@@ -18,7 +18,7 @@ CREATE TABLE cihaz_rezervasyonlari (
     rezervasyon_id SERIAL PRIMARY KEY,
     cihaz_id INT REFERENCES cihazlar(cihaz_id),
     randevu_id INT, -- İleride Öğrenci A'nın 'appointments' tablosuna bağlanacak
-    rezerve_eden_personel VARCHAR(100),
+    personel_id INT, -- İleride Öğrenci C'nin 'staff' veya 'users' tablosuna bağlanacak
     baslangic_zamani TIMESTAMP NOT NULL,
     bitis_zamani TIMESTAMP NOT NULL,
     iptal_edildi_mi BOOLEAN DEFAULT FALSE
