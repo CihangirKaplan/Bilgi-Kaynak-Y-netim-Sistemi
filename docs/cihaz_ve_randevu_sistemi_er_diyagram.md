@@ -1,14 +1,12 @@
-# Cihaz ve Randevu Yönetim Sistemi - Varlık-İlişki (ER) Diyagramı
+# Bilgi Kaynak Yönetim Sistemi - ER Diyagramı
 
-Veritabanı şifrelerinize ve tablo yapınıza dayanarak hazırlanan Mermaid.js formatındaki ER diyagramı ve modül açıklamaları aşağıdadır.
-
-## Mermaid ER Diyagramı
+## ER Diyagramı (Mermaid.js Formatında)
 
 ```mermaid
 erDiagram
     bolumler {
         int bolum_id PK
-        string bolum_adi
+        string bolum_adi UK
         string sorumlu_ad_soyad
         string iletisim_bilgisi
         boolean aktif_mi
@@ -16,19 +14,19 @@ erDiagram
 
     odalar {
         int oda_id PK
-        string oda_adi
+        string oda_adi UK
         int kapasite
         boolean aktif_mi
     }
 
     roller {
         int rol_id PK
-        string rol_adi
+        string rol_adi UK
     }
 
     kullanicilar {
         int kullanici_id PK
-        string kullanici_adi
+        string kullanici_adi UK
         string parola_hash
         int rol_id FK
         boolean aktif_mi
@@ -37,17 +35,17 @@ erDiagram
 
     personel {
         int personel_id PK
-        int kullanici_id FK
-        string personel_kodu
+        int kullanici_id FK, UK
+        string personel_kodu UK
         boolean aktif_mi
         timestamp olusturulma_tarihi
     }
 
     danisma_ogrencileri {
         int ogrenci_id PK
-        int kullanici_id FK
+        int kullanici_id FK, UK
         string ad_soyad
-        string ogrenci_numarasi
+        string ogrenci_numarasi UK
         string telefon
         boolean aktif_mi
         timestamp olusturulma_tarihi
@@ -63,10 +61,10 @@ erDiagram
 
     cihazlar {
         int cihaz_id PK
-        string envanter_kodu
+        string envanter_kodu UK
         string cihaz_adi
         string marka_model
-        string seri_no
+        string seri_no UK
         int zimmetli_oda_id FK
         cihaz_durumu durum
         timestamp kayit_tarihi
@@ -164,19 +162,3 @@ erDiagram
     cihazlar ||--o{ cihaz_arizalari : "arizalanir"
     cihazlar ||--o{ cihaz_bakimlari : "bakim_görür"
     cihazlar ||--o{ cihaz_kalibrasyonlari : "kalibre_edilir"
-```
-
-## Modül Bazlı İlişki Özeti
-
-1. **Kullanıcı ve Yetkilendirme Modülü:** 
-   - `roller` tablosu `kullanicilar` tablosuna 1-N ilişkiyle bağlanır.
-   - Her kullanıcı `personel` veya `danisma_ogrencileri` tablosu ile birebir (1-1) ilişkilidir.
-   - Gerçekleşen işlemler `denetim_kayitlari` tablosuyla takip edilir.
-
-2. **Cihaz Yönetimi Modülü:**
-   - `cihazlar` tablosu `odalar` tablosuna (zimmetli oda olarak) bağlıdır.
-   - Cihazların; `cihaz_rezervasyonlari`, `cihaz_arizalari`, `cihaz_bakimlari` ve `cihaz_kalibrasyonlari` tabloları ile bire-çok (1-N) ilişkisi bulunur.
-
-3. **Randevu ve Oda Yönetimi Modülü:**
-   - `randevular` tablosu; `danisan_kodlari`, `personel` (psikolog) ve `odalar` tablolarına bağlanır.
-   - Kurum içi etkinlikler `oda_etkinlikleri` tablosu ile yönetilir ve `odalar` / `personel` tablolarına referans verir.
