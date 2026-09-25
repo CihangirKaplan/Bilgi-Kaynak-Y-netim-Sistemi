@@ -1,21 +1,25 @@
 ﻿-- Randevu ve Oda Yönetimi Modülü Tabloları
-
+-- 1. Danışan Kodları Tablosu 
 CREATE TABLE danisan_kodlari (
-    danisan_id SERIAL PRIMARY KEY,
-    danisan_kod_id VARCHAR(50) UNIQUE NOT NULL,
-    kapasite INT DEFAULT 1,
-    aktif_mi BOOLEAN NOT NULL DEFAULT TRUE
+    danisan_kod_id VARCHAR(50) PRIMARY KEY, 
+    ucretli_mi BOOLEAN NOT NULL DEFAULT TRUE, -- Ücretli mi yoksa ücretsiz mi?
+    istisna_turu VARCHAR(50) DEFAULT 'YOK',   -- 'KANSER_HASTASI', 'SEHIT_GAZI_YAKINI', 'YOK' vb.
+    aktif_mi BOOLEAN NOT NULL DEFAULT TRUE,
+    olusturulma_tarihi TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 2. Odalar Tablosu
 CREATE TABLE odalar (
     oda_id SERIAL PRIMARY KEY,
     oda_adi VARCHAR(50) UNIQUE NOT NULL,
+    kapasite INT DEFAULT 1, -- Fiziksel oda kapasitesi
     aktif_mi BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+-- 3. Randevular Tablosu (Türler ve anahtarlar eşitlendi)
 CREATE TABLE randevular (
     randevu_id SERIAL PRIMARY KEY,
-    danisan_kod_id INT NOT NULL REFERENCES danisan_kodlari(danisan_kod_id),
+    danisan_kod_id VARCHAR(50) NOT NULL REFERENCES danisan_kodlari(danisan_kod_id),
     psikolog_id INT NOT NULL REFERENCES personel(personel_id),
     oda_id INT NOT NULL REFERENCES odalar(oda_id),
     baslangic_zamani TIMESTAMP NOT NULL,
@@ -23,7 +27,8 @@ CREATE TABLE randevular (
     durum VARCHAR(30) DEFAULT 'PLANLANDI',
     olusturulma_tarihi TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
--- Eğitim, Seminer ve İdari Toplantılar için Oda Kullanımı
+
+-- 4. Eğitim, Seminer ve İdari Toplantılar için Oda Kullanımı
 CREATE TABLE oda_etkinlikleri (
     etkinlik_id SERIAL PRIMARY KEY,
     oda_id INT NOT NULL REFERENCES odalar(oda_id),
