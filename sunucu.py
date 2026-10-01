@@ -3,12 +3,13 @@ import psycopg2
 
 app = FastAPI()
 
-# Masaüstü bilgisayarın (Veritabanının) bağlantı ayarları
+# Hangi ortamda çalışmak istiyorsan onun host adresini aktif bırak (diğerini yoruma al)
 VT_AYARLARI = {
-    "dbname": "postgres",
+    "dbname": "bkys",
     "user": "postgres",
-    "password": "123",    
-    "host": "172.24.4.66",  # Masaüstü PC'nin IP'si
+    "password": "123", # Eğer kendi laptopuna kurarken postgres şifreni farklı yaptıysan burayı güncelle
+    "host": "172.24.4.66", # 1. KOL: Masaüstü (Ortak) PC'ye bağlanmak için bunu kullan
+    # "host": "127.0.0.1", # 2. KOL: Kendi laptopunda (Yerel) test etmek için başındaki # işaretini kaldır, üsttekine koy
     "port": "5432"
 }
 
