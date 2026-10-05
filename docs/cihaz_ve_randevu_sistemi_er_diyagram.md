@@ -1,205 +1,234 @@
-# Veritabanı ER Şeması, Değişken Listesi ve Lejant Rehberi
+# Cihaz, Randevu ve Kullanıcı Yönetim Sistemi - ER Diyagramı
 
-Bu doküman, sistemde bulunan tüm veritabanı tablolarını, veri tiplerini, birincil anahtarları (**PK**), yabancı anahtarları (**FK**), benzersiz kısıtlamaları (**UK**) ve modül ilişkilerini içermektedir.
+Bu doküman, güncel PostgreSQL veritabanı şemanıza ait varlık-ilişki (ER) diyagramını ve benzersiz (`UNIQUE`) alanların vurgulandığı yapıyı içermektedir.
 
----
-
-## 🗺️ 1. ER Diyagramı Lejantı (Semboller ve Tipler)
-
-| Sembol / Sütun Niteliği | Anlamı | Açıklama |
-| :--- | :--- | :--- |
-| **PK** | Primary Key | Tablodaki her kaydı benzersiz şekilde tanımlayan birincil anahtar. |
-| **FK** | Foreign Key | Başka bir tablonun PK alanına bağlanarak ilişkileri oluşturan yabancı anahtar. |
-| **UK** | Unique Key | Tekrarlanamaz (benzersiz) değerler içeren sütun. |
-| **ENUM** | Enumerated Type | Belirli tanımlı metin değerlerinden birini alan özel tip. |
-| `||--o{` | 1'e Çok (1..N) | Bir kaydın ilişkili tabloda birden fazla karşılığı olabilir. |
-| `||--o|` | 1'e 1 (1..1) | Bir kaydın ilişkili tabloda tam olarak bir karşılığı vardır. |
-
----
-
-## 📊 2. Bütün Değişkenleri İçeren ER Diyagramı (Mermaid)
+## ER Diyagramı (Mermaid.js Formatında)
 
 ```mermaid
 erDiagram
-    roller {
-        SERIAL rol_id PK
-        VARCHAR rol_adi UK
-    }
-    
-    izinler {
-        SERIAL izin_id PK
-        VARCHAR izin_adi UK
-        VARCHAR aciklama
-    }
-    
-    rol_izinleri {
-        INT rol_id PK, FK
-        INT izin_id PK, FK
-        SMALLINT izin_var
-    }
-    
-    kullanicilar {
-        SERIAL kullanici_id PK
-        VARCHAR kullanici_adi UK
-        VARCHAR parola_hash
-        INT rol_id FK
-        BOOLEAN aktif_mi
-        TIMESTAMP olusturulma_tarihi
-    }
-    
-    personel {
-        SERIAL personel_id PK
-        INT kullanici_id UK, FK
-        VARCHAR personel_kodu UK
-        BOOLEAN aktif_mi
-        TIMESTAMP olusturulma_tarihi
-    }
-    
-    danisma_ogrencileri {
-        SERIAL ogrenci_id PK
-        INT kullanici_id UK, FK
-        VARCHAR ad_soyad
-        VARCHAR ogrenci_numarasi UK
-        VARCHAR telefon
-        BOOLEAN aktif_mi
-        TIMESTAMP olusturulma_tarihi
-    }
-    
-    danisma_masasi_oturumlari {
-        SERIAL oturum_id PK
-        INT ogrenci_id FK
-        TIMESTAMP baslangic_zamani
-        TIMESTAMP bitis_zamani
-        BOOLEAN onaylandi_mi
-        TIMESTAMP olusturulma_tarihi
-        TIMESTAMP guncellenme_tarihi
-    }
-    
-    denetim_kayitlari {
-        BIGSERIAL denetim_id PK
-        INT kullanici_id FK
-        ENUM denetim_olay_turu
-        VARCHAR hedef_tablo
-        INT hedef_kayit_id
-        TIMESTAMP olusturulma_tarihi
+    bolumler {
+        int bolum_id PK
+        string bolum_adi UK
+        string sorumlu_ad_soyad
+        string iletisim_bilgisi
+        boolean aktif_mi
     }
 
     odalar {
-        SERIAL oda_id PK
-        VARCHAR oda_adi UK
-        INT kapasite
-        BOOLEAN aktif_mi
+        int oda_id PK
+        string oda_adi UK
+        int kapasite
+        boolean aktif_mi
     }
-    
+
+    roller {
+        int rol_id PK
+        string rol_adi UK
+    }
+
+    izinler {
+        int izin_id PK
+        string izin_adi UK
+        string aciklama
+    }
+
+    rol_izinleri {
+        int rol_id PK, FK
+        int izin_id PK, FK
+        smallint izin_var
+    }
+
+    kullanicilar {
+        int kullanici_id PK
+        string kullanici_adi UK
+        string parola_hash
+        int rol_id FK
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+    }
+
+    personel {
+        int personel_id PK
+        int kullanici_id FK, UK
+        string personel_kodu UK
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+    }
+
+    ogrenciler {
+        int ogrenci_id PK
+        int kullanici_id FK, UK
+        string ad_soyad
+        string ogrenci_numarasi UK
+        string telefon
+        ogrenci_turu tur
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+    }
+
+    danisma_masasi_oturumlari {
+        int oturum_id PK
+        int ogrenci_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        boolean onaylandi_mi
+    }
+
+    faaliyetler {
+        int faaliyet_id PK
+        string faaliyet_adi UK
+        int puan
+        boolean aktif_mi
+    }
+
+    ogrenci_faaliyet_takip {
+        int takip_id PK
+        int ogrenci_id FK
+        int faaliyet_id FK
+        int adet
+        date faaliyet_tarihi
+        string aciklama
+        boolean onaylandi_mi
+        timestamp olusturulma_tarihi
+    }
+
     danisan_kodlari {
-        VARCHAR danisan_kod_id PK
-        BOOLEAN ucretli_mi
-        VARCHAR istisna_turu
-        BOOLEAN aktif_mi
-        TIMESTAMP olusturulma_tarihi
-    }
-    
-    randevular {
-        SERIAL randevu_id PK
-        VARCHAR danisan_kod_id FK
-        INT psikolog_id FK
-        INT oda_id FK
-        TIMESTAMP baslangic_zamani
-        TIMESTAMP bitis_zamani
-        VARCHAR durum
-        TIMESTAMP olusturulma_tarihi
-    }
-    
-    oda_etkinlikleri {
-        SERIAL etkinlik_id PK
-        INT oda_id FK
-        INT organize_eden_personel_id FK
-        VARCHAR etkinlik_adi
-        INT katilimci_sayisi
-        TIMESTAMP baslangic_zamani
-        TIMESTAMP bitis_zamani
-        BOOLEAN iptal_edildi_mi
+        string danisan_kod_id PK
+        boolean ucretli_mi
+        string istisna_turu
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
     }
 
-    bolumler {
-        SERIAL bolum_id PK
-        VARCHAR bolum_adi UK
-        VARCHAR sorumlu_ad_soyad
-        VARCHAR iletisim_bilgisi
-        BOOLEAN aktif_mi
-    }
-    
     cihazlar {
-        SERIAL cihaz_id PK
-        VARCHAR envanter_kodu UK
-        VARCHAR cihaz_adi
-        VARCHAR marka_model
-        VARCHAR seri_no UK
-        INT zimmetli_oda_id FK
-        ENUM cihaz_durumu
-        TIMESTAMP kayit_tarihi
-    }
-    
-    cihaz_rezervasyonlari {
-        SERIAL rezervasyon_id PK
-        INT cihaz_id FK
-        INT bolum_id FK
-        INT rezervasyonu_yapan_personel_id FK
-        TIMESTAMP baslangic_zamani
-        TIMESTAMP bitis_zamani
-        BOOLEAN iptal_edildi_mi
-        INT kullanilacak_oda_id FK
-    }
-    
-    cihaz_arizalari {
-        SERIAL ariza_id PK
-        INT cihaz_id FK
-        VARCHAR bildiren_personel
-        TEXT ariza_aciklamasi
-        TIMESTAMP bildirim_tarihi
-        TIMESTAMP cozum_tarihi
-        BOOLEAN cozuldu_mu
-    }
-    
-    cihaz_bakimlari {
-        SERIAL bakim_id PK
-        INT cihaz_id FK
-        VARCHAR bakim_yapan_kisi
-        TEXT yapilan_islem
-        DECIMAL maliyet
-        TIMESTAMP bakim_tarihi
-    }
-    
-    cihaz_kalibrasyonlari {
-        SERIAL kalibrasyon_id PK
-        INT cihaz_id FK
-        VARCHAR kalibrasyon_yapan_kurum
-        DATE gecerlilik_tarihi
-        VARCHAR sertifika_no
-        TIMESTAMP islem_tarihi
+        int cihaz_id PK
+        string envanter_kodu UK
+        string cihaz_adi
+        string marka_model
+        string seri_no UK
+        int zimmetli_oda_id FK
+        cihaz_durumu durum
+        timestamp kayit_tarihi
     }
 
-    %% --- İlişkiler (Relationships) ---
+    cihaz_rezervasyonlari {
+        int rezervasyon_id PK
+        int cihaz_id FK
+        int bolum_id FK
+        int rezervasyonu_yapan_personel_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        boolean iptal_edildi_mi
+        int kullanilacak_oda_id FK
+        string proje_turu
+        string proje_adi_aciklamasi
+    }
+
+    cihaz_arizalari {
+        int ariza_id PK
+        int cihaz_id FK
+        string bildiren_personel
+        string ariza_aciklamasi
+        timestamp bildirim_tarihi
+        timestamp cozum_tarihi
+        boolean cozuldu_mu
+    }
+
+    cihaz_bakimlari {
+        int bakim_id PK
+        int cihaz_id FK
+        string bakim_yapan_kisi
+        string yapilan_islem
+        decimal maliyet
+        timestamp bakim_tarihi
+    }
+
+    cihaz_kalibrasyonlari {
+        int kalibrasyon_id PK
+        int cihaz_id FK
+        string kalibrasyon_yapan_kurum
+        date gecerlilik_tarihi
+        string sertifika_no
+        timestamp islem_tarihi
+    }
+
+    cihaz_bakim_planlari {
+        int plan_id PK
+        int cihaz_id FK
+        string gorev_turu
+        int periyot_gun
+        int uyari_suresi_gun
+        date sonraki_gorev_tarihi
+        boolean aktif_mi
+    }
+
+    cihaz_takip_parametreleri {
+        int parametre_id PK
+        int cihaz_id FK
+        string parametre_adi
+        string parametre_degeri
+        string birim
+        timestamp son_guncelleme
+    }
+
+    randevular {
+        int randevu_id PK
+        string danisan_kod_id FK
+        int psikolog_id FK
+        int oda_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        string durum
+        timestamp olusturulma_tarihi
+    }
+
+    oda_etkinlikleri {
+        int etkinlik_id PK
+        int oda_id FK
+        int organize_eden_personel_id FK
+        string etkinlik_adi
+        int katilimci_sayisi
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        boolean iptal_edildi_mi
+    }
+
+    denetim_kayitlari {
+        bigint denetim_id PK
+        int kullanici_id FK
+        denetim_olay_turu olay_turu
+        string hedef_tablo
+        int hedef_kayit_id
+        timestamp olusturulma_tarihi
+    }
+
+    %% İlişkiler (Relationships)
     roller ||--o{ kullanicilar : "sahiptir"
-    roller ||--o{ rol_izinleri : "içerir"
-    izinler ||--o{ rol_izinleri : "atanır"
-    kullanicilar ||--o| personel : "detayıdır"
-    kullanicilar ||--o| danisma_ogrencileri : "detayıdır"
-    danisma_ogrencileri ||--o{ danisma_masasi_oturumlari : "gerçekleştirir"
+    roller ||--o{ rol_izinleri : "tanimlar"
+    izinler ||--o{ rol_izinleri : "ait"
+    kullanicilar ||--o| personel : "ait_bir_personel"
+    kullanicilar ||--o| ogrenciler : "ait_bir_ogrenci"
     kullanicilar ||--o{ denetim_kayitlari : "tetikler"
     
-    odalar ||--o{ cihazlar : "zimmetlidir"
-    odalar ||--o{ randevular : "ev sahipliği yapar"
-    odalar ||--o{ oda_etkinlikleri : "kullanılır"
-    odalar ||--o{ cihaz_rezervasyonlari : "kullanılacak oda"
+    ogrenciler ||--o{ danisma_masasi_oturumlari : "acar"
+    ogrenciler ||--o{ ogrenci_faaliyet_takip : "gerceklestirir"
+    faaliyetler ||--o{ ogrenci_faaliyet_takip : "icerir"
+
+    odalar ||--o{ cihazlar : "zimmetlenir"
+    odalar ||--o{ cihaz_rezervasyonlari : "kullanilir"
+    odalar ||--o{ randevular : "gerceklesir"
+    odalar ||--o{ oda_etkinlikleri : "ev_sahipligi_yapar"
     
-    bolumler ||--o{ cihaz_rezervasyonlari : "kiralar"
-    cihazlar ||--o{ cihaz_rezervasyonlari : "rezervasyonu"
-    cihazlar ||--o{ cihaz_arizalari : "bildirilir"
-    cihazlar ||--o{ cihaz_bakimlari : "görür"
-    cihazlar ||--o{ cihaz_kalibrasyonlari : "görür"
-    
-    danisan_kodlari ||--o{ randevular : "alır"
-    personel ||--o{ randevular : "yürütür (psikolog)"
-    personel ||--o{ oda_etkinlikleri : "organize eder"
     personel ||--o{ cihaz_rezervasyonlari : "yapar"
+    personel ||--o{ randevular : "psikolog_olarak_atanir"
+    personel ||--o{ oda_etkinlikleri : "organize_eder"
+    
+    bolumler ||--o{ cihaz_rezervasyonlari : "talep_eder"
+    danisan_kodlari ||--o{ randevular : "kullanilir"
+    
+    cihazlar ||--o{ cihaz_rezervasyonlari : "rezerve_edilir"
+    cihazlar ||--o{ cihaz_arizalari : "arizalanir"
+    cihazlar ||--o{ cihaz_bakimlari : "bakim_gorur"
+    cihazlar ||--o{ cihaz_kalibrasyonlari : "kalibre_edilir"
+    cihazlar ||--o{ cihaz_bakim_planlari : "plan_sahibidir"
+    cihazlar ||--o{ cihaz_takip_parametreleri : "parametre_sahibidir"
