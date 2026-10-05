@@ -1,7 +1,7 @@
 # D05 - Sistem Mimarisi (Architecture)
 
 **Proje:** Travma Uygulama ve Araştırma Merkezi - Bilgi ve Kaynak Yönetim Sistemi  
-**Sürüm:** v1.1  
+**Sürüm:** v1.0  
 **Doküman:** Sistem Mimarisi
 
 ---
