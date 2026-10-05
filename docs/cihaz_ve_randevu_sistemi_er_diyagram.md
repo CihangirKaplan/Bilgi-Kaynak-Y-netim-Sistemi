@@ -1,6 +1,6 @@
 # Cihaz, Randevu ve Kullanıcı Yönetim Sistemi - ER Diyagramı
 
-Bu doküman, PostgreSQL veritabanı şemasına ait varlık-ilişki (ER) diyagramını içermektedir.
+Bu doküman, güncel PostgreSQL veritabanı şemanıza ait varlık-ilişki (ER) diyagramını ve benzersiz (`UNIQUE`) alanların vurgulandığı yapıyı içermektedir.
 
 ## ER Diyagramı (Mermaid.js Formatında)
 
