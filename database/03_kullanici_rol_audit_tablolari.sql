@@ -1,90 +1,56 @@
-
 -- ============================================================
-
 -- 1. ROLLER
-
 -- Sistemde bulunan kullanıcı rollerini tanımlar.
-
 -- ============================================================
 
 CREATE TABLE roller (
-
     rol_id SERIAL PRIMARY KEY,
-
     rol_adi VARCHAR(50) UNIQUE NOT NULL
-
 );
 
 
-
 -- ============================================================
-
 -- 2. IZINLER
-
 -- Sistemde gerçekleştirilebilecek yetkili işlemleri tanımlar.
-
 -- ============================================================
 
 CREATE TABLE izinler (
-
     izin_id SERIAL PRIMARY KEY,
-
     izin_adi VARCHAR(100) UNIQUE NOT NULL,
-
     aciklama VARCHAR(255)
-
 );
 
 
-
 -- ============================================================
-
 -- 3. ROL IZINLERI
-
 -- Her rolün hangi işlemi yapıp yapamayacağını tutar.
-
 --
-
 -- izin_var = 1 -> izin var
-
 -- izin_var = 0 -> izin yok
-
 -- ============================================================
 
 CREATE TABLE rol_izinleri (
-
     rol_id INT NOT NULL
-
         REFERENCES roller(rol_id),
 
     izin_id INT NOT NULL
-
         REFERENCES izinler(izin_id),
 
     izin_var SMALLINT NOT NULL
-
         DEFAULT 0,
 
     PRIMARY KEY (rol_id, izin_id),
 
     CHECK (izin_var IN (0, 1))
-
 );
 
 
-
-
-
 -- ============================================================
-
 -- 4. KULLANICILAR
-
 -- Sisteme giriş yapabilen kullanıcı hesaplarını tutar.
-
 -- ============================================================
 
 CREATE TABLE kullanicilar (
-
     kullanici_id SERIAL PRIMARY KEY,
 
     kullanici_adi VARCHAR(100) UNIQUE NOT NULL,
@@ -92,64 +58,48 @@ CREATE TABLE kullanicilar (
     parola_hash VARCHAR(255) NOT NULL,
 
     rol_id INT NOT NULL
-
         REFERENCES roller(rol_id),
 
     -- TRUE  -> kullanıcı sisteme giriş yapabilir
-
     -- FALSE -> kullanıcı hesabı pasiftir
-
     aktif_mi BOOLEAN NOT NULL
-
         DEFAULT TRUE,
 
     olusturulma_tarihi TIMESTAMP NOT NULL
-
         DEFAULT CURRENT_TIMESTAMP
-
 );
 
 
-
-
-
 -- ============================================================
-
 -- 5. PERSONEL
-
 -- Kurum personellerinin operasyonel kayıtlarını tutar.
-
 -- ============================================================
 
 CREATE TABLE personel (
-
     personel_id SERIAL PRIMARY KEY,
 
     kullanici_id INT UNIQUE NOT NULL
-
         REFERENCES kullanicilar(kullanici_id),
 
     personel_kodu VARCHAR(50) UNIQUE NOT NULL,
 
     aktif_mi BOOLEAN NOT NULL
-
         DEFAULT TRUE,
 
     olusturulma_tarihi TIMESTAMP NOT NULL
-
         DEFAULT CURRENT_TIMESTAMP
-
 );
-
-
-
 
 
 -- ============================================================
 -- 6. OGRENCI TURU
 -- ============================================================
 
-CREATE TYPE ogrenci_turu AS ENUM ('GONULLU', 'DANISMA_MASASI');
+CREATE TYPE ogrenci_turu AS ENUM (
+    'GONULLU',
+    'DANISMA_MASASI'
+);
+
 
 -- ============================================================
 -- 7. OGRENCILER
@@ -158,14 +108,24 @@ CREATE TYPE ogrenci_turu AS ENUM ('GONULLU', 'DANISMA_MASASI');
 
 CREATE TABLE ogrenciler (
     ogrenci_id SERIAL PRIMARY KEY,
-    kullanici_id INT UNIQUE REFERENCES kullanicilar(kullanici_id),
+
+    kullanici_id INT UNIQUE
+        REFERENCES kullanicilar(kullanici_id),
+
     ad_soyad VARCHAR(100) NOT NULL,
+
     ogrenci_numarasi VARCHAR(50) UNIQUE NOT NULL,
+
     telefon VARCHAR(20),
+
     tur ogrenci_turu NOT NULL,
+
     aktif_mi BOOLEAN NOT NULL DEFAULT TRUE,
-    olusturulma_tarihi TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+    olusturulma_tarihi TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- ============================================================
 -- 8. DANISMA MASASI OTURUMLARI
@@ -174,12 +134,23 @@ CREATE TABLE ogrenciler (
 
 CREATE TABLE danisma_masasi_oturumlari (
     oturum_id SERIAL PRIMARY KEY,
-    ogrenci_id INT NOT NULL REFERENCES ogrenciler(ogrenci_id),
-    baslangic_zamani TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    ogrenci_id INT NOT NULL
+        REFERENCES ogrenciler(ogrenci_id),
+
+    baslangic_zamani TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
     bitis_zamani TIMESTAMP,
+
     onaylandi_mi BOOLEAN NOT NULL DEFAULT FALSE,
-    CHECK (bitis_zamani IS NULL OR bitis_zamani > baslangic_zamani)
+
+    CHECK (
+        bitis_zamani IS NULL
+        OR bitis_zamani > baslangic_zamani
+    )
 );
+
 
 -- ============================================================
 -- 9. FAALIYETLER
@@ -188,103 +159,114 @@ CREATE TABLE danisma_masasi_oturumlari (
 
 CREATE TABLE faaliyetler (
     faaliyet_id SERIAL PRIMARY KEY,
+
     faaliyet_adi VARCHAR(100) UNIQUE NOT NULL,
-    puan INT NOT NULL CHECK (puan >= 0),
+
+    puan INT NOT NULL
+        CHECK (puan >= 0),
+
     aktif_mi BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+
 -- ============================================================
--- 10. OGRENCI FAALIYET TAKIP
+-- 10. FAALIYET BIRIMLERI
+-- Faaliyet kayıtlarında kullanılabilecek birimleri tutar.
+-- Birimler Admin tarafından yönetilebilir.
+-- ============================================================
+
+CREATE TABLE faaliyet_birimleri (
+    birim_id SERIAL PRIMARY KEY,
+
+    birim_adi VARCHAR(50) UNIQUE NOT NULL,
+
+    aktif_mi BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+
+-- ============================================================
+-- 11. OGRENCI FAALIYET TAKIP
 -- Her iki öğrenci türünün faaliyetlerini tutar.
 -- Toplam puan = adet * faaliyetler.puan (güncel puan).
 -- ============================================================
 
 CREATE TABLE ogrenci_faaliyet_takip (
     takip_id SERIAL PRIMARY KEY,
-    ogrenci_id INT NOT NULL REFERENCES ogrenciler(ogrenci_id),
-    faaliyet_id INT NOT NULL REFERENCES faaliyetler(faaliyet_id),
-    adet INT NOT NULL CHECK (adet > 0),
-    faaliyet_tarihi DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    ogrenci_id INT NOT NULL
+        REFERENCES ogrenciler(ogrenci_id),
+
+    faaliyet_id INT NOT NULL
+        REFERENCES faaliyetler(faaliyet_id),
+
+    adet INT NOT NULL
+        CHECK (adet > 0),
+
+    birim_id INT NOT NULL
+        REFERENCES faaliyet_birimleri(birim_id),
+
+    faaliyet_tarihi DATE NOT NULL
+        DEFAULT CURRENT_DATE,
+
     aciklama VARCHAR(255),
-    onaylandi_mi BOOLEAN NOT NULL DEFAULT FALSE,
-    olusturulma_tarihi TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+    onaylandi_mi BOOLEAN NOT NULL
+        DEFAULT FALSE,
+
+    olusturulma_tarihi TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
 );
 
+
 -- ============================================================
-
--- 11. DENETIM OLAY TURU
-
+-- 12. DENETIM OLAY TURU
 -- Audit kayıtlarında kullanılabilecek olay türlerini tanımlar.
-
 -- ============================================================
 
 CREATE TYPE denetim_olay_turu AS ENUM (
-
     'LOGIN',
-
     'LOGIN_FAILED',
-
     'CREATE',
-
     'UPDATE',
-
     'CANCEL',
-
     'ROLE_CHANGE',
-
     'DEVICE_STATUS_CHANGE'
-
 );
 
 
 -- ============================================================
-
--- 12. DENETIM KAYITLARI
-
+-- 13. DENETIM KAYITLARI
 -- Sistemde gerçekleşen kritik işlemlerin kayıtlarını tutar.
-
 -- ============================================================
 
 CREATE TABLE denetim_kayitlari (
-
     denetim_id BIGSERIAL PRIMARY KEY,
 
     -- LOGIN_FAILED gibi durumlarda geçerli bir kullanıcı
-
     -- bulunmayabileceği için NULL olabilir.
-
     kullanici_id INT
-
         REFERENCES kullanicilar(kullanici_id),
 
     olay_turu denetim_olay_turu NOT NULL,
 
     -- İşlemden etkilenen tablo.
-
     hedef_tablo VARCHAR(100),
 
     -- İşlemden etkilenen kaydın ID değeri.
-
     hedef_kayit_id INT,
 
     olusturulma_tarihi TIMESTAMP NOT NULL
-
         DEFAULT CURRENT_TIMESTAMP
-
 );
 
 
-
-
-
 -- ============================================================
-
--- 13. BASLANGIC VERILERI
+-- 14. BASLANGIC VERILERI
 -- ============================================================
 
 
 -- ============================================================
--- 13.1 ROLLER
+-- 14.1 ROLLER
 -- ============================================================
 
 INSERT INTO roller (rol_adi) VALUES
@@ -297,7 +279,7 @@ INSERT INTO roller (rol_adi) VALUES
 
 
 -- ============================================================
--- 13.2 FAALIYET BASLANGIC VERILERI
+-- 14.2 FAALIYET BASLANGIC VERILERI
 -- Güncel puanlar faaliyetler tablosunda tutulur.
 -- ============================================================
 
@@ -312,7 +294,16 @@ INSERT INTO faaliyetler (faaliyet_adi, puan) VALUES
 
 
 -- ============================================================
--- 13.3 IZINLER
+-- 14.3 FAALIYET BIRIMI BASLANGIC VERILERI
+-- ============================================================
+
+INSERT INTO faaliyet_birimleri (birim_adi) VALUES
+    ('KISI'),
+    ('SAAT');
+
+
+-- ============================================================
+-- 14.4 IZINLER
 -- İzin adları, son paylaşılan izin matrisindeki işlemleri temsil eder.
 -- ============================================================
 
@@ -341,15 +332,18 @@ INSERT INTO izinler (izin_adi, aciklama) VALUES
     ('IZIN_DUZENLE', 'Mevcut izin tanımını düzenleme'),
     ('ROL_IZIN_YONET', 'Rollerin izinlerini yönetme'),
     ('ROL_OLUSTUR', 'Sisteme yeni rol oluşturma'),
-    ('ROL_DUZENLE', 'Mevcut rolü düzenleme');
+    ('ROL_DUZENLE', 'Mevcut rolü düzenleme'),
+    ('FAALIYET_BIRIMI_DUZENLE', 'Faaliyet birimlerini yönetme');
 
 
 -- ============================================================
--- 13.4 PSIKOLOG IZINLERI
+-- 14.5 PSIKOLOG IZINLERI
 -- ============================================================
 
 INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
-SELECT r.rol_id, i.izin_id,
+SELECT
+    r.rol_id,
+    i.izin_id,
     CASE WHEN i.izin_adi IN (
         'RANDEVU_OLUSTUR',
         'RANDEVU_DUZENLE',
@@ -364,11 +358,13 @@ WHERE r.rol_adi = 'PSIKOLOG';
 
 
 -- ============================================================
--- 13.5 MEMUR IZINLERI
+-- 14.6 MEMUR IZINLERI
 -- ============================================================
 
 INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
-SELECT r.rol_id, i.izin_id,
+SELECT
+    r.rol_id,
+    i.izin_id,
     CASE WHEN i.izin_adi IN (
         'TAKVIM_GORUNTULE',
         'ODA_DURUMU_GORUNTULE',
@@ -389,11 +385,13 @@ WHERE r.rol_adi = 'MEMUR';
 
 
 -- ============================================================
--- 13.6 MUDUR IZINLERI
+-- 14.7 MUDUR IZINLERI
 -- ============================================================
 
 INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
-SELECT r.rol_id, i.izin_id,
+SELECT
+    r.rol_id,
+    i.izin_id,
     CASE WHEN i.izin_adi IN (
         'TAKVIM_GORUNTULE',
         'ODA_DURUMU_GORUNTULE',
@@ -418,11 +416,13 @@ WHERE r.rol_adi = 'MUDUR';
 
 
 -- ============================================================
--- 13.7 DANISMA OGRENCISI IZINLERI
+-- 14.8 DANISMA OGRENCISI IZINLERI
 -- ============================================================
 
 INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
-SELECT r.rol_id, i.izin_id,
+SELECT
+    r.rol_id,
+    i.izin_id,
     CASE WHEN i.izin_adi IN (
         'RANDEVU_OLUSTUR',
         'RANDEVU_DUZENLE',
@@ -437,11 +437,13 @@ WHERE r.rol_adi = 'DANISMA_OGRENCISI';
 
 
 -- ============================================================
--- 13.8 PROJE ASISTANI IZINLERI
+-- 14.9 PROJE ASISTANI IZINLERI
 -- ============================================================
 
 INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
-SELECT r.rol_id, i.izin_id,
+SELECT
+    r.rol_id,
+    i.izin_id,
     CASE WHEN i.izin_adi IN (
         'TAKVIM_GORUNTULE',
         'ODA_DURUMU_GORUNTULE',
@@ -453,8 +455,9 @@ FROM roller r
 CROSS JOIN izinler i
 WHERE r.rol_adi = 'PROJE_ASISTANI';
 
+
 -- ============================================================
--- 13.9 ADMIN IZINLERI
+-- 14.10 ADMIN IZINLERI
 -- ADMIN süper kullanıcıdır ve sistemde tanımlı tüm izinlere sahiptir.
 -- Yeni izin oluşturma işleminde FastAPI, yeni izni ADMIN rolüne de
 -- otomatik olarak izin_var = 1 ile bağlamalıdır.
@@ -468,5 +471,3 @@ SELECT
 FROM roller r
 CROSS JOIN izinler i
 WHERE r.rol_adi = 'ADMIN';
-
-
