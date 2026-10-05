@@ -19,3 +19,8 @@ class KullaniciModeli(BaseModel):
     rol_id: int
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
+
+# AUTH-002: Role Modeli
+class RolModeli(BaseModel):
+    rol_id: Optional[int] = None
+    rol_adi: str
