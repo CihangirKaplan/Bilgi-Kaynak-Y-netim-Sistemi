@@ -24,7 +24,7 @@ Doküman kapsamında;
 - rol tabanlı erişim kontrolü (RBAC),
 - randevu ve oda yönetimi,
 - cihaz envanteri ve cihaz operasyonları,
-- öğrenci faaliyet ve puan takibi,
+- öğrenci faaliyet, birim ve puan takibi,
 - temel iş kuralları,
 - audit ve mimari güvenlik ilkeleri
 
@@ -187,6 +187,7 @@ Admin sistemin süper kullanıcı rolüdür. Müdür rolünden farklı olarak ya
 - Yeni rol oluşturabilir.
 - Mevcut rolü düzenleyebilir.
 - Roller ile izinler arasındaki ilişkileri yönetebilir.
+- Faaliyet birimlerini ekleyebilir, düzenleyebilir, aktif veya pasif hale getirebilir.
 - Diğer rollerin gerçekleştirebildiği bütün yetkili işlemleri gerçekleştirebilir.
 
 Yeni bir izin sisteme eklendiğinde FastAPI, bu izni ADMIN rolüne otomatik olarak `izin_var = 1` değeriyle bağlamalıdır. Böylece yeni bir izin eklendiğinde Admin'in yetkisiz kalması önlenir.
@@ -330,6 +331,7 @@ Veritabanı dört ana iş alanında değerlendirilebilir:
 - `ogrenciler`
 - `danisma_masasi_oturumlari`
 - `faaliyetler`
+- `faaliyet_birimleri`
 - `ogrenci_faaliyet_takip`
 
 ### Randevu ve Oda
@@ -363,8 +365,6 @@ Bu yapı sayesinde her operasyon kendi sorumluluğuna uygun tabloda tutulur ve t
 `izinler` tablosu sistemde yapılabilecek yetkili işlemleri tanımlar.
 
 `rol_izinleri` tablosu ise hangi rolün hangi izne sahip olduğunu belirler. Bu tabloda `izin_var = 1` izin bulunduğunu, `izin_var = 0` ise izin bulunmadığını ifade eder.
-
-Örnek ilişki:
 
 ```text
 Kullanıcı
@@ -410,8 +410,6 @@ Bu yaklaşım ortak öğrenci bilgilerini tekrar etmeyi önler.
 
 `danisma_masasi_oturumlari`, danışma masasında görev yapan öğrencinin gerçek çalışma süresini takip eder.
 
-Örnek akış:
-
 ```text
 Öğrenci "Başlat" seçer
         ↓
@@ -428,7 +426,7 @@ onaylandi_mi güncellenir
 
 `bitis_zamani`, `baslangic_zamani` değerinden sonra olmak zorundadır.
 
-## 5.5. Faaliyetler ve Öğrenci Faaliyet Takibi
+## 5.5. Faaliyetler, Faaliyet Birimleri ve Öğrenci Faaliyet Takibi
 
 `faaliyetler` tablosu sistemde tanımlı faaliyetleri ve bu faaliyetlerin güncel puanlarını tutar.
 
@@ -444,16 +442,20 @@ Güncel başlangıç değerleri:
 | Sempozyum | 10 |
 | PsiLab Etkinliği | 3 |
 
-`ogrenci_faaliyet_takip` tablosu ise bir öğrencinin hangi faaliyeti kaç adet yaptığını, faaliyet tarihini, açıklamasını ve onay durumunu tutar.
+`faaliyet_birimleri` tablosu faaliyet kayıtlarında kullanılabilecek birimleri tutar. Başlangıçta `KISI` ve `SAAT` birimleri tanımlanmıştır.
 
-`takip_id`, her faaliyet kaydının benzersiz kimliğidir. Aynı öğrenci birden fazla faaliyet yaptığı için `ogrenci_id` tek başına kayıtları birbirinden ayırmaya yeterli değildir.
+Birimler sabit bir ENUM olarak tutulmaz. Admin tarafından yönetilebilmesi gerektiği için ayrı tabloda saklanır. Bir birim artık kullanılmayacaksa geçmiş faaliyet kayıtlarını bozmamak için fiziksel olarak silinmek yerine `aktif_mi = FALSE` yapılarak pasifleştirilir.
+
+`ogrenci_faaliyet_takip` tablosu bir öğrencinin hangi faaliyeti yaptığını; `adet`, `birim_id`, faaliyet tarihi, açıklama ve onay bilgileriyle birlikte tutar. `birim_id`, `faaliyet_birimleri` tablosuna yabancı anahtar ile bağlıdır.
+
+`adet` alanı yapılan miktarı, birim ise bu miktarın ne ifade ettiğini belirtir.
 
 Örnek:
 
 ```text
-takip_id = 1 → Öğrenci 5 → Yüz Yüze Anket → 4 adet
-takip_id = 2 → Öğrenci 5 → Online Anket     → 10 adet
-takip_id = 3 → Öğrenci 5 → Sempozyum        → 1 adet
+takip_id = 1 → Öğrenci 5 → Yüz Yüze Anket → 4 KISI
+takip_id = 2 → Öğrenci 5 → Online Anket     → 10 KISI
+takip_id = 3 → Öğrenci 5 → Sempozyum        → 3 SAAT
 ```
 
 Toplam puan ayrı bir sütunda saklanmaz:
@@ -461,6 +463,8 @@ Toplam puan ayrı bir sütunda saklanmaz:
 ```text
 Toplam puan = adet × faaliyetler.puan
 ```
+
+Birim, `adet` değerinin anlamını belirtir; mevcut puan hesaplama formülünü değiştirmez.
 
 Bu tasarımda faaliyet puanı daha sonra değiştirilirse hesaplama yeni/güncel puan üzerinden yapılır.
 
@@ -510,8 +514,6 @@ Oda bilgisi hem randevular hem oda etkinlikleri hem de cihazların zimmetli oda 
 - randevu durumu
 
 arasındaki ilişkiyi tutar.
-
-Temel ilişki:
 
 ```text
 Danışan Kodu ──┐
@@ -648,8 +650,6 @@ Bir cihazın birden fazla kalibrasyon kaydı olabilir; bu nedenle kalibrasyon bi
 
 `cihaz_bakim_planlari`, belirli aralıklarla tekrar edilmesi gereken cihaz görevlerini planlamak için kullanılır.
 
-Örneğin:
-
 ```text
 Görev: Haftalık Şarj
 Periyot: 7 gün
@@ -671,8 +671,6 @@ FastAPI, aktif planları kontrol ederek yaklaşan görevleri tespit edebilir. Me
 ## 7.9. Dinamik Cihaz Takip Parametreleri
 
 Her cihazın takip edilmesi gereken özellikleri aynı olmayabilir.
-
-Örneğin:
 
 ```text
 EEG cihazı → Jel Miktarı → 450 ml
@@ -710,6 +708,7 @@ API modülleri veritabanındaki ana iş alanlarıyla uyumlu olacak şekilde ayr�
 | `students` | Gönüllü ve danışma masası öğrencileri |
 | `consultation-sessions` | Danışma masası başlangıç/bitiş oturumları |
 | `activities` | Faaliyet ve güncel puan tanımları |
+| `activity-units` | Faaliyet birimlerinin yönetimi |
 | `student-activities` | Öğrencilerin faaliyet kayıtları |
 | `client-codes` | Danışan kodu işlemleri |
 | `appointments` | Randevu işlemleri |
@@ -790,28 +789,29 @@ Roller:
 | Rol-izin yönetme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | Rol oluşturma | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | Rol düzenleme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
+| Faaliyet birimlerini yönetme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 
 Sisteme giriş, `rol_izinleri` tablosunda ayrı bir işlem izni olarak tutulmaz. Giriş; doğru kimlik doğrulama bilgileri ve `kullanicilar.aktif_mi` alanı üzerinden kontrol edilir.
+
+`Faaliyet birimlerini yönetme` işlemi veritabanındaki `FAALIYET_BIRIMI_DUZENLE` iznine karşılık gelir ve yalnızca Admin rolüne verilmiştir.
 
 ## 9.3. Yetkilendirme Prensibi
 
 Yetkilendirme FastAPI backend katmanında gerçekleştirilir.
 
-Kontrol zinciri:
-
 ```text
 İstek
-  ↓
+ ↓
 Kullanıcı doğrulandı mı?
-  ↓
+ ↓
 Kullanıcı aktif mi?
-  ↓
+ ↓
 Kullanıcının rolü nedir?
-  ↓
+ ↓
 Rol gerekli izne sahip mi?
-  ↓
+ ↓
 İş kuralı uygun mu?
-  ↓
+ ↓
 İşlem gerçekleştirilir
 ```
 
@@ -872,20 +872,23 @@ Aktif bakım/görev planları `sonraki_gorev_tarihi` ve `uyari_suresi_gun` alanl
 
 Görev tamamlandıktan sonra sonraki görev tarihi tanımlı `periyot_gun` bilgisine göre güncellenebilir.
 
-## 10.7. Öğrenci Faaliyet Puanı
+## 10.7. Öğrenci Faaliyet Puanı ve Birimi
 
 Faaliyet puanının tek kaynağı `faaliyetler.puan` alanıdır.
 
-`ogrenci_faaliyet_takip` tablosunda ayrı bir toplam puan veya geçmiş puan kopyası tutulmaz.
+`ogrenci_faaliyet_takip` tablosunda ayrı bir toplam puan veya geçmiş puan kopyası tutulmaz. Kayıtta `adet` ile birlikte `birim_id` de saklanır.
 
 Örnek:
 
 ```text
 Yüz Yüze Anket puanı = 5
 Öğrencinin yaptığı adet = 4
+Birim = KISI
 
 Toplam = 4 × 5 = 20
 ```
+
+Birim, `adet` değerinin neyi ifade ettiğini belirtir ve puan formülünü değiştirmez.
 
 Puan daha sonra 6 yapılırsa hesaplama güncel değere göre:
 
@@ -894,6 +897,8 @@ Puan daha sonra 6 yapılırsa hesaplama güncel değere göre:
 ```
 
 olur.
+
+Pasifleştirilmiş bir faaliyet birimi yeni kayıtlarda seçilememelidir; ancak geçmiş kayıtların referans bütünlüğünü korumak amacıyla mevcut kayıtlarla ilişkisi korunur.
 
 ---
 
@@ -992,6 +997,8 @@ Veritabanı yedekleri de üretim verisi kadar korunmalıdır. Yedek dosyalarına
 - Danışma masası görev zamanları `danisma_masasi_oturumlari` tablosunda tutulacaktır.
 - Öğrenci faaliyetleri `ogrenci_faaliyet_takip` tablosunda tutulacaktır.
 - Faaliyet puanları `faaliyetler` tablosundaki güncel değer üzerinden hesaplanacaktır.
+- Faaliyet birimleri `faaliyet_birimleri` tablosunda tutulacak ve faaliyet kayıtları `ogrenci_faaliyet_takip.birim_id` ile bu tabloya bağlanacaktır.
+- Faaliyet birimleri Admin tarafından yönetilecektir; kullanılmayacak birimler geçmiş kayıtları korumak için silinmek yerine pasifleştirilecektir.
 - Danışan kodu kalıcı ve benzersiz operasyonel kod olacaktır.
 - Danışan kodu ile gerçek kimlik bilgileri arasında sistem içinde eşleştirme tutulmayacaktır.
 - Randevu ve cihaz rezervasyonu bağımsız süreçlerdir.
@@ -999,7 +1006,7 @@ Veritabanı yedekleri de üretim verisi kadar korunmalıdır. Yedek dosyalarına
 - Cihaz arıza, bakım ve kalibrasyon geçmişleri ayrı tablolarda tutulacaktır.
 - Periyodik cihaz görevleri `cihaz_bakim_planlari` tablosuyla takip edilecektir.
 - Cihaza göre değişebilen takip özellikleri `cihaz_takip_parametreleri` tablosunda tutulacaktır.
-- Mevcut son şemada proje bilgisi cihaz rezervasyonundaki `proje_turu` ve `proje_adi_aciklamasi` alanlarıyla tutulmaktadır.
+- Mevcut son şemada proje bilgisi cihaz rezervasyonundaki `proje_turu` ve `proje_adi_aciklamasi` alanlarıyla tutulmaktadır; ayrı bir `projeler` tablosu bulunmamaktadır.
 - Mevcut son şemada ayrı bir kalıcı `bildirimler` tablosu bulunmamaktadır.
 - Sistem V1.0 kapsamında dış internet erişimine açık olmayacaktır.
 
@@ -1009,6 +1016,6 @@ Veritabanı yedekleri de üretim verisi kadar korunmalıdır. Yedek dosyalarına
 
 Bu mimariyle kullanıcı arayüzü, iş mantığı ve veri katmanı birbirinden ayrılmıştır. PySide6 yalnızca kullanıcı etkileşimini yürütür; FastAPI kimlik doğrulama, yetkilendirme, doğrulama ve iş kurallarının merkezi uygulama noktasıdır; PostgreSQL ise kalıcı ve ilişkisel veriyi tutar.
 
-Güncel yapı yalnızca randevu yönetimini değil; cihaz envanteri ve rezervasyonlarını, cihaz bakım/arıza/kalibrasyon geçmişini, periyodik cihaz görevlerini, öğrenci faaliyetlerini, danışma masası çalışma sürelerini ve dinamik rol-izin yönetimini de kapsar.
+Güncel yapı yalnızca randevu yönetimini değil; cihaz envanteri ve rezervasyonlarını, cihaz bakım/arıza/kalibrasyon geçmişini, periyodik cihaz görevlerini, öğrenci faaliyetlerini ve faaliyet birimlerini, danışma masası çalışma sürelerini ve dinamik rol-izin yönetimini de kapsar.
 
 Bu ayrım sayesinde yeni işlevler eklenirken güvenlik kontrollerinin tek bir backend katmanında uygulanması, verilerin merkezi biçimde tutulması ve farklı kullanıcı rollerinin yalnızca kendilerine tanımlanan işlemleri gerçekleştirmesi hedeflenmektedir.
