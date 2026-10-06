@@ -14,13 +14,22 @@ load_dotenv()
 app = FastAPI()
 bearer_scheme = HTTPBearer()
 
+
+VT_AYARLARI = {
+    "dbname": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT")
+}
+
+
 def mevcut_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
 ) -> int:
     try:
         token = credentials.credentials
         kullanici_id = token_dogrula(token)
-        return kullanici_id
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -33,6 +42,45 @@ def mevcut_kullanici_id(
             status_code=401,
             detail="Geçersiz token."
         )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT aktif_mi
+            FROM kullanicilar
+            WHERE kullanici_id = %s;
+            """,
+            (kullanici_id,)
+        )
+
+        kullanici = cursor.fetchone()
+
+        if kullanici is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Kullanıcı bulunamadı."
+            )
+
+        if not kullanici[0]:
+            raise HTTPException(
+                status_code=403,
+                detail="Kullanıcı hesabı aktif değil."
+            )
+
+        return kullanici_id
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+        if conn is not None:
+            conn.close()
 
     
 def izin_kontrol(izin_adi: str):
@@ -100,15 +148,8 @@ def yetki_test(
         "mesaj": "Kullanıcının CIHAZ_EKLE izni var.",
         "kullanici_id": kullanici_id
     }
-    
 
-VT_AYARLARI = {
-    "dbname": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
+
 
 @app.get("/api/cihazlar")
 def cihazlari_getir():
