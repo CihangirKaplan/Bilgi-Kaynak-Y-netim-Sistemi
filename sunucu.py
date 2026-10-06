@@ -1,14 +1,48 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 import os
 from dotenv import load_dotenv
+import jwt
 
 from modeller import GirisModeli
-from guvenlik import parola_dogrula
+from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
+
 
 load_dotenv()
 
 app = FastAPI()
+bearer_scheme = HTTPBearer()
+
+def mevcut_kullanici_id(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+) -> int:
+    try:
+        token = credentials.credentials
+        kullanici_id = token_dogrula(token)
+        return kullanici_id
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Token süresi dolmuş."
+        )
+
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Geçersiz token."
+        )
+
+@app.get("/api/korumali-test")
+def korumali_test(
+    kullanici_id: int = Depends(mevcut_kullanici_id)
+):
+    return {
+        "durum": "basarili",
+        "mesaj": "Token geçerli.",
+        "kullanici_id": kullanici_id
+    }
 
 VT_AYARLARI = {
     "dbname": os.getenv("DB_NAME"),
@@ -80,9 +114,13 @@ def giris_yap(giris: GirisModeli):
                 detail="Kullanıcı adı veya parola hatalı."
             )
 
+        access_token = access_token_olustur(kullanici[0])
+
         return {
             "durum": "basarili",
             "mesaj": "Giriş başarılı.",
+            "access_token": access_token,
+            "token_type": "bearer",
             "kullanici_id": kullanici[0],
             "kullanici_adi": kullanici[1],
             "rol_id": kullanici[3]
