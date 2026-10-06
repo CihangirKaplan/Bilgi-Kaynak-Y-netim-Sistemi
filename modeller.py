@@ -24,3 +24,9 @@ class KullaniciModeli(BaseModel):
 class RolModeli(BaseModel):
     rol_id: Optional[int] = None
     rol_adi: str
+
+
+# AUTH-004: Login İstek Modeli
+class GirisModeli(BaseModel):
+    kullanici_adi: str
+    parola: str
