@@ -7,6 +7,7 @@ import jwt
 
 from modeller import GirisModeli
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
+from denetim import denetim_kaydi_olustur
 
 
 load_dotenv()
@@ -195,25 +196,59 @@ def giris_yap(giris: GirisModeli):
 
         kullanici = cursor.fetchone()
 
+        # Kullanıcı adı veritabanında bulunamadı.
         if kullanici is None:
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="LOGIN_FAILED",
+                hedef_tablo="kullanicilar"
+            )
+
             raise HTTPException(
                 status_code=401,
                 detail="Kullanıcı adı veya parola hatalı."
             )
 
+        # Kullanıcı hesabı pasif.
         if not kullanici[4]:
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="LOGIN_FAILED",
+                kullanici_id=kullanici[0],
+                hedef_tablo="kullanicilar",
+                hedef_kayit_id=kullanici[0]
+            )
+
             raise HTTPException(
                 status_code=403,
                 detail="Kullanıcı hesabı aktif değil."
             )
 
+        # Parola hatalı.
         if not parola_dogrula(giris.parola, kullanici[2]):
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="LOGIN_FAILED",
+                kullanici_id=kullanici[0],
+                hedef_tablo="kullanicilar",
+                hedef_kayit_id=kullanici[0]
+            )
+
             raise HTTPException(
                 status_code=401,
                 detail="Kullanıcı adı veya parola hatalı."
             )
 
         access_token = access_token_olustur(kullanici[0])
+
+        # Giriş başarılı.
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="LOGIN",
+            kullanici_id=kullanici[0],
+            hedef_tablo="kullanicilar",
+            hedef_kayit_id=kullanici[0]
+        )
 
         return {
             "durum": "basarili",
@@ -231,3 +266,4 @@ def giris_yap(giris: GirisModeli):
 
         if conn is not None:
             conn.close()
+            
