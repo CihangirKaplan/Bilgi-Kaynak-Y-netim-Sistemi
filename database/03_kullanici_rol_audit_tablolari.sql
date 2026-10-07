@@ -64,6 +64,14 @@ CREATE TABLE kullanicilar (
     -- FALSE -> kullanıcı hesabı pasiftir
     aktif_mi BOOLEAN NOT NULL
         DEFAULT TRUE,
+    
+    -- Art arda yapılan başarısız giriş denemelerinin sayısı
+    basarisiz_giris_sayisi INT NOT NULL
+        DEFAULT 0,
+
+    -- Geçici hesap kilidinin biteceği zaman
+    -- NULL ise geçici kilit yoktur
+    kilit_bitis_zamani TIMESTAMP NULL,
 
     olusturulma_tarihi TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP

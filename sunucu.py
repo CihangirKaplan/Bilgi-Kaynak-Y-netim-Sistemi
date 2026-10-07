@@ -4,6 +4,7 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 import jwt
+from datetime import datetime, timedelta
 
 from modeller import GirisModeli
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
@@ -83,7 +84,7 @@ def mevcut_kullanici_id(
         if conn is not None:
             conn.close()
 
-    
+
 def izin_kontrol(izin_adi: str):
     def kontrol(
         kullanici_id: int = Depends(mevcut_kullanici_id)
@@ -151,7 +152,6 @@ def yetki_test(
     }
 
 
-
 @app.get("/api/cihazlar")
 def cihazlari_getir():
     try:
@@ -159,7 +159,7 @@ def cihazlari_getir():
         cursor = conn.cursor()
         cursor.execute("SELECT envanter_kodu, cihaz_adi, durum FROM cihazlar;")
         kayitlar = cursor.fetchall()
-        
+
         veri = []
         for k in kayitlar:
             veri.append({
@@ -167,13 +167,12 @@ def cihazlari_getir():
                 "cihaz_adi": k[1],
                 "durum": k[2]
             })
-            
+
         cursor.close()
         conn.close()
         return {"durum": "basarili", "veri": veri}
     except Exception as e:
         return {"durum": "hata", "mesaj": str(e)}
-
 
 # AUTH-004: Login Endpointi
 @app.post("/api/login")
@@ -187,7 +186,14 @@ def giris_yap(giris: GirisModeli):
 
         cursor.execute(
             """
-            SELECT kullanici_id, kullanici_adi, parola_hash, rol_id, aktif_mi
+            SELECT
+                kullanici_id,
+                kullanici_adi,
+                parola_hash,
+                rol_id,
+                aktif_mi,
+                basarisiz_giris_sayisi,
+                kilit_bitis_zamani
             FROM kullanicilar
             WHERE kullanici_adi = %s;
             """,
@@ -224,8 +230,56 @@ def giris_yap(giris: GirisModeli):
                 detail="Kullanıcı hesabı aktif değil."
             )
 
+        # Kullanıcı hesabı geçici olarak kilitli.
+        if kullanici[6] is not None and kullanici[6] > datetime.now():
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Çok fazla hatalı giriş denemesi. "
+                    "Lütfen daha sonra tekrar deneyin."
+                )
+            )
+
         # Parola hatalı.
         if not parola_dogrula(giris.parola, kullanici[2]):
+            yeni_basarisiz_giris_sayisi = kullanici[5] + 1
+
+            # 5. başarısız girişte hesabı 15 dakika kilitle.
+            if yeni_basarisiz_giris_sayisi >= 5:
+                kilit_bitis_zamani = (
+                    datetime.now() + timedelta(minutes=15)
+                )
+
+                cursor.execute(
+                    """
+                    UPDATE kullanicilar
+                    SET basarisiz_giris_sayisi = %s,
+                        kilit_bitis_zamani = %s
+                    WHERE kullanici_id = %s;
+                    """,
+                    (
+                        yeni_basarisiz_giris_sayisi,
+                        kilit_bitis_zamani,
+                        kullanici[0]
+                    )
+                )
+
+            else:
+                cursor.execute(
+                    """
+                    UPDATE kullanicilar
+                    SET basarisiz_giris_sayisi = %s
+                    WHERE kullanici_id = %s;
+                    """,
+                    (
+                        yeni_basarisiz_giris_sayisi,
+                        kullanici[0]
+                    )
+                )
+
+            conn.commit()
+
+            # Başarısız giriş audit kaydı.
             denetim_kaydi_olustur(
                 VT_AYARLARI,
                 olay_turu="LOGIN_FAILED",
@@ -234,10 +288,33 @@ def giris_yap(giris: GirisModeli):
                 hedef_kayit_id=kullanici[0]
             )
 
+            # 5. başarısız girişte kullanıcıya kilit bilgisi ver.
+            if yeni_basarisiz_giris_sayisi >= 5:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "Çok fazla hatalı giriş denemesi. "
+                        "Hesap 15 dakika kilitlendi."
+                    )
+                )
+
             raise HTTPException(
                 status_code=401,
                 detail="Kullanıcı adı veya parola hatalı."
             )
+
+        # Parola doğruysa başarısız giriş bilgilerini sıfırla.
+        cursor.execute(
+            """
+            UPDATE kullanicilar
+            SET basarisiz_giris_sayisi = 0,
+                kilit_bitis_zamani = NULL
+            WHERE kullanici_id = %s;
+            """,
+            (kullanici[0],)
+        )
+
+        conn.commit()
 
         access_token = access_token_olustur(kullanici[0])
 
@@ -266,4 +343,3 @@ def giris_yap(giris: GirisModeli):
 
         if conn is not None:
             conn.close()
-            
