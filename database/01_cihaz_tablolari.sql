@@ -31,7 +31,7 @@ CREATE TABLE cihaz_rezervasyonlari (
     baslangic_zamani TIMESTAMP NOT NULL,
     bitis_zamani TIMESTAMP NOT NULL,
     iptal_edildi_mi BOOLEAN DEFAULT FALSE, 
-    kullanilacak_oda_id INT REFERENCES odalar(oda_id) 
+    kullanilacak_oda_id INT REFERENCES odalar(oda_id),
     proje_turu VARCHAR(50), -- Örn: 'TÜBİTAK', 'BAP', 'TEZ', 'DİĞER' (Boş bırakılabilir)
     proje_adi_aciklamasi VARCHAR(255) -- Örn: '1001 Nolu TÜBİTAK Uyku Araştırması Projesi'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 );
