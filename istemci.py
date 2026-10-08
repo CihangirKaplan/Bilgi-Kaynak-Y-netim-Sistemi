@@ -25,7 +25,6 @@ class SpikeArayuz(QMainWindow):
         self.liste.clear()
         try:
             # API bizim kendi laptopumuzda çalıştığı için localhost'a istek atıyoruz
-            yanit = requests.get("http://localhost:8000/api/cihazlar")
             sonuc = yanit.json()
             
             if sonuc["durum"] == "basarili":
