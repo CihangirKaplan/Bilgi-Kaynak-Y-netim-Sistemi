@@ -30,3 +30,21 @@ class RolModeli(BaseModel):
 class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
+
+
+# APT-API-001: Randevu Oluşturma Modeli
+class RandevuOlusturModeli(BaseModel):
+    danisan_kod_id: str
+    psikolog_id: int
+    oda_id: int
+    baslangic_zamani: datetime
+    bitis_zamani: datetime
+
+
+# APT-API-001: Randevu Güncelleme Modeli
+class RandevuGuncelleModeli(BaseModel):
+    danisan_kod_id: Optional[str] = None
+    psikolog_id: Optional[int] = None
+    oda_id: Optional[int] = None
+    baslangic_zamani: Optional[datetime] = None
+    bitis_zamani: Optional[datetime] = None

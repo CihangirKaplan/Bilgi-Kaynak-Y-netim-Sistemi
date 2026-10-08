@@ -39,3 +39,24 @@ CREATE TABLE oda_etkinlikleri (
     bitis_zamani TIMESTAMP NOT NULL,
     iptal_edildi_mi BOOLEAN DEFAULT FALSE
 );
+
+-- Randevu saat çakışmalarını veritabanı seviyesinde engelle
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Aynı psikoloğun çakışan iki aktif randevusu olamaz
+ALTER TABLE randevular
+ADD CONSTRAINT psikolog_randevu_cakisma
+EXCLUDE USING gist (
+    psikolog_id WITH =,
+    tsrange(baslangic_zamani, bitis_zamani, '[)') WITH &&
+)
+WHERE (durum = 'PLANLANDI');
+
+-- Aynı oda çakışan iki aktif randevuya atanamaz
+ALTER TABLE randevular
+ADD CONSTRAINT oda_randevu_cakisma
+EXCLUDE USING gist (
+    oda_id WITH =,
+    tsrange(baslangic_zamani, bitis_zamani, '[)') WITH &&
+)
+WHERE (durum = 'PLANLANDI');
