@@ -6,10 +6,9 @@ import os
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
-from modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli
+from modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli, DanisanKoduModeli 
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
-from modeller import GirisModeli, DanisanKoduModeli 
 
 
 load_dotenv()
@@ -903,3 +902,129 @@ def randevu_iptal_et(
             cursor.close()
         if conn is not None:
             conn.close()
+
+
+# CLI-001 / CLI-002: Otomatik danışan kodu üretimi
+def otomatik_danisan_kodu_uret(cursor) -> str:
+    yil = datetime.now().year
+
+    cursor.execute("SELECT nextval('danisan_kodu_seq');")
+    sira_no = cursor.fetchone()[0]
+
+    return f"DAN-{yil}-{sira_no:04d}"
+
+
+# CLI-001 / CLI-002: Yeni danışan kodu oluşturma
+@app.post(
+    "/api/danisan-kodlari",
+    status_code=201,
+    summary="Yeni Otomatik Danışan Kodu Oluştur"
+)
+def danisan_kodu_olustur(
+    ucretli_mi: bool = True,
+    istisna_turu: str = "YOK",
+    kullanici_id: int = Depends(mevcut_kullanici_id)
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kullanıcının rolünü kontrol et.
+        cursor.execute(
+            """
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s
+              AND k.aktif_mi = TRUE;
+            """,
+            (kullanici_id,)
+        )
+
+        rol = cursor.fetchone()
+
+        if rol is None or rol[0] not in (
+            "ADMIN",
+            "PSIKOLOG",
+            "DANISMA_OGRENCISI"
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Danışan kodu oluşturma yetkiniz yok."
+            )
+
+        # Kod sunucuda otomatik üretilir.
+        yeni_kod = otomatik_danisan_kodu_uret(cursor)
+
+        cursor.execute(
+            """
+            INSERT INTO danisan_kodlari (
+                danisan_kod_id,
+                ucretli_mi,
+                istisna_turu,
+                aktif_mi
+            )
+            VALUES (%s, %s, %s, TRUE)
+            RETURNING
+                danisan_kod_id,
+                ucretli_mi,
+                istisna_turu,
+                aktif_mi,
+                olusturulma_tarihi;
+            """,
+            (yeni_kod, ucretli_mi, istisna_turu)
+        )
+
+        kayit = cursor.fetchone()
+
+        # Danışan kodu oluşturma işlemini denetim kaydına ekle.
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari (
+                kullanici_id,
+                olay_turu,
+                hedef_tablo
+            )
+            VALUES (%s, %s, %s);
+            """,
+            (kullanici_id, "CREATE", "danisan_kodlari")
+        )
+
+        # Danışan kodu ve denetim kaydı birlikte kaydedilir.
+        conn.commit()
+
+        veri = DanisanKoduModeli(
+            danisan_kod_id=kayit[0],
+            ucretli_mi=kayit[1],
+            istisna_turu=kayit[2],
+            aktif_mi=kayit[3],
+            olusturulma_tarihi=kayit[4]
+        )
+
+        return {
+            "durum": "basarili",
+            "veri": veri.model_dump(mode="json")
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Danışan kodu oluşturulurken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
