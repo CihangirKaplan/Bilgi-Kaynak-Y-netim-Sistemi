@@ -106,7 +106,7 @@ class LoginEkrani(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("kok")
-        self.setWindowTitle("BKYS — Güvenli Giriş")
+        self.setWindowTitle("TKYS — Güvenli Giriş")
         self.setFixedSize(980, 620)
         self.setStyleSheet(STIL)
         self.ana_pencere = None
@@ -135,9 +135,9 @@ class LoginEkrani(QWidget):
         ml.setContentsMargins(44, 48, 44, 36)
         ml.setSpacing(6)
 
-        logo = QLabel("BKYS")
+        logo = QLabel("TKYS")
         logo.setObjectName("logoYazi")
-        baslik = QLabel("Travma Merkezi\nYönetim Sistemi")
+        baslik = QLabel("Travma Kalite\nYönetim Sistemi")
         baslik.setObjectName("markaBaslik")
         alt = QLabel("Klinik operasyon, cihaz yaşam döngüsü ve\nyönetim süreçleri tek platformda.")
         alt.setObjectName("markaAlt")
@@ -170,7 +170,7 @@ class LoginEkrani(QWidget):
 
         h1 = QLabel("Hoş Geldiniz")
         h1.setObjectName("hosgeldin")
-        h2 = QLabel("Devam etmek için hesabınızla oturum açın.")
+        h2 = QLabel("Devam etmek için hesabınızla oturum açınız.")
         h2.setObjectName("hosgeldinAlt")
         fl.addWidget(h1)
         fl.addWidget(h2)
@@ -179,7 +179,7 @@ class LoginEkrani(QWidget):
         e1 = QLabel("KULLANICI ADI")
         e1.setObjectName("etiket")
         self.kullanici_input = QLineEdit()
-        self.kullanici_input.setPlaceholderText("Kullanıcı adınızı girin")
+        self.kullanici_input.setPlaceholderText("Kullanıcı adınızı giriniz:")
         fl.addWidget(e1)
         fl.addWidget(self.kullanici_input)
         fl.addSpacing(10)

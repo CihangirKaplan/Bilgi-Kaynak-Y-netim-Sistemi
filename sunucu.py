@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
-
+from modeller import GirisModeli, DanisanKoduModeli 
 
 
 load_dotenv()
