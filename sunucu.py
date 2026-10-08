@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from modeller import GirisModeli
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
+from modeller import GirisModeli, DanisanKoduModeli 
 
 
 load_dotenv()
@@ -341,5 +342,75 @@ def giris_yap(giris: GirisModeli):
         if cursor is not None:
             cursor.close()
 
+        if conn is not None:
+            conn.close()
+
+ # DanisanKoduModeli import edildi
+
+
+# ==========================================
+# ÖĞRENCİ A: CLI (DANIŞAN KODU) İŞLEMLERİ
+# ==========================================
+
+# CLI-002: Veritabanındaki son kayda bakarak otomatik kod üreten yardımcı fonksiyon
+def otomatik_danisan_kodu_uret(cursor) -> str:
+    yil = datetime.now().year
+    cursor.execute("SELECT COUNT(*) FROM danisan_kodlari;")
+    sayim = cursor.fetchone()[0]
+    siradaki = sayim + 1
+    return f"DAN-{yil}-{siradaki:04d}"
+
+
+# CLI-001 & CLI-002: Yeni Danışan Kodu Oluşturma Uç Noktası
+@app.post("/api/danisan-kodlari", summary="Yeni Otomatik Danışan Kodu Oluştur")
+def danisan_kodu_olustur(
+    ucretli_mi: bool = True, 
+    istisna_turu: str = "YOK",
+    kullanici_id: int = Depends(mevcut_kullanici_id)  # Güvenli endpoint (Token zorunlu)
+):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # Otomatik kod üretimi (CLI-002)
+        yeni_kod = otomatik_danisan_kodu_uret(cursor)
+        
+        # Veritabanına kayıt (INSERT)
+        cursor.execute(
+            """
+            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi)
+            VALUES (%s, %s, %s, %s)
+            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi;
+            """,
+            (yeni_kod, ucretli_mi, istisna_turu, True)
+        )
+        
+        kayit = cursor.fetchone()
+        conn.commit()
+        
+        # İstemcinin beklediği standart format ({"durum": "basarili", "veri": ...})
+        veri = {
+            "danisan_kod_id": kayit[0],
+            "ucretli_mi": kayit[1],
+            "istisna_turu": kayit[2],
+            "aktif_mi": kayit[3],
+            "olusturulma_tarihi": kayit[4].isoformat() if kayit[4] else None
+        }
+        
+        return {
+            "durum": "basarili",
+            "veri": veri
+        }
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    finally:
+        if cursor is not None:
+            cursor.close()
         if conn is not None:
             conn.close()
