@@ -2,17 +2,14 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-# ==========================================
-# CİHAZ VE KİMLİK DOĞRULAMA MODELLERİ
-# ==========================================
-
 # DEV-001: Device Temel Modeli
 class CihazModeli(BaseModel):
     envanter_kodu: str
     cihaz_adi: str
-    marka_model: Optional[str] = None
-    seri_no: Optional[str] = None
-    durum: str = "Kullanima_Hazir"
+    marka_model: Optional[str] = None  # Opsiyonel alan (boş bırakılabilir)
+    seri_no: Optional[str] = None      # Opsiyonel alan
+    durum: str = "Kullanima_Hazir"     # Varsayılan olarak cihaz kullanıma hazır gelir
+
 
 # AUTH-001: User Modeli
 class KullaniciModeli(BaseModel):
@@ -23,10 +20,12 @@ class KullaniciModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
 
+
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
     rol_id: Optional[int] = None
     rol_adi: str
+
 
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
@@ -35,28 +34,33 @@ class GirisModeli(BaseModel):
 
 
 # ==========================================
-# DANIŞAN, ODA VE RANDEVU MODELLERİ
+# ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
 # ==========================================
 
-# CLI-001 & CLI-002: Client Code (Danışan Kodu) Modeli
-class ClientCodeModeli(BaseModel):
-    id: Optional[int] = None
-    kod: str  # Örn: DAN-2026-0001
-    danisan_adi: str
-    durum: str = "Aktif"
+# CLI-001: Danışan Kodu Modeli -> danisan_kodlari tablosu
+class DanisanKoduModeli(BaseModel):
+    danisan_kod_id: str  # Örn: DAN-2026-0001
+    ucretli_mi: bool = True
+    istisna_turu: str = "YOK"
+    aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
 
-# ROOM-001: Oda Modeli
+
+# ROOM-001: Oda Modeli -> odalar tablosu
 class OdaModeli(BaseModel):
     oda_id: Optional[int] = None
     oda_adi: str
-    kapasite: int
-    durum: str = "Musait"
+    kapasite: int = 1
+    aktif_mi: bool = True
 
-# APT-001 - APT-004: Randevu Modelleri
+
+# APT-001: Randevu Modeli -> randevular tablosu
 class RandevuModeli(BaseModel):
     randevu_id: Optional[int] = None
-    danisan_kodu: str
+    danisan_kod_id: str
+    psikolog_id: int
     oda_id: int
-    tarih_saat: datetime
-    durum: str = "Planlandi"
+    baslangic_zamani: datetime
+    bitis_zamani: datetime
+    durum: str = "PLANLANDI"
+    olusturulma_tarihi: Optional[datetime] = None
