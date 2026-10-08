@@ -20,6 +20,7 @@ class KullaniciModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
 
+
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
     rol_id: Optional[int] = None
@@ -30,3 +31,36 @@ class RolModeli(BaseModel):
 class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
+
+
+# ==========================================
+# ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
+# ==========================================
+
+# CLI-001: Danışan Kodu Modeli -> danisan_kodlari tablosu
+class DanisanKoduModeli(BaseModel):
+    danisan_kod_id: str  # Örn: DAN-2026-0001
+    ucretli_mi: bool = True
+    istisna_turu: str = "YOK"
+    aktif_mi: bool = True
+    olusturulma_tarihi: Optional[datetime] = None
+
+
+# ROOM-001: Oda Modeli -> odalar tablosu
+class OdaModeli(BaseModel):
+    oda_id: Optional[int] = None
+    oda_adi: str
+    kapasite: int = 1
+    aktif_mi: bool = True
+
+
+# APT-001: Randevu Modeli -> randevular tablosu
+class RandevuModeli(BaseModel):
+    randevu_id: Optional[int] = None
+    danisan_kod_id: str
+    psikolog_id: int
+    oda_id: int
+    baslangic_zamani: datetime
+    bitis_zamani: datetime
+    durum: str = "PLANLANDI"
+    olusturulma_tarihi: Optional[datetime] = None
