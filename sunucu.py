@@ -1028,3 +1028,77 @@ def danisan_kodu_olustur(
         if conn is not None:
             conn.close()
 
+@app.get("/api/odalar")
+def odalari_listele(
+    kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT oda_id, oda_adi, kapasite, aktif_mi
+            FROM odalar
+            ORDER BY oda_id;
+        """)
+
+        odalar = cursor.fetchall()
+
+        return [
+            {
+                "oda_id": oda[0],
+                "oda_adi": oda[1],
+                "kapasite": oda[2],
+                "aktif_mi": oda[3]
+            }
+            for oda in odalar
+        ]
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+            
+
+@app.get("/api/odalar/{oda_id}")
+def oda_detay(
+    oda_id: int,
+    kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT oda_id, oda_adi, kapasite, aktif_mi
+            FROM odalar
+            WHERE oda_id = %s;
+        """, (oda_id,))
+
+        oda = cursor.fetchone()
+
+        if oda is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Oda bulunamadı."
+            )
+
+        return {
+            "oda_id": oda[0],
+            "oda_adi": oda[1],
+            "kapasite": oda[2],
+            "aktif_mi": oda[3]
+        }
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
