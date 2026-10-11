@@ -6,9 +6,9 @@ import os
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
-from server.modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli, DanisanKoduModeli
-from server.guvenlik import parola_dogrula, access_token_olustur, token_dogrula
-from server.denetim import denetim_kaydi_olustur
+from modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli, DanisanKoduModeli 
+from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
+from denetim import denetim_kaydi_olustur
 
 
 load_dotenv()

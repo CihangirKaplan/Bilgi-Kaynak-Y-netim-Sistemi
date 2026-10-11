@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from server.modeller import RandevuOlusturModeli, RandevuGuncelleModeli
+from modeller import RandevuOlusturModeli, RandevuGuncelleModeli
 
 
 # Testlerde kullanılacak geçerli randevu bilgileri
@@ -108,7 +108,7 @@ from datetime import datetime
 from unittest.mock import patch
 from fastapi import HTTPException
 
-from server.sunucu import randevu_olustur
+from sunucu import randevu_olustur
 
 
 # 8. Başlangıç zamanı bitişten önce olmalı
@@ -119,7 +119,7 @@ def test_baslangic_bitisten_sonra_olamaz():
 
     randevu = RandevuOlusturModeli(**veriler)
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         with pytest.raises(HTTPException) as hata:
             randevu_olustur(randevu, kullanici_id=1)
 
@@ -129,11 +129,47 @@ def test_baslangic_bitisten_sonra_olamaz():
         mock_connect.assert_not_called()
 
 
+
 # 9. Geçersiz danışan koduyla randevu oluşturulamamalı
 def test_gecersiz_danisan_kodu_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
+        mock_cursor = mock_connect.return_value.cursor.return_value
+
+        # İlk sorgu: Kullanıcı rolü ADMIN
+        # İkinci sorgu: Danışan kodu bulunamadı
+        mock_cursor.fetchone.side_effect = [
+            ("ADMIN",),
+            None,
+        ]
+
+        with pytest.raises(HTTPException) as hata:
+            randevu_olustur(randevu, kullanici_id=1)
+
+        assert hata.value.status_code == 422
+        assert hata.value.detail == (
+            "Danışan kodu bulunamadı veya aktif değil."
+        )
+
+        # Hatalı randevu veritabanına kaydedilmemeli.
+        mock_connect.return_value.commit.assert_not_called()
+
+        # INSERT sorgusu çalıştırılmamalı.
+        sorgular = [
+            cagri.args[0].strip().upper()
+            for cagri in mock_cursor.execute.call_args_list
+        ]
+        assert not any(
+            sorgu.startswith("INSERT") for sorgu in sorgular
+        )
+
+
+# 9. Geçersiz danışan koduyla randevu oluşturulamamalı
+def test_gecersiz_danisan_kodu_reddedilir():
+    randevu = RandevuOlusturModeli(**gecerli_randevu())
+
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Kullanıcı ADMIN, danışan kodu bulunamadı.
@@ -166,7 +202,7 @@ def test_gecersiz_danisan_kodu_reddedilir():
 def test_gecersiz_psikolog_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Kullanıcı ADMIN
@@ -198,11 +234,48 @@ def test_gecersiz_psikolog_reddedilir():
         )
 
 
+# 10. Geçersiz veya pasif psikologla randevu oluşturulamamalı
+def test_gecersiz_psikolog_reddedilir():
+    randevu = RandevuOlusturModeli(**gecerli_randevu())
+
+    with patch("sunucu.psycopg2.connect") as mock_connect:
+        mock_cursor = mock_connect.return_value.cursor.return_value
+
+        # Kullanıcı ADMIN
+        # Danışan kodu geçerli
+        # Psikolog bulunamadı veya aktif değil
+        mock_cursor.fetchone.side_effect = [
+            ("ADMIN",),
+            (1,),
+            None,
+        ]
+
+        with pytest.raises(HTTPException) as hata:
+            randevu_olustur(randevu, kullanici_id=1)
+
+        assert hata.value.status_code == 422
+        assert hata.value.detail == (
+            "Geçerli ve aktif bir psikolog seçilmelidir."
+        )
+
+        # Hatalı veri kaydedilmemeli.
+        mock_connect.return_value.commit.assert_not_called()
+
+        sorgular = [
+            cagri.args[0].strip().upper()
+            for cagri in mock_cursor.execute.call_args_list
+        ]
+        assert not any(
+            sorgu.startswith("INSERT") for sorgu in sorgular
+        )
+
+
+
 # 11. Geçersiz veya pasif odayla randevu oluşturulamamalı
 def test_gecersiz_oda_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Kullanıcı ADMIN
@@ -236,14 +309,14 @@ def test_gecersiz_oda_reddedilir():
         )
 
 
-from server.sunucu import randevu_guncelle
+from sunucu import randevu_guncelle
 
 
 # 12. Boş güncelleme isteği reddedilmeli
 def test_bos_guncelleme_reddedilir():
     guncelleme = RandevuGuncelleModeli()
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Randevu mevcut ve PLANLANDI durumunda
@@ -288,7 +361,7 @@ def test_bos_guncelleme_reddedilir():
 def test_null_guncelleme_reddedilir():
     guncelleme = RandevuGuncelleModeli(oda_id=None)
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Randevu mevcut ve planlandı, kullanıcı ADMIN
@@ -335,7 +408,7 @@ def test_guncellemede_gecersiz_tarih_reddedilir():
         baslangic_zamani=datetime(2026, 10, 15, 12, 0)
     )
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_cursor = mock_connect.return_value.cursor.return_value
 
         # Mevcut randevu 10.00 - 11.00 arasında
@@ -380,7 +453,7 @@ def test_guncellemede_gecersiz_tarih_reddedilir():
 def test_gecerli_randevu_guncellenir():
     guncelleme = RandevuGuncelleModeli(oda_id=2)
 
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
+    with patch("sunucu.psycopg2.connect") as mock_connect:
         mock_conn = mock_connect.return_value
         mock_cursor = mock_conn.cursor.return_value
 
