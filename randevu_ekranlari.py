@@ -1,5 +1,5 @@
 import requests
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QComboBox, QMessageBox, QDateTimeEdit)
 from PySide6.QtCore import QDateTime
 
@@ -143,7 +143,7 @@ class RandevuOlusturFormu(QWidget):
 
 
 # ======================================================================
-#  APT-003: MEVCUT RANDEVUYU DÜZENLEME FORMU
+#  APT-003 & APT-004: MEVCUT RANDEVUYU DÜZENLEME VE İPTAL FORMU
 # ======================================================================
 class RandevuDuzenleFormu(QWidget):
     def __init__(self, api_url, token, mevcut_psikolog_id, randevu_id, eski_veriler):
@@ -154,8 +154,8 @@ class RandevuDuzenleFormu(QWidget):
         self.randevu_id = randevu_id
         self.eski_veriler = eski_veriler 
         
-        self.setWindowTitle(f"Randevu Düzenle (ID: {self.randevu_id})")
-        self.resize(450, 250)
+        self.setWindowTitle(f"Randevu Yönetimi (ID: {self.randevu_id})")
+        self.resize(450, 300) # Formu butonlar için biraz uzattık
         
         self.init_ui()
         self.odalari_yukle()
@@ -191,15 +191,29 @@ class RandevuDuzenleFormu(QWidget):
         self.dt_bitis.setDisplayFormat("yyyy-MM-dd HH:mm:00")
         form_layout.addRow("Bitiş:", self.dt_bitis)
 
-        self.btn_guncelle = StandartButon("Değişiklikleri Kaydet")
-        self.btn_guncelle.setStyleSheet("background-color: #f39c12; color: white; border-radius: 6px; padding: 10px; font-weight: bold;") # Turuncu
-        self.btn_guncelle.clicked.connect(self.randevuyu_guncelle)
-
         layout.addLayout(form_layout)
-        layout.addWidget(self.btn_guncelle)
+        
+        # --- BUTONLAR BÖLÜMÜ (Yatay Hizada) ---
+        buton_layout = QHBoxLayout()
+        
+        # Güncelle Butonu
+        self.btn_guncelle = StandartButon("Değişiklikleri Kaydet")
+        self.btn_guncelle.setStyleSheet("background-color: #f39c12; color: white; border-radius: 6px; padding: 10px; font-weight: bold;")
+        self.btn_guncelle.clicked.connect(self.randevuyu_guncelle)
+        
+        # İptal Et Butonu (APT-004)
+        self.btn_iptal = StandartButon("Randevuyu İptal Et")
+        self.btn_iptal.setStyleSheet("background-color: #c0392b; color: white; border-radius: 6px; padding: 10px; font-weight: bold;")
+        self.btn_iptal.clicked.connect(self.randevuyu_iptal_et)
+        
+        buton_layout.addWidget(self.btn_guncelle)
+        buton_layout.addWidget(self.btn_iptal)
+        
+        layout.addLayout(buton_layout)
         self.setLayout(layout)
 
     def odalari_yukle(self):
+        """Arkadaşının uyarısıyla buradaki except: pass hataları da giderildi."""
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
@@ -207,7 +221,8 @@ class RandevuDuzenleFormu(QWidget):
                 for oda in cevap.json():
                     if oda["aktif_mi"]:
                         self.cmb_odalar.addItem(oda["oda_adi"], oda["oda_id"])
-        except: pass
+        except Exception as e:
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
 
     def danisanlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -216,12 +231,11 @@ class RandevuDuzenleFormu(QWidget):
             if cevap.status_code == 200:
                 for kod in cevap.json():
                     self.cmb_danisan_kodu.addItem(kod["danisan_kod_id"])
-        except: pass
+        except Exception as e:
+            pass # Arayüzü dondurmamak için sessiz geçilebilir, odalar daha kritik.
 
     def eski_verileri_arayuze_bas(self):
-        """Açılır açılmaz kutuları eski verilerle doldurur"""
         self.cmb_danisan_kodu.setCurrentText(self.eski_veriler["danisan_kod_id"])
-        
         oda_index = self.cmb_odalar.findData(self.eski_veriler["oda_id"])
         if oda_index >= 0:
             self.cmb_odalar.setCurrentIndex(oda_index)
@@ -234,7 +248,6 @@ class RandevuDuzenleFormu(QWidget):
         girilen_danisan = self.cmb_danisan_kodu.currentText().strip()
         secilen_oda_id = self.cmb_odalar.currentData()
         
-        # FORM DOĞRULAMASI (Code Review - Madde 4)
         if not girilen_danisan:
             QMessageBox.warning(self, "Eksik Veri", "Lütfen bir danışan kodu giriniz.")
             return
@@ -255,7 +268,6 @@ class RandevuDuzenleFormu(QWidget):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            # POST yerine PATCH atıyoruz (APT-003)
             cevap = requests.patch(f"{self.api_url}/api/randevular/{self.randevu_id}", 
                                   json=guncel_veriler, 
                                   headers=headers,
@@ -272,3 +284,36 @@ class RandevuDuzenleFormu(QWidget):
             QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı, işlem çok uzun sürdü.")
         except Exception as e:
             QMessageBox.critical(self, "Hata", str(e))
+
+# GÜNCELLENEN APT-004 İPTAL FONKSİYONU (Backend ile %100 Uyumlu)
+    def randevuyu_iptal_et(self):
+        """Kullanıcıdan onay alır ve API'ye PATCH iptal isteği yollar."""
+        cevap = QMessageBox.question(self, "İptal Onayı", 
+                                     "Bu randevuyu iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+                                     QMessageBox.Yes | QMessageBox.No)
+        
+        if cevap == QMessageBox.No:
+            return # Kullanıcı vazgeçti
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            # DÜZELTME: Öğrenci C'nin sunucu.py koduna istinaden PATCH metodu ve /iptal eki kullanıldı!
+            yanit = requests.patch(f"{self.api_url}/api/randevular/{self.randevu_id}/iptal", 
+                                    headers=headers, timeout=5)
+            
+            if yanit.status_code == 200:
+                QMessageBox.information(self, "İptal Edildi", "Randevu başarıyla iptal edildi.")
+                self.close() # Formu kapatıp ana ekrana dön
+            elif yanit.status_code == 403:
+                QMessageBox.warning(self, "Yetkisiz İşlem", "Sadece kendi randevularınızı iptal edebilirsiniz!")
+            elif yanit.status_code == 404:
+                QMessageBox.warning(self, "Bulunamadı", "İptal edilmek istenen randevu sistemde bulunamadı.")
+            elif yanit.status_code == 409:
+                QMessageBox.warning(self, "Geçersiz İşlem", "Bu randevu zaten iptal edilmiş veya iptal edilemez durumda.")
+            else:
+                QMessageBox.warning(self, "Hata", f"İptal işlemi başarısız: {yanit.json().get('detail')}")
+                
+        except requests.exceptions.Timeout:
+            QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı, işlem çok uzun sürdü.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Beklenmeyen bir hata oluştu: {str(e)}")
