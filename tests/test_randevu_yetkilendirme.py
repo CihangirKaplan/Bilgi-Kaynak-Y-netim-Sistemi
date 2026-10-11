@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from modeller import RandevuGuncelleModeli, RandevuOlusturModeli
-from sunucu import (
+from server.modeller import RandevuGuncelleModeli, RandevuOlusturModeli
+from server.sunucu import (
     randevu_guncelle,
     randevu_iptal_et,
     randevu_olustur,
@@ -35,7 +35,7 @@ def test_psikolog_baskasinin_randevusunu_guncelleyemez():
     ]
 
     # Gerçek veritabanına bağlanılmasını engelle
-    with patch("sunucu.psycopg2.connect", return_value=mock_conn):
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         with pytest.raises(HTTPException) as hata:
             randevu_guncelle(
                 randevu_id=5,
@@ -70,7 +70,7 @@ def test_psikolog_baskasinin_randevusunu_iptal_edemez():
         (1,),
     ]
 
-    with patch("sunucu.psycopg2.connect", return_value=mock_conn):
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         with pytest.raises(HTTPException) as hata:
             randevu_iptal_et(
                 randevu_id=5,
@@ -111,7 +111,7 @@ def test_psikolog_baskasi_adina_randevu_olusturamaz():
         bitis_zamani="2026-10-15T16:00:00",
     )
 
-    with patch("sunucu.psycopg2.connect", return_value=mock_conn):
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         with pytest.raises(HTTPException) as hata:
             randevu_olustur(
                 randevu=randevu,
@@ -156,7 +156,7 @@ def test_psikolog_kendi_randevusunu_guncelleyebilir():
         None,           # Randevu çakışması yok
     ]
 
-    with patch("sunucu.psycopg2.connect", return_value=mock_conn):
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         sonuc = randevu_guncelle(
             randevu_id=2,
             guncelleme=RandevuGuncelleModeli(oda_id=1),
@@ -204,7 +204,7 @@ def test_psikolog_tum_randevulari_goruntuleyebilir():
         ),
     ]
 
-    with patch("sunucu.psycopg2.connect", return_value=mock_conn):
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         sonuc = randevulari_listele(kullanici_id=10)
 
     assert len(sonuc) == 2
