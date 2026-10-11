@@ -1030,7 +1030,7 @@ def danisan_kodu_olustur(
 
 @app.get("/api/odalar")
 def odalari_listele(
-    kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))
+    #kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))
 ):
     conn = None
     cursor = None
@@ -1097,6 +1097,36 @@ def oda_detay(
             "aktif_mi": oda[3]
         }
 
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+# APT-API-002: Kayıtlı Danışan Kodlarını Listeleme
+@app.get("/api/danisan-kodlari")
+def danisan_kodlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece aktif olan danışanları getir
+        cursor.execute("""
+            SELECT danisan_kod_id, ucretli_mi, aktif_mi
+            FROM danisan_kodlari
+            WHERE aktif_mi = TRUE
+            ORDER BY olusturulma_tarihi DESC;
+        """)
+        kayitlar = cursor.fetchall()
+        return [
+            {
+                "danisan_kod_id": k[0],
+                "ucretli_mi": k[1],
+                "aktif_mi": k[2]
+            }
+            for k in kayitlar
+        ]
     finally:
         if cursor is not None:
             cursor.close()

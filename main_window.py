@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
+from randevu_ekranlari import RandevuOlusturFormu
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -247,10 +248,18 @@ def kart_olustur():
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()   # "Oturumu Kapat" butonuna basılınca giriş ekranına haber verir
 
-    def __init__(self, aktif_rol="admin", kullanici_adi="", rol_onizleme=False):
+
+    def __init__(self, aktif_rol="admin", kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
         super().__init__()
+        # ... (mevcut kodlar)
         self.aktif_rol = aktif_rol.lower() if aktif_rol.lower() in ROLLER else "admin"
-        self.kullanici_adi = kullanici_adi          # ekranda görünecek ad soyad
+        self.kullanici_adi = kullanici_adi          
+        self.rol_onizleme = rol_onizleme            
+
+        # YENİ EKLENEN KISIM:
+        self.api_url = "http://127.0.0.1:8000"
+        self.token = token
+        self.kullanici_id = kullanici_id
         self.rol_onizleme = rol_onizleme            # sadece geliştirme/test için True
         self.resize(1360, 820)
         self.setMinimumSize(1100, 700)
@@ -364,6 +373,16 @@ class AnaPencere(QMainWindow):
         self.nav_grup = QButtonGroup(self)
         self.nav_grup.setExclusive(True)
         self.sayfa_bilgi = []
+
+        self.btn_yeni_randevu = QPushButton("＋ Yeni Randevu Oluştur")
+        self.btn_yeni_randevu.setObjectName("aksiyon") # Temaya uygun mavi buton yapar
+        self.btn_yeni_randevu.setCursor(Qt.PointingHandCursor)
+        self.btn_yeni_randevu.clicked.connect(self.yeni_randevu_ekrani_ac)
+        
+        # Butonu sağ üstteki topbar içine ekliyoruz
+        tb.addWidget(self.btn_yeni_randevu)
+
+        self.rol_uygula(self.aktif_rol)
 
         self.rol_uygula(self.aktif_rol)
 
@@ -580,6 +599,15 @@ class AnaPencere(QMainWindow):
         il.addWidget(e1); il.addWidget(e2); il.addWidget(e3)
         lay.addWidget(ik, 1)
         return govde
+
+    def yeni_randevu_ekrani_ac(self):
+        # Artık doğrudan self üzerinden (gerçek değerleri) alıyoruz
+        self.randevu_formu = RandevuOlusturFormu(
+            api_url=self.api_url, 
+            token=self.token, 
+            mevcut_psikolog_id=self.kullanici_id 
+        )
+        self.randevu_formu.show()
 
 
 if __name__ == "__main__":
