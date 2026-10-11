@@ -129,42 +129,6 @@ def test_baslangic_bitisten_sonra_olamaz():
         mock_connect.assert_not_called()
 
 
-
-# 9. Geçersiz danışan koduyla randevu oluşturulamamalı
-def test_gecersiz_danisan_kodu_reddedilir():
-    randevu = RandevuOlusturModeli(**gecerli_randevu())
-
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
-
-        # İlk sorgu: Kullanıcı rolü ADMIN
-        # İkinci sorgu: Danışan kodu bulunamadı
-        mock_cursor.fetchone.side_effect = [
-            ("ADMIN",),
-            None,
-        ]
-
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
-
-        assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Danışan kodu bulunamadı veya aktif değil."
-        )
-
-        # Hatalı randevu veritabanına kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
-
-        # INSERT sorgusu çalıştırılmamalı.
-        sorgular = [
-            cagri.args[0].strip().upper()
-            for cagri in mock_cursor.execute.call_args_list
-        ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
-
 # 9. Geçersiz danışan koduyla randevu oluşturulamamalı
 def test_gecersiz_danisan_kodu_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
@@ -232,43 +196,6 @@ def test_gecersiz_psikolog_reddedilir():
         assert not any(
             sorgu.startswith("INSERT") for sorgu in sorgular
         )
-
-
-# 10. Geçersiz veya pasif psikologla randevu oluşturulamamalı
-def test_gecersiz_psikolog_reddedilir():
-    randevu = RandevuOlusturModeli(**gecerli_randevu())
-
-    with patch("server.sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
-
-        # Kullanıcı ADMIN
-        # Danışan kodu geçerli
-        # Psikolog bulunamadı veya aktif değil
-        mock_cursor.fetchone.side_effect = [
-            ("ADMIN",),
-            (1,),
-            None,
-        ]
-
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
-
-        assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Geçerli ve aktif bir psikolog seçilmelidir."
-        )
-
-        # Hatalı veri kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
-
-        sorgular = [
-            cagri.args[0].strip().upper()
-            for cagri in mock_cursor.execute.call_args_list
-        ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
 
 
 # 11. Geçersiz veya pasif odayla randevu oluşturulamamalı
