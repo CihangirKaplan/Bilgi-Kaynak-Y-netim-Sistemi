@@ -1,12 +1,12 @@
 import sys
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
     QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from randevu_ekranlari import RandevuOlusturFormu
+from randevu_ekranlari import RandevuOlusturFormu, RandevuDuzenleFormu
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -375,9 +375,17 @@ class AnaPencere(QMainWindow):
         self.sayfa_bilgi = []
 
         self.btn_yeni_randevu = QPushButton("＋ Yeni Randevu Oluştur")
-        self.btn_yeni_randevu.setObjectName("aksiyon") # Temaya uygun mavi buton yapar
+        self.btn_yeni_randevu.setObjectName("aksiyon") 
         self.btn_yeni_randevu.setCursor(Qt.PointingHandCursor)
         self.btn_yeni_randevu.clicked.connect(self.yeni_randevu_ekrani_ac)
+        tb.addWidget(self.btn_yeni_randevu)
+
+        # TEST AMAÇLI DÜZENLEME BUTONU:
+        self.btn_randevu_duzenle = QPushButton("✎ Son Randevuyu Düzenle")
+        self.btn_randevu_duzenle.setStyleSheet("background-color: #f39c12; color: white; border-radius: 10px; padding: 11px 20px; font-weight: bold;")
+        self.btn_randevu_duzenle.setCursor(Qt.PointingHandCursor)
+        self.btn_randevu_duzenle.clicked.connect(self.randevu_duzenle_ekrani_ac)
+        tb.addWidget(self.btn_randevu_duzenle)
         
         # Butonu sağ üstteki topbar içine ekliyoruz
         tb.addWidget(self.btn_yeni_randevu)
@@ -608,6 +616,29 @@ class AnaPencere(QMainWindow):
             mevcut_psikolog_id=self.kullanici_id 
         )
         self.randevu_formu.show()
+
+    def randevu_duzenle_ekrani_ac(self):
+        import requests
+        headers = {"Authorization": f"Bearer {self.token}"}
+        
+        # Test için: Sistemdeki tüm randevuları çek ve en sonuncusunu düzenlemeye çalış
+        cevap = requests.get(f"{self.api_url}/api/randevular", headers=headers)
+        randevular = cevap.json()
+        
+        if len(randevular) == 0:
+            QMessageBox.warning(self, "Uyarı", "Sistemde düzenlenecek hiç randevu yok!")
+            return
+            
+        son_randevu = randevular[-1] # En son oluşturulan randevuyu alıyoruz
+        
+        self.duzenle_formu = RandevuDuzenleFormu(
+            api_url=self.api_url, 
+            token=self.token, 
+            mevcut_psikolog_id=self.kullanici_id,
+            randevu_id=son_randevu["randevu_id"],
+            eski_veriler=son_randevu
+        )
+        self.duzenle_formu.show()
 
 
 if __name__ == "__main__":

@@ -192,10 +192,9 @@ class LoginEkrani(QWidget):
         self.hata_lbl.show()
 
     def rol_adindan_koda(self, rol_id):
-        """API'den dönen rol_id'yi uygulamanın anladığı string formata çevirir"""
-        # Veritabanında rollerin sıralamasına göre ayarlanmalı. (Varsayılan olarak)
-        roller = {1: "admin", 2: "mudur", 3: "psikolog", 4: "memur", 5: "ogrenci"}
-        return roller.get(rol_id, "psikolog") # Bulamazsa varsayılan psikolog
+        # Varsayılan değer "psikolog" değil, artık "None" (Tanımsız) olmalı! (Madde 1 Çözümü)
+        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
+        return roller.get(rol_id, None)
 
     def giris_yap(self):
         if self.kalan > 0:
@@ -217,21 +216,33 @@ class LoginEkrani(QWidget):
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
+                
+                r_id = veri.get("rol_id")
+                aktif_rol = self.rol_adindan_koda(r_id)
+
+                # Madde 1 Çözümü: Rol tanımlı değilse girişi reddet (Fail-Closed)
+                if aktif_rol is None:
+                    self.hata_goster("Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
+                    return
+
+                # Madde 3 Çözümü: Artık personel_id alıyoruz
+                k_id = veri.get("kullanici_id")
+                p_id = veri.get("personel_id") # API'den yeni eklediğimiz alanı çektik
+                # Eğer personel kaydı yoksa (admin vs) güvenlik için kullanici_id yedek kalabilir.
+                aktif_personel_id = p_id if p_id else k_id 
+
                 # BAŞARILI GİRİŞ
                 self.hatali_deneme = 0
                 self.hata_lbl.hide()
                 
                 gercek_token = veri.get("access_token")
-                k_id = veri.get("kullanici_id")
                 k_adi = veri.get("kullanici_adi")
-                r_id = veri.get("rol_id")
-                aktif_rol = self.rol_adindan_koda(r_id)
 
                 self.ana_pencere = AnaPencere(
                     aktif_rol=aktif_rol, 
                     kullanici_adi=k_adi,
                     token=gercek_token,  # Artık gerçek Token gönderiyoruz!
-                    kullanici_id=k_id    # Artık gerçek ID gönderiyoruz!
+                    kullanici_id=aktif_personel_id  # ARTIK GERÇEK PERSONEL_ID GİDİYOR
                 )
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.show()

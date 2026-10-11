@@ -290,15 +290,18 @@ def giris_yap(giris: GirisModeli):
             (kullanici[0],)
         )
         conn.commit()
+# (login başarılı oldu kısmındayız, access_token oluşturuldu)
         access_token = access_token_olustur(kullanici[0])
+
+        # YENİ EKLENEN: Psikolog ise personel_id'sini bul
+        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici[0],))
+        pers = cursor.fetchone()
+        personel_id = pers[0] if pers else None
 
         # Giriş başarılı.
         denetim_kaydi_olustur(
-            VT_AYARLARI,
-            olay_turu="LOGIN",
-            kullanici_id=kullanici[0],
-            hedef_tablo="kullanicilar",
-            hedef_kayit_id=kullanici[0]
+            VT_AYARLARI, olay_turu="LOGIN", kullanici_id=kullanici[0], 
+            hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0]
         )
         return {
             "durum": "basarili",
@@ -306,6 +309,7 @@ def giris_yap(giris: GirisModeli):
             "access_token": access_token,
             "token_type": "bearer",
             "kullanici_id": kullanici[0],
+            "personel_id": personel_id, # ARTIK PERSONEL ID DE GİDİYOR
             "kullanici_adi": kullanici[1],
             "rol_id": kullanici[3]
         }
@@ -1105,7 +1109,7 @@ def oda_detay(
 
 # APT-API-002: Kayıtlı Danışan Kodlarını Listeleme
 @app.get("/api/danisan-kodlari")
-def danisan_kodlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
     cursor = None
     try:

@@ -1,6 +1,13 @@
 import psycopg2
 # Kendi güvenlik fonksiyonlarımızı import ediyoruz
 from guvenlik import parola_hashle 
+import sys # sys kütüphanesi eklendi
+
+# GÜVENLİK KİLİDİ (Madde 6)
+onay = input("DİKKAT: Bu script test verilerini ezecek ve şifreleri sıfırlayacaktır. SADECE GELİŞTİRME ortamında çalıştırınız. Devam etmek istiyor musunuz? (evet/hayir): ")
+if onay.lower() != "evet":
+    print("İşlem iptal edildi.")
+    sys.exit()
 
 # 1. YEREL (LOCALHOST) VERİTABANI BAĞLANTI AYARLARI
 DB_HOST = "localhost"  
