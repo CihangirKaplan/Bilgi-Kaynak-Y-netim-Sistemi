@@ -1,6 +1,19 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
+
+# ROOM-001: Oda Veritabanı Modeli (SQL Şeması ile Birebir Uyumlu)
+class Oda(Base):
+    __tablename__ = "odalar"
+
+    oda_id = Column(Integer, primary_key=True, autoincrement=True)
+    oda_adi = Column(String(50), unique=True, nullable=False)
+    kapasite = Column(Integer, default=1)
+    aktif_mi = Column(Boolean, default=True, nullable=False)
 
 # DEV-001: Device Temel Modeli
 class CihazModeli(BaseModel):
@@ -97,4 +110,6 @@ class RandevuGuncelleModeli(BaseModel):
         if deger is not None and not deger.strip():
             raise ValueError("Danışan kodu boş olamaz.")
         return deger
+
+
 
