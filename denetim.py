@@ -1,4 +1,4 @@
-import psycopg2
+import psycopg2 # veritabanı bağlantısı için psycopg2 kütüphanesini içe aktarır
 
 
 def denetim_kaydi_olustur(

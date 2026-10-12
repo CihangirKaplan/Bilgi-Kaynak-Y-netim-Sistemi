@@ -192,7 +192,7 @@ class LoginEkrani(QWidget):
         self.hata_lbl.show()
 
     def rol_adindan_koda(self, rol_id):
-        # Varsayılan değer "psikolog" değil, artık "None" (Tanımsız) olmalı! (Madde 1 Çözümü)
+        # API'den gelen Rol ID'sini arayüzün anladığı kelimelere (slug) çevirir.
         roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
         return roller.get(rol_id, None)
 
@@ -207,45 +207,50 @@ class LoginEkrani(QWidget):
             self.hata_goster("Kullanıcı adı ve şifre boş bırakılamaz.")
             return
 
-        # GERÇEK API'YE BAĞLANMA (AUTH-004: Login Endpointi)
+        # ==========================================
+        # GERÇEK API'YE (SUNUCUYA) BAĞLANTI KATMANI
+        # ==========================================
         try:
             cevap = requests.post(
                 f"{API_URL}/api/login",
-                json={"kullanici_adi": kullanici, "parola": sifre}
+                json={"kullanici_adi": kullanici, "parola": sifre},
+                timeout=5
             )
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
                 
+                # Yetki ve Rol Kontrolü
                 r_id = veri.get("rol_id")
                 aktif_rol = self.rol_adindan_koda(r_id)
 
-                # Madde 1 Çözümü: Rol tanımlı değilse girişi reddet (Fail-Closed)
                 if aktif_rol is None:
                     self.hata_goster("Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
                     return
 
-                # Madde 3 Çözümü: Artık personel_id alıyoruz
-                k_id = veri.get("kullanici_id")
-                p_id = veri.get("personel_id") # API'den yeni eklediğimiz alanı çektik
-                # Eğer personel kaydı yoksa (admin vs) güvenlik için kullanici_id yedek kalabilir.
-                aktif_personel_id = p_id if p_id else k_id 
-
-                # BAŞARILI GİRİŞ
+                # Güvenli Giriş Onayı
                 self.hatali_deneme = 0
                 self.hata_lbl.hide()
                 
                 gercek_token = veri.get("access_token")
                 k_adi = veri.get("kullanici_adi")
+                k_id = veri.get("kullanici_id")
+                p_id = veri.get("personel_id")
+                aktif_personel_id = p_id if p_id else k_id 
 
+                # 1. Ana Pencereyi var olan yapısına uygun yaratıyoruz (Çökmeyi engeller)
                 self.ana_pencere = AnaPencere(
                     aktif_rol=aktif_rol, 
-                    kullanici_adi=k_adi,
-                    token=gercek_token,  # Artık gerçek Token gönderiyoruz!
-                    kullanici_id=aktif_personel_id  # ARTIK GERÇEK PERSONEL_ID GİDİYOR
+                    kullanici_adi=k_adi
                 )
+                
+                # 2. Token ve ID'yi pencerenin içine sonradan (dinamik olarak) enjekte ediyoruz
+                self.ana_pencere.token = gercek_token
+                self.ana_pencere.kullanici_id = aktif_personel_id
+
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.show()
+                
                 self.kullanici_input.clear()
                 self.sifre_input.clear()
                 self.goster.setChecked(False)
@@ -292,6 +297,7 @@ class LoginEkrani(QWidget):
             return
         self.hata_goster(f"Çok fazla hatalı deneme. {self.kalan} saniye kilitlendiniz.")
         self.kalan -= 1
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
