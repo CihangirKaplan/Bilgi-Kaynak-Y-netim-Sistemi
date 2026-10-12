@@ -321,6 +321,8 @@ INSERT INTO izinler (izin_adi, aciklama) VALUES
     ('RANDEVU_IPTAL', 'Randevu iptal etme'),
     ('TAKVIM_GORUNTULE', 'Randevu takvimini görüntüleme'),
     ('ODA_DURUMU_GORUNTULE', 'Oda kullanım durumunu görüntüleme'),
+    ('ODA_EKLE', 'Sisteme yeni oda ekleme'),
+    ('ODA_DUZENLE', 'Mevcut oda bilgilerini düzenleme'),
     ('CIHAZ_UYGUNLUK_GORUNTULE', 'Cihaz uygunluğunu görüntüleme'),
     ('CIHAZ_ENVANTER_YONET', 'Cihaz envanterini yönetme'),
     ('CIHAZ_REZERVASYON', 'Cihaz rezervasyonu yapma'),
@@ -376,6 +378,8 @@ SELECT
     CASE WHEN i.izin_adi IN (
         'TAKVIM_GORUNTULE',
         'ODA_DURUMU_GORUNTULE',
+        'ODA_EKLE',
+        'ODA_DUZENLE',
         'CIHAZ_UYGUNLUK_GORUNTULE',
         'CIHAZ_ENVANTER_YONET',
         'CIHAZ_REZERVASYON',
@@ -403,6 +407,8 @@ SELECT
     CASE WHEN i.izin_adi IN (
         'TAKVIM_GORUNTULE',
         'ODA_DURUMU_GORUNTULE',
+        'ODA_EKLE',
+        'ODA_DUZENLE',
         'CIHAZ_UYGUNLUK_GORUNTULE',
         'CIHAZ_ENVANTER_YONET',
         'BAKIM_KAYITLARI_YONET',
