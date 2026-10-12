@@ -1,6 +1,5 @@
 import sys
-import hmac
-import hashlib
+import requests
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QFrame, QPushButton, QCheckBox, QGraphicsDropShadowEffect
@@ -9,47 +8,13 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from main_window import AnaPencere
 
-
 # ======================================================================
-#  KULLANICI DOĞRULAMA
-#  Şimdilik demo kullanıcılar. Veritabanı bağlandığında sadece
-#  `kullanici_dogrula` fonksiyonunu DB sorgusuyla değiştirmeniz yeterli.
-#  Rol, kullanıcıya ait kayıttan gelir; giriş ekranında rol SEÇİLMEZ.
+#  TEMA VE SABİTLER
 # ======================================================================
-def _hashle(sifre, tuz):
-    return hashlib.pbkdf2_hmac("sha256", sifre.encode("utf-8"), tuz.encode("utf-8"), 120_000).hex()
+API_URL = "http://127.0.0.1:8000" # Sunucu adresimiz
+MAX_DENEME = 5
+KILIT_SANIYE = 30
 
-
-def _kullanici(ad_soyad, rol, sifre):
-    tuz = f"bkys-{rol}"
-    return {"ad_soyad": ad_soyad, "rol": rol, "tuz": tuz, "hash": _hashle(sifre, tuz)}
-
-
-KULLANICILAR = {
-    "psikolog": _kullanici("Psikolog Hesabı",        "psikolog", "Psikolog.123"),
-    "memur":    _kullanici("Memur Hesabı",           "memur",    "Memur.123"),
-    "mudur":    _kullanici("Müdür Hesabı",           "mudur",    "Mudur.123"),
-    "ogrenci":  _kullanici("Danışma Öğrencisi",      "ogrenci",  "Ogrenci.123"),
-    "asistan":  _kullanici("Proje Asistanı",         "asistan",  "Asistan.123"),
-    "admin":    _kullanici("Sistem Yöneticisi",      "admin",    "Admin.123"),
-}
-
-
-def kullanici_dogrula(kullanici_adi, sifre):
-    """Doğruysa kullanıcı sözlüğünü, yanlışsa None döner."""
-    kayit = KULLANICILAR.get(kullanici_adi.strip().lower())
-    if not kayit:
-        # Kullanıcı yokken de hash hesapla (zamanlama farkını azaltır)
-        _hashle(sifre, "bkys-bos")
-        return None
-    if hmac.compare_digest(_hashle(sifre, kayit["tuz"]), kayit["hash"]):
-        return kayit
-    return None
-
-
-# ======================================================================
-#  TEMA
-# ======================================================================
 STIL = """
 * { font-family: 'Segoe UI', 'Inter', Arial; }
 QWidget#kok { background: #EAF0FA; }
@@ -98,10 +63,6 @@ QPushButton#giris:disabled { background: #B7C6E6; color: #EEF3FF; }
 QLabel#guvenlik { color: #8A9BC0; font-size: 11px; background: transparent; }
 """
 
-MAX_DENEME = 5
-KILIT_SANIYE = 30
-
-
 class LoginEkrani(QWidget):
     def __init__(self):
         super().__init__()
@@ -147,10 +108,10 @@ class LoginEkrani(QWidget):
         ml.addSpacing(4)
         ml.addWidget(alt)
         ml.addSpacing(34)
-        for metin in ("✔   Role dayalı erişim kontrolü",
-                      "✔   Denetim izi (audit) kaydı",
-                      "✔   Cihaz yaşam döngüsü takibi",
-                      "✔   Randevu ve oda yönetimi"):
+        for metin in ("✔  Role dayalı erişim kontrolü",
+                      "✔  Denetim izi (audit) kaydı",
+                      "✔  Cihaz yaşam döngüsü takibi",
+                      "✔  Randevu ve oda yönetimi"):
             o = QLabel(metin)
             o.setObjectName("ozellik")
             ml.addWidget(o)
@@ -226,14 +187,19 @@ class LoginEkrani(QWidget):
         self.sifre_input.returnPressed.connect(self.giris_yap)
         self.kullanici_input.setFocus()
 
-    # ------------------------------------------------------------------
     def hata_goster(self, metin):
         self.hata_lbl.setText("⚠  " + metin)
         self.hata_lbl.show()
 
+    def rol_adindan_koda(self, rol_id):
+        # API'den gelen Rol ID'sini arayüzün anladığı kelimelere (slug) çevirir.
+        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
+        return roller.get(rol_id, None)
+
     def giris_yap(self):
         if self.kalan > 0:
             return
+        
         kullanici = self.kullanici_input.text().strip()
         sifre = self.sifre_input.text()
 
@@ -241,35 +207,74 @@ class LoginEkrani(QWidget):
             self.hata_goster("Kullanıcı adı ve şifre boş bırakılamaz.")
             return
 
-        kayit = kullanici_dogrula(kullanici, sifre)
-        if kayit is None:
-            self.hatali_deneme += 1
-            kalan_hak = MAX_DENEME - self.hatali_deneme
-            if kalan_hak <= 0:
-                self.kilitle()
-            else:
-                self.hata_goster(f"Kullanıcı adı veya şifre hatalı. Kalan deneme hakkı: {kalan_hak}")
-            self.sifre_input.clear()
-            self.sifre_input.setFocus()
-            return
+        # ==========================================
+        # GERÇEK API'YE (SUNUCUYA) BAĞLANTI KATMANI
+        # ==========================================
+        try:
+            cevap = requests.post(
+                f"{API_URL}/api/login",
+                json={"kullanici_adi": kullanici, "parola": sifre},
+                timeout=5
+            )
+            veri = cevap.json()
 
-        # ---- BAŞARILI GİRİŞ: rol, kullanıcı kaydından gelir ----
-        self.hatali_deneme = 0
-        self.hata_lbl.hide()
-        self.ana_pencere = AnaPencere(aktif_rol=kayit["rol"], kullanici_adi=kayit["ad_soyad"])
-        self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
-        self.ana_pencere.show()
-        self.kullanici_input.clear()
-        self.sifre_input.clear()
-        self.goster.setChecked(False)
-        self.hide()
+            if cevap.status_code == 200 and veri.get("durum") == "basarili":
+                
+                # Yetki ve Rol Kontrolü
+                r_id = veri.get("rol_id")
+                aktif_rol = self.rol_adindan_koda(r_id)
+
+                if aktif_rol is None:
+                    self.hata_goster("Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
+                    return
+
+                # Güvenli Giriş Onayı
+                self.hatali_deneme = 0
+                self.hata_lbl.hide()
+                
+                gercek_token = veri.get("access_token")
+                k_adi = veri.get("kullanici_adi")
+                k_id = veri.get("kullanici_id")
+                p_id = veri.get("personel_id")
+                aktif_personel_id = p_id if p_id else k_id 
+
+                # 1. Ana Pencereyi var olan yapısına uygun yaratıyoruz (Çökmeyi engeller)
+                self.ana_pencere = AnaPencere(
+                    aktif_rol=aktif_rol, 
+                    kullanici_adi=k_adi
+                )
+                
+                # 2. Token ve ID'yi pencerenin içine sonradan (dinamik olarak) enjekte ediyoruz
+                self.ana_pencere.token = gercek_token
+                self.ana_pencere.kullanici_id = aktif_personel_id
+
+                self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
+                self.ana_pencere.show()
+                
+                self.kullanici_input.clear()
+                self.sifre_input.clear()
+                self.goster.setChecked(False)
+                self.hide()
+            
+            elif cevap.status_code == 429: # Çok fazla hatalı giriş (Kilitlenme)
+                self.kilitle()
+                
+            else: # 401 veya 403 (Hatalı şifre / Pasif hesap)
+                self.hata_goster(veri.get("detail", "Giriş başarısız."))
+                self.hatali_deneme += 1
+                self.sifre_input.clear()
+                self.sifre_input.setFocus()
+                
+        except requests.exceptions.ConnectionError:
+            self.hata_goster("Sunucuya bağlanılamadı. API'nin açık olduğundan emin olun.")
+        except Exception as e:
+            self.hata_goster(f"Beklenmeyen bir hata oluştu: {str(e)}")
 
     def oturum_kapandi(self):
         """Ana pencerede 'Oturumu Kapat'a basılınca giriş ekranı geri gelir."""
         self.kullanici_input.setFocus()
         self.show()
 
-    # ---------------- Kaba kuvvet koruması ----------------
     def kilitle(self):
         self.kalan = KILIT_SANIYE
         self.hatali_deneme = 0
@@ -290,7 +295,7 @@ class LoginEkrani(QWidget):
             self.hata_lbl.hide()
             self.kullanici_input.setFocus()
             return
-        self.hata_goster(f"Çok fazla hatalı deneme. {self.kalan} saniye sonra tekrar deneyin.")
+        self.hata_goster(f"Çok fazla hatalı deneme. {self.kalan} saniye kilitlendiniz.")
         self.kalan -= 1
 
 
