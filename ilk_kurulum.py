@@ -6,20 +6,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # .env dosyasından ayarları okuyoruz
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASSWORD")
-DB_PORT = os.getenv("DB_PORT")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_NAME = os.getenv("DB_NAME", "crkys")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASSWORD", "123")
+DB_PORT = os.getenv("DB_PORT", "5432")
 
 # Takım arkadaşları için toplu test kullanıcıları listesi
+# Arayüzdeki güncel 'personel_kodu' mimarisine uyarlandı.
 TEST_KULLANICILARI = [
-    {"k_adi": "doktor_cihangir", "sifre": "Cihangir.123", "rol": "PSIKOLOG", "ad": "Cihangir", "soyad": "Kaplan", "unvan": "Uzman Psikolog"},
-    {"k_adi": "admin", "sifre": "Admin.123", "rol": "ADMIN", "ad": "Sistem", "soyad": "Yöneticisi", "unvan": "Kurucu Admin"},
-    {"k_adi": "memur", "sifre": "Memur.123", "rol": "MEMUR", "ad": "Ahmet", "soyad": "Yılmaz", "unvan": "Cihaz Sorumlusu"},
-    {"k_adi": "mudur", "sifre": "Mudur.123", "rol": "MUDUR", "ad": "Ayşe", "soyad": "Kaya", "unvan": "Klinik Müdürü"},
-    {"k_adi": "ogrenci", "sifre": "Ogrenci.123", "rol": "DANISMA_OGRENCISI", "ad": "Can", "soyad": "Öztürk", "unvan": "Stajyer Öğrenci"},
-    {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "ASISTAN", "ad": "Fatma", "soyad": "Çelik", "unvan": "Proje Asistanı"}
+    {"k_adi": "doktor_cihangir", "sifre": "Cihangir.123", "rol": "PSIKOLOG", "p_kodu": "PER-PSK-001"},
+    {"k_adi": "admin", "sifre": "Admin.123", "rol": "ADMIN", "p_kodu": "PER-ADM-001"},
+    {"k_adi": "memur", "sifre": "Memur.123", "rol": "MEMUR", "p_kodu": "PER-MEM-001"},
+    {"k_adi": "mudur", "sifre": "Mudur.123", "rol": "MUDUR", "p_kodu": "PER-MUD-001"},
+    {"k_adi": "ogrenci", "sifre": "Ogrenci.123", "rol": "DANISMA_OGRENCISI", "p_kodu": "PER-OGR-001"},
+    {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "ASISTAN", "p_kodu": "PER-AST-001"}
 ]
 
 def ilk_kurulumu_yap():
@@ -45,25 +46,30 @@ def ilk_kurulumu_yap():
             kullanici = cursor.fetchone()
             
             if not kullanici:
-                # Şifreyi güvenlik modülüyle hashle
                 hashli_sifre = parola_hashle(k["sifre"])
-                
                 cursor.execute("""
                     INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, aktif_mi, basarisiz_giris_sayisi) 
                     VALUES (%s, %s, %s, TRUE, 0) 
                     RETURNING kullanici_id;
                 """, (k["k_adi"], hashli_sifre, rol_id))
                 kullanici_id = cursor.fetchone()[0]
-                
-                # 3. KULLANICIYI PERSONEL TABLOSUNA BAĞLA (Randevu işlemleri için şart)
-                cursor.execute("""
-                    INSERT INTO personel (kullanici_id, ad, soyad, unvan, aktif_mi) 
-                    VALUES (%s, %s, %s, %s, TRUE);
-                """, (kullanici_id, k["ad"], k["soyad"], k["unvan"]))
-                
-                print(f"✅ Eklendi: {k['k_adi']} (Rol: {k['rol']})")
+                print(f"✅ Kullanıcı Eklendi: {k['k_adi']} (Rol: {k['rol']})")
             else:
-                print(f"⚠️ Zaten Mevcut: {k['k_adi']}")
+                kullanici_id = kullanici[0]
+                print(f"⚠️ Kullanıcı Zaten Mevcut: {k['k_adi']}")
+
+            # 3. KULLANICIYI PERSONEL TABLOSUNA BAĞLA (Mimarine Uygun Olarak)
+            cursor.execute("SELECT * FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
+            personel = cursor.fetchone()
+            
+            if not personel:
+                cursor.execute("""
+                    INSERT INTO personel (kullanici_id, personel_kodu, aktif_mi) 
+                    VALUES (%s, %s, TRUE);
+                """, (kullanici_id, k["p_kodu"]))
+                print(f"   └─ ✅ Personel Kaydı Oluşturuldu: {k['p_kodu']}")
+            else:
+                print(f"   └─ ⚠️ Personel Kaydı Zaten Var")
 
         conn.commit()
         print("\n🎉 Tüm test kullanıcıları başarıyla veritabanına işlendi!")
