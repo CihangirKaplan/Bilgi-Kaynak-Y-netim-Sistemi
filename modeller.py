@@ -111,5 +111,12 @@ class RandevuGuncelleModeli(BaseModel):
             raise ValueError("Danışan kodu boş olamaz.")
         return deger
 
+class OdaOlusturModeli(BaseModel):
+    oda_adi: str = Field(min_length=1, max_length=50)
+    kapasite: int = Field(default=1, ge=1)
+    aktif_mi: bool = True
 
-
+class OdaGuncelleModeli(BaseModel):
+    oda_adi: str | None = Field(default=None, min_length=1, max_length=50)
+    kapasite: int | None = Field(default=None, ge=1)
+    aktif_mi: bool | None = None
