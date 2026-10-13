@@ -6,7 +6,14 @@ import os
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
-from modeller import GirisModeli, RandevuOlusturModeli, RandevuGuncelleModeli, DanisanKoduModeli 
+from modeller import (
+    GirisModeli, 
+    RandevuOlusturModeli,
+    RandevuGuncelleModeli, 
+    DanisanKoduModeli, 
+    OdaOlusturModeli,
+    OdaGuncelleModeli,
+    )
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
 
@@ -393,6 +400,84 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# ROOM-API-001: Yeni oda oluşturma
+@app.post("/api/odalar", status_code=201)
+def oda_olustur(
+    oda: OdaOlusturModeli,
+    kullanici_id: int = Depends(izin_kontrol("ODA_EKLE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        oda_adi = oda.oda_adi.strip()
+
+        if not oda_adi:
+            raise HTTPException(
+                status_code=422,
+                detail="Oda adı boş olamaz."
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO odalar (oda_adi, kapasite, aktif_mi)
+            VALUES (%s, %s, %s)
+            RETURNING oda_id;
+            """,
+            (oda_adi, oda.kapasite, oda.aktif_mi)
+        )
+
+        oda_id = cursor.fetchone()[0]
+
+        # Oda ekleme işlemini denetim kaydına ekle.
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari (
+                kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id
+            )
+            VALUES (%s, %s, %s, %s);
+            """,
+            (kullanici_id, "CREATE", "odalar", oda_id)
+        )
+
+        conn.commit()
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Oda başarıyla oluşturuldu.",
+            "oda_id": oda_id
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Bu isimde bir oda zaten mevcut."
+        )
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Oda oluşturulurken bir veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+            
 @app.get("/api/odalar")
 def odalari_listele():
     conn = None
@@ -423,6 +508,128 @@ def oda_detay(oda_id: int, kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# ROOM-API-001: Mevcut oda bilgilerini güncelleme
+@app.patch("/api/odalar/{oda_id}")
+def oda_guncelle(
+    oda_id: int,
+    oda: OdaGuncelleModeli,
+    kullanici_id: int = Depends(izin_kontrol("ODA_DUZENLE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        # Yalnızca istekte gönderilen alanları al.
+        degisiklikler = oda.model_dump(exclude_unset=True)
+
+        if not degisiklikler:
+            raise HTTPException(
+                status_code=422,
+                detail="Güncellenecek en az bir alan gönderilmelidir."
+            )
+
+        # İsteğe bağlı alanlara açıkça null gönderilmesini engelle.
+        if any(deger is None for deger in degisiklikler.values()):
+            raise HTTPException(
+                status_code=422,
+                detail="Oda alanları null olamaz."
+            )
+
+        if "oda_adi" in degisiklikler:
+            degisiklikler["oda_adi"] = degisiklikler["oda_adi"].strip()
+
+            if not degisiklikler["oda_adi"]:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Oda adı boş olamaz."
+                )
+
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Güncellenecek odanın varlığını kontrol et.
+        cursor.execute(
+            "SELECT oda_id FROM odalar WHERE oda_id = %s FOR UPDATE;",
+            (oda_id,)
+        )
+
+        if cursor.fetchone() is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Oda bulunamadı."
+            )
+
+        # Sütun adları yalnızca Pydantic modelinden geliyor.
+        alanlar = ", ".join(
+            f"{alan} = %s" for alan in degisiklikler
+        )
+
+        degerler = list(degisiklikler.values())
+
+        cursor.execute(
+            f"""
+            UPDATE odalar
+            SET {alanlar}
+            WHERE oda_id = %s
+            RETURNING oda_id, oda_adi, kapasite, aktif_mi;
+            """,
+            (*degerler, oda_id)
+        )
+
+        sonuc = cursor.fetchone()
+
+        # Güncelleme işlemini denetim kaydına ekle.
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari (
+                kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id
+            )
+            VALUES (%s, %s, %s, %s);
+            """,
+            (kullanici_id, "UPDATE", "odalar", oda_id)
+        )
+
+        conn.commit()
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Oda başarıyla güncellendi.",
+            "oda": {
+                "oda_id": sonuc[0],
+                "oda_adi": sonuc[1],
+                "kapasite": sonuc[2],
+                "aktif_mi": sonuc[3]
+            }
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Bu isimde başka bir oda zaten mevcut."
+        )
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Oda güncellenirken bir veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+# APT-API-002: Kayıtlı Danışan Kodlarını Listeleme
 @app.get("/api/danisan-kodlari")
 def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
