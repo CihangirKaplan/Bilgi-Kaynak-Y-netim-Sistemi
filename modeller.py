@@ -123,13 +123,13 @@ class OdaGuncelleModeli(BaseModel):
     aktif_mi: bool | None = None
 
 class CihazDurumu(str, Enum):
-    KULLANILABILIR = "Kullanılabilir"
+    KULLANIMA_HAZIR = "Kullanima_Hazir"
     REZERVE = "Rezerve"
-    BAKIMDA = "Bakımda"
-    ARIZALI = "Arızalı"
+    KULLANIMDA = "Kullanimda"
+    ARIZALI = "Arizali"
+    BAKIMDA = "Bakimda"
     KALIBRASYONDA = "Kalibrasyonda"
-    KULLANIM_DISI = "Kullanım Dışı"
-
+    KULLANIM_DISI = "Kullanim_Disi"
 # ==========================================
 # ÖĞRENCİ B MODÜLLERİ (DEVICE, RES)
 # ==========================================
@@ -142,7 +142,7 @@ class CihazModeli(BaseModel):
     marka_model: Optional[str] = None
     seri_no: Optional[str] = None
     zimmetli_oda_id: Optional[int] = None
-    durum: CihazDurumu = CihazDurumu.KULLANILABILIR
+    durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-002: Cihaz Ekleme Modeli (Girdi)
 class CihazOlusturModeli(BaseModel):
@@ -151,7 +151,7 @@ class CihazOlusturModeli(BaseModel):
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
     zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
-    durum: CihazDurumu = CihazDurumu.KULLANILABILIR
+    durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-003, DEVICE-004, DEVICE-005: Cihaz Güncelleme/Durum Değiştirme Modeli
 class CihazGuncelleModeli(BaseModel):
