@@ -672,3 +672,113 @@ def aktif_psikologlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+# DEVICE-API-001: Cihaz Envanterini Listeleme
+@app.get("/api/cihazlar")
+def cihazlari_listele(
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_GORUNTULE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                cihaz_id,
+                envanter_kodu,
+                cihaz_adi,
+                marka_model,
+                seri_no,
+                zimmetli_oda_id,
+                durum,
+                kayit_tarihi
+            FROM cihazlar
+            ORDER BY cihaz_id;
+        """)
+
+        kayitlar = cursor.fetchall()
+
+        return [
+            {
+                "cihaz_id": kayit[0],
+                "envanter_kodu": kayit[1],
+                "cihaz_adi": kayit[2],
+                "marka_model": kayit[3],
+                "seri_no": kayit[4],
+                "zimmetli_oda_id": kayit[5],
+                "durum": kayit[6],
+                "kayit_tarihi": kayit[7]
+            }
+            for kayit in kayitlar
+        ]
+
+    except psycopg2.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Cihazlar listelenirken bir veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+# DEVICE-API-001: Cihaz Detaylarını Görüntüleme
+@app.get("/api/cihazlar/{cihaz_id}")
+def cihaz_detayi_getir(
+    cihaz_id: int,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_GORUNTULE"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                cihaz_id,
+                envanter_kodu,
+                cihaz_adi,
+                marka_model,
+                seri_no,
+                zimmetli_oda_id,
+                durum,
+                kayit_tarihi
+            FROM cihazlar
+            WHERE cihaz_id = %s;
+        """, (cihaz_id,))
+
+        kayit = cursor.fetchone()
+
+        if kayit is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Cihaz bulunamadı."
+            )
+
+        return {
+            "cihaz_id": kayit[0],
+            "envanter_kodu": kayit[1],
+            "cihaz_adi": kayit[2],
+            "marka_model": kayit[3],
+            "seri_no": kayit[4],
+            "zimmetli_oda_id": kayit[5],
+            "durum": kayit[6],
+            "kayit_tarihi": kayit[7]
+        }
+
+    except psycopg2.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Cihaz bilgileri alınırken bir veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
