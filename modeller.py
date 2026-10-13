@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.orm import declarative_base
+from enum import Enum
 
 Base = declarative_base()
 
@@ -120,3 +121,58 @@ class OdaGuncelleModeli(BaseModel):
     oda_adi: str | None = Field(default=None, min_length=1, max_length=50)
     kapasite: int | None = Field(default=None, ge=1)
     aktif_mi: bool | None = None
+
+class CihazDurumu(str, Enum):
+    KULLANIMA_HAZIR = "Kullanima_Hazir"
+    REZERVE = "Rezerve"
+    KULLANIMDA = "Kullanimda"
+    ARIZALI = "Arizali"
+    BAKIMDA = "Bakimda"
+    KALIBRASYONDA = "Kalibrasyonda"
+    KULLANIM_DISI = "Kullanim_Disi"
+# ==========================================
+# ÖĞRENCİ B MODÜLLERİ (DEVICE, RES)
+# ==========================================
+
+# DEVICE-001: Cihaz Çıktı Modeli
+class CihazModeli(BaseModel):
+    cihaz_id: Optional[int] = None
+    envanter_kodu: str
+    cihaz_adi: str
+    marka_model: Optional[str] = None
+    seri_no: Optional[str] = None
+    zimmetli_oda_id: Optional[int] = None
+    durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
+
+# DEVICE-002: Cihaz Ekleme Modeli (Girdi)
+class CihazOlusturModeli(BaseModel):
+    envanter_kodu: str = Field(min_length=1, max_length=50)
+    cihaz_adi: str = Field(min_length=1, max_length=100)
+    marka_model: Optional[str] = Field(default=None, max_length=100)
+    seri_no: Optional[str] = Field(default=None, max_length=100)
+    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
+    durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
+
+# DEVICE-003, DEVICE-004, DEVICE-005: Cihaz Güncelleme/Durum Değiştirme Modeli
+class CihazGuncelleModeli(BaseModel):
+    cihaz_adi: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    marka_model: Optional[str] = Field(default=None, max_length=100)
+    seri_no: Optional[str] = Field(default=None, max_length=100)
+    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
+    durum: Optional[CihazDurumu] = None
+
+# RES-001: Cihaz Rezervasyonu Oluşturma Modeli
+class RezervasyonOlusturModeli(BaseModel):
+    cihaz_id: int = Field(gt=0)
+    kullanilacak_oda_id: Optional[int] = Field(default=None, gt=0)
+    baslangic_zamani: datetime
+    bitis_zamani: datetime
+    proje_turu: Optional[str] = Field(default=None, max_length=50)
+    proje_adi_aciklamasi: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("baslangic_zamani", "bitis_zamani", mode="before")
+    @classmethod
+    def tarih_formati(cls, deger):
+        if isinstance(deger, str):
+            return datetime.fromisoformat(deger.replace("Z", ""))
+        return deger
