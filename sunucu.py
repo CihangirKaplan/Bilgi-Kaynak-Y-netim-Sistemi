@@ -13,10 +13,13 @@ from modeller import (
     DanisanKoduModeli, 
     OdaOlusturModeli,
     OdaGuncelleModeli,
+
+    CihazOlusturModeli,
+    CihazGuncelleModeli,
+    RezervasyonOlusturModeli,
     )
 from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
-
 
 load_dotenv()
 app = FastAPI()
@@ -669,6 +672,163 @@ def aktif_psikologlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id))
             {"personel_id": k[0], "ad_soyad": k[1]}
             for k in kayitlar
         ]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# DEVICE-001: Tüm Cihazları Listeleme
+@app.get("/api/cihazlar")
+def cihazlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum 
+            FROM cihazlar 
+            ORDER BY cihaz_id DESC;
+        """)
+        kayitlar = cursor.fetchall()
+        return [
+            {
+                "cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2], 
+                "marka_model": k[3], "seri_no": k[4], "durum": k[5]
+            } for k in kayitlar
+        ]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# DEVICE-002: Yeni Cihaz Ekleme
+@app.post("/api/cihazlar", status_code=201)
+def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_EKLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Envanter kodu veya seri no çakışması var mı?
+        cursor.execute("SELECT 1 FROM cihazlar WHERE envanter_kodu = %s OR seri_no = %s;", (cihaz.envanter_kodu, cihaz.seri_no))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Bu envanter kodu veya seri no zaten kullanımda.")
+
+        cursor.execute(
+            """
+            INSERT INTO cihazlar (envanter_kodu, cihaz_adi, marka_model, seri_no, zimmetli_oda_id, durum)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING cihaz_id;
+            """,
+            (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.zimmetli_oda_id, cihaz.durum)
+        )
+        cihaz_id = cursor.fetchone()[0]
+        
+        # Denetim (Audit) Kaydı
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=cihaz_id)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Cihaz başarıyla eklendi.", "cihaz_id": cihaz_id}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# DEVICE-003, 004, 005: Cihaz Düzenleme ve Durum Yönetimi
+@app.patch("/api/cihazlar/{cihaz_id}")
+def cihaz_guncelle(cihaz_id: int, guncelleme: CihazGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        degisiklikler = guncelleme.model_dump(exclude_unset=True)
+        if not degisiklikler:
+            raise HTTPException(status_code=422, detail="Güncellenecek alan bulunamadı.")
+
+        # Dinamik Update Sorgusu Oluşturma
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        degerler = list(degisiklikler.values())
+        
+        cursor.execute(f"UPDATE cihazlar SET {alanlar} WHERE cihaz_id = %s RETURNING cihaz_id;", (*degerler, cihaz_id))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=cihaz_id)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Cihaz güncellendi."}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# RES-002, RES-003: Rezervasyon Oluşturma ve Çakışma Kontrolü
+@app.post("/api/rezervasyonlar", status_code=201)
+def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("REZERVASYON_OLUSTUR"))):
+    if rez.baslangic_zamani >= rez.bitis_zamani:
+        raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
+        
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # KURAL 1: Cihazın durmu rezerve edilmeye uygun mu? (Arızalı, Bakımda vs olamaz)
+        cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s;", (rez.cihaz_id,))
+        cihaz = cursor.fetchone()
+        if cihaz is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+        if cihaz[0] not in ["Kullanılabilir", "Rezerve"]:
+            raise HTTPException(status_code=403, detail=f"Cihaz şu anda {cihaz[0]} durumunda olduğu için rezerve edilemez!")
+
+        # KURAL 2: O saatler arasında cihaz zaten rezerve edilmiş mi? (Çakışma Kontrolü)
+        cursor.execute("""
+            SELECT 1 FROM cihaz_rezervasyonlari 
+            WHERE cihaz_id = %s 
+              AND iptal_edildi_mi = FALSE 
+              AND baslangic_zamani < %s 
+              AND bitis_zamani > %s LIMIT 1;
+        """, (rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş.")
+
+        # İşlemi yapanın personel ID'sini bul
+        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
+        pers = cursor.fetchone()
+        personel_id = pers[0] if pers else None
+
+        # Rezervasyonu Kaydet
+        cursor.execute("""
+            INSERT INTO cihaz_rezervasyonlari 
+            (cihaz_id, rezervasyonu_yapan_personel_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani, proje_turu, proje_adi_aciklamasi)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING rezervasyon_id;
+        """, (rez.cihaz_id, personel_id, rez.kullanilacak_oda_id, rez.baslangic_zamani, rez.bitis_zamani, rez.proje_turu, rez.proje_adi_aciklamasi))
+        
+        rez_id = cursor.fetchone()[0]
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_rezervasyonlari", hedef_kayit_id=rez_id)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Rezervasyon başarıyla oluşturuldu.", "rezervasyon_id": rez_id}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# RES-004: Rezervasyon İptal Etme
+@app.patch("/api/rezervasyonlar/{rezervasyon_id}/iptal")
+def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kontrol("REZERVASYON_IPTAL"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # Veriyi silmek yerine flag değiştiriyoruz
+        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s RETURNING rezervasyon_id;", (rezervasyon_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Rezervasyon bulunamadı veya yetkiniz yok.")
+
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CANCEL", kullanici_id=kullanici_id, hedef_tablo="cihaz_rezervasyonlari", hedef_kayit_id=rezervasyon_id)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Rezervasyon iptal edildi."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
