@@ -762,7 +762,7 @@ def cihaz_guncelle(cihaz_id: int, guncelleme: CihazGuncelleModeli, kullanici_id:
 
 # RES-002, RES-003: Rezervasyon Oluşturma ve Çakışma Kontrolü
 @app.post("/api/rezervasyonlar", status_code=201)
-def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("REZERVASYON_OLUSTUR"))):
+def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     if rez.baslangic_zamani >= rez.bitis_zamani:
         raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
         
@@ -814,7 +814,7 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
 
 # RES-004: Rezervasyon İptal Etme
 @app.patch("/api/rezervasyonlar/{rezervasyon_id}/iptal")
-def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kontrol("REZERVASYON_IPTAL"))):
+def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     conn = None
     cursor = None
     try:
