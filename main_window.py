@@ -6,11 +6,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from randevu_ekranlari import RandevuOlusturFormu, RandevuDuzenleFormu
+from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
-#  Sütun sırası: Psikolog, Memur, Müdür, Danışma Öğrencisi, Proje Asistanı, Admin
 # ======================================================================
 ROLLER = ["psikolog", "memur", "mudur", "ogrenci", "asistan", "admin"]
 
@@ -23,7 +22,6 @@ ROL_BILGI = {
     "admin":    {"ad": "Sistem Admin",      "aciklama": "Tam Yetkili Sistem ve Yetki Yönetimi"},
 }
 
-# (izin adı, kategori, "Psi Mem Müd Öğr Asi Adm")
 IZIN_LISTESI = [
     ("Randevu oluşturma",                    "Randevu & Oda",     "EHHEHE"),
     ("Randevu düzenleme",                    "Randevu & Oda",     "EHHEHE"),
@@ -59,13 +57,11 @@ IZIN_LISTESI = [
 
 IZIN = {ad: (kat, kod) for ad, kat, kod in IZIN_LISTESI}
 
-
 def izin_var(rol, izin_adi):
     return IZIN[izin_adi][1][ROLLER.index(rol)] == "E"
 
-
 # ======================================================================
-#  2. MENÜ TANIMI  (görünürlük izni + sayfa içi işlem butonları)
+#  2. MENÜ TANIMI
 # ======================================================================
 MENU = [
     ("GENEL", [
@@ -137,29 +133,15 @@ QMainWindow { background: #EAF0FA; }
 QLabel { background: transparent; color: #0F2552; }
 
 /* ---------- SIDEBAR ---------- */
-QWidget#sidebar {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0A1F5C, stop:1 #0B3AA8);
-}
-QFrame#logo {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2563EB, stop:1 #60A5FA);
-    border-radius: 14px;
-}
+QWidget#sidebar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0A1F5C, stop:1 #0B3AA8); }
+QFrame#logo { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2563EB, stop:1 #60A5FA); border-radius: 14px; }
 QLabel#bolum { color: #7FA2E8; font-size: 10px; font-weight: 800; letter-spacing: 2px; padding: 14px 6px 4px 6px; }
-QPushButton#nav {
-    background: transparent; color: #BFD2F7; border: none; border-left: 3px solid transparent;
-    text-align: left; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
-}
+QPushButton#nav { background: transparent; color: #BFD2F7; border: none; border-left: 3px solid transparent; text-align: left; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; }
 QPushButton#nav:hover { background: rgba(255,255,255,0.10); color: #FFFFFF; }
-QPushButton#nav:checked {
-    background: rgba(255,255,255,0.18); color: #FFFFFF; border-left: 3px solid #93C5FD;
-}
+QPushButton#nav:checked { background: rgba(255,255,255,0.18); color: #FFFFFF; border-left: 3px solid #93C5FD; }
 QFrame#rolKart { background: rgba(255,255,255,0.10); border-radius: 12px; }
-QPushButton#cikis {
-    background: rgba(255,255,255,0.08); color: #DCE7FF; border: 1px solid rgba(255,255,255,0.20);
-    padding: 11px; border-radius: 10px; font-weight: 700; font-size: 13px;
-}
+QPushButton#cikis { background: rgba(255,255,255,0.08); color: #DCE7FF; border: 1px solid rgba(255,255,255,0.20); padding: 11px; border-radius: 10px; font-weight: 700; font-size: 13px; }
 QPushButton#cikis:hover { background: #DC2626; color: white; border: 1px solid #DC2626; }
-
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
@@ -171,35 +153,20 @@ QFrame#topbar { background: white; border-radius: 16px; }
 QLabel#sayfaBaslik { font-size: 20px; font-weight: 800; color: #0A1F5C; }
 QLabel#sayfaAlt { font-size: 12px; color: #6B7FA8; }
 QLabel#onizleme { font-size: 11px; font-weight: 700; color: #6B7FA8; }
-QComboBox {
-    background: #EEF4FF; color: #0A1F5C; border: 1px solid #C7D9FB; border-radius: 10px;
-    padding: 8px 14px; font-weight: 700; min-width: 170px;
-}
+QComboBox { background: #EEF4FF; color: #0A1F5C; border: 1px solid #C7D9FB; border-radius: 10px; padding: 8px 14px; font-weight: 700; min-width: 170px; }
 QComboBox::drop-down { border: none; width: 24px; }
-QComboBox QAbstractItemView {
-    background: white; color: #0A1F5C; selection-background-color: #2563EB;
-    selection-color: white; border: 1px solid #C7D9FB; outline: none;
-}
+QComboBox QAbstractItemView { background: white; color: #0A1F5C; selection-background-color: #2563EB; selection-color: white; border: 1px solid #C7D9FB; outline: none; }
 
 /* ---------- KARTLAR ---------- */
-QFrame#hero {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0A1F5C, stop:0.55 #1D4ED8, stop:1 #3B82F6);
-    border-radius: 20px;
-}
+QFrame#hero { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0A1F5C, stop:0.55 #1D4ED8, stop:1 #3B82F6); border-radius: 20px; }
 QLabel#heroBaslik { color: white; font-size: 26px; font-weight: 800; }
 QLabel#heroAlt { color: #CFE0FF; font-size: 14px; }
-QLabel#heroRozet {
-    background: rgba(255,255,255,0.20); color: white; border-radius: 10px;
-    font-size: 12px; font-weight: 800; padding: 8px 16px; letter-spacing: 1px;
-}
+QLabel#heroRozet { background: rgba(255,255,255,0.20); color: white; border-radius: 10px; font-size: 12px; font-weight: 800; padding: 8px 16px; letter-spacing: 1px; }
 QFrame#kart { background: white; border-radius: 16px; }
 QLabel#kartBaslik { font-size: 12px; font-weight: 700; color: #6B7FA8; }
 QLabel#kartDeger { font-size: 26px; font-weight: 800; color: #1D4ED8; }
 QLabel#kartAlt { font-size: 11px; color: #8A9BC0; }
-QPushButton#hizli {
-    background: white; color: #0A1F5C; border: 1px solid transparent; border-radius: 16px;
-    padding: 18px 20px; text-align: left; font-size: 14px; font-weight: 700;
-}
+QPushButton#hizli { background: white; color: #0A1F5C; border: 1px solid transparent; border-radius: 16px; padding: 18px 20px; text-align: left; font-size: 14px; font-weight: 700; }
 QPushButton#hizli:hover { background: #F3F8FF; border: 1px solid #3B82F6; color: #1D4ED8; }
 QLabel#kategori { font-size: 13px; font-weight: 800; color: #0A1F5C; }
 QLabel#izinAdi { font-size: 12px; color: #1E3A8A; }
@@ -213,19 +180,14 @@ QLabel#modulBaslik { font-size: 22px; font-weight: 800; color: #0A1F5C; }
 QLabel#modulAlt { font-size: 13px; color: #6B7FA8; }
 QLabel#rozetYetki { background: #DBEAFE; color: #1D4ED8; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
 QLabel#rozetOkunur { background: #FEF3C7; color: #B45309; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
-QPushButton#aksiyon {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6);
-    color: white; border: none; border-radius: 10px; padding: 11px 20px; font-size: 13px; font-weight: 700;
-}
+QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 10px; padding: 11px 20px; font-size: 13px; font-weight: 700; }
 QPushButton#aksiyon:hover { background: #1E40AF; }
 QPushButton#aksiyon:pressed { background: #172554; }
 QLabel#bos { font-size: 40px; }
 QLabel#bosBaslik { font-size: 16px; font-weight: 800; color: #0A1F5C; }
 QLabel#bosAlt { font-size: 12px; color: #8A9BC0; }
-
 QStatusBar { background: #0A1F5C; color: #BFD2F7; font-size: 12px; padding: 4px; }
 """
-
 
 def golge(widget, blur=32, alpha=38, dy=8):
     eff = QGraphicsDropShadowEffect(widget)
@@ -234,33 +196,28 @@ def golge(widget, blur=32, alpha=38, dy=8):
     eff.setColor(QColor(10, 31, 92, alpha))
     widget.setGraphicsEffect(eff)
 
-
 def kart_olustur():
     k = QFrame()
     k.setObjectName("kart")
     golge(k, 26, 28, 5)
     return k
 
-
 # ======================================================================
 #  4. ANA PENCERE
 # ======================================================================
 class AnaPencere(QMainWindow):
-    oturum_kapatildi = Signal()   # "Oturumu Kapat" butonuna basılınca giriş ekranına haber verir
-
+    oturum_kapatildi = Signal()
 
     def __init__(self, aktif_rol="admin", kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
         super().__init__()
-        # ... (mevcut kodlar)
         self.aktif_rol = aktif_rol.lower() if aktif_rol.lower() in ROLLER else "admin"
         self.kullanici_adi = kullanici_adi          
         self.rol_onizleme = rol_onizleme            
-
-        # YENİ EKLENEN KISIM:
+        
         self.api_url = "http://127.0.0.1:8000"
         self.token = token
         self.kullanici_id = kullanici_id
-        self.rol_onizleme = rol_onizleme            # sadece geliştirme/test için True
+        
         self.resize(1360, 820)
         self.setMinimumSize(1100, 700)
         self.setStyleSheet(STIL)
@@ -293,7 +250,6 @@ class AnaPencere(QMainWindow):
         golge(logo, 28, 90, 6)
         sb.addWidget(logo)
 
-        # Kaydırılabilir menü alanı
         self.nav_scroll = QScrollArea()
         self.nav_scroll.setWidgetResizable(True)
         self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -304,7 +260,6 @@ class AnaPencere(QMainWindow):
         self.nav_scroll.setWidget(nav_icerik)
         sb.addWidget(self.nav_scroll, 1)
 
-        # Rol kartı
         rol_kart = QFrame()
         rol_kart.setObjectName("rolKart")
         rk = QVBoxLayout(rol_kart)
@@ -326,7 +281,6 @@ class AnaPencere(QMainWindow):
         btn_cikis.setCursor(Qt.PointingHandCursor)
         btn_cikis.clicked.connect(self.oturum_kapat)
         sb.addWidget(btn_cikis)
-
         ana.addWidget(sidebar)
 
         # ---------------- SAĞ ALAN ----------------
@@ -350,18 +304,19 @@ class AnaPencere(QMainWindow):
         bas.addWidget(self.lbl_sayfa_alt)
         tb.addLayout(bas)
         tb.addStretch()
+        
+        # TOPBAR'DAKİ SABİT BUTONLAR BURADAN TAMAMEN SİLİNDİ!
+        
         onizleme = QLabel("ROL ÖNİZLEME")
         onizleme.setObjectName("onizleme")
         self.combo_rol = QComboBox()
         for r in ROLLER:
             self.combo_rol.addItem(ROL_BILGI[r]["ad"], r)
         self.combo_rol.setCurrentIndex(ROLLER.index(self.aktif_rol))
-        self.combo_rol.currentIndexChanged.connect(
-            lambda i: self.rol_uygula(self.combo_rol.itemData(i)))
+        self.combo_rol.currentIndexChanged.connect(lambda i: self.rol_uygula(self.combo_rol.itemData(i)))
         tb.addWidget(onizleme)
         tb.addSpacing(8)
         tb.addWidget(self.combo_rol)
-        # Gerçek girişte rol değiştirme kapalı (güvenlik)
         onizleme.setVisible(self.rol_onizleme)
         self.combo_rol.setVisible(self.rol_onizleme)
         sag_l.addWidget(topbar)
@@ -374,29 +329,10 @@ class AnaPencere(QMainWindow):
         self.nav_grup.setExclusive(True)
         self.sayfa_bilgi = []
 
-        self.btn_yeni_randevu = QPushButton("＋ Yeni Randevu Oluştur")
-        self.btn_yeni_randevu.setObjectName("aksiyon") 
-        self.btn_yeni_randevu.setCursor(Qt.PointingHandCursor)
-        self.btn_yeni_randevu.clicked.connect(self.yeni_randevu_ekrani_ac)
-        tb.addWidget(self.btn_yeni_randevu)
-
-        # TEST AMAÇLI DÜZENLEME BUTONU:
-        self.btn_randevu_duzenle = QPushButton("✎ Son Randevuyu Düzenle")
-        self.btn_randevu_duzenle.setStyleSheet("background-color: #f39c12; color: white; border-radius: 10px; padding: 11px 20px; font-weight: bold;")
-        self.btn_randevu_duzenle.setCursor(Qt.PointingHandCursor)
-        self.btn_randevu_duzenle.clicked.connect(self.randevu_duzenle_ekrani_ac)
-        tb.addWidget(self.btn_randevu_duzenle)
-        
-        # Butonu sağ üstteki topbar içine ekliyoruz
-        tb.addWidget(self.btn_yeni_randevu)
-
-        self.rol_uygula(self.aktif_rol)
-
         self.rol_uygula(self.aktif_rol)
 
     # ------------------------------------------------------------------
     def rol_uygula(self, rol):
-        """Seçilen role göre menüyü, sayfaları ve butonları yeniden kurar."""
         self.aktif_rol = rol
         info = ROL_BILGI[rol]
         self.setWindowTitle(f"BKYS — Travma Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
@@ -408,7 +344,6 @@ class AnaPencere(QMainWindow):
             self.lbl_rol_ad.setText(info["ad"])
             self.lbl_kullanici.setVisible(False)
 
-        # eski içerikleri temizle
         while self.nav_layout.count():
             it = self.nav_layout.takeAt(0)
             w = it.widget()
@@ -421,21 +356,24 @@ class AnaPencere(QMainWindow):
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
+            
         self.sayfa_bilgi = []
         self.nav_btnler = {}
 
         ilk_btn = None
         for bolum, ogeler in MENU:
             gorunen = [o for o in ogeler if o["izin"] is None or izin_var(rol, o["izin"])]
-            if not gorunen:
-                continue
+            if not gorunen: continue
+            
             lbl = QLabel(bolum)
             lbl.setObjectName("bolum")
             self.nav_layout.addWidget(lbl)
+            
             for oge in gorunen:
                 sayfa = self.sayfa_dashboard() if oge.get("dashboard") else self.sayfa_modul(oge)
                 idx = self.stack.addWidget(sayfa)
                 self.sayfa_bilgi.append((oge["ad"], oge.get("aciklama", info["aciklama"])))
+                
                 btn = QPushButton(f"{oge['ikon']}   {oge['ad']}")
                 btn.setObjectName("nav")
                 btn.setCheckable(True)
@@ -466,7 +404,6 @@ class AnaPencere(QMainWindow):
         self.lbl_sayfa.setText(ad)
         self.lbl_sayfa_alt.setText(alt)
 
-    # ------------------------------------------------------------------
     def kaydirmali(self, icerik):
         sc = QScrollArea()
         sc.setWidgetResizable(True)
@@ -481,7 +418,6 @@ class AnaPencere(QMainWindow):
         lay.setContentsMargins(4, 4, 4, 20)
         lay.setSpacing(20)
 
-        # HERO
         hero = QFrame()
         hero.setObjectName("hero")
         golge(hero, 36, 70, 10)
@@ -489,20 +425,23 @@ class AnaPencere(QMainWindow):
         h.setContentsMargins(34, 30, 34, 30)
         sol = QVBoxLayout()
         sol.setSpacing(4)
+        
         b = QLabel(f"Hoş Geldiniz, {self.kullanici_adi or info['ad']}")
         b.setObjectName("heroBaslik")
         a = QLabel(info["aciklama"])
         a.setObjectName("heroAlt")
+        
         sol.addWidget(b)
         sol.addWidget(a)
+        
         rozet = QLabel(f"●  AKTİF ROL: {info['ad'].upper()}")
         rozet.setObjectName("heroRozet")
+        
         h.addLayout(sol)
         h.addStretch()
         h.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(hero)
 
-        # İSTATİSTİK KARTLARI
         erisilebilir = [o for _, og in MENU for o in og
                         if o["izin"] is not None and izin_var(rol, o["izin"])]
 
@@ -519,14 +458,20 @@ class AnaPencere(QMainWindow):
             kl = QVBoxLayout(k)
             kl.setContentsMargins(22, 18, 22, 18)
             kl.setSpacing(2)
-            l1 = QLabel(bs.upper()); l1.setObjectName("kartBaslik")
-            l2 = QLabel(dg); l2.setObjectName("kartDeger")
-            l3 = QLabel(al); l3.setObjectName("kartAlt")
-            kl.addWidget(l1); kl.addWidget(l2); kl.addWidget(l3)
+            
+            l1 = QLabel(bs.upper())
+            l1.setObjectName("kartBaslik")
+            l2 = QLabel(dg)
+            l2.setObjectName("kartDeger")
+            l3 = QLabel(al)
+            l3.setObjectName("kartAlt")
+            
+            kl.addWidget(l1)
+            kl.addWidget(l2)
+            kl.addWidget(l3)
             grid.addWidget(k, 0, i)
         lay.addLayout(grid)
 
-        # HIZLI ERİŞİM (sadece rolün görebildiği modüller)
         baslik = QLabel("Hızlı Erişim")
         baslik.setStyleSheet("font-size:17px; font-weight:800; color:#0A1F5C;")
         lay.addWidget(baslik)
@@ -545,6 +490,7 @@ class AnaPencere(QMainWindow):
         lay.addStretch()
         return self.kaydirmali(govde)
 
+    # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
         rol = self.aktif_rol
         govde = QWidget()
@@ -552,20 +498,24 @@ class AnaPencere(QMainWindow):
         lay.setContentsMargins(4, 4, 4, 20)
         lay.setSpacing(20)
 
-        # Başlık kartı
         bk = kart_olustur()
         bl = QHBoxLayout(bk)
         bl.setContentsMargins(26, 22, 26, 22)
         bl.setSpacing(18)
+        
         ikon = QLabel(oge["ikon"])
         ikon.setObjectName("modulIkon")
         ikon.setFixedSize(64, 64)
         ikon.setAlignment(Qt.AlignCenter)
+        
         mt = QVBoxLayout()
         mt.setSpacing(2)
-        m1 = QLabel(oge["ad"]); m1.setObjectName("modulBaslik")
-        m2 = QLabel(oge["aciklama"]); m2.setObjectName("modulAlt")
-        mt.addWidget(m1); mt.addWidget(m2)
+        m1 = QLabel(oge["ad"])
+        m1.setObjectName("modulBaslik")
+        m2 = QLabel(oge["aciklama"])
+        m2.setObjectName("modulAlt")
+        mt.addWidget(m1)
+        mt.addWidget(m2)
 
         yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
         if yetkili:
@@ -581,35 +531,49 @@ class AnaPencere(QMainWindow):
         bl.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(bk)
 
-        # İşlem butonları: yetkisi olmayan buton HİÇ GÖRÜNMEZ
+        # İŞTE BURASI DİNAMİK BUTONLARIN EKLENDİĞİ VE YETKİYE GÖRE BAĞLANDIĞI YER
         if yetkili:
             ab = QHBoxLayout()
             ab.setSpacing(12)
-            for etiket, _ in yetkili:
+            for etiket, izin_kodu in yetkili:
                 btn = QPushButton(etiket)
                 btn.setObjectName("aksiyon")
                 btn.setCursor(Qt.PointingHandCursor)
+                
+                # İzin koduna bakarak hangi fonksiyonu tetikleyeceğine karar veriyor
+                if izin_kodu == "Randevu oluşturma":
+                    btn.clicked.connect(self.yeni_randevu_ekrani_ac)
+                elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
+                    btn.clicked.connect(self.randevu_listesi_ekrani_ac)
+                # İleride Cihaz Ekle vb. fonksiyonlarını da bu mantıkla buraya ekleyebilirsin
+                
                 ab.addWidget(btn)
             ab.addStretch()
             lay.addLayout(ab)
 
-        # İçerik alanı (veri katmanı buraya bağlanacak)
         ik = kart_olustur()
         ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         il = QVBoxLayout(ik)
         il.setAlignment(Qt.AlignCenter)
         il.setSpacing(6)
-        e1 = QLabel(oge["ikon"]); e1.setObjectName("bos"); e1.setAlignment(Qt.AlignCenter)
-        e2 = QLabel(f"{oge['ad']} verileri burada listelenecek"); e2.setObjectName("bosBaslik")
+        
+        e1 = QLabel(oge["ikon"])
+        e1.setObjectName("bos")
+        e1.setAlignment(Qt.AlignCenter)
+        e2 = QLabel(f"{oge['ad']} verileri burada listelenecek")
+        e2.setObjectName("bosBaslik")
         e2.setAlignment(Qt.AlignCenter)
         e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
-        e3.setObjectName("bosAlt"); e3.setAlignment(Qt.AlignCenter)
-        il.addWidget(e1); il.addWidget(e2); il.addWidget(e3)
+        e3.setObjectName("bosAlt")
+        e3.setAlignment(Qt.AlignCenter)
+        
+        il.addWidget(e1)
+        il.addWidget(e2)
+        il.addWidget(e3)
         lay.addWidget(ik, 1)
         return govde
 
     def yeni_randevu_ekrani_ac(self):
-        # Artık doğrudan self üzerinden (gerçek değerleri) alıyoruz
         self.randevu_formu = RandevuOlusturFormu(
             api_url=self.api_url, 
             token=self.token, 
@@ -617,34 +581,16 @@ class AnaPencere(QMainWindow):
         )
         self.randevu_formu.show()
 
-    def randevu_duzenle_ekrani_ac(self):
-        import requests
-        headers = {"Authorization": f"Bearer {self.token}"}
-        
-        # Test için: Sistemdeki tüm randevuları çek ve en sonuncusunu düzenlemeye çalış
-        cevap = requests.get(f"{self.api_url}/api/randevular", headers=headers)
-        randevular = cevap.json()
-        
-        if len(randevular) == 0:
-            QMessageBox.warning(self, "Uyarı", "Sistemde düzenlenecek hiç randevu yok!")
-            return
-            
-        son_randevu = randevular[-1] # En son oluşturulan randevuyu alıyoruz
-        
-        self.duzenle_formu = RandevuDuzenleFormu(
+    def randevu_listesi_ekrani_ac(self):
+        self.liste_formu = RandevuListesiFormu(
             api_url=self.api_url, 
             token=self.token, 
-            mevcut_psikolog_id=self.kullanici_id,
-            randevu_id=son_randevu["randevu_id"],
-            eski_veriler=son_randevu
+            mevcut_psikolog_id=self.kullanici_id
         )
-        self.duzenle_formu.show()
-
+        self.liste_formu.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Test için: python bkys_arayuz.py psikolog
-    # Roller: admin, psikolog, memur, mudur, ogrenci, asistan
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
     pencere = AnaPencere(aktif_rol=rol, rol_onizleme=True)
     pencere.show()

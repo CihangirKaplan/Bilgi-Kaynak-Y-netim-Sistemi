@@ -193,7 +193,7 @@ class LoginEkrani(QWidget):
 
     def rol_adindan_koda(self, rol_id):
         # API'den gelen Rol ID'sini arayüzün anladığı kelimelere (slug) çevirir.
-        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
+        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 9: "asistan", 6: "admin"}
         return roller.get(rol_id, None)
 
     def giris_yap(self):
