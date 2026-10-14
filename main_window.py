@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
+from cihaz_ekranlari import CihazYonetimEkrani
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -492,86 +493,112 @@ class AnaPencere(QMainWindow):
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
-        rol = self.aktif_rol
-        govde = QWidget()
-        lay = QVBoxLayout(govde)
-        lay.setContentsMargins(4, 4, 4, 20)
-        lay.setSpacing(20)
+            rol = self.aktif_rol
+            govde = QWidget()
+            lay = QVBoxLayout(govde)
+            lay.setContentsMargins(4, 4, 4, 20)
+            lay.setSpacing(20)
 
-        bk = kart_olustur()
-        bl = QHBoxLayout(bk)
-        bl.setContentsMargins(26, 22, 26, 22)
-        bl.setSpacing(18)
-        
-        ikon = QLabel(oge["ikon"])
-        ikon.setObjectName("modulIkon")
-        ikon.setFixedSize(64, 64)
-        ikon.setAlignment(Qt.AlignCenter)
-        
-        mt = QVBoxLayout()
-        mt.setSpacing(2)
-        m1 = QLabel(oge["ad"])
-        m1.setObjectName("modulBaslik")
-        m2 = QLabel(oge["aciklama"])
-        m2.setObjectName("modulAlt")
-        mt.addWidget(m1)
-        mt.addWidget(m2)
+    # main_window.py içindeki sayfa_modul fonksiyonunun başları:
+            bk = kart_olustur()
+            bl = QHBoxLayout(bk)
+            # ESKİDEN bl.setContentsMargins(26, 22, 26, 22) İDİ. ŞİMDİ ÇOK DAHA İNCE VE ŞIK YAPIYORUZ:
+            bl.setContentsMargins(15, 10, 15, 10) 
+            bl.setSpacing(15)
+            
+            ikon = QLabel(oge["ikon"])
+            ikon.setObjectName("modulIkon")
+            ikon.setFixedSize(64, 64)
+            ikon.setAlignment(Qt.AlignCenter)
+            
+            mt = QVBoxLayout()
+            mt.setSpacing(2)
+            m1 = QLabel(oge["ad"])
+            m1.setObjectName("modulBaslik")
+            m2 = QLabel(oge["aciklama"])
+            m2.setObjectName("modulAlt")
+            mt.addWidget(m1)
+            mt.addWidget(m2)
 
-        yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
-        if yetkili:
-            rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
-            rozet.setObjectName("rozetYetki")
-        else:
-            rozet = QLabel("●  SALT OKUNUR")
-            rozet.setObjectName("rozetOkunur")
+            yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
+            if yetkili:
+                rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
+                rozet.setObjectName("rozetYetki")
+            else:
+                rozet = QLabel("●  SALT OKUNUR")
+                rozet.setObjectName("rozetOkunur")
 
-        bl.addWidget(ikon)
-        bl.addLayout(mt)
-        bl.addStretch()
-        bl.addWidget(rozet, 0, Qt.AlignVCenter)
-        lay.addWidget(bk)
+            bl.addWidget(ikon)
+            bl.addLayout(mt)
+            bl.addStretch()
+            bl.addWidget(rozet, 0, Qt.AlignVCenter)
+            lay.addWidget(bk)
 
-        # İŞTE BURASI DİNAMİK BUTONLARIN EKLENDİĞİ VE YETKİYE GÖRE BAĞLANDIĞI YER
-        if yetkili:
-            ab = QHBoxLayout()
-            ab.setSpacing(12)
-            for etiket, izin_kodu in yetkili:
-                btn = QPushButton(etiket)
-                btn.setObjectName("aksiyon")
-                btn.setCursor(Qt.PointingHandCursor)
+# İŞTE BURASI DİNAMİK BUTONLARIN EKLENDİĞİ VE YETKİYE GÖRE BAĞLANDIĞI YER
+            if yetkili:
+                ab = QHBoxLayout()
+                ab.setSpacing(12)
+                for etiket, izin_kodu in yetkili:
+                    btn = QPushButton(etiket)
+                    btn.setObjectName("aksiyon")
+                    btn.setCursor(Qt.PointingHandCursor)
+                    
+                    # İzin koduna bakarak hangi fonksiyonu tetikleyeceğine karar veriyor
+                    if izin_kodu == "Randevu oluşturma":
+                        btn.clicked.connect(self.yeni_randevu_ekrani_ac)
+                    elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
+                        btn.clicked.connect(self.randevu_listesi_ekrani_ac)
+                    
+                    # ---> KOPUK BUTONLARIN BAĞLANDIĞI YER <---
+                    elif izin_kodu == "Cihaz ekleme":
+                        btn.clicked.connect(self.cihaz_ekle_tetikle)
+                    elif izin_kodu == "Cihaz envanterini yönetme":
+                        btn.clicked.connect(self.cihaz_envanter_duzenle_tetikle)
+                    elif izin_kodu == "Cihaz rezervasyonu yapma":
+                        btn.clicked.connect(self.yeni_rezervasyon_ekrani_ac)
+                    elif izin_kodu == "Cihaz takip kontrol listesini yönetme":
+                        btn.clicked.connect(self.takip_listesi_tetikle)
+                    
+                    ab.addWidget(btn)
+                ab.addStretch()
+                lay.addLayout(ab)
+
+            # YENİ EKLENEN YÖNLENDİRME (ROUTING) KISMI
+            if oge["ad"] == "Cihaz Envanteri":
+                cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
                 
-                # İzin koduna bakarak hangi fonksiyonu tetikleyeceğine karar veriyor
-                if izin_kodu == "Randevu oluşturma":
-                    btn.clicked.connect(self.yeni_randevu_ekrani_ac)
-                elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
-                    btn.clicked.connect(self.randevu_listesi_ekrani_ac)
-                # İleride Cihaz Ekle vb. fonksiyonlarını da bu mantıkla buraya ekleyebilirsin
+                # Cihaz ekranını "self" içine kaydediyoruz ki yukarıdaki butonlar ona ulaşabilsin!
+                self.aktif_cihaz_ekrani = CihazYonetimEkrani(
+                    api_url=self.api_url, 
+                    token=self.token, 
+                    yetkili_mi=cihaz_yetkisi
+                )
+                lay.addWidget(self.aktif_cihaz_ekrani, 1)
                 
-                ab.addWidget(btn)
-            ab.addStretch()
-            lay.addLayout(ab)
-
-        ik = kart_olustur()
-        ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        il = QVBoxLayout(ik)
-        il.setAlignment(Qt.AlignCenter)
-        il.setSpacing(6)
-        
-        e1 = QLabel(oge["ikon"])
-        e1.setObjectName("bos")
-        e1.setAlignment(Qt.AlignCenter)
-        e2 = QLabel(f"{oge['ad']} verileri burada listelenecek")
-        e2.setObjectName("bosBaslik")
-        e2.setAlignment(Qt.AlignCenter)
-        e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
-        e3.setObjectName("bosAlt")
-        e3.setAlignment(Qt.AlignCenter)
-        
-        il.addWidget(e1)
-        il.addWidget(e2)
-        il.addWidget(e3)
-        lay.addWidget(ik, 1)
-        return govde
+            else:
+                # Henüz tasarımı yapılmamış diğer sayfalar için BOŞ GÖRÜNÜM kartı
+                ik = kart_olustur()
+                ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                il = QVBoxLayout(ik)
+                il.setAlignment(Qt.AlignCenter)
+                il.setSpacing(6)
+                
+                e1 = QLabel(oge["ikon"])
+                e1.setObjectName("bos")
+                e1.setAlignment(Qt.AlignCenter)
+                e2 = QLabel(f"{oge['ad']} verileri burada listelenecek")
+                e2.setObjectName("bosBaslik")
+                e2.setAlignment(Qt.AlignCenter)
+                e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
+                e3.setObjectName("bosAlt")
+                e3.setAlignment(Qt.AlignCenter)
+                
+                il.addWidget(e1)
+                il.addWidget(e2)
+                il.addWidget(e3)
+                lay.addWidget(ik, 1)
+                
+            return govde
 
     def yeni_randevu_ekrani_ac(self):
         self.randevu_formu = RandevuOlusturFormu(
@@ -588,6 +615,21 @@ class AnaPencere(QMainWindow):
             mevcut_psikolog_id=self.kullanici_id
         )
         self.liste_formu.show()
+
+    def cihaz_ekle_tetikle(self):
+        """Ana yetki kartındaki 'Cihaz Ekle' butonuna basılınca çalışır."""
+        if hasattr(self, 'aktif_cihaz_ekrani'):
+            self.aktif_cihaz_ekrani.yeni_cihaz_ekle()
+
+    def cihaz_envanter_duzenle_tetikle(self):
+        """'Envanteri Düzenle' butonuna basılınca özel cihaz listesi penceresini açar."""
+        if hasattr(self, 'aktif_cihaz_ekrani'):
+            self.aktif_cihaz_ekrani.envanter_duzenle_liste_ac()
+    def takip_listesi_tetikle(self):
+        QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
+        
+    def yeni_rezervasyon_ekrani_ac(self):
+        QMessageBox.information(self, "Bilgi", "Cihaz rezervasyon ekranı yapım aşamasındadır.") # Bir sonraki adımda burayı kodlayacağız!
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
