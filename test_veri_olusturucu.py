@@ -13,7 +13,7 @@ if onay.lower() != "evet":
 DB_HOST = "localhost"  
 DB_NAME = "crkys"
 DB_USER = "postgres"
-DB_PASS = "123" 
+DB_PASS = "1234" 
 DB_PORT = "5432"
 
 try:
