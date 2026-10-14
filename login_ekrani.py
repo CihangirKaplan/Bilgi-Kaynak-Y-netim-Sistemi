@@ -239,14 +239,14 @@ class LoginEkrani(QWidget):
                 aktif_personel_id = p_id if p_id else k_id 
 
                 # 1. Ana Pencereyi var olan yapısına uygun yaratıyoruz (Çökmeyi engeller)
+# Token'ı ve ID'yi pencere yaratılırken doğrudan içeri yolluyoruz 
+                # ki Cihaz ekranı çizilirken token'ı kapabilsin!
                 self.ana_pencere = AnaPencere(
                     aktif_rol=aktif_rol, 
-                    kullanici_adi=k_adi
+                    kullanici_adi=k_adi,
+                    token=gercek_token,
+                    kullanici_id=aktif_personel_id
                 )
-                
-                # 2. Token ve ID'yi pencerenin içine sonradan (dinamik olarak) enjekte ediyoruz
-                self.ana_pencere.token = gercek_token
-                self.ana_pencere.kullanici_id = aktif_personel_id
 
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.show()
