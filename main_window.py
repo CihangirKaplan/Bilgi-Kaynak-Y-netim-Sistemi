@@ -137,7 +137,7 @@ MENU = [
 #  3. KURUMSAL MAVİ TEMA
 # ======================================================================
 STIL = """
-- { font-family: 'Segoe UI', 'Inter', Arial; }
+* { font-family: 'Segoe UI', 'Inter', Arial; }
 QMainWindow { background: #EAF0FA; }
 QLabel { background: transparent; color: #0F2552; }
 
