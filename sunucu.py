@@ -714,12 +714,13 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Bu envanter kodu veya seri no zaten kullanımda.")
 
+# cihaz.durum yerine cihaz.durum.value yazdığımıza dikkat et!
         cursor.execute(
             """
             INSERT INTO cihazlar (envanter_kodu, cihaz_adi, marka_model, seri_no, zimmetli_oda_id, durum)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING cihaz_id;
             """,
-            (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.zimmetli_oda_id, cihaz.durum)
+            (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.zimmetli_oda_id, cihaz.durum.value)
         )
         cihaz_id = cursor.fetchone()[0]
         
@@ -743,6 +744,10 @@ def cihaz_guncelle(cihaz_id: int, guncelleme: CihazGuncelleModeli, kullanici_id:
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
         if not degisiklikler:
             raise HTTPException(status_code=422, detail="Güncellenecek alan bulunamadı.")
+
+        # Eğer durum güncelleniyorsa, Enum objesini saf stringe çevir:
+        if "durum" in degisiklikler and hasattr(degisiklikler["durum"], "value"):
+            degisiklikler["durum"] = degisiklikler["durum"].value
 
         # Dinamik Update Sorgusu Oluşturma
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
