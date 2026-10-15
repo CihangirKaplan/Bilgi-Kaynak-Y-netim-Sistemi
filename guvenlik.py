@@ -1,6 +1,8 @@
 import bcrypt
 import os
 import jwt
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
@@ -13,6 +15,13 @@ if not JWT_SECRET:
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+
+def gecici_parola_uret() -> str:
+    karakterler = string.ascii_letters + string.digits + "!@#$%&*"
+    return "".join(
+        secrets.choice(karakterler)
+        for _ in range(16)
+    )
 
 def parola_hashle(parola: str) -> str:
     parola_bytes = parola.encode("utf-8")
