@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
+from randevu_ekranlari import RandevuOlusturFormu
 from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 
@@ -336,15 +336,7 @@ class AnaPencere(QMainWindow):
         golge(topbar, 26, 26, 5)
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(24, 14, 20, 14)
-        bas = QVBoxLayout()
-        bas.setSpacing(0)
-        self.lbl_sayfa = QLabel()
-        self.lbl_sayfa.setObjectName("sayfaBaslik")
-        self.lbl_sayfa_alt = QLabel()
-        self.lbl_sayfa_alt.setObjectName("sayfaAlt")
-        bas.addWidget(self.lbl_sayfa)
-        bas.addWidget(self.lbl_sayfa_alt)
-        tb.addLayout(bas)
+        
         tb.addStretch()
         
         onizleme = QLabel("ROL ÖNİZLEME")
@@ -357,10 +349,12 @@ class AnaPencere(QMainWindow):
         tb.addWidget(onizleme)
         tb.addSpacing(8)
         tb.addWidget(self.combo_rol)
-        onizleme.setVisible(self.rol_onizleme)
-        self.combo_rol.setVisible(self.rol_onizleme)
+        
+        # Sadece admin rol önizlemesi yaparken görünür, yoksa tamamen kaybolur
+        topbar.setVisible(self.rol_onizleme) 
         sag_l.addWidget(topbar)
 
+        # --- AZ ÖNCE EKSİK KALAN İSKELET KISMI BURASI ---
         self.stack = QStackedWidget()
         sag_l.addWidget(self.stack, 1)
         ana.addWidget(sag, 1)
@@ -533,16 +527,12 @@ class AnaPencere(QMainWindow):
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
         
-        if ad == "Randevu Takvimi":
+        if ad == "Oda Kullanımı":
             self.master_stack.setCurrentIndex(1)
             self.stack.setCurrentIndex(idx)
-            self.lbl_sayfa.setText(ad)
-            self.lbl_sayfa_alt.setText(alt)
         else:
             self.master_stack.setCurrentIndex(0)
             self.stack.setCurrentIndex(idx)
-            self.lbl_sayfa.setText(ad)
-            self.lbl_sayfa_alt.setText(alt)
     
     def ana_ekrana_don(self):
         self.master_stack.setCurrentIndex(0) 
@@ -726,8 +716,10 @@ class AnaPencere(QMainWindow):
                 # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
                 if izin_kodu == "Randevu oluşturma":
                     btn.clicked.connect(self.yeni_randevu_ekrani_ac)
-                elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
-                    btn.clicked.connect(self.randevu_listesi_ekrani_ac)
+                elif izin_kodu == "Randevu düzenleme":
+                    btn.clicked.connect(lambda: self.randevu_ana_ekrani.duzenle_secilen() if hasattr(self, 'randevu_ana_ekrani') else None)
+                elif izin_kodu == "Randevu iptal etme":
+                    btn.clicked.connect(lambda: self.randevu_ana_ekrani.iptal_et_secilen() if hasattr(self, 'randevu_ana_ekrani') else None)
                 elif izin_kodu == "Cihaz ekleme":
                     btn.clicked.connect(self.cihaz_ekle_tetikle)
                 elif izin_kodu == "Cihaz envanterini yönetme":
@@ -789,7 +781,17 @@ class AnaPencere(QMainWindow):
             il.addWidget(self.oda_tablosu)
             self.odalari_getir()
             lay.addWidget(ik, 1)
+        elif oge["ad"] == "Randevu Takvimi":
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
             
+            # randevu_ekranlari'ndan yeni yazdığımız tablo sınıfını çağırıyoruz
+            from randevu_ekranlari import RandevuAnaEkrani
+            self.randevu_ana_ekrani = RandevuAnaEkrani(api_url=self.api_url, token=self.token,mevcut_psikolog_id=self.kullanici_id)
+            il.addWidget(self.randevu_ana_ekrani)
+            
+            lay.addWidget(ik, 1)
         else:
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -816,18 +818,26 @@ class AnaPencere(QMainWindow):
 
     def yeni_randevu_ekrani_ac(self):
         self.randevu_formu = RandevuOlusturFormu(
-            api_url=self.api_url, 
-            token=self.token, 
-            mevcut_psikolog_id=self.kullanici_id 
+            api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id 
         )
+        
+        # Form kapandığında dışarıdaki listeyi otomatik güncelle
+        orijinal_close = self.randevu_formu.closeEvent
+        def kapanma_yakala(event):
+            if hasattr(self, 'randevu_ana_ekrani'):
+                self.randevu_ana_ekrani.verileri_cek() 
+            if orijinal_close: orijinal_close(event)
+            else: event.accept()
+        self.randevu_formu.closeEvent = kapanma_yakala
+        
         self.randevu_formu.show()
 
     def randevu_listesi_ekrani_ac(self):
         self.liste_formu = RandevuListesiFormu(
-            api_url=self.api_url, 
-            token=self.token, 
-            mevcut_psikolog_id=self.kullanici_id
+            api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
         )
+        # Düzenleme formundan çıkıldığında listeyi otomatik güncelle
+        self.liste_formu.finished.connect(lambda: self.randevu_ana_ekrani.verileri_cek() if hasattr(self, 'randevu_ana_ekrani') else None)
         self.liste_formu.show()
 
     def cihaz_ekle_tetikle(self):
