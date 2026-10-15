@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor
 from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
 from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
+from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -682,6 +683,7 @@ class AnaPencere(QMainWindow):
         lay.setContentsMargins(4, 4, 4, 20)
         lay.setSpacing(20)
 
+        # 1. Ekip Arkadaşının Yaptığı Harika UI Tasarımı (Modül Başlığı ve İkonu)
         bk = kart_olustur()
         bl = QHBoxLayout(bk)
         bl.setContentsMargins(15, 10, 15, 10) 
@@ -715,6 +717,7 @@ class AnaPencere(QMainWindow):
         bl.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(bk)
 
+        # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
         if yetkili:
             ab = QHBoxLayout()
             ab.setSpacing(12)
@@ -747,7 +750,7 @@ class AnaPencere(QMainWindow):
             ab.addStretch()
             lay.addLayout(ab)
 
-        # SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
+        # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
         if oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
             self.aktif_cihaz_ekrani = CihazYonetimEkrani(
@@ -756,6 +759,15 @@ class AnaPencere(QMainWindow):
                 yetkili_mi=cihaz_yetkisi
             )
             lay.addWidget(self.aktif_cihaz_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Rezervasyonu":
+            rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
+            self.aktif_rezervasyon_ekrani = RezervasyonYonetimEkrani(
+                api_url=self.api_url, 
+                token=self.token, 
+                yetkili_mi=rezervasyon_yetkisi
+            )
+            lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
 
         elif oge["ad"] == "Oda Yönetimi":
             ik = kart_olustur()
@@ -842,7 +854,9 @@ class AnaPencere(QMainWindow):
         QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
         
     def yeni_rezervasyon_ekrani_ac(self):
-        QMessageBox.information(self, "Bilgi", "Cihaz rezervasyon ekranı yapım aşamasındadır.") 
+        """Ana yetki kartındaki 'Cihaz Rezervasyonu Yap' butonuna basılınca formu açar."""
+        if hasattr(self, 'aktif_rezervasyon_ekrani'):
+            self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -1035,3 +1035,40 @@ def cihaz_detayi_getir(
             cursor.close()
         if conn is not None:
             conn.close()
+
+# RES-API-001: Rezervasyonları Listeleme (GET)
+@app.get("/api/rezervasyonlar")
+def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # Cihaz adını da göstermek için cihaz_rezervasyonlari tablosunu cihazlar tablosu ile birleştiriyoruz (JOIN)
+        cursor.execute("""
+            SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi 
+            FROM cihaz_rezervasyonlari r
+            JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
+            ORDER BY r.baslangic_zamani DESC;
+        """)
+        kayitlar = cursor.fetchall()
+        
+        sonuc = []
+        for kayit in kayitlar:
+            # Veritabanındaki 'iptal_edildi_mi' (True/False) bilgisini, arayüzün beklediği "İptal Edildi" veya "Aktif" metnine çeviriyoruz
+            durum_str = "İptal Edildi" if kayit[5] else "Aktif"
+            
+            sonuc.append({
+                "rezervasyon_id": kayit[0],
+                "cihaz_id": f"{kayit[1]} - {kayit[2]}", # Örn: "123 - EEG Cihazı"
+                "baslangic_zamani": kayit[3].isoformat() if hasattr(kayit[3], 'isoformat') else str(kayit[3]),
+                "bitis_zamani": kayit[4].isoformat() if hasattr(kayit[4], 'isoformat') else str(kayit[4]),
+                "durum": durum_str
+            })
+        return sonuc
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
