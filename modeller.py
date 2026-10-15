@@ -34,18 +34,15 @@ class KullaniciModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
 
-
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
     rol_id: Optional[int] = None
     rol_adi: str
 
-
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
-
 
 # ==========================================
 # ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
@@ -59,14 +56,12 @@ class DanisanKoduModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
 
-
 # ROOM-001: Oda Modeli -> odalar tablosu
 class OdaModeli(BaseModel):
     oda_id: Optional[int] = None
     oda_adi: str
     kapasite: int = 1
     aktif_mi: bool = True
-
 
 # APT-001: Randevu Modeli -> randevular tablosu
 class RandevuModeli(BaseModel):
@@ -79,38 +74,24 @@ class RandevuModeli(BaseModel):
     durum: str = "PLANLANDI"
     olusturulma_tarihi: Optional[datetime] = None
 
-
 # APT-API-001 / SEC-APT-002: Randevu Oluşturma Modeli
 class RandevuOlusturModeli(BaseModel):
-    danisan_kod_id: str = Field(min_length=1)
     psikolog_id: int = Field(gt=0)
     oda_id: int = Field(gt=0)
     baslangic_zamani: datetime
     bitis_zamani: datetime
 
-    @field_validator("danisan_kod_id")
-    @classmethod
-    def danisan_kodu_dogrula(cls, deger: str) -> str:
-        if not deger.strip():
-            raise ValueError("Danışan kodu boş olamaz.")
-        return deger
-
-
-
 # APT-API-001 / SEC-APT-002: Randevu Güncelleme Modeli
 class RandevuGuncelleModeli(BaseModel):
-    danisan_kod_id: Optional[str] = Field(default=None, min_length=1)
+    danisan_kod_id: Optional[str] = Field(
+    default=None,
+    min_length=1,
+    pattern=r".*\S.*"
+)
     psikolog_id: Optional[int] = Field(default=None, gt=0)
     oda_id: Optional[int] = Field(default=None, gt=0)
     baslangic_zamani: Optional[datetime] = None
     bitis_zamani: Optional[datetime] = None
-
-    @field_validator("danisan_kod_id")
-    @classmethod
-    def danisan_kodu_dogrula(cls, deger: Optional[str]) -> Optional[str]:
-        if deger is not None and not deger.strip():
-            raise ValueError("Danışan kodu boş olamaz.")
-        return deger
 
 class OdaOlusturModeli(BaseModel):
     oda_adi: str = Field(min_length=1, max_length=50)
