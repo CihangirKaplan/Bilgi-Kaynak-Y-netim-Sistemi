@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
 from cihaz_ekranlari import CihazYonetimEkrani
+from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -574,6 +575,21 @@ class AnaPencere(QMainWindow):
                     yetkili_mi=cihaz_yetkisi
                 )
                 lay.addWidget(self.aktif_cihaz_ekrani, 1)
+
+            # =========================================================
+        # CİHAZ REZERVASYON (RES-UI-01) YÖNLENDİRMESİ
+        # =========================================================
+            elif oge["ad"] == "Cihaz Rezervasyonu":
+                # Kullanıcının rezervasyon yapma veya iptal etme yetkisi var mı kontrol ediyoruz
+                rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
+                
+                # Yeni yazdığımız o efsane ekranı çağırıp ana gövdeye gömüyoruz
+                self.aktif_rezervasyon_ekrani = RezervasyonYonetimEkrani(
+                    api_url=self.api_url, 
+                    token=self.token, 
+                    yetkili_mi=rezervasyon_yetkisi
+                )
+                lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
                 
             else:
                 # Henüz tasarımı yapılmamış diğer sayfalar için BOŞ GÖRÜNÜM kartı
@@ -629,7 +645,9 @@ class AnaPencere(QMainWindow):
         QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
         
     def yeni_rezervasyon_ekrani_ac(self):
-        QMessageBox.information(self, "Bilgi", "Cihaz rezervasyon ekranı yapım aşamasındadır.") # Bir sonraki adımda burayı kodlayacağız!
+            """Ana yetki kartındaki 'Cihaz Rezervasyonu Yap' butonuna basılınca formu açar."""
+            if hasattr(self, 'aktif_rezervasyon_ekrani'):
+                self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
