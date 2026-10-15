@@ -1,4 +1,3 @@
-
 import pytest
 from pydantic import ValidationError
 
@@ -8,7 +7,6 @@ from modeller import RandevuOlusturModeli, RandevuGuncelleModeli
 # Testlerde kullanılacak geçerli randevu bilgileri
 def gecerli_randevu():
     return {
-        "danisan_kod_id": "DAN-2026-0001",
         "psikolog_id": 1,
         "oda_id": 1,
         "baslangic_zamani": "2026-10-15T10:00:00",
@@ -23,16 +21,15 @@ def test_gecerli_randevu_kabul_edilir():
     assert randevu.psikolog_id == 1
     assert randevu.oda_id == 1
 
-
-# 2. Boş danışan kodu reddedilmeli
-@pytest.mark.parametrize("kod", ["", "   "])
-def test_bos_danisan_kodu_reddedilir(kod):
+# 2. Danışan kodu gönderilmeden randevu verileri kabul edilmeli
+def test_danisan_kodu_olmadan_randevu_kabul_edilir():
     veriler = gecerli_randevu()
-    veriler["danisan_kod_id"] = kod
 
-    with pytest.raises(ValidationError):
-        RandevuOlusturModeli(**veriler)
+    randevu = RandevuOlusturModeli(**veriler)
 
+    assert not hasattr(randevu, "danisan_kod_id")
+    assert randevu.psikolog_id == 1
+    assert randevu.oda_id == 1
 
 # 3. Sıfır veya negatif ID değerleri reddedilmeli
 @pytest.mark.parametrize(
@@ -56,7 +53,6 @@ def test_gecersiz_id_reddedilir(alan, deger):
 @pytest.mark.parametrize(
     "alan",
     [
-        "danisan_kod_id",
         "psikolog_id",
         "oda_id",
         "baslangic_zamani",
@@ -69,7 +65,6 @@ def test_eksik_alan_reddedilir(alan):
 
     with pytest.raises(ValidationError):
         RandevuOlusturModeli(**veriler)
-
 
 # 5. Geçersiz tarih formatı reddedilmeli
 def test_gecersiz_tarih_reddedilir():
@@ -128,147 +123,53 @@ def test_baslangic_bitisten_sonra_olamaz():
         # Hatalı istekte veritabanına bağlanılmamalı.
         mock_connect.assert_not_called()
 
+# 9. Danışan kodu otomatik oluşturulmalı
+def test_otomatik_danisan_kodu_uretilir():
+    from sunucu import otomatik_danisan_kodu_uret
+    from unittest.mock import MagicMock
+    from datetime import datetime
 
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.return_value = (6,)
 
-# 9. Geçersiz danışan koduyla randevu oluşturulamamalı
-def test_gecersiz_danisan_kodu_reddedilir():
-    randevu = RandevuOlusturModeli(**gecerli_randevu())
+    yeni_kod = otomatik_danisan_kodu_uret(mock_cursor)
 
-    with patch("sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
+    yil = datetime.now().year
 
-        # İlk sorgu: Kullanıcı rolü ADMIN
-        # İkinci sorgu: Danışan kodu bulunamadı
-        mock_cursor.fetchone.side_effect = [
-            ("ADMIN",),
-            None,
-        ]
+    assert yeni_kod == f"DAN-{yil}-0006"
 
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
-
-        assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Danışan kodu bulunamadı veya aktif değil."
-        )
-
-        # Hatalı randevu veritabanına kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
-
-        # INSERT sorgusu çalıştırılmamalı.
-        sorgular = [
-            cagri.args[0].strip().upper()
-            for cagri in mock_cursor.execute.call_args_list
-        ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
-
-# 9. Geçersiz danışan koduyla randevu oluşturulamamalı
-def test_gecersiz_danisan_kodu_reddedilir():
-    randevu = RandevuOlusturModeli(**gecerli_randevu())
-
-    with patch("sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
-
-        # Kullanıcı ADMIN, danışan kodu bulunamadı.
-        mock_cursor.fetchone.side_effect = [
-            ("ADMIN",),
-            None,
-        ]
-
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
-
-        assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Danışan kodu bulunamadı veya aktif değil."
-        )
-
-        # Veritabanına kayıt yapılmamalı.
-        mock_connect.return_value.commit.assert_not_called()
-
-        sorgular = [
-            cagri.args[0].strip().upper()
-            for cagri in mock_cursor.execute.call_args_list
-        ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
+    mock_cursor.execute.assert_called_once_with(
+        "SELECT nextval('danisan_kodu_seq');"
+    )
 
 # 10. Geçersiz veya pasif psikologla randevu oluşturulamamalı
 def test_gecersiz_psikolog_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
 
     with patch("sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
+        mock_conn = mock_connect.return_value
+        mock_cursor = mock_conn.cursor.return_value
+        yil = datetime.now().year
 
-        # Kullanıcı ADMIN
-        # Danışan kodu geçerli
-        # Psikolog bulunamadı veya aktif değil
         mock_cursor.fetchone.side_effect = [
             ("ADMIN",),
-            (1,),
-            None,
+            (5,),  # PostgreSQL sequence tarafından döndürülen sıra numarası
+            None,  # Geçerli ve aktif psikolog bulunamadı
         ]
 
         with pytest.raises(HTTPException) as hata:
             randevu_olustur(randevu, kullanici_id=1)
 
         assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Geçerli ve aktif bir psikolog seçilmelidir."
-        )
-
-        # Hatalı veri kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
+        assert hata.value.detail == "Geçerli ve aktif bir psikolog seçilmelidir."
+        mock_conn.commit.assert_not_called()
+        mock_conn.rollback.assert_called_once()
 
         sorgular = [
             cagri.args[0].strip().upper()
             for cagri in mock_cursor.execute.call_args_list
         ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
-
-# 10. Geçersiz veya pasif psikologla randevu oluşturulamamalı
-def test_gecersiz_psikolog_reddedilir():
-    randevu = RandevuOlusturModeli(**gecerli_randevu())
-
-    with patch("sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
-
-        # Kullanıcı ADMIN
-        # Danışan kodu geçerli
-        # Psikolog bulunamadı veya aktif değil
-        mock_cursor.fetchone.side_effect = [
-            ("ADMIN",),
-            (1,),
-            None,
-        ]
-
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
-
-        assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Geçerli ve aktif bir psikolog seçilmelidir."
-        )
-
-        # Hatalı veri kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
-
-        sorgular = [
-            cagri.args[0].strip().upper()
-            for cagri in mock_cursor.execute.call_args_list
-        ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
-
+        assert not any(sorgu.startswith("INSERT INTO RANDEVULAR") for sorgu in sorgular)
 
 
 # 11. Geçersiz veya pasif odayla randevu oluşturulamamalı
@@ -276,37 +177,30 @@ def test_gecersiz_oda_reddedilir():
     randevu = RandevuOlusturModeli(**gecerli_randevu())
 
     with patch("sunucu.psycopg2.connect") as mock_connect:
-        mock_cursor = mock_connect.return_value.cursor.return_value
+        mock_conn = mock_connect.return_value
+        mock_cursor = mock_conn.cursor.return_value
+        yil = datetime.now().year
 
-        # Kullanıcı ADMIN
-        # Danışan kodu geçerli
-        # Psikolog geçerli
-        # Oda bulunamadı veya aktif değil
         mock_cursor.fetchone.side_effect = [
             ("ADMIN",),
-            (1,),
-            (1,),
-            None,
+            (5,),  # PostgreSQL sequence tarafından döndürülen sıra numarası
+            (1,),  # Psikolog geçerli
+            None,  # Oda bulunamadı veya aktif değil
         ]
 
         with pytest.raises(HTTPException) as hata:
             randevu_olustur(randevu, kullanici_id=1)
 
         assert hata.value.status_code == 422
-        assert hata.value.detail == (
-            "Oda bulunamadı veya aktif değil."
-        )
-
-        # Hatalı randevu kaydedilmemeli.
-        mock_connect.return_value.commit.assert_not_called()
+        assert hata.value.detail == "Oda bulunamadı veya aktif değil."
+        mock_conn.commit.assert_not_called()
+        mock_conn.rollback.assert_called_once()
 
         sorgular = [
             cagri.args[0].strip().upper()
             for cagri in mock_cursor.execute.call_args_list
         ]
-        assert not any(
-            sorgu.startswith("INSERT") for sorgu in sorgular
-        )
+        assert not any(sorgu.startswith("INSERT INTO RANDEVULAR") for sorgu in sorgular)
 
 
 from sunucu import randevu_guncelle

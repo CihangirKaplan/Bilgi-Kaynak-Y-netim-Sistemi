@@ -37,16 +37,11 @@ VT_AYARLARI = {
 def otomatik_danisan_kodu_uret(cursor) -> str:
     yil = datetime.now().year
 
-    # Sequence kullanmak yerine doğrudan tablodaki o yıla ait en büyük koda bakıyoruz
-    cursor.execute(f"SELECT danisan_kod_id FROM danisan_kodlari WHERE danisan_kod_id LIKE 'DAN-{yil}-%%' ORDER BY danisan_kod_id DESC LIMIT 1;")
-    son_kayit = cursor.fetchone()
+    cursor.execute(
+        "SELECT nextval('danisan_kodu_seq');"
+    )
 
-    if son_kayit:
-        # DAN-2026-0002 -> Son parçayı al, 1 ekle
-        son_kod = son_kayit[0]
-        sira = int(son_kod.split('-')[-1]) + 1
-    else:
-        sira = 1
+    sira = cursor.fetchone()[0]
 
     return f"DAN-{yil}-{sira:04d}"
 
@@ -245,12 +240,28 @@ def randevu_olustur(
         return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
 
     except ExclusionViolation:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Seçilen psikolog veya oda bu saatlerde dolu."
+        )
 
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 @app.get("/api/randevular")
 def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
