@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
-from psycopg2.errors import ExclusionViolation
+from psycopg2.errors import ExclusionViolation, DeadlockDetected
 import os
+import time
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
@@ -743,56 +744,166 @@ def cihaz_guncelle(cihaz_id: int, guncelleme: CihazGuncelleModeli, kullanici_id:
 
 # RES-002, RES-003: Rezervasyon Oluşturma ve Çakışma Kontrolü
 @app.post("/api/rezervasyonlar", status_code=201)
-def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+def cihaz_rezervasyonu_yap(
+    rez: RezervasyonOlusturModeli,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))
+):
     if rez.baslangic_zamani >= rez.bitis_zamani:
-        raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
+        raise HTTPException(
+            status_code=422,
+            detail="Bitiş zamanı, başlangıçtan sonra olmalıdır."
+        )
 
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
+    maksimum_deneme = 3
 
-        # KURAL 1: Cihazın durmu rezerve edilmeye uygun mu? (Arızalı, Bakımda vs olamaz)
-        cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s;", (rez.cihaz_id,))
-        cihaz = cursor.fetchone()
-        if cihaz is None:
-            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-        if cihaz[0] not in ["Kullanima_Hazir", "Rezerve"]:
-            raise HTTPException(status_code=403, detail=f"Cihaz şu anda {cihaz[0]} durumunda olduğu için rezerve edilemez!")
+    for deneme in range(maksimum_deneme):
+        conn = None
+        cursor = None
 
-        # KURAL 2: O saatler arasında cihaz zaten rezerve edilmiş mi? (Çakışma Kontrolü)
-        cursor.execute("""
-            SELECT 1 FROM cihaz_rezervasyonlari
-            WHERE cihaz_id = %s
-              AND iptal_edildi_mi = FALSE
-              AND baslangic_zamani < %s
-              AND bitis_zamani > %s LIMIT 1;
-        """, (rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani))
-        if cursor.fetchone():
-            raise HTTPException(status_code=409, detail="Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş.")
+        try:
+            conn = psycopg2.connect(**VT_AYARLARI)
+            cursor = conn.cursor()
 
-        # İşlemi yapanın personel ID'sini bul
-        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
-        pers = cursor.fetchone()
-        personel_id = pers[0] if pers else None
+            # 1. Cihazın mevcut durumunu kontrol et.
+            cursor.execute(
+                "SELECT durum FROM cihazlar WHERE cihaz_id = %s;",
+                (rez.cihaz_id,)
+            )
+            cihaz = cursor.fetchone()
 
-        # Rezervasyonu Kaydet
-        cursor.execute("""
-            INSERT INTO cihaz_rezervasyonlari
-            (cihaz_id, rezervasyonu_yapan_personel_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani, proje_turu, proje_adi_aciklamasi)
-            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING rezervasyon_id;
-        """, (rez.cihaz_id, personel_id, rez.kullanilacak_oda_id, rez.baslangic_zamani, rez.bitis_zamani, rez.proje_turu, rez.proje_adi_aciklamasi))
+            if cihaz is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cihaz bulunamadı."
+                )
 
-        rez_id = cursor.fetchone()[0]
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_rezervasyonlari", hedef_kayit_id=rez_id)
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Rezervasyon başarıyla oluşturuldu.", "rezervasyon_id": rez_id}
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
+            if cihaz[0] not in ["Kullanima_Hazir", "Rezerve"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Cihaz şu anda {cihaz[0]} durumunda olduğu için rezerve edilemez!"
+                )
 
+            # 2. Aynı cihaz için zaman çakışmasını kontrol et.
+            cursor.execute(
+                """
+                SELECT 1
+                FROM cihaz_rezervasyonlari
+                WHERE cihaz_id = %s
+                  AND iptal_edildi_mi = FALSE
+                  AND baslangic_zamani < %s
+                  AND bitis_zamani > %s
+                LIMIT 1;
+                """,
+                (
+                    rez.cihaz_id,
+                    rez.bitis_zamani,
+                    rez.baslangic_zamani
+                )
+            )
 
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş."
+                )
+
+            # 3. Rezervasyonu yapan personeli bul.
+            cursor.execute(
+                """
+                SELECT personel_id
+                FROM personel
+                WHERE kullanici_id = %s;
+                """,
+                (kullanici_id,)
+            )
+
+            pers = cursor.fetchone()
+            personel_id = pers[0] if pers else None
+
+            # 4. Rezervasyonu oluştur.
+            cursor.execute(
+                """
+                INSERT INTO cihaz_rezervasyonlari (
+                    cihaz_id,
+                    rezervasyonu_yapan_personel_id,
+                    kullanilacak_oda_id,
+                    baslangic_zamani,
+                    bitis_zamani,
+                    proje_turu,
+                    proje_adi_aciklamasi
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING rezervasyon_id;
+                """,
+                (
+                    rez.cihaz_id,
+                    personel_id,
+                    rez.kullanilacak_oda_id,
+                    rez.baslangic_zamani,
+                    rez.bitis_zamani,
+                    rez.proje_turu,
+                    rez.proje_adi_aciklamasi
+                )
+            )
+
+            rez_id = cursor.fetchone()[0]
+
+            # 5. Audit kaydını aynı transaction içinde oluştur.
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari (
+                    kullanici_id,
+                    olay_turu,
+                    hedef_tablo,
+                    hedef_kayit_id
+                )
+                VALUES (%s, %s, %s, %s);
+                """,
+                (
+                    kullanici_id,
+                    "CREATE",
+                    "cihaz_rezervasyonlari",
+                    rez_id
+                 )
+)
+            # 6. Rezervasyon ve audit kaydını birlikte kesinleştir.
+            conn.commit()
+
+            return {
+                "durum": "basarili",
+                "mesaj": "Rezervasyon başarıyla oluşturuldu.",
+                "rezervasyon_id": rez_id
+            }
+
+        except DeadlockDetected:
+            if conn is not None:
+                conn.rollback()
+
+            # Son denemede de deadlock oluştuysa 503 döndür.
+            if deneme == maksimum_deneme - 1:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Rezervasyon işlemi eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin."
+                )
+
+            # Yeniden denemeden önce kısa süre bekle.
+            time.sleep(0.1 * (deneme + 1))
+
+        except ExclusionViolation:
+            if conn is not None:
+                conn.rollback()
+
+            raise HTTPException(
+                status_code=409,
+                detail="Cihaz seçilen saat aralığında zaten rezerve edilmiş."
+            )
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+
+            if conn is not None:
+                conn.close()
 # RES-004: Rezervasyon İptal Etme
 @app.patch("/api/rezervasyonlar/{rezervasyon_id}/iptal")
 def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):

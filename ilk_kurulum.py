@@ -15,14 +15,15 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 # Takım arkadaşları için toplu test kullanıcıları listesi
 # Arayüzdeki güncel 'personel_kodu' mimarisine uyarlandı.
 TEST_KULLANICILARI = [
-    {"k_adi": "doktor_cihangir", "sifre": "Cihangir.123", "rol": "PSIKOLOG", "p_kodu": "PER-PSK-001"},
+    # 1. Psikolog
+    {"k_adi": "psikolog1", "sifre": "Psikolog1.123", "rol": "PSIKOLOG", "p_kodu": "PER-PSK-001"},
+    {"k_adi": "psikolog2", "sifre": "Psikolog2.123", "rol": "PSIKOLOG", "p_kodu": "PER-PSK-002"}, 
     {"k_adi": "admin", "sifre": "Admin.123", "rol": "ADMIN", "p_kodu": "PER-ADM-001"},
     {"k_adi": "memur", "sifre": "Memur.123", "rol": "MEMUR", "p_kodu": "PER-MEM-001"},
     {"k_adi": "mudur", "sifre": "Mudur.123", "rol": "MUDUR", "p_kodu": "PER-MUD-001"},
     {"k_adi": "ogrenci", "sifre": "Ogrenci.123", "rol": "DANISMA_OGRENCISI", "p_kodu": "PER-OGR-001"},
     {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "ASISTAN", "p_kodu": "PER-AST-001"}
 ]
-
 def ilk_kurulumu_yap():
     conn = None
     cursor = None

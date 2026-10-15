@@ -4,9 +4,11 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
     QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy
 )
+from oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from randevu_ekranlari import RandevuOlusturFormu, RandevuListesiFormu
+from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 
@@ -30,6 +32,7 @@ IZIN_LISTESI = [
     ("Randevu iptal etme",                   "Randevu & Oda",     "EHHEHE"),
     ("Randevu takvimini görüntüleme",        "Randevu & Oda",     "EEEEEE"),
     ("Oda kullanım durumunu görüntüleme",    "Randevu & Oda",     "EEEEEE"),
+    ("Oda yönetimi",                         "Randevu & Oda",     "HEEHHE"),
 
     ("Cihaz uygunluğunu görüntüleme",        "Cihaz Yönetimi",    "EEEHEE"),
     ("Cihaz envanterini yönetme",            "Cihaz Yönetimi",    "HEEHHE"),
@@ -114,6 +117,11 @@ MENU = [
                       ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
+        dict(ikon="🏢", ad="Oda Yönetimi", izin="Oda yönetimi",
+             aciklama="Sistemdeki fiziksel odaların tanımlanması ve düzenlenmesi",
+             aksiyon=[("＋  Yeni Oda Ekle", "Oda yönetimi"),
+                      ("✎  Odayı Düzenle", "Oda yönetimi"),
+                      ("✕  Odayı Pasife Al", "Oda yönetimi")]),
     ]),
     ("SİSTEM", [
         dict(ikon="🛡️", ad="Rol & İzin Yönetimi", izin="Rol-izin yönetme",
@@ -224,8 +232,41 @@ class AnaPencere(QMainWindow):
         self.setMinimumSize(1100, 700)
         self.setStyleSheet(STIL)
 
+        # 1. MASTER STACK (Ana Katman Geçişi İçin)
+        self.master_stack = QStackedWidget()
+        self.setCentralWidget(self.master_stack)
+
+        # INDEX 0: Normal Dashboard (Sol Menü + Sağ İçerik)
         ana_widget = QWidget()
-        self.setCentralWidget(ana_widget)
+        self.master_stack.addWidget(ana_widget)
+
+        # INDEX 1: Tam Ekran Takvim (Üstünde Geri Ok Butonu ile)
+        self.tam_ekran_takvim = QWidget()
+        self.tam_ekran_takvim.setStyleSheet("background-color: white;")
+        te_layout = QVBoxLayout(self.tam_ekran_takvim)
+        te_layout.setContentsMargins(0, 0, 0, 0)
+        te_layout.setSpacing(0)
+
+        # Koyu Mavi Üst Bar ve Geri Butonu
+        ust_bar = QFrame()
+        ust_bar.setStyleSheet("background-color: #0A1F5C; padding: 12px;")
+        ust_layout = QHBoxLayout(ust_bar)
+        self.btn_geri = QPushButton("⬅ Ana Ekrana Dön")
+        self.btn_geri.setStyleSheet("color: white; font-weight: bold; font-size: 16px; border: none; background: transparent;")
+        self.btn_geri.setCursor(Qt.PointingHandCursor)
+        self.btn_geri.clicked.connect(self.ana_ekrana_don) # 0'a, yani ana menüye dön
+        
+        ust_layout.addWidget(self.btn_geri)
+        ust_layout.addStretch()
+        te_layout.addWidget(ust_bar)
+
+        # Takvim bileşenimizi buraya tam ekran olarak yerleştiriyoruz
+        self.takvim_widget = HaftalikTakvimEkrani(api_url=self.api_url, token=self.token)
+        te_layout.addWidget(self.takvim_widget)
+        
+        self.master_stack.addWidget(self.tam_ekran_takvim) # INDEX 1 olarak eklendi
+
+        # Ana layout (Sol menü ve sağ panel) Index 0'ın içine kurulmaya devam ediyor
         ana = QHBoxLayout(ana_widget)
         ana.setContentsMargins(0, 0, 0, 0)
         ana.setSpacing(0)
@@ -306,8 +347,6 @@ class AnaPencere(QMainWindow):
         bas.addWidget(self.lbl_sayfa_alt)
         tb.addLayout(bas)
         tb.addStretch()
-        
-        # TOPBAR'DAKİ SABİT BUTONLAR BURADAN TAMAMEN SİLİNDİ!
         
         onizleme = QLabel("ROL ÖNİZLEME")
         onizleme.setObjectName("onizleme")
@@ -400,11 +439,155 @@ class AnaPencere(QMainWindow):
         self.oturum_kapatildi.emit()
         self.close()
 
+    def yeni_oda_formunu_ac(self):
+        self.oda_ekle_penceresi = OdaFormu(api_url=self.api_url, token=self.token)
+        
+        orijinal_close = self.oda_ekle_penceresi.closeEvent
+        def kapanma_yakala(event):
+            self.odalari_getir() 
+            if orijinal_close:
+                orijinal_close(event)
+            else:
+                event.accept()
+                
+        self.oda_ekle_penceresi.closeEvent = kapanma_yakala
+        self.oda_ekle_penceresi.show()
+
+    def odayi_duzenle(self):
+        if not hasattr(self, 'oda_tablosu'): return
+            
+        from PySide6.QtWidgets import QMessageBox
+        secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
+        
+        if not secili_satirlar:
+            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz odayı tablodan seçin.")
+            return
+
+        satir = secili_satirlar[0].row()
+        
+        oda_id = int(self.oda_tablosu.item(satir, 0).text())
+        oda_adi = self.oda_tablosu.item(satir, 1).text()
+        kapasite = int(self.oda_tablosu.item(satir, 2).text())
+        aktif_mi = "Aktif" in self.oda_tablosu.item(satir, 3).text()
+
+        eski_veriler = {
+            "oda_adi": oda_adi,
+            "kapasite": kapasite,
+            "aktif_mi": aktif_mi
+        }
+
+        from oda_yonetimi import OdaFormu
+        self.oda_duzenle_penceresi = OdaFormu(
+            api_url=self.api_url, token=self.token, oda_id=oda_id, eski_veriler=eski_veriler
+        )
+        
+        orijinal_close = self.oda_duzenle_penceresi.closeEvent
+        def kapanma_yakala(event):
+            self.odalari_getir() 
+            if orijinal_close:
+                orijinal_close(event)
+            else:
+                event.accept()
+                
+        self.oda_duzenle_penceresi.closeEvent = kapanma_yakala
+        self.oda_duzenle_penceresi.show()
+
+    def odayi_pasife_al(self):
+        if not hasattr(self, 'oda_tablosu'): return
+            
+        from PySide6.QtWidgets import QMessageBox
+        import requests
+        
+        secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
+        if not secili_satirlar:
+            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen pasife almak istediğiniz odayı tablodan seçin.")
+            return
+
+        satir = secili_satirlar[0].row()
+        oda_id = int(self.oda_tablosu.item(satir, 0).text())
+        oda_adi = self.oda_tablosu.item(satir, 1).text()
+        
+        cevap = QMessageBox.question(
+            self, "Onay", 
+            f"'{oda_adi}' adlı odayı pasife almak istediğinize emin misiniz?\nBu işlem randevu sistemini etkileyebilir.", 
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if cevap == QMessageBox.Yes:
+            headers = {"Authorization": f"Bearer {self.token}"}
+            try:
+                res = requests.patch(
+                    f"{self.api_url}/api/odalar/{oda_id}", 
+                    json={"aktif_mi": False}, 
+                    headers=headers, 
+                    timeout=5
+                )
+                
+                if res.status_code == 200:
+                    QMessageBox.information(self, "Başarılı", "Oda başarıyla pasife alındı.")
+                    self.odalari_getir() 
+                else:
+                    QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
+            except Exception as e:
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+
     def sayfa_ac(self, idx):
-        self.stack.setCurrentIndex(idx)
         ad, alt = self.sayfa_bilgi[idx]
-        self.lbl_sayfa.setText(ad)
-        self.lbl_sayfa_alt.setText(alt)
+        
+        if ad == "Randevu Takvimi":
+            self.master_stack.setCurrentIndex(1)
+            self.stack.setCurrentIndex(idx)
+            self.lbl_sayfa.setText(ad)
+            self.lbl_sayfa_alt.setText(alt)
+        else:
+            self.master_stack.setCurrentIndex(0)
+            self.stack.setCurrentIndex(idx)
+            self.lbl_sayfa.setText(ad)
+            self.lbl_sayfa_alt.setText(alt)
+    
+    def ana_ekrana_don(self):
+        self.master_stack.setCurrentIndex(0) 
+        if "Ana Kontrol Paneli" in self.nav_btnler:
+            self.nav_btnler["Ana Kontrol Paneli"].setChecked(True)
+            for i, (ad, _) in enumerate(self.sayfa_bilgi):
+                if ad == "Ana Kontrol Paneli":
+                    self.sayfa_ac(i)
+                    break
+
+    def odalari_getir(self):
+        if not hasattr(self, 'oda_tablosu'):
+            return
+            
+        import requests
+        from PySide6.QtWidgets import QTableWidgetItem
+        from PySide6.QtCore import Qt
+        
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if cevap.status_code == 200:
+                odalar = cevap.json()
+                self.oda_tablosu.setRowCount(len(odalar))
+                
+                for satir, oda in enumerate(odalar):
+                    item_id = QTableWidgetItem(str(oda["oda_id"]))
+                    item_ad = QTableWidgetItem(oda["oda_adi"])
+                    item_kapasite = QTableWidgetItem(str(oda["kapasite"]))
+                    
+                    durum = "🟢 Aktif" if oda["aktif_mi"] else "🔴 Pasif"
+                    item_durum = QTableWidgetItem(durum)
+                    
+                    item_id.setTextAlignment(Qt.AlignCenter)
+                    item_ad.setTextAlignment(Qt.AlignCenter)
+                    item_kapasite.setTextAlignment(Qt.AlignCenter)
+                    item_durum.setTextAlignment(Qt.AlignCenter)
+                    
+                    self.oda_tablosu.setItem(satir, 0, item_id)
+                    self.oda_tablosu.setItem(satir, 1, item_ad)
+                    self.oda_tablosu.setItem(satir, 2, item_kapasite)
+                    self.oda_tablosu.setItem(satir, 3, item_durum)
+        except Exception as e:
+            print("Oda verileri çekilirken hata oluştu:", e)
 
     def kaydirmali(self, icerik):
         sc = QScrollArea()
@@ -494,127 +677,154 @@ class AnaPencere(QMainWindow):
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
-            rol = self.aktif_rol
-            govde = QWidget()
-            lay = QVBoxLayout(govde)
-            lay.setContentsMargins(4, 4, 4, 20)
-            lay.setSpacing(20)
+        rol = self.aktif_rol
+        govde = QWidget()
+        lay = QVBoxLayout(govde)
+        lay.setContentsMargins(4, 4, 4, 20)
+        lay.setSpacing(20)
 
-    # main_window.py içindeki sayfa_modul fonksiyonunun başları:
-            bk = kart_olustur()
-            bl = QHBoxLayout(bk)
-            # ESKİDEN bl.setContentsMargins(26, 22, 26, 22) İDİ. ŞİMDİ ÇOK DAHA İNCE VE ŞIK YAPIYORUZ:
-            bl.setContentsMargins(15, 10, 15, 10) 
-            bl.setSpacing(15)
+        # 1. Ekip Arkadaşının Yaptığı Harika UI Tasarımı (Modül Başlığı ve İkonu)
+        bk = kart_olustur()
+        bl = QHBoxLayout(bk)
+        bl.setContentsMargins(15, 10, 15, 10) 
+        bl.setSpacing(15)
+        
+        ikon = QLabel(oge["ikon"])
+        ikon.setObjectName("modulIkon")
+        ikon.setFixedSize(64, 64)
+        ikon.setAlignment(Qt.AlignCenter)
+        
+        mt = QVBoxLayout()
+        mt.setSpacing(2)
+        m1 = QLabel(oge["ad"])
+        m1.setObjectName("modulBaslik")
+        m2 = QLabel(oge["aciklama"])
+        m2.setObjectName("modulAlt")
+        mt.addWidget(m1)
+        mt.addWidget(m2)
+
+        yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
+        if yetkili:
+            rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
+            rozet.setObjectName("rozetYetki")
+        else:
+            rozet = QLabel("●  SALT OKUNUR")
+            rozet.setObjectName("rozetOkunur")
+
+        bl.addWidget(ikon)
+        bl.addLayout(mt)
+        bl.addStretch()
+        bl.addWidget(rozet, 0, Qt.AlignVCenter)
+        lay.addWidget(bk)
+
+        # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
+        if yetkili:
+            ab = QHBoxLayout()
+            ab.setSpacing(12)
+            for etiket, izin_kodu in yetkili:
+                btn = QPushButton(etiket)
+                btn.setObjectName("aksiyon")
+                btn.setCursor(Qt.PointingHandCursor)
+                
+                # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
+                if izin_kodu == "Randevu oluşturma":
+                    btn.clicked.connect(self.yeni_randevu_ekrani_ac)
+                elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
+                    btn.clicked.connect(self.randevu_listesi_ekrani_ac)
+                elif izin_kodu == "Cihaz ekleme":
+                    btn.clicked.connect(self.cihaz_ekle_tetikle)
+                elif izin_kodu == "Cihaz envanterini yönetme":
+                    btn.clicked.connect(self.cihaz_envanter_duzenle_tetikle)
+                elif izin_kodu == "Cihaz rezervasyonu yapma":
+                    btn.clicked.connect(self.yeni_rezervasyon_ekrani_ac)
+                elif izin_kodu == "Cihaz takip kontrol listesini yönetme":
+                    btn.clicked.connect(self.takip_listesi_tetikle)
+                elif etiket == "＋  Yeni Oda Ekle":
+                    btn.clicked.connect(self.yeni_oda_formunu_ac)
+                elif etiket == "✎  Odayı Düzenle":
+                    btn.clicked.connect(self.odayi_duzenle)
+                elif etiket == "✕  Odayı Pasife Al":
+                    btn.clicked.connect(self.odayi_pasife_al)
+                
+                ab.addWidget(btn)
+            ab.addStretch()
+            lay.addLayout(ab)
+
+        # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
+        if oge["ad"] == "Cihaz Envanteri":
+            cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
+            self.aktif_cihaz_ekrani = CihazYonetimEkrani(
+                api_url=self.api_url, 
+                token=self.token, 
+                yetkili_mi=cihaz_yetkisi
+            )
+            lay.addWidget(self.aktif_cihaz_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Rezervasyonu":
+            rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
+            self.aktif_rezervasyon_ekrani = RezervasyonYonetimEkrani(
+                api_url=self.api_url, 
+                token=self.token, 
+                yetkili_mi=rezervasyon_yetkisi
+            )
+            lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
+
+        elif oge["ad"] == "Oda Yönetimi":
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
             
-            ikon = QLabel(oge["ikon"])
-            ikon.setObjectName("modulIkon")
-            ikon.setFixedSize(64, 64)
-            ikon.setAlignment(Qt.AlignCenter)
+            from PySide6.QtWidgets import QTableWidget, QHeaderView, QAbstractItemView
             
-            mt = QVBoxLayout()
-            mt.setSpacing(2)
-            m1 = QLabel(oge["ad"])
-            m1.setObjectName("modulBaslik")
-            m2 = QLabel(oge["aciklama"])
-            m2.setObjectName("modulAlt")
-            mt.addWidget(m1)
-            mt.addWidget(m2)
-
-            yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
-            if yetkili:
-                rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
-                rozet.setObjectName("rozetYetki")
-            else:
-                rozet = QLabel("●  SALT OKUNUR")
-                rozet.setObjectName("rozetOkunur")
-
-            bl.addWidget(ikon)
-            bl.addLayout(mt)
-            bl.addStretch()
-            bl.addWidget(rozet, 0, Qt.AlignVCenter)
-            lay.addWidget(bk)
-
-# İŞTE BURASI DİNAMİK BUTONLARIN EKLENDİĞİ VE YETKİYE GÖRE BAĞLANDIĞI YER
-            if yetkili:
-                ab = QHBoxLayout()
-                ab.setSpacing(12)
-                for etiket, izin_kodu in yetkili:
-                    btn = QPushButton(etiket)
-                    btn.setObjectName("aksiyon")
-                    btn.setCursor(Qt.PointingHandCursor)
-                    
-                    # İzin koduna bakarak hangi fonksiyonu tetikleyeceğine karar veriyor
-                    if izin_kodu == "Randevu oluşturma":
-                        btn.clicked.connect(self.yeni_randevu_ekrani_ac)
-                    elif izin_kodu in ["Randevu düzenleme", "Randevu iptal etme"]:
-                        btn.clicked.connect(self.randevu_listesi_ekrani_ac)
-                    
-                    # ---> KOPUK BUTONLARIN BAĞLANDIĞI YER <---
-                    elif izin_kodu == "Cihaz ekleme":
-                        btn.clicked.connect(self.cihaz_ekle_tetikle)
-                    elif izin_kodu == "Cihaz envanterini yönetme":
-                        btn.clicked.connect(self.cihaz_envanter_duzenle_tetikle)
-                    elif izin_kodu == "Cihaz rezervasyonu yapma":
-                        btn.clicked.connect(self.yeni_rezervasyon_ekrani_ac)
-                    elif izin_kodu == "Cihaz takip kontrol listesini yönetme":
-                        btn.clicked.connect(self.takip_listesi_tetikle)
-                    
-                    ab.addWidget(btn)
-                ab.addStretch()
-                lay.addLayout(ab)
-
-            # YENİ EKLENEN YÖNLENDİRME (ROUTING) KISMI
-            if oge["ad"] == "Cihaz Envanteri":
-                cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
-                
-                # Cihaz ekranını "self" içine kaydediyoruz ki yukarıdaki butonlar ona ulaşabilsin!
-                self.aktif_cihaz_ekrani = CihazYonetimEkrani(
-                    api_url=self.api_url, 
-                    token=self.token, 
-                    yetkili_mi=cihaz_yetkisi
-                )
-                lay.addWidget(self.aktif_cihaz_ekrani, 1)
-
-            # =========================================================
-        # CİHAZ REZERVASYON (RES-UI-01) YÖNLENDİRMESİ
-        # =========================================================
-            elif oge["ad"] == "Cihaz Rezervasyonu":
-                # Kullanıcının rezervasyon yapma veya iptal etme yetkisi var mı kontrol ediyoruz
-                rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
-                
-                # Yeni yazdığımız o efsane ekranı çağırıp ana gövdeye gömüyoruz
-                self.aktif_rezervasyon_ekrani = RezervasyonYonetimEkrani(
-                    api_url=self.api_url, 
-                    token=self.token, 
-                    yetkili_mi=rezervasyon_yetkisi
-                )
-                lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
-                
-            else:
-                # Henüz tasarımı yapılmamış diğer sayfalar için BOŞ GÖRÜNÜM kartı
-                ik = kart_olustur()
-                ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                il = QVBoxLayout(ik)
-                il.setAlignment(Qt.AlignCenter)
-                il.setSpacing(6)
-                
-                e1 = QLabel(oge["ikon"])
-                e1.setObjectName("bos")
-                e1.setAlignment(Qt.AlignCenter)
-                e2 = QLabel(f"{oge['ad']} verileri burada listelenecek")
-                e2.setObjectName("bosBaslik")
-                e2.setAlignment(Qt.AlignCenter)
-                e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
-                e3.setObjectName("bosAlt")
-                e3.setAlignment(Qt.AlignCenter)
-                
-                il.addWidget(e1)
-                il.addWidget(e2)
-                il.addWidget(e3)
-                lay.addWidget(ik, 1)
-                
-            return govde
+            self.oda_tablosu = QTableWidget()
+            self.oda_tablosu.setColumnCount(4) 
+            self.oda_tablosu.setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum"])
+            self.oda_tablosu.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) 
+            self.oda_tablosu.setEditTriggers(QAbstractItemView.NoEditTriggers) 
+            self.oda_tablosu.setSelectionBehavior(QAbstractItemView.SelectRows) 
+            
+            self.oda_tablosu.setStyleSheet("""
+                QTableWidget {
+                    background-color: white;
+                    border: 1px solid #D0D7E5;
+                    border-radius: 8px;
+                    gridline-color: #E2E8F0;
+                }
+                QHeaderView::section {
+                    background-color: #0A1F5C;
+                    color: white;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                }
+            """)
+            il.addWidget(self.oda_tablosu)
+            self.odalari_getir()
+            lay.addWidget(ik, 1)
+            
+        else:
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
+            il.setAlignment(Qt.AlignCenter)
+            il.setSpacing(6)
+            
+            e1 = QLabel(oge["ikon"])
+            e1.setObjectName("bos")
+            e1.setAlignment(Qt.AlignCenter)
+            e2 = QLabel(f"{oge['ad']} verileri burada listelenecek")
+            e2.setObjectName("bosBaslik")
+            e2.setAlignment(Qt.AlignCenter)
+            e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
+            e3.setObjectName("bosAlt")
+            e3.setAlignment(Qt.AlignCenter)
+            
+            il.addWidget(e1)
+            il.addWidget(e2)
+            il.addWidget(e3)
+            lay.addWidget(ik, 1)
+            
+        return govde
 
     def yeni_randevu_ekrani_ac(self):
         self.randevu_formu = RandevuOlusturFormu(
@@ -633,21 +843,20 @@ class AnaPencere(QMainWindow):
         self.liste_formu.show()
 
     def cihaz_ekle_tetikle(self):
-        """Ana yetki kartındaki 'Cihaz Ekle' butonuna basılınca çalışır."""
         if hasattr(self, 'aktif_cihaz_ekrani'):
             self.aktif_cihaz_ekrani.yeni_cihaz_ekle()
 
     def cihaz_envanter_duzenle_tetikle(self):
-        """'Envanteri Düzenle' butonuna basılınca özel cihaz listesi penceresini açar."""
         if hasattr(self, 'aktif_cihaz_ekrani'):
             self.aktif_cihaz_ekrani.envanter_duzenle_liste_ac()
+            
     def takip_listesi_tetikle(self):
         QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
         
     def yeni_rezervasyon_ekrani_ac(self):
-            """Ana yetki kartındaki 'Cihaz Rezervasyonu Yap' butonuna basılınca formu açar."""
-            if hasattr(self, 'aktif_rezervasyon_ekrani'):
-                self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
+        """Ana yetki kartındaki 'Cihaz Rezervasyonu Yap' butonuna basılınca formu açar."""
+        if hasattr(self, 'aktif_rezervasyon_ekrani'):
+            self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
