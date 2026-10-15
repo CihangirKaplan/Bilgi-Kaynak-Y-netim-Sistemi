@@ -88,27 +88,12 @@ class CihazIslemFormu(QDialog):
             QMessageBox.warning(self, "Hata", "Envanter kodu ve cihaz adı zorunludur!")
             return
 
-# Ekranda gösterilen Türkçe durumları, veritabanının anladığı formata çeviren sözlük
-        durum_cevirici = {
-            "Kullanılabilir": "Kullanima_Hazir",
-            "Rezerve": "Rezerve",
-            "Bakımda": "Bakimda",
-            "Arızalı": "Arizali",
-            "Kalibrasyonda": "Kalibrasyonda",
-            "Kullanım Dışı": "Kullanim_Disi"
-        }
-        
-        # Ekrandaki kelimeyi alıp, sözlükten karşılığını buluyoruz. 
-        # (Bulamazsa varsayılan olarak Kullanima_Hazir yollar)
-        ekrandaki_durum = self.cmb_durum.currentText()
-        db_durumu = durum_cevirici.get(ekrandaki_durum, "Kullanima_Hazir")
-
         veri = {
             "envanter_kodu": self.txt_envanter.text().strip(),
             "cihaz_adi": self.txt_ad.text().strip(),
             "marka_model": self.txt_marka.text().strip() or None,
             "seri_no": self.txt_seri.text().strip() or None,
-            "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
+            "durum": self.cmb_durum.currentText() if self.islem_turu == "GUNCELLE" else "Kullanılabilir"
         }
         
         secili_oda = self.cmb_oda.currentData()
@@ -127,8 +112,7 @@ class CihazIslemFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "İşlem başarıyla kaydedildi.")
                 self.accept()
             else:
-                # Gelen hatayı ne olursa olsun zorla düz metne (str) çeviriyoruz ki PySide6 çökmesin!
-                hata_detay = str(cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.'))
+                hata_detay = cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.')
                 QMessageBox.critical(self, "Hata", hata_detay)
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")

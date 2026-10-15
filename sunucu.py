@@ -9,8 +9,6 @@ import jwt
 from datetime import datetime, timedelta
 from modeller import (
     GirisModeli,
-    KullaniciOlusturModeli,
-    SifreDegistirModeli,
     RandevuOlusturModeli,
     RandevuGuncelleModeli,
     DanisanKoduModeli,
@@ -21,13 +19,7 @@ from modeller import (
     CihazGuncelleModeli,
     RezervasyonOlusturModeli,
     )
-from guvenlik import (
-    parola_hashle,
-    parola_dogrula,
-    gecici_parola_uret,
-    access_token_olustur,
-    token_dogrula
-)
+from guvenlik import parola_dogrula, access_token_olustur, token_dogrula
 from denetim import denetim_kaydi_olustur
 
 load_dotenv()
@@ -45,28 +37,18 @@ VT_AYARLARI = {
 def otomatik_danisan_kodu_uret(cursor) -> str:
     yil = datetime.now().year
 
-    cursor.execute(
-        "SELECT nextval('danisan_kodu_seq');"
-    )
+    # Sequence kullanmak yerine doğrudan tablodaki o yıla ait en büyük koda bakıyoruz
+    cursor.execute(f"SELECT danisan_kod_id FROM danisan_kodlari WHERE danisan_kod_id LIKE 'DAN-{yil}-%%' ORDER BY danisan_kod_id DESC LIMIT 1;")
+    son_kayit = cursor.fetchone()
 
-    sira = cursor.fetchone()[0]
+    if son_kayit:
+        # DAN-2026-0002 -> Son parçayı al, 1 ekle
+        son_kod = son_kayit[0]
+        sira = int(son_kod.split('-')[-1]) + 1
+    else:
+        sira = 1
 
     return f"DAN-{yil}-{sira:04d}"
-def token_kullanici_id(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
-) -> int:
-    try:
-        return token_dogrula(credentials.credentials)
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Token süresi dolmuş."
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Geçersiz token."
-        )
 
 def mevcut_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
@@ -84,29 +66,12 @@ def mevcut_kullanici_id(
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute(
-    """
-    SELECT aktif_mi, ilk_giris_mi
-    FROM kullanicilar
-    WHERE kullanici_id = %s;
-    """,
-    (kullanici_id,)
-)
+        cursor.execute("SELECT aktif_mi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
         kullanici = cursor.fetchone()
         if kullanici is None:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         if not kullanici[0]:
-            raise HTTPException(
-                status_code=403,
-        detail="Kullanıcı hesabı aktif değil."
-    )
-
-        if kullanici[1]:
-            raise HTTPException(
-                status_code=403,
-        detail="İlk girişte şifrenizi değiştirmeniz gerekiyor."
-    )
-
+            raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         return kullanici_id
     finally:
         if cursor is not None: cursor.close()
@@ -136,116 +101,6 @@ def izin_kontrol(izin_adi: str):
             if conn is not None: conn.close()
     return kontrol
 
-@app.post("/api/kullanicilar", status_code=201)
-def kullanici_olustur(
-    yeni_kullanici: KullaniciOlusturModeli,
-    kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR"))
-):
-    conn = None
-    cursor = None
-
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # İşlemi yapan kullanıcının rolünü öğren
-        cursor.execute(
-            """
-            SELECT r.rol_adi
-            FROM kullanicilar k
-            JOIN roller r ON k.rol_id = r.rol_id
-            WHERE k.kullanici_id = %s;
-            """,
-            (kullanici_id,)
-        )
-        yapan = cursor.fetchone()
-
-        # Rol atama yetkisini ayrıca kontrol et
-        cursor.execute(
-            """
-            SELECT 1
-            FROM kullanicilar k
-            JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
-            JOIN izinler i ON ri.izin_id = i.izin_id
-            WHERE k.kullanici_id = %s
-              AND i.izin_adi = 'ROL_ATAMA_DEGISTIRME'
-              AND ri.izin_var = 1;
-            """,
-            (kullanici_id,)
-        )
-        if cursor.fetchone() is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Rol atama yetkiniz bulunmuyor."
-            )
-
-        # Atanacak rolün varlığını kontrol et
-        cursor.execute(
-            "SELECT rol_adi FROM roller WHERE rol_id = %s;",
-            (yeni_kullanici.rol_id,)
-        )
-        hedef_rol = cursor.fetchone()
-
-        if hedef_rol is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Geçersiz rol seçildi."
-            )
-
-        # ADMIN rolünü yalnızca ADMIN atayabilir
-        if hedef_rol[0] == "ADMIN" and (yapan is None or yapan[0] != "ADMIN"):
-            raise HTTPException(
-                status_code=403,
-                detail="ADMIN rolünü atama yetkiniz bulunmuyor."
-            )
-
-        gecici_parola = gecici_parola_uret()
-        parola_hash = parola_hashle(gecici_parola)
-
-        cursor.execute(
-            """
-            INSERT INTO kullanicilar
-                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi)
-            VALUES (%s, %s, %s, TRUE, TRUE)
-            RETURNING kullanici_id;
-            """,
-            (
-                yeni_kullanici.kullanici_adi,
-                parola_hash,
-                yeni_kullanici.rol_id
-            )
-        )
-
-        yeni_id = cursor.fetchone()[0]
-        conn.commit()
-
-        return {
-            "durum": "basarili",
-            "kullanici_id": yeni_id,
-            "kullanici_adi": yeni_kullanici.kullanici_adi,
-            "gecici_parola": gecici_parola,
-            "ilk_giris_mi": True
-        }
-
-    except psycopg2.errors.UniqueViolation:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Bu kullanıcı adı zaten kullanılıyor."
-        )
-
-    except Exception:
-        if conn:
-            conn.rollback()
-        raise
-
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
-
 @app.get("/api/korumali-test")
 def korumali_test(kullanici_id: int = Depends(mevcut_kullanici_id)):
     return {"durum": "basarili", "mesaj": "Token geçerli.", "kullanici_id": kullanici_id}
@@ -260,7 +115,7 @@ def giris_yap(giris: GirisModeli):
         cursor.execute(
             """
             SELECT kullanici_id, kullanici_adi, parola_hash, rol_id, aktif_mi,
-                   basarisiz_giris_sayisi, kilit_bitis_zamani, ilk_giris_mi
+                   basarisiz_giris_sayisi, kilit_bitis_zamani
             FROM kullanicilar WHERE kullanici_adi = %s;
             """, (giris.kullanici_adi,)
         )
@@ -305,102 +160,11 @@ def giris_yap(giris: GirisModeli):
             "kullanici_id": kullanici[0],
             "personel_id": personel_id,
             "kullanici_adi": kullanici[1],
-            "rol_id": kullanici[3],
-            "sifre_degistirme_gerekli": kullanici[7]
+            "rol_id": kullanici[3]
         }
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
-
-# İlk girişte zorunlu ve isteğe bağlı şifre değiştirme işlemi
-@app.post("/api/sifre-degistir")
-def sifre_degistir(
-    veri: SifreDegistirModeli,
-    kullanici_id: int = Depends(token_kullanici_id)
-):
-    if veri.yeni_parola != veri.yeni_parola_tekrar:
-        raise HTTPException(
-            status_code=422,
-            detail="Yeni şifreler birbiriyle eşleşmiyor."
-        )
-
-    if len(veri.yeni_parola.encode("utf-8")) > 72:
-        raise HTTPException(
-            status_code=422,
-            detail="Yeni şifre en fazla 72 bayt olabilir."
-        )
-
-    if veri.eski_parola == veri.yeni_parola:
-        raise HTTPException(
-            status_code=422,
-            detail="Yeni şifre eski şifreyle aynı olamaz."
-        )
-
-    conn = None
-    cursor = None
-
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT parola_hash, aktif_mi
-            FROM kullanicilar
-            WHERE kullanici_id = %s
-            FOR UPDATE;
-            """,
-            (kullanici_id,)
-        )
-
-        kullanici = cursor.fetchone()
-
-        if kullanici is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Kullanıcı bulunamadı."
-            )
-
-        if not kullanici[1]:
-            raise HTTPException(
-                status_code=403,
-                detail="Kullanıcı hesabı aktif değil."
-            )
-
-        if not parola_dogrula(veri.eski_parola, kullanici[0]):
-            raise HTTPException(
-                status_code=401,
-                detail="Eski şifre hatalı."
-            )
-
-        yeni_hash = parola_hashle(veri.yeni_parola)
-
-        cursor.execute(
-            """
-            UPDATE kullanicilar
-            SET parola_hash = %s, ilk_giris_mi = FALSE
-            WHERE kullanici_id = %s;
-            """,
-            (yeni_hash, kullanici_id)
-        )
-
-        conn.commit()
-
-        return {
-            "durum": "basarili",
-            "mesaj": "Şifreniz başarıyla değiştirildi."
-        }
-
-    except Exception:
-        if conn is not None:
-            conn.rollback()
-        raise
-
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
 
 @app.get("/api/randevular/siradaki-kod")
 def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
@@ -481,28 +245,12 @@ def randevu_olustur(
         return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
 
     except ExclusionViolation:
-        if conn is not None:
-            conn.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Seçilen psikolog veya oda bu saatlerde dolu."
-        )
-
-    except HTTPException:
-        if conn is not None:
-            conn.rollback()
-        raise
-
-    except Exception:
-        if conn is not None:
-            conn.rollback()
-        raise
-
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
     finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 @app.get("/api/randevular")
 def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
@@ -1287,40 +1035,3 @@ def cihaz_detayi_getir(
             cursor.close()
         if conn is not None:
             conn.close()
-
-# RES-API-001: Rezervasyonları Listeleme (GET)
-@app.get("/api/rezervasyonlar")
-def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # Cihaz adını da göstermek için cihaz_rezervasyonlari tablosunu cihazlar tablosu ile birleştiriyoruz (JOIN)
-        cursor.execute("""
-            SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi
-            FROM cihaz_rezervasyonlari r
-            JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
-            ORDER BY r.baslangic_zamani DESC;
-        """)
-        kayitlar = cursor.fetchall()
-
-        sonuc = []
-        for kayit in kayitlar:
-            # Veritabanındaki 'iptal_edildi_mi' (True/False) bilgisini, arayüzün beklediği "İptal Edildi" veya "Aktif" metnine çeviriyoruz
-            durum_str = "İptal Edildi" if kayit[5] else "Aktif"
-
-            sonuc.append({
-                "rezervasyon_id": kayit[0],
-                "cihaz_id": f"{kayit[1]} - {kayit[2]}", # Örn: "123 - EEG Cihazı"
-                "baslangic_zamani": kayit[3].isoformat() if hasattr(kayit[3], 'isoformat') else str(kayit[3]),
-                "bitis_zamani": kayit[4].isoformat() if hasattr(kayit[4], 'isoformat') else str(kayit[4]),
-                "durum": durum_str
-            })
-        return sonuc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()

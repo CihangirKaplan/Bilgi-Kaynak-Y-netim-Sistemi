@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from main_window import AnaPencere
-from sifre_degistir_ekrani import SifreDegistirEkrani
 
 # ======================================================================
 #  TEMA VE SABİTLER
@@ -200,7 +199,7 @@ class LoginEkrani(QWidget):
     def giris_yap(self):
         if self.kalan > 0:
             return
-
+        
         kullanici = self.kullanici_input.text().strip()
         sifre = self.sifre_input.text()
 
@@ -220,7 +219,7 @@ class LoginEkrani(QWidget):
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
-
+                
                 # Yetki ve Rol Kontrolü
                 r_id = veri.get("rol_id")
                 aktif_rol = self.rol_adindan_koda(r_id)
@@ -232,31 +231,18 @@ class LoginEkrani(QWidget):
                 # Güvenli Giriş Onayı
                 self.hatali_deneme = 0
                 self.hata_lbl.hide()
-
+                
                 gercek_token = veri.get("access_token")
                 k_adi = veri.get("kullanici_adi")
                 k_id = veri.get("kullanici_id")
                 p_id = veri.get("personel_id")
-                aktif_personel_id = p_id if p_id else k_id
-
-                # İlk girişte zorunlu şifre değiştirme
-                if veri.get("sifre_degistirme_gerekli") is True:
-                    self.sifre_penceresi = SifreDegistirEkrani(gercek_token)
-                    self.sifre_penceresi.sifre_degistirildi.connect(
-                        self.ilk_giris_sifresi_degisti
-                    )
-                    self.sifre_penceresi.iptal_edildi.connect(
-                        self.ilk_giris_iptal
-                    )
-                    self.sifre_penceresi.show()
-                    self.hide()
-                    return
+                aktif_personel_id = p_id if p_id else k_id 
 
                 # 1. Ana Pencereyi var olan yapısına uygun yaratıyoruz (Çökmeyi engeller)
-# Token'ı ve ID'yi pencere yaratılırken doğrudan içeri yolluyoruz
+# Token'ı ve ID'yi pencere yaratılırken doğrudan içeri yolluyoruz 
                 # ki Cihaz ekranı çizilirken token'ı kapabilsin!
                 self.ana_pencere = AnaPencere(
-                    aktif_rol=aktif_rol,
+                    aktif_rol=aktif_rol, 
                     kullanici_adi=k_adi,
                     token=gercek_token,
                     kullanici_id=aktif_personel_id
@@ -264,41 +250,25 @@ class LoginEkrani(QWidget):
 
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.show()
-
+                
                 self.kullanici_input.clear()
                 self.sifre_input.clear()
                 self.goster.setChecked(False)
                 self.hide()
-
+            
             elif cevap.status_code == 429: # Çok fazla hatalı giriş (Kilitlenme)
                 self.kilitle()
-
+                
             else: # 401 veya 403 (Hatalı şifre / Pasif hesap)
                 self.hata_goster(veri.get("detail", "Giriş başarısız."))
                 self.hatali_deneme += 1
                 self.sifre_input.clear()
                 self.sifre_input.setFocus()
-
+                
         except requests.exceptions.ConnectionError:
             self.hata_goster("Sunucuya bağlanılamadı. API'nin açık olduğundan emin olun.")
         except Exception as e:
             self.hata_goster(f"Beklenmeyen bir hata oluştu: {str(e)}")
-
-    def ilk_giris_sifresi_degisti(self):
-        """Şifre değişince yeni şifreyle tekrar giriş yapılmasını sağlar."""
-        self.sifre_penceresi.close()
-        self.kullanici_input.clear()
-        self.sifre_input.clear()
-        self.goster.setChecked(False)
-        self.hata_lbl.hide()
-        self.show()
-        self.kullanici_input.setFocus()
-
-    def ilk_giris_iptal(self):
-        """Şifre değiştirme ekranı kapatılırsa giriş ekranına döner."""
-        self.sifre_input.clear()
-        self.show()
-        self.sifre_input.setFocus()
 
     def oturum_kapandi(self):
         """Ana pencerede 'Oturumu Kapat'a basılınca giriş ekranı geri gelir."""
