@@ -184,6 +184,20 @@ class RezervasyonOlusturModeli(BaseModel):
         if isinstance(deger, str):
             return datetime.fromisoformat(deger.replace("Z", ""))
         return deger
+
+# FAIL-001: Arıza Bildirim Modeli
+class ArizaBildirimModeli(BaseModel):
+    cihaz_id: int = Field(gt=0)
+    ariza_baslik: str = Field(min_length=3, max_length=150)
+    ariza_aciklama: str = Field(min_length=5)
+    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+
+# FAIL-003: Arıza Güncelleme Modeli
+class ArizaGuncelleModeli(BaseModel):
+    ariza_baslik: str = Field(min_length=3, max_length=150)
+    ariza_aciklama: str = Field(min_length=2)
+    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+    cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
 # ADM-API-004: Personel Güncelleme İstek Modeli
 class PersonelGuncelleModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")

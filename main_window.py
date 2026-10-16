@@ -11,6 +11,8 @@ from randevu_ekranlari import RandevuOlusturFormu
 from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
+from cihaz_ariza_ekranlari import ArizaYonetimEkrani
+
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -719,6 +721,8 @@ class AnaPencere(QMainWindow):
                 # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
                 if izin_kodu == "Randevu oluşturma":
                     btn.clicked.connect(self.yeni_randevu_ekrani_ac)
+                elif izin_kodu == "Arıza kayıtlarını yönetme":
+                    btn.clicked.connect(self.yeni_ariza_bildirimi_ac)
                 elif izin_kodu == "Randevu düzenleme":
                     btn.clicked.connect(lambda: self.randevu_ana_ekrani.duzenle_secilen() if hasattr(self, 'randevu_ana_ekrani') else None)
                 elif izin_kodu == "Randevu iptal etme":
@@ -760,6 +764,21 @@ class AnaPencere(QMainWindow):
                 yetkili_mi=rezervasyon_yetkisi
             )
             lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
+
+        # =========================================================
+        # CİHAZ ARIZA KAYITLARI (FAIL-UI-01) YÖNLENDİRMESİ
+        # =========================================================
+        elif oge["ad"] == "Arıza Kayıtları":
+            # Kullanıcının arıza kayıtlarını yönetme yetkisi var mı kontrol ediyoruz
+            ariza_yetkisi = izin_var(rol, "Arıza kayıtlarını yönetme")
+            
+            # Yeni yazdığımız o efsane ekranı çağırıp ana gövdeye gömüyoruz
+            self.aktif_ariza_ekrani = ArizaYonetimEkrani(
+                api_url=self.api_url, 
+                token=self.token, 
+                yetkili_mi=ariza_yetkisi
+            )
+            lay.addWidget(self.aktif_ariza_ekrani, 1)
 
         elif oge["ad"] == "Oda Yönetimi":
             ik = kart_olustur()
@@ -868,6 +887,11 @@ class AnaPencere(QMainWindow):
         if hasattr(self, 'aktif_rezervasyon_ekrani'):
             self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
 
+    def yeni_ariza_bildirimi_ac(self):
+        """Ana yetki kartındaki 'Arıza Kaydı' butonuna basılınca formu açar."""
+        if hasattr(self, 'aktif_ariza_ekrani'):
+            self.aktif_ariza_ekrani.yeni_ariza_bildirimi()
+    
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"

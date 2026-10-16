@@ -217,6 +217,16 @@ class LoginEkrani(QWidget):
                 json={"kullanici_adi": kullanici, "parola": sifre},
                 timeout=5
             )
+            
+            # Gelen cevabı önce ekrana düz metin (text) olarak basalım ki sunucu ne diyor görelim!
+            print(f"Sunucudan Gelen Ham Cevap (Text): {cevap.text}")
+            print(f"Sunucudan Gelen HTTP Kodu: {cevap.status_code}")
+            
+            # Eğer sunucu tamamen boş döndüyse (char 0 hatası buradan çıkar)
+            if not cevap.text.strip():
+                 self.hata_goster(f"Sunucu {cevap.status_code} kodu döndürdü ama içeriği bomboş!")
+                 return
+                 
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
@@ -331,6 +341,7 @@ class LoginEkrani(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     pencere = LoginEkrani()
     pencere.show()
     sys.exit(app.exec())
