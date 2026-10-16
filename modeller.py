@@ -24,7 +24,6 @@ class CihazModeli(BaseModel):
     seri_no: Optional[str] = None      # Opsiyonel alan
     durum: str = "Kullanima_Hazir"     # Varsayılan olarak cihaz kullanıma hazır gelir
 
-
 # AUTH-001: User Modeli
 class KullaniciModeli(BaseModel):
     kullanici_id: Optional[int] = None
@@ -33,6 +32,17 @@ class KullaniciModeli(BaseModel):
     rol_id: int
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime] = None
+
+# AUTH: Yeni kullanıcı oluşturma modeli
+class KullaniciOlusturModeli(BaseModel):
+    kullanici_adi: str = Field(min_length=3, max_length=100)
+    rol_id: int = Field(gt=0)
+
+# İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
+class SifreDegistirModeli(BaseModel):
+    eski_parola: str
+    yeni_parola: str = Field(min_length=8, max_length=72)
+    yeni_parola_tekrar: str
 
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
