@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean
@@ -49,6 +49,12 @@ class RolModeli(BaseModel):
     rol_id: Optional[int] = None
     rol_adi: str
 
+# ADM-API-002: Kullanıcı Rol Değiştirme İstek Modeli
+class RolDegistirModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rol_id: int = Field(gt=0)
+    
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
     kullanici_adi: str
