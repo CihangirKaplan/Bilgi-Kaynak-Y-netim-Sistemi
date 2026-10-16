@@ -1443,3 +1443,116 @@ def kullanici_rol_degistir(
             cursor.close()
         if conn is not None:
             conn.close()
+# ADM-API-003: Kullanıcı Pasifleştirme
+@app.patch("/api/kullanicilar/{kullanici_id}/pasiflestir")
+def kullanici_pasiflestir(
+    kullanici_id: int,
+    islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kullanıcı kendi hesabını pasifleştiremez
+        if kullanici_id == islem_yapan_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Kendi hesabınızı pasifleştiremezsiniz."
+            )
+
+        # İşlemi yapan kullanıcının rolünü öğren
+        cursor.execute(
+            """
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s;
+            """,
+            (islem_yapan_id,)
+        )
+        islem_yapan = cursor.fetchone()
+
+        if islem_yapan is None:
+            raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
+
+        # Hedef kullanıcıyı kilitleyerek sorgula
+        cursor.execute(
+            """
+            SELECT r.rol_adi, k.aktif_mi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s
+            FOR UPDATE OF k;
+            """,
+            (kullanici_id,)
+        )
+        hedef = cursor.fetchone()
+
+        if hedef is None:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+        hedef_rol, aktif_mi = hedef
+
+        # ADMIN hesabını yalnızca ADMIN pasifleştirebilir
+        if hedef_rol == "ADMIN" and islem_yapan[0] != "ADMIN":
+            raise HTTPException(
+                status_code=403,
+                detail="ADMIN hesabını yalnızca ADMIN pasifleştirebilir."
+            )
+
+        if not aktif_mi:
+            raise HTTPException(
+                status_code=409,
+                detail="Kullanıcı zaten pasif durumda."
+            )
+
+        # Kullanıcıyı pasifleştir
+        cursor.execute(
+            """
+            UPDATE kullanicilar
+            SET aktif_mi = FALSE
+            WHERE kullanici_id = %s;
+            """,
+            (kullanici_id,)
+        )
+
+        # Audit kaydı
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari (
+                kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id
+            )
+            VALUES (%s, %s, %s, %s);
+            """,
+            (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id)
+        )
+
+        conn.commit()
+
+        return {
+            "mesaj": "Kullanıcı başarıyla pasifleştirildi.",
+            "kullanici_id": kullanici_id,
+            "aktif_mi": False
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Kullanıcı pasifleştirme sırasında veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
