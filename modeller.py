@@ -38,6 +38,17 @@ class KullaniciOlusturModeli(BaseModel):
     kullanici_adi: str = Field(min_length=3, max_length=100)
     rol_id: int = Field(gt=0)
 
+# ADM-API-004: Personel Oluşturma İstek Modeli
+class PersonelOlusturModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kullanici_id: int = Field(gt=0)
+    personel_kodu: str = Field(
+        min_length=1,
+        max_length=50,
+        pattern=r"^\s*\S(?:.*\S)?\s*$"
+    )
+
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
     eski_parola: str
@@ -187,3 +198,14 @@ class ArizaGuncelleModeli(BaseModel):
     ariza_aciklama: str = Field(min_length=2)
     aciliyet: str # Düşük, Orta, Yüksek, Kritik
     cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
+# ADM-API-004: Personel Güncelleme İstek Modeli
+class PersonelGuncelleModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    personel_kodu: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        pattern=r"^\s*\S(?:.*\S)?\s*$"
+    )
+    aktif_mi: bool | None = None
