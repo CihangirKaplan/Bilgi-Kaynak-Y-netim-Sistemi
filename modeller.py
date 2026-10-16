@@ -39,6 +39,10 @@ class RolModeli(BaseModel):
     rol_id: Optional[int] = None
     rol_adi: str
 
+# ADM-API-002: Kullanıcı Rol Değiştirme İstek Modeli
+class RolDegistirModeli(BaseModel):
+    rol_id: int = Field(gt=0)
+    
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
     kullanici_adi: str
