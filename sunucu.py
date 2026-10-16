@@ -11,6 +11,8 @@ from modeller import (
     GirisModeli,
     RolDegistirModeli,
     KullaniciOlusturModeli,
+    PersonelOlusturModeli,
+    PersonelGuncelleModeli,
     SifreDegistirModeli,
     RandevuOlusturModeli,
     RandevuGuncelleModeli,
@@ -1436,6 +1438,338 @@ def kullanici_rol_degistir(
         raise HTTPException(
             status_code=500,
             detail="Rol değiştirme işlemi sırasında veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+# ADM-API-004: Personel Oluşturma
+@app.post("/api/personel", status_code=201)
+def personel_olustur(
+    yeni_personel: PersonelOlusturModeli,
+    islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kullanıcı hesabı var mı ve aktif mi?
+        cursor.execute(
+            """
+            SELECT k.aktif_mi, r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s;
+            """,
+            (yeni_personel.kullanici_id,)
+        )
+        kullanici = cursor.fetchone()
+
+        if kullanici is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Kullanıcı hesabı bulunamadı."
+            )
+
+        if not kullanici[0]:
+            raise HTTPException(
+                status_code=422,
+                detail="Pasif kullanıcı için personel kaydı oluşturulamaz."
+            )
+
+        # Personel kaydı oluştur
+        cursor.execute(
+            """
+            INSERT INTO personel (kullanici_id, personel_kodu)
+            VALUES (%s, %s)
+            RETURNING personel_id;
+            """,
+            (
+                yeni_personel.kullanici_id,
+                yeni_personel.personel_kodu.strip()
+            )
+        )
+
+        personel_id = cursor.fetchone()[0]
+
+        # Audit kaydı
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (islem_yapan_id, "CREATE", "personel", personel_id)
+        )
+
+        conn.commit()
+
+        return {
+            "mesaj": "Personel başarıyla oluşturuldu.",
+            "personel_id": personel_id,
+            "kullanici_id": yeni_personel.kullanici_id,
+            "personel_kodu": yeni_personel.personel_kodu.strip(),
+            "aktif_mi": True
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Bu kullanıcıya ait personel kaydı veya personel kodu zaten mevcut."
+        )
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Personel oluşturulurken veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+# ADM-API-004: Personel Listeleme
+@app.get("/api/personel")
+def personel_listele(
+    islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                p.personel_id,
+                p.kullanici_id,
+                k.kullanici_adi,
+                p.personel_kodu,
+                r.rol_adi,
+                p.aktif_mi,
+                p.olusturulma_tarihi
+            FROM personel p
+            JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+            JOIN roller r ON k.rol_id = r.rol_id
+            ORDER BY p.personel_id;
+            """
+        )
+
+        kayitlar = cursor.fetchall()
+
+        return [
+            {
+                "personel_id": kayit[0],
+                "kullanici_id": kayit[1],
+                "kullanici_adi": kayit[2],
+                "personel_kodu": kayit[3],
+                "rol_adi": kayit[4],
+                "aktif_mi": kayit[5],
+                "olusturulma_tarihi": kayit[6]
+            }
+            for kayit in kayitlar
+        ]
+
+    except psycopg2.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Personel listesi alınırken veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+# ADM-API-004: Personel Detay
+@app.get("/api/personel/{personel_id}")
+def personel_detay(
+    personel_id: int,
+    islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))
+):
+    if personel_id <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Geçerli bir personel ID girilmelidir."
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                p.personel_id,
+                p.kullanici_id,
+                k.kullanici_adi,
+                p.personel_kodu,
+                r.rol_adi,
+                p.aktif_mi,
+                p.olusturulma_tarihi
+            FROM personel p
+            JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE p.personel_id = %s;
+            """,
+            (personel_id,)
+        )
+
+        kayit = cursor.fetchone()
+
+        if kayit is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Personel bulunamadı."
+            )
+
+        return {
+            "personel_id": kayit[0],
+            "kullanici_id": kayit[1],
+            "kullanici_adi": kayit[2],
+            "personel_kodu": kayit[3],
+            "rol_adi": kayit[4],
+            "aktif_mi": kayit[5],
+            "olusturulma_tarihi": kayit[6]
+        }
+
+    except HTTPException:
+        raise
+
+    except psycopg2.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Personel bilgileri alınırken veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+# ADM-API-004: Personel Güncelleme
+@app.patch("/api/personel/{personel_id}")
+def personel_guncelle(
+    personel_id: int,
+    guncelleme: PersonelGuncelleModeli,
+    islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))
+):
+    if personel_id <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Geçerli bir personel ID girilmelidir."
+        )
+
+    degisiklikler = guncelleme.model_dump(exclude_unset=True)
+
+    if not degisiklikler or any(
+        deger is None for deger in degisiklikler.values()
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="En az bir geçerli güncelleme alanı gönderilmelidir."
+        )
+
+    if "personel_kodu" in degisiklikler:
+        degisiklikler["personel_kodu"] = (
+            degisiklikler["personel_kodu"].strip()
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT personel_id, personel_kodu, aktif_mi
+            FROM personel
+            WHERE personel_id = %s
+            FOR UPDATE;
+            """,
+            (personel_id,)
+        )
+
+        mevcut = cursor.fetchone()
+
+        if mevcut is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Personel bulunamadı."
+            )
+
+        yeni_kod = degisiklikler.get("personel_kodu", mevcut[1])
+        yeni_aktiflik = degisiklikler.get("aktif_mi", mevcut[2])
+
+        cursor.execute(
+            """
+            UPDATE personel
+            SET personel_kodu = %s,
+                aktif_mi = %s
+            WHERE personel_id = %s;
+            """,
+            (yeni_kod, yeni_aktiflik, personel_id)
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (islem_yapan_id, "UPDATE", "personel", personel_id)
+        )
+
+        conn.commit()
+
+        return {
+            "mesaj": "Personel başarıyla güncellendi.",
+            "personel_id": personel_id,
+            "personel_kodu": yeni_kod,
+            "aktif_mi": yeni_aktiflik
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Bu personel kodu başka bir kayıtta kullanılıyor."
+        )
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Personel güncellenirken veritabanı hatası oluştu."
         )
 
     finally:
