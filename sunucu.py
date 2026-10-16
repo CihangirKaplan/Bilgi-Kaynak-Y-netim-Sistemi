@@ -9,6 +9,9 @@ import jwt
 from datetime import datetime, timedelta
 from modeller import (
     GirisModeli,
+    RolDegistirModeli,
+    KullaniciOlusturModeli,
+    SifreDegistirModeli,
     RandevuOlusturModeli,
     RandevuGuncelleModeli,
     DanisanKoduModeli,
@@ -1028,6 +1031,161 @@ def cihaz_detayi_getir(
         raise HTTPException(
             status_code=500,
             detail="Cihaz bilgileri alınırken bir veritabanı hatası oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+# RES-API-001: Rezervasyonları Listeleme (GET)
+@app.get("/api/rezervasyonlar")
+def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Cihaz adını da göstermek için cihaz_rezervasyonlari tablosunu cihazlar tablosu ile birleştiriyoruz (JOIN)
+        cursor.execute("""
+            SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi
+            FROM cihaz_rezervasyonlari r
+            JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
+            ORDER BY r.baslangic_zamani DESC;
+        """)
+        kayitlar = cursor.fetchall()
+
+        sonuc = []
+        for kayit in kayitlar:
+            # Veritabanındaki 'iptal_edildi_mi' (True/False) bilgisini, arayüzün beklediği "İptal Edildi" veya "Aktif" metnine çeviriyoruz
+            durum_str = "İptal Edildi" if kayit[5] else "Aktif"
+
+            sonuc.append({
+                "rezervasyon_id": kayit[0],
+                "cihaz_id": f"{kayit[1]} - {kayit[2]}", # Örn: "123 - EEG Cihazı"
+                "baslangic_zamani": kayit[3].isoformat() if hasattr(kayit[3], 'isoformat') else str(kayit[3]),
+                "bitis_zamani": kayit[4].isoformat() if hasattr(kayit[4], 'isoformat') else str(kayit[4]),
+                "durum": durum_str
+            })
+        return sonuc
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# ADM-API-002: Kullanıcı Rol Atama ve Değiştirme
+@app.patch("/api/kullanicilar/{kullanici_id}/rol")
+def kullanici_rol_degistir(
+    kullanici_id: int,
+    veri: RolDegistirModeli,
+    islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # İşlemi yapan kullanıcının rolünü öğren
+        cursor.execute(
+            """
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s;
+            """,
+            (islem_yapan_id,)
+        )
+        islem_yapan = cursor.fetchone()
+
+        if islem_yapan is None:
+            raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
+
+        islem_yapan_rol = islem_yapan[0]
+
+        # Rolü değiştirilecek kullanıcıyı kilitleyerek sorgula
+        cursor.execute(
+            """
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s
+            FOR UPDATE OF k;
+            """,
+            (kullanici_id,)
+        )
+        hedef_kullanici = cursor.fetchone()
+
+        if hedef_kullanici is None:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+        mevcut_rol = hedef_kullanici[0]
+
+        # Yeni rol geçerli mi?
+        cursor.execute(
+            "SELECT rol_adi FROM roller WHERE rol_id = %s;",
+            (veri.rol_id,)
+        )
+        yeni_rol = cursor.fetchone()
+
+        if yeni_rol is None:
+            raise HTTPException(status_code=404, detail="Atanacak rol bulunamadı.")
+
+        yeni_rol_adi = yeni_rol[0]
+
+        # ADMIN rolünü yalnızca ADMIN yönetebilir
+        if islem_yapan_rol != "ADMIN":
+            if mevcut_rol == "ADMIN" or yeni_rol_adi == "ADMIN":
+                raise HTTPException(
+                    status_code=403,
+                    detail="ADMIN rolünü yalnızca ADMIN yönetebilir."
+                )
+
+        # Rolü güncelle
+        cursor.execute(
+            """
+            UPDATE kullanicilar
+            SET rol_id = %s
+            WHERE kullanici_id = %s;
+            """,
+            (veri.rol_id, kullanici_id)
+        )
+
+        # Audit kaydını aynı transaction içinde oluştur
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari (
+                kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id
+            )
+            VALUES (%s, %s, %s, %s);
+            """,
+            (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id)
+        )
+
+        conn.commit()
+
+        return {
+            "mesaj": "Kullanıcı rolü başarıyla değiştirildi.",
+            "kullanici_id": kullanici_id,
+            "yeni_rol_id": veri.rol_id,
+            "yeni_rol_adi": yeni_rol_adi
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except psycopg2.Error:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Rol değiştirme işlemi sırasında veritabanı hatası oluştu."
         )
 
     finally:
