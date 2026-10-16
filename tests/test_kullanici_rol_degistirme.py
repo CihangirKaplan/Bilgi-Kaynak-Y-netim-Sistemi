@@ -243,3 +243,31 @@ def test_psikolog_http_uzerinden_rol_degistiremez():
 
     finally:
         app.dependency_overrides.pop(mevcut_kullanici_id, None)
+def test_rol_degistirmede_beklenmeyen_alan_reddedilir():
+    from fastapi.testclient import TestClient
+    from sunucu import app, izin_kontrol
+
+    rol_degistirme_endpointi = next(
+        route for route in app.routes
+        if getattr(route, "path", None) == "/api/kullanicilar/{kullanici_id}/rol"
+        and "PATCH" in getattr(route, "methods", set())
+    )
+
+    yetki_bagimliligi = rol_degistirme_endpointi.dependant.dependencies[0].call
+
+    app.dependency_overrides[yetki_bagimliligi] = lambda: 10
+
+    try:
+        with TestClient(app) as client:
+            yanit = client.patch(
+                "/api/kullanicilar/5/rol",
+                json={
+                    "rol_id": 2,
+                    "is_admin": True
+                }
+            )
+
+        assert yanit.status_code == 422
+
+    finally:
+        app.dependency_overrides.pop(yetki_bagimliligi, None)
