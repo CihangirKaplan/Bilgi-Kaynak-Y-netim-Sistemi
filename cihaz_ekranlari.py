@@ -105,7 +105,7 @@ class CihazIslemFormu(QDialog):
 
         veri = {
             "envanter_kodu": self.txt_envanter.text().strip(),
-            "cihaz_adi": self.txt_ad.text().strip(),
+            "cihaz_adi": self.txt_ad.text().strip(  ),
             "marka_model": self.txt_marka.text().strip() or None,
             "seri_no": self.txt_seri.text().strip() or None,
             "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
