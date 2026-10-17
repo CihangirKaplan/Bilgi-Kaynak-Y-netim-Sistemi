@@ -22,8 +22,8 @@ from modeller import (
     CihazOlusturModeli,
     CihazGuncelleModeli,
     RezervasyonOlusturModeli,
-    ArizaBildirimModeli,  # Ekledik!
-    ArizaGuncelleModeli   # Ekledik!
+    ArizaBildirimModeli,
+    ArizaGuncelleModeli
 )
 from guvenlik import (
     parola_hashle,
@@ -33,7 +33,6 @@ from guvenlik import (
     token_dogrula
 )
 from denetim import denetim_kaydi_olustur
-from modeller import ArizaBildirimModeli, ArizaGuncelleModeli
 
 load_dotenv()
 app = FastAPI()
@@ -313,7 +312,6 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# ÇAKIŞMA ÇÖZÜLEN YER 1: Kullanıcı Pasifleştirme (Develop Dalı)
 @app.patch("/api/kullanicilar/{kullanici_id}/pasiflestir")
 def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
     conn = None
@@ -353,7 +351,6 @@ def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# ÇAKIŞMA ÇÖZÜLEN YER 2: Personel Oluşturma (Feature Dalı)
 @app.post("/api/personel", status_code=201)
 def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))):
     conn = None
@@ -929,178 +926,7 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
 # ==========================================
 # ARIZA YÖNETİMİ MODÜLÜ (EFSANE YER)
 # ==========================================
-@app.get("/api/arizalar")
-def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT a.ariza_id, c.cihaz_adi, a.ariza_aciklamasi, a.cozuldu_mu, a.bildirim_tarihi
-            FROM cihaz_arizalari a
-            JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
-            ORDER BY a.bildirim_tarihi DESC;
-        """)
-        kayitlar = cursor.fetchall()
-        
-        sonuc = []
-        for kayit in kayitlar:
-            tam_metin = kayit[2] if kayit[2] else ""
-            aciliyet_derecesi = "Belirtilmedi"
-            baslik = tam_metin
-            aciklama = ""
-            
-            if tam_metin.startswith("[") and "]" in tam_metin:
-                bol = tam_metin.split("]", 1)
-                aciliyet_derecesi = bol[0].replace("[", "").strip()
-                kalan = bol[1].strip()
-                if "-" in kalan:
-                    baslik, aciklama = kalan.split("-", 1)
-                    baslik = baslik.strip()
-                    aciklama = aciklama.strip()
-                else:
-                    baslik = kalan
-            
-            durum_metni = "Çözüldü" if kayit[3] else "Açık"
-            sonuc.append({
-                "ariza_id": kayit[0],
-                "cihaz_adi": kayit[1],
-                "ariza_baslik": baslik,
-                "ariza_aciklama": aciklama,
-                "aciliyet": aciliyet_derecesi,
-                "durum": durum_metni,
-                "bildirim_tarihi": kayit[4].isoformat() if hasattr(kayit[4], 'isoformat') else str(kayit[4])
-            })
-        return sonuc
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
-@app.post("/api/arizalar", status_code=201)
-def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;", (ariza.cihaz_id,))
-        cihaz = cursor.fetchone()
-        if cihaz is None:
-            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-        
-        cursor.execute("SELECT kullanici_adi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
-        kullanici = cursor.fetchone()
-        bildiren_kisi = kullanici[0] if kullanici else f"Kullanıcı-{kullanici_id}"
-
-        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-
-        cursor.execute("""
-            INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_aciklamasi, bildirim_tarihi, cozuldu_mu)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE) RETURNING ariza_id;
-        """, (ariza.cihaz_id, bildiren_kisi, tam_aciklama))
-        ariza_id = cursor.fetchone()[0]
-
-        cursor.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s;", (ariza.cihaz_id,))
-
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_arizalari", hedef_kayit_id=ariza_id)
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=ariza.cihaz_id)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi.", "ariza_id": ariza_id}
-    except Exception as e:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-@app.put("/api/arizalar/{ariza_id}")
-def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT cihaz_id FROM cihaz_arizalari WHERE ariza_id = %s FOR UPDATE;", (ariza_id,))
-        kayit = cursor.fetchone()
-        if kayit is None:
-            raise HTTPException(status_code=404, detail="Arıza kaydı bulunamadı.")
-        cihaz_id = kayit[0]
-
-        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-        cozum_sql = "CURRENT_TIMESTAMP" if ariza.cozuldu_mu else "NULL"
-
-        cursor.execute(f"""
-            UPDATE cihaz_arizalari 
-            SET ariza_aciklamasi = %s, cozuldu_mu = %s, cozum_tarihi = {cozum_sql}
-            WHERE ariza_id = %s;
-        """, (tam_aciklama, ariza.cozuldu_mu, ariza_id))
-
-        yeni_cihaz_durum = 'Kullanima_Hazir' if ariza.cozuldu_mu else 'Arizali'
-        cursor.execute("UPDATE cihazlar SET durum = %s WHERE cihaz_id = %s;", (yeni_cihaz_durum, cihaz_id))
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Arıza başarıyla güncellendi."}
-    except Exception as e:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
-
-# FAIL-002 ve FAIL-003: Arıza Bildirimi ve Durum Güncelleme
-@app.post("/api/arizalar", status_code=201)
-def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
-    conn = None
-    cursor = None
-    try:
-        conn = psycopg2.connect(**VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # 1. Cihaz var mı ve durumu uygun mu kontrolü
-        cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;", (ariza.cihaz_id,))
-        cihaz = cursor.fetchone()
-        if cihaz is None:
-            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-        
-        # 2. Bildiren personelin adını (kullanıcı adını) bulalım (DB varchar bekliyor)
-        cursor.execute("SELECT kullanici_adi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
-        kullanici = cursor.fetchone()
-        bildiren_kisi = kullanici[0] if kullanici else f"Kullanıcı-{kullanici_id}"
-
-        # 3. Tabloda Başlık ve Aciliyet sütunları olmadığı için hepsini anlamlı bir metin olarak birleştiriyoruz
-        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-
-        # 4. Arıza kaydını birebir senin veritabanı şemana uygun ekle
-        cursor.execute("""
-            INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_aciklamasi, bildirim_tarihi, cozuldu_mu)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE) RETURNING ariza_id;
-        """, (ariza.cihaz_id, bildiren_kisi, tam_aciklama))
-        ariza_id = cursor.fetchone()[0]
-
-        # 5. Cihazın durumunu 'Arizali' (veritabanı formatında) olarak güncelle!
-        cursor.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s;", (ariza.cihaz_id,))
-
-        # 6. Denetim (Audit) logları
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_arizalari", hedef_kayit_id=ariza_id)
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=ariza.cihaz_id)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi.", "ariza_id": ariza_id}
-    except Exception as e:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-
-# FAIL-UI-01: Arızaları Listeleme (Açıklama detayıyla birlikte)
 @app.get("/api/arizalar")
 def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
@@ -1153,8 +979,51 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.post("/api/arizalar", status_code=201)
+def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
 
-# FAIL-003: Arızayı Tamamen Düzenleme (PUT)
+        # 1. Cihaz var mı ve durumu uygun mu kontrolü
+        cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;", (ariza.cihaz_id,))
+        cihaz = cursor.fetchone()
+        if cihaz is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+        
+        # 2. Bildiren personelin adını (kullanıcı adını) bulalım (DB varchar bekliyor)
+        cursor.execute("SELECT kullanici_adi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
+        kullanici = cursor.fetchone()
+        bildiren_kisi = kullanici[0] if kullanici else f"Kullanıcı-{kullanici_id}"
+
+        # 3. Tabloda Başlık ve Aciliyet sütunları olmadığı için hepsini anlamlı bir metin olarak birleştiriyoruz
+        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
+
+        # 4. Arıza kaydını birebir veritabanı şemana uygun ekle
+        cursor.execute("""
+            INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_aciklamasi, bildirim_tarihi, cozuldu_mu)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE) RETURNING ariza_id;
+        """, (ariza.cihaz_id, bildiren_kisi, tam_aciklama))
+        ariza_id = cursor.fetchone()[0]
+
+        # 5. Cihazın durumunu 'Arizali' (veritabanı formatında) olarak güncelle!
+        cursor.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s;", (ariza.cihaz_id,))
+
+        # 6. Denetim (Audit) logları
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_arizalari", hedef_kayit_id=ariza_id)
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=ariza.cihaz_id)
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi.", "ariza_id": ariza_id}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 @app.put("/api/arizalar/{ariza_id}")
 def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
