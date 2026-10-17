@@ -1071,10 +1071,6 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
 # BAKIM YÖNETİMİ MODÜLÜ (MNT-001, MNT-002)
 # ==========================================
 
-# ==========================================
-# BAKIM YÖNETİMİ MODÜLÜ (MNT-001, MNT-002)
-# ==========================================
-
 @app.get("/api/bakimlar")
 def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
@@ -1083,9 +1079,10 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
         
+        # SQL Sorgusuna b.sonraki_bakim_tarihi eklendi
         cursor.execute("""
-            SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu, b.bakim_tarihi, 
-                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet
+            SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu, 
+                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, b.bakim_tarihi, b.sonraki_bakim_tarihi
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.bakim_tarihi DESC;
@@ -1096,19 +1093,19 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             {
                 "bakim_id": k[0],
                 "cihaz_adi": f"{k[2]} - {k[1]}",
-                "bakim_tarihi": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]),
-                "bakim_yapan_kisi": k[4],
-                "yapilan_islem": k[5],
-                "maliyet": float(k[6]) if k[6] is not None else 0.0
+                "bakim_yapan_kisi": k[3],
+                "yapilan_islem": k[4],
+                "maliyet": float(k[5]) if k[5] else 0.0,
+                "bakim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
+                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi")
             }
             for k in kayitlar
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
-
 
 @app.post("/api/bakimlar", status_code=201)
 def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
@@ -1118,23 +1115,20 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT 1 FROM cihazlar WHERE cihaz_id = %s;", (bakim.cihaz_id,))
-        if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-
+        # INSERT sorgusuna sonraki_bakim_tarihi eklendi
         cursor.execute("""
-            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_tarihi, bakim_yapan_kisi, yapilan_islem, maliyet)
-            VALUES (%s, %s, %s, %s, %s) RETURNING bakim_id;
-        """, (bakim.cihaz_id, bakim.bakim_tarihi, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet))
+            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, sonraki_bakim_tarihi)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+        """, (bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, bakim.bakim_tarihi, bakim.sonraki_bakim_tarihi))
         bakim_id = cursor.fetchone()[0]
 
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id)
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
 
         conn.commit()
-        return {"durum": "basarili", "mesaj": "Bakım kaydı başarıyla eklendi.", "bakim_id": bakim_id}
+        return {"durum": "basarili", "bakim_id": bakim_id}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1147,12 +1141,10 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # Kayıt var mı kontrolü
         cursor.execute("SELECT 1 FROM cihaz_bakimlari WHERE bakim_id = %s FOR UPDATE;", (bakim_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Bakım kaydı bulunamadı.")
 
-        # Sadece gönderilen dolu alanları al
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
         if not degisiklikler:
             raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
@@ -1160,10 +1152,7 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())
         
-        # Güncelleme Sorgusu
         cursor.execute(f"UPDATE cihaz_bakimlari SET {alanlar} WHERE bakim_id = %s;", (*degerler, bakim_id))
-        
-        # Denetim (Audit) Logu
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id)
         
         conn.commit()

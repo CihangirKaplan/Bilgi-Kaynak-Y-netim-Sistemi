@@ -220,9 +220,11 @@ class BakimOlusturModeli(BaseModel):
     bakim_yapan_kisi: str
     yapilan_islem: str
     maliyet: Optional[float] = 0.0
+    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
 
 class BakimGuncelleModeli(BaseModel):
     bakim_tarihi: Optional[date] = None
     bakim_yapan_kisi: Optional[str] = None
     yapilan_islem: Optional[str] = None
     maliyet: Optional[float] = None
+    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
