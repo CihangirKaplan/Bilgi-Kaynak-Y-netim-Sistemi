@@ -23,7 +23,9 @@ from modeller import (
     CihazGuncelleModeli,
     RezervasyonOlusturModeli,
     ArizaBildirimModeli,
-    ArizaGuncelleModeli
+    ArizaGuncelleModeli,
+    KalibrasyonOlusturModeli,
+    KalibrasyonGuncelleModeli
 )
 from guvenlik import (
     parola_hashle,
@@ -1061,6 +1063,101 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# ==========================================
+# KALİBRASYON YÖNETİMİ MODÜLÜ (CALB-001, CALB-002)
+# ==========================================
+
+@app.get("/api/kalibrasyonlar")
+def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu, 
+                   k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi
+            FROM cihaz_kalibrasyonlari k
+            JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
+            ORDER BY k.islem_tarihi DESC;
+        """)
+        kayitlar = cursor.fetchall()
+        
+        return [
+            {
+                "kalibrasyon_id": k[0],
+                "cihaz_adi": f"{k[2]} - {k[1]}",
+                "kalibrasyon_yapan_kurum": k[3],
+                "gecerlilik_tarihi": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]),
+                "sertifika_no": k[5],
+                "islem_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6])
+            }
+            for k in kayitlar
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/kalibrasyonlar", status_code=201)
+def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # islem_tarihi veritabanı tarafından otomatik veya backend'den eklenecek
+        cursor.execute("""
+            INSERT INTO cihaz_kalibrasyonlari (cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP) RETURNING kalibrasyon_id;
+        """, (kalib.cihaz_id, kalib.kalibrasyon_yapan_kurum, kalib.gecerlilik_tarihi, kalib.sertifika_no))
+        kalibrasyon_id = cursor.fetchone()[0]
+
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kalibrasyon başarıyla eklendi.", "kalibrasyon_id": kalibrasyon_id}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.put("/api/kalibrasyonlar/{kalibrasyon_id}")
+def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT 1 FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s FOR UPDATE;", (kalibrasyon_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
+
+        degisiklikler = guncelleme.model_dump(exclude_unset=True)
+        if not degisiklikler:
+            raise HTTPException(status_code=422, detail="Değişiklik yok.")
+
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        degerler = list(degisiklikler.values())
+        
+        cursor.execute(f"UPDATE cihaz_kalibrasyonlari SET {alanlar} WHERE kalibrasyon_id = %s;", (*degerler, kalibrasyon_id))
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+        
+        conn.commit()
+        return {"durum": "basarili"}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

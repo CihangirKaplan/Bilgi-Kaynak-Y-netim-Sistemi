@@ -12,7 +12,7 @@ from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from cihaz_ariza_ekranlari import ArizaYonetimEkrani
-
+from cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -741,7 +741,8 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(self.odayi_duzenle)
                 elif etiket == "✕  Odayı Pasife Al":
                     btn.clicked.connect(self.odayi_pasife_al)
-                
+                elif etiket == "＋  Kalibrasyon Kaydı":
+                 btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
                 ab.addWidget(btn)
             ab.addStretch()
             lay.addLayout(ab)
@@ -755,6 +756,13 @@ class AnaPencere(QMainWindow):
                 yetkili_mi=cihaz_yetkisi
             )
             lay.addWidget(self.aktif_cihaz_ekrani, 1)
+
+        elif oge["ad"] == "Kalibrasyon":
+         self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
+             api_url=self.api_url, 
+             token=self.token
+         )
+         lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
 
         elif oge["ad"] == "Cihaz Rezervasyonu":
             rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
