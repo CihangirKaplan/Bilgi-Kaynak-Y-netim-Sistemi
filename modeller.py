@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.orm import declarative_base
 from enum import Enum
@@ -209,3 +209,17 @@ class PersonelGuncelleModeli(BaseModel):
         pattern=r"^\s*\S(?:.*\S)?\s*$"
     )
     aktif_mi: bool | None = None
+
+# ==========================================
+# KALİBRASYON YÖNETİMİ MODELLERİ (CALB)
+# ==========================================
+class KalibrasyonOlusturModeli(BaseModel):
+    cihaz_id: int
+    kalibrasyon_yapan_kurum: str
+    gecerlilik_tarihi: date
+    sertifika_no: str
+
+class KalibrasyonGuncelleModeli(BaseModel):
+    kalibrasyon_yapan_kurum: Optional[str] = None
+    gecerlilik_tarihi: Optional[date] = None
+    sertifika_no: Optional[str] = None
