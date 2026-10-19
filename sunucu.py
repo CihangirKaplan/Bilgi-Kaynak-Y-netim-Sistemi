@@ -25,7 +25,9 @@ from modeller import (
     ArizaBildirimModeli,
     ArizaGuncelleModeli,
     KalibrasyonOlusturModeli,
-    KalibrasyonGuncelleModeli
+    KalibrasyonGuncelleModeli,
+    BakimOlusturModeli,
+    BakimGuncelleModeli
 )
 from guvenlik import (
     parola_hashle,
@@ -78,14 +80,14 @@ def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bear
         cursor = conn.cursor()
         cursor.execute("SELECT aktif_mi, ilk_giris_mi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
         kullanici = cursor.fetchone()
-        
+
         if kullanici is None:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         if not kullanici[0]:
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if kullanici[1]:
             raise HTTPException(status_code=403, detail="İlk girişte şifrenizi değiştirmeniz gerekiyor.")
-            
+
         return kullanici_id
     finally:
         if cursor is not None: cursor.close()
@@ -227,7 +229,7 @@ def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int 
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         yapan = cursor.fetchone()
 
@@ -334,7 +336,7 @@ def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_
         hedef = cursor.fetchone()
         if hedef is None:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
-            
+
         hedef_rol, aktif_mi = hedef
         if hedef_rol == "ADMIN" and islem_yapan[0] != "ADMIN":
             raise HTTPException(status_code=403, detail="ADMIN hesabını yalnızca ADMIN pasifleştirebilir.")
@@ -499,7 +501,7 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
 
         yeni_danisan_kodu = otomatik_danisan_kodu_uret(cursor)
         cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi) VALUES (%s, TRUE, 'YOK', TRUE);", (yeni_danisan_kodu,))
-        
+
         cursor.execute("SELECT 1 FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND r.rol_adi = 'PSIKOLOG';", (randevu.psikolog_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=422, detail="Geçerli ve aktif bir psikolog seçilmelidir.")
@@ -709,7 +711,7 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
     degisiklikler = oda.model_dump(exclude_unset=True)
     if not degisiklikler or any(deger is None for deger in degisiklikler.values()):
         raise HTTPException(status_code=422, detail="Güncellenecek geçerli bir alan gönderilmelidir.")
-    
+
     conn = None
     cursor = None
     try:
@@ -936,7 +938,7 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT a.ariza_id, c.cihaz_adi, a.ariza_aciklamasi, a.cozuldu_mu, a.bildirim_tarihi
             FROM cihaz_arizalari a
@@ -944,14 +946,14 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             ORDER BY a.bildirim_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
-        
+
         sonuc = []
         for kayit in kayitlar:
             tam_metin = kayit[2] if kayit[2] else ""
             aciliyet_derecesi = "Belirtilmedi"
             baslik = tam_metin
             aciklama = ""
-            
+
             # DB'den gelen "[Kritik] Başlık - Açıklama" formatını form için 3'e bölüyoruz
             if tam_metin.startswith("[") and "]" in tam_metin:
                 bol = tam_metin.split("]", 1)
@@ -963,7 +965,7 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
                     aciklama = aciklama.strip()
                 else:
                     baslik = kalan
-            
+
             durum_metni = "Çözüldü" if kayit[3] else "Açık"
             sonuc.append({
                 "ariza_id": kayit[0],
@@ -994,7 +996,7 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_
         cihaz = cursor.fetchone()
         if cihaz is None:
             raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-        
+
         # 2. Bildiren personelin adını (kullanıcı adını) bulalım (DB varchar bekliyor)
         cursor.execute("SELECT kullanici_adi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
         kullanici = cursor.fetchone()
@@ -1043,13 +1045,13 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
 
         # Tekrar veritabanı formatına (Tam Metin) dönüştür
         tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-        
+
         # Çözüldüyse çözüm tarihini anlık at, çözülmediyse NULL (Boş) yap
         cozum_sql = "CURRENT_TIMESTAMP" if ariza.cozuldu_mu else "NULL"
 
         # Arıza Tablosunu Güncelle
         cursor.execute(f"""
-            UPDATE cihaz_arizalari 
+            UPDATE cihaz_arizalari
             SET ariza_aciklamasi = %s, cozuldu_mu = %s, cozum_tarihi = {cozum_sql}
             WHERE ariza_id = %s;
         """, (tam_aciklama, ariza.cozuldu_mu, ariza_id))
@@ -1068,6 +1070,102 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
         if conn is not None: conn.close()
 
 # ==========================================
+# BAKIM YÖNETİMİ MODÜLÜ (MNT-001, MNT-002)
+# ==========================================
+
+@app.get("/api/bakimlar")
+def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # SQL Sorgusuna b.sonraki_bakim_tarihi eklendi
+        cursor.execute("""
+            SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
+                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, b.bakim_tarihi, b.sonraki_bakim_tarihi
+            FROM cihaz_bakimlari b
+            JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
+            ORDER BY b.bakim_tarihi DESC;
+        """)
+        kayitlar = cursor.fetchall()
+
+        return [
+            {
+                "bakim_id": k[0],
+                "cihaz_adi": f"{k[2]} - {k[1]}",
+                "bakim_yapan_kisi": k[3],
+                "yapilan_islem": k[4],
+                "maliyet": float(k[5]) if k[5] else 0.0,
+                "bakim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
+                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi")
+            }
+            for k in kayitlar
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/bakimlar", status_code=201)
+def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # INSERT sorgusuna sonraki_bakim_tarihi eklendi
+        cursor.execute("""
+            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, sonraki_bakim_tarihi)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+        """, (bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, bakim.bakim_tarihi, bakim.sonraki_bakim_tarihi))
+        bakim_id = cursor.fetchone()[0]
+
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+
+        conn.commit()
+        return {"durum": "basarili", "bakim_id": bakim_id}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.put("/api/bakimlar/{bakim_id}")
+def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT 1 FROM cihaz_bakimlari WHERE bakim_id = %s FOR UPDATE;", (bakim_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Bakım kaydı bulunamadı.")
+
+        degisiklikler = guncelleme.model_dump(exclude_unset=True)
+        if not degisiklikler:
+            raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
+
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        degerler = list(degisiklikler.values())
+
+        cursor.execute(f"UPDATE cihaz_bakimlari SET {alanlar} WHERE bakim_id = %s;", (*degerler, bakim_id))
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id)
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Bakım kaydı başarıyla güncellendi."}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 # KALİBRASYON YÖNETİMİ MODÜLÜ (CALB-001, CALB-002)
 # ==========================================
 
@@ -1078,16 +1176,16 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu, 
+            SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu,
                    k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             ORDER BY k.islem_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
-        
+
         return [
             {
                 "kalibrasyon_id": k[0],
@@ -1149,10 +1247,10 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
 
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())
-        
+
         cursor.execute(f"UPDATE cihaz_kalibrasyonlari SET {alanlar} WHERE kalibrasyon_id = %s;", (*degerler, kalibrasyon_id))
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
-        
+
         conn.commit()
         return {"durum": "basarili"}
     except Exception as e:
