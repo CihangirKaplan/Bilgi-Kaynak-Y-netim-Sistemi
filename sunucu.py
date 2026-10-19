@@ -278,6 +278,12 @@ def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int 
 def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))):
     conn = None
     cursor = None
+    if kullanici_id == islem_yapan_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Kendi rolünüzü değiştiremezsiniz."
+        )
+
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
@@ -309,6 +315,10 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         conn.commit()
 
         return {"mesaj": "Kullanıcı rolü başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
@@ -348,6 +358,10 @@ def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_
         conn.commit()
 
         return {"mesaj": "Kullanıcı başarıyla pasifleştirildi.", "kullanici_id": kullanici_id, "aktif_mi": False}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Kullanıcı pasifleştirme sırasında veritabanı hatası oluştu: {str(e)}")
@@ -386,6 +400,10 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
     except psycopg2.errors.UniqueViolation:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=409, detail="Bu kullanıcıya ait personel kaydı veya personel kodu zaten mevcut.")
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Personel oluşturulurken veritabanı hatası oluştu: {str(e)}")
@@ -412,6 +430,12 @@ def personel_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIML
 
 @app.get("/api/personel/{personel_id}")
 def personel_detay(personel_id: int, islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))):
+    if personel_id <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Geçerli bir personel ID girilmelidir."
+        )
+
     conn = None
     cursor = None
     try:
