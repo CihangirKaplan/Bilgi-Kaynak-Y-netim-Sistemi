@@ -36,6 +36,7 @@ class KullaniciModeli(BaseModel):
 
 # AUTH: Yeni kullanıcı oluşturma modeli
 class KullaniciOlusturModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     kullanici_adi: str = Field(min_length=3, max_length=100)
     rol_id: int = Field(gt=0)
 
