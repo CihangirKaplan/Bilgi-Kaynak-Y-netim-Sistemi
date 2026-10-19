@@ -1259,3 +1259,112 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+# ==========================================
+# DASHBOARD VE RAPORLAMA MODÜLÜ (DASH-001)
+# ==========================================
+
+@app.get("/api/dashboard/ozet")
+def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        ozet = {
+            "toplam_cihaz": 0, "aktif_cihaz": 0, "arizali_cihaz": 0, 
+            "bakimdaki_cihaz": 0, "acik_ariza_sayisi": 0, "bugunku_randevu_sayisi": 0
+        }
+
+        # 1. Cihaz İstatistiklerini Çek
+        cursor.execute("SELECT durum, COUNT(*) FROM cihazlar GROUP BY durum;")
+        cihaz_durumlari = cursor.fetchall()
+        for durum, sayi in cihaz_durumlari:
+            ozet["toplam_cihaz"] += sayi
+            if durum == "Kullanima_Hazir":
+                ozet["aktif_cihaz"] = sayi
+            elif durum == "Arizali":
+                ozet["arizali_cihaz"] = sayi
+            elif durum == "Bakimda":
+                ozet["bakimdaki_cihaz"] = sayi
+
+        # 2. Açık Arızaları Çek (cozuldu_mu sütunu FALSE olanlar)
+        # Eğer tabloda cozuldu_mu yok durum varsa: WHERE durum != 'Çözüldü' şeklinde de olabilir, biz genel halini yazalım.
+        try:
+            cursor.execute("SELECT COUNT(*) FROM cihaz_arizalari WHERE cozuldu_mu = False;")
+            ozet["acik_ariza_sayisi"] = cursor.fetchone()[0]
+        except:
+            conn.rollback() # Sütun adı farklıysa diye önlem
+
+        # 3. Bugünkü Randevuları Çek
+        cursor.execute("SELECT COUNT(*) FROM randevular WHERE DATE(baslangic_zamani) = CURRENT_DATE;")
+        ozet["bugunku_randevu_sayisi"] = cursor.fetchone()[0]
+
+        return ozet
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dashboard veri çekme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.get("/api/dashboard/yaklasan-islemler")
+def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    import datetime
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        islemler = []
+        bugun = datetime.date.today()
+
+        # 1. YAKLAŞAN BAKIMLAR (Saf Python Hesabı)
+        cursor.execute("""
+            SELECT c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi
+            FROM cihaz_bakimlari b
+            JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
+            WHERE b.sonraki_bakim_tarihi IS NOT NULL
+        """)
+        for kayit in cursor.fetchall():
+            hedef_tarih = kayit[2]
+            kalan_gun = (hedef_tarih - bugun).days
+            if 0 <= kalan_gun <= 60:
+                islemler.append({
+                    "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
+                    "islem_turu": "Bakım",
+                    "tarih": hedef_tarih.strftime("%d.%m.%Y"),
+                    "kalan_gun": kalan_gun,
+                    "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
+                })
+
+        # 2. YAKLAŞAN KALİBRASYONLAR (Saf Python Hesabı)
+        cursor.execute("""
+            SELECT c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi
+            FROM cihaz_kalibrasyonlari k
+            JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
+            WHERE k.gecerlilik_tarihi IS NOT NULL
+        """)
+        for kayit in cursor.fetchall():
+            hedef_tarih = kayit[2]
+            kalan_gun = (hedef_tarih - bugun).days
+            if 0 <= kalan_gun <= 60:
+                islemler.append({
+                    "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
+                    "islem_turu": "Kalibrasyon",
+                    "tarih": hedef_tarih.strftime("%d.%m.%Y"),
+                    "kalan_gun": kalan_gun,
+                    "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
+                })
+
+        islemler.sort(key=lambda x: x["kalan_gun"])
+        return islemler[:10]
+
+    except Exception as e:
+        print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
