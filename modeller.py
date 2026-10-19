@@ -66,7 +66,7 @@ class RolDegistirModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rol_id: int = Field(gt=0)
-    
+
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
     kullanici_adi: str
@@ -212,6 +212,18 @@ class PersonelGuncelleModeli(BaseModel):
     aktif_mi: bool | None = None
 
 # ==========================================
+# KALİBRASYON YÖNETİMİ MODELLERİ (CALB)
+# ===================================
+class KalibrasyonOlusturModeli(BaseModel):
+    cihaz_id: int
+    kalibrasyon_yapan_kurum: str
+    gecerlilik_tarihi: date
+    sertifika_no: str
+
+class KalibrasyonGuncelleModeli(BaseModel):
+    kalibrasyon_yapan_kurum: Optional[str] = None
+    gecerlilik_tarihi: Optional[date] = None
+    sertifika_no: Optional[str] = None
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
 # ==========================================
 class BakimOlusturModeli(BaseModel):
