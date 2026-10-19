@@ -2,10 +2,6 @@ import datetime
 from datetime import date
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
-from datetime import date, datetime
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.orm import declarative_base
-
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
 from sqlalchemy.orm import declarative_base
