@@ -1,8 +1,9 @@
 import sys
+import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView
 )
 from oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal
@@ -12,7 +13,7 @@ from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from cihaz_ariza_ekranlari import ArizaYonetimEkrani
-
+from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -357,7 +358,6 @@ class AnaPencere(QMainWindow):
         topbar.setVisible(self.rol_onizleme) 
         sag_l.addWidget(topbar)
 
-        # --- AZ ÖNCE EKSİK KALAN İSKELET KISMI BURASI ---
         self.stack = QStackedWidget()
         sag_l.addWidget(self.stack, 1)
         ana.addWidget(sag, 1)
@@ -675,7 +675,7 @@ class AnaPencere(QMainWindow):
         lay.setContentsMargins(4, 4, 4, 20)
         lay.setSpacing(20)
 
-        # 1. Ekip Arkadaşının Yaptığı Harika UI Tasarımı (Modül Başlığı ve İkonu)
+        # 1. Modül Başlığı ve İkonu
         bk = kart_olustur()
         bl = QHBoxLayout(bk)
         bl.setContentsMargins(15, 10, 15, 10) 
@@ -742,6 +742,10 @@ class AnaPencere(QMainWindow):
                 elif etiket == "✕  Odayı Pasife Al":
                     btn.clicked.connect(self.odayi_pasife_al)
                 
+                # --- YENİ EKLENEN BAKIM BUTONU ---
+                elif etiket == "＋  Bakım Kaydı":
+                    btn.clicked.connect(self.yeni_bakim_ekrani_ac)
+                
                 ab.addWidget(btn)
             ab.addStretch()
             lay.addLayout(ab)
@@ -765,14 +769,8 @@ class AnaPencere(QMainWindow):
             )
             lay.addWidget(self.aktif_rezervasyon_ekrani, 1)
 
-        # =========================================================
-        # CİHAZ ARIZA KAYITLARI (FAIL-UI-01) YÖNLENDİRMESİ
-        # =========================================================
         elif oge["ad"] == "Arıza Kayıtları":
-            # Kullanıcının arıza kayıtlarını yönetme yetkisi var mı kontrol ediyoruz
             ariza_yetkisi = izin_var(rol, "Arıza kayıtlarını yönetme")
-            
-            # Yeni yazdığımız o efsane ekranı çağırıp ana gövdeye gömüyoruz
             self.aktif_ariza_ekrani = ArizaYonetimEkrani(
                 api_url=self.api_url, 
                 token=self.token, 
@@ -780,12 +778,20 @@ class AnaPencere(QMainWindow):
             )
             lay.addWidget(self.aktif_ariza_ekrani, 1)
 
+        # =========================================================
+        # CİHAZ BAKIM KAYITLARI (MNT-002) YÖNLENDİRMESİ
+        # =========================================================
+        elif oge["ad"] == "Bakım Kayıtları":
+            self.aktif_bakim_ekrani = BakimYonetimEkrani(
+                api_url=self.api_url, 
+                token=self.token
+            )
+            lay.addWidget(self.aktif_bakim_ekrani, 1)
+
         elif oge["ad"] == "Oda Yönetimi":
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             il = QVBoxLayout(ik)
-            
-            from PySide6.QtWidgets import QTableWidget, QHeaderView, QAbstractItemView
             
             self.oda_tablosu = QTableWidget()
             self.oda_tablosu.setColumnCount(4) 
@@ -812,12 +818,12 @@ class AnaPencere(QMainWindow):
             il.addWidget(self.oda_tablosu)
             self.odalari_getir()
             lay.addWidget(ik, 1)
+            
         elif oge["ad"] == "Randevu Takvimi":
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             il = QVBoxLayout(ik)
             
-            # randevu_ekranlari'ndan yeni yazdığımız tablo sınıfını çağırıyoruz
             from randevu_ekranlari import RandevuAnaEkrani
             self.randevu_ana_ekrani = RandevuAnaEkrani(api_url=self.api_url, token=self.token,mevcut_psikolog_id=self.kullanici_id)
             il.addWidget(self.randevu_ana_ekrani)
@@ -851,8 +857,6 @@ class AnaPencere(QMainWindow):
         self.randevu_formu = RandevuOlusturFormu(
             api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id 
         )
-        
-        # Form kapandığında dışarıdaki listeyi otomatik güncelle
         orijinal_close = self.randevu_formu.closeEvent
         def kapanma_yakala(event):
             if hasattr(self, 'randevu_ana_ekrani'):
@@ -860,14 +864,12 @@ class AnaPencere(QMainWindow):
             if orijinal_close: orijinal_close(event)
             else: event.accept()
         self.randevu_formu.closeEvent = kapanma_yakala
-        
         self.randevu_formu.show()
 
     def randevu_listesi_ekrani_ac(self):
         self.liste_formu = RandevuListesiFormu(
             api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
         )
-        # Düzenleme formundan çıkıldığında listeyi otomatik güncelle
         self.liste_formu.finished.connect(lambda: self.randevu_ana_ekrani.verileri_cek() if hasattr(self, 'randevu_ana_ekrani') else None)
         self.liste_formu.show()
 
@@ -883,14 +885,17 @@ class AnaPencere(QMainWindow):
         QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
         
     def yeni_rezervasyon_ekrani_ac(self):
-        """Ana yetki kartındaki 'Cihaz Rezervasyonu Yap' butonuna basılınca formu açar."""
         if hasattr(self, 'aktif_rezervasyon_ekrani'):
             self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur()
 
     def yeni_ariza_bildirimi_ac(self):
-        """Ana yetki kartındaki 'Arıza Kaydı' butonuna basılınca formu açar."""
         if hasattr(self, 'aktif_ariza_ekrani'):
             self.aktif_ariza_ekrani.yeni_ariza_bildirimi()
+
+    def yeni_bakim_ekrani_ac(self):
+        """Ana yetki kartındaki 'Bakım Kaydı' butonuna basılınca formu açar."""
+        if hasattr(self, 'aktif_bakim_ekrani'):
+            self.aktif_bakim_ekrani.yeni_bakim_ekle()
     
 if __name__ == "__main__":
     app = QApplication(sys.argv)
