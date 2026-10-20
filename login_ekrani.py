@@ -263,7 +263,7 @@ class LoginEkrani(QWidget):
                 )
 
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
-                self.ana_pencere.show()
+                self.ana_pencere.showMaximized()
 
                 self.kullanici_input.clear()
                 self.sifre_input.clear()

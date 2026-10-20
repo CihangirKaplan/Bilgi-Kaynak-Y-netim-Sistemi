@@ -45,13 +45,20 @@ VT_AYARLARI = {
 # CLI-001 / CLI-002: Otomatik danışan kodu üretimi
 def otomatik_danisan_kodu_uret(cursor) -> str:
     yil = datetime.now().year
-
-    cursor.execute(
-        "SELECT nextval('danisan_kodu_seq');"
-    )
-
-    sira = cursor.fetchone()[0]
-
+    
+    # Hata fırlatıp veritabanını kilitlememesi için önce Sequence'in var olup olmadığını kontrol ediyoruz
+    cursor.execute("SELECT 1 FROM pg_class WHERE relname = 'danisan_kodu_seq' AND relkind = 'S';")
+    seq_var_mi = cursor.fetchone()
+    
+    if seq_var_mi:
+        # Eğer Sequence veritabanında oluşturulmuşsa onu kullan
+        cursor.execute("SELECT nextval('danisan_kodu_seq');")
+        sira = cursor.fetchone()[0]
+    else:
+        # Sequence yoksa, mevcut kayıt sayısına bakarak güvenli bir şekilde 1 artır
+        cursor.execute("SELECT COUNT(*) FROM danisan_kodlari;")
+        sira = cursor.fetchone()[0] + 1
+        
     return f"DAN-{yil}-{sira:04d}"
 def token_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
@@ -428,6 +435,7 @@ def randevu_olustur(
 ):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+    
     conn = None
     cursor = None
     try:
@@ -443,12 +451,14 @@ def randevu_olustur(
             if personel is None or personel[0] != randevu.psikolog_id:
                 raise HTTPException(status_code=403, detail="Yalnızca kendi adınıza randevu oluşturabilirsiniz.")
 
-        # DÜZELTİLEN YER: Danışan kodu dışarıdan beklenmiyor, sunucu kendi üretiyor ve MÜHÜRLÜYOR!
         yeni_danisan_kodu = otomatik_danisan_kodu_uret(cursor)
+        
+        # ON CONFLICT DO NOTHING eklendi (Kod varsa bile işlemi çökertmez)
         cursor.execute(
             """
             INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi)
-            VALUES (%s, TRUE, 'YOK', TRUE);
+            VALUES (%s, TRUE, 'YOK', TRUE)
+            ON CONFLICT (danisan_kod_id) DO NOTHING;
             """,
             (yeni_danisan_kodu,)
         )
@@ -479,25 +489,28 @@ def randevu_olustur(
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CREATE", "randevular", randevu_id))
         conn.commit()
-        return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
+        
+        return {
+            "durum": "basarili", 
+            "mesaj": "Randevu oluşturuldu.", 
+            "randevu_id": randevu_id, 
+            "danisan_kod_id": yeni_danisan_kodu
+        }
 
     except ExclusionViolation:
         if conn is not None:
             conn.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Seçilen psikolog veya oda bu saatlerde dolu."
-        )
+        raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
 
     except HTTPException:
         if conn is not None:
             conn.rollback()
         raise
 
-    except Exception:
+    except Exception as e:
         if conn is not None:
             conn.rollback()
-        raise
+        raise HTTPException(status_code=500, detail=f"Sunucu hatası: {str(e)}")
 
     finally:
         if cursor is not None:
