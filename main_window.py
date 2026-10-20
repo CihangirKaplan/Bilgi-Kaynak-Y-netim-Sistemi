@@ -89,6 +89,9 @@ MENU = [
         dict(ikon="🛎️", ad="Danışma Masası", izin="Danışma masası oturumunu yönetme",
              aciklama="Danışma masası oturum yönetimi",
              aksiyon=[("▶  Oturumu Yönet", "Danışma masası oturumunu yönetme")]),
+                dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
+             aciklama="Faaliyet kayıtlarının düzenlenmesi",
+             aksiyon=[("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme")]),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
@@ -110,9 +113,7 @@ MENU = [
         dict(ikon="⚠️", ad="Arıza Kayıtları", izin="Arıza kayıtlarını yönetme",
              aciklama="Arıza bildirimi ve takibi",
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
-        dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
-             aciklama="Faaliyet kayıtlarının düzenlenmesi",
-             aksiyon=[("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme")]),
+
     ]),
     ("YÖNETİM & DENETİM", [
         dict(ikon="👥", ad="Kullanıcı & Personel", izin="Kullanıcı oluşturma",

@@ -1368,3 +1368,54 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+# ==========================================
+# FAALİYET YÖNETİMİ MODÜLÜ API UÇLARI
+# ==========================================
+
+@app.get("/api/faaliyetler")
+def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece aktif olan faaliyetleri listele
+        cursor.execute("SELECT faaliyet_id, faaliyet_adi, puan FROM faaliyetler WHERE aktif_mi = true ORDER BY faaliyet_id;")
+        
+        faaliyetler = []
+        for kayit in cursor.fetchall():
+            faaliyetler.append({
+                "id": kayit[0],
+                "ad": kayit[1],
+                "puan": kayit[2]
+            })
+        return faaliyetler
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.get("/api/faaliyet-birimleri")
+def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece aktif olan birimleri listele
+        cursor.execute("SELECT birim_id, birim_adi FROM faaliyet_birimleri WHERE aktif_mi = true ORDER BY birim_id;")
+        
+        birimler = []
+        for kayit in cursor.fetchall():
+            birimler.append({
+                "id": kayit[0],
+                "ad": kayit[1]
+            })
+        return birimler
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
