@@ -15,6 +15,7 @@ from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from cihaz_ariza_ekranlari import ArizaYonetimEkrani
 from cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
 from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
+from dashboard_ekrani import DashboardEkrani
 
 
 # ======================================================================
@@ -664,10 +665,18 @@ class AnaPencere(QMainWindow):
             btn.setMinimumHeight(78)
             golge(btn, 22, 24, 4)
             btn.clicked.connect(lambda _=False, ad=oge["ad"]: self.nav_btnler[ad].click())
+# ... (Hızlı erişim butonlarını ekleyen döngü) ...
             hg.addWidget(btn, n // 4, n % 4)
         lay.addLayout(hg)
-        lay.addStretch()
-        return self.kaydirmali(govde)
+        
+        # --- İŞTE BURAYA BİZİM YENİ DASHBOARD'U EKLİYORUZ ---
+        if self.aktif_rol in ["mudur", "admin", "memur"]:
+            self.istatistik_paneli = DashboardEkrani(self.api_url, self.token)
+            lay.addWidget(self.istatistik_paneli)
+            # ----------------------------------------------------
+
+            lay.addStretch()
+            return self.kaydirmali(govde)
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
