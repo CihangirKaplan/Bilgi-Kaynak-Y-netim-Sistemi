@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>tr.edu.tkys.backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ayseberra/Desktop/bkys/.venv/bin/python</string>
+        <string>/Users/ayseberra/Desktop/bkys/scripts/otomatik_yedekleme.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/opt/postgresql@18/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ayseberra/Desktop/bkys</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/tkys-backup.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/tkys-backup-error.log</string>
+</dict>
+</plist>
