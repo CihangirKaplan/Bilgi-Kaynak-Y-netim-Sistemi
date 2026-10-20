@@ -241,3 +241,22 @@ class BakimGuncelleModeli(BaseModel):
     yapilan_islem: Optional[str] = None
     maliyet: Optional[float] = None
     sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
+
+# ==========================================
+# DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
+# ==========================================
+
+class DashboardOzetModeli(BaseModel):
+    toplam_cihaz: int
+    aktif_cihaz: int
+    arizali_cihaz: int
+    bakimdaki_cihaz: int
+    acik_ariza_sayisi: int
+    bugunku_randevu_sayisi: int
+
+class YaklasanIslemModeli(BaseModel):
+    cihaz_adi: str
+    islem_turu: str # 'Bakım' veya 'Kalibrasyon'
+    tarih: str
+    kalan_gun: int
+    durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
