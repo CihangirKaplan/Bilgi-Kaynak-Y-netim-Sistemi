@@ -1,9 +1,10 @@
+import datetime
+from datetime import date
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.orm import declarative_base
 from enum import Enum
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
@@ -31,12 +32,24 @@ class KullaniciModeli(BaseModel):
     parola_hash: str
     rol_id: int
     aktif_mi: bool = True
-    olusturulma_tarihi: Optional[datetime] = None
+    olusturulma_tarihi: Optional[datetime.datetime] = None
 
 # AUTH: Yeni kullanıcı oluşturma modeli
 class KullaniciOlusturModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     kullanici_adi: str = Field(min_length=3, max_length=100)
     rol_id: int = Field(gt=0)
+
+# ADM-API-004: Personel Oluşturma İstek Modeli
+class PersonelOlusturModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kullanici_id: int = Field(gt=0)
+    personel_kodu: str = Field(
+        min_length=1,
+        max_length=50,
+        pattern=r"^\s*\S(?:.*\S)?\s*$"
+    )
 
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
@@ -54,7 +67,7 @@ class RolDegistirModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rol_id: int = Field(gt=0)
-    
+
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
     kullanici_adi: str
@@ -70,7 +83,7 @@ class DanisanKoduModeli(BaseModel):
     ucretli_mi: bool = True
     istisna_turu: str = "YOK"
     aktif_mi: bool = True
-    olusturulma_tarihi: Optional[datetime] = None
+    olusturulma_tarihi: Optional[datetime.datetime] = None
 
 # ROOM-001: Oda Modeli -> odalar tablosu
 class OdaModeli(BaseModel):
@@ -85,17 +98,17 @@ class RandevuModeli(BaseModel):
     danisan_kod_id: str
     psikolog_id: int
     oda_id: int
-    baslangic_zamani: datetime
-    bitis_zamani: datetime
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
     durum: str = "PLANLANDI"
-    olusturulma_tarihi: Optional[datetime] = None
+    olusturulma_tarihi: Optional[datetime.datetime] = None
 
 # APT-API-001 / SEC-APT-002: Randevu Oluşturma Modeli
 class RandevuOlusturModeli(BaseModel):
     psikolog_id: int = Field(gt=0)
     oda_id: int = Field(gt=0)
-    baslangic_zamani: datetime
-    bitis_zamani: datetime
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
 
 # APT-API-001 / SEC-APT-002: Randevu Güncelleme Modeli
 class RandevuGuncelleModeli(BaseModel):
@@ -106,8 +119,8 @@ class RandevuGuncelleModeli(BaseModel):
 )
     psikolog_id: Optional[int] = Field(default=None, gt=0)
     oda_id: Optional[int] = Field(default=None, gt=0)
-    baslangic_zamani: Optional[datetime] = None
-    bitis_zamani: Optional[datetime] = None
+    baslangic_zamani: Optional[datetime.datetime] = None
+    bitis_zamani: Optional[datetime.datetime] = None
 
 class OdaOlusturModeli(BaseModel):
     oda_adi: str = Field(min_length=1, max_length=50)
@@ -162,8 +175,8 @@ class CihazGuncelleModeli(BaseModel):
 class RezervasyonOlusturModeli(BaseModel):
     cihaz_id: int = Field(gt=0)
     kullanilacak_oda_id: Optional[int] = Field(default=None, gt=0)
-    baslangic_zamani: datetime
-    bitis_zamani: datetime
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
     proje_turu: Optional[str] = Field(default=None, max_length=50)
     proje_adi_aciklamasi: Optional[str] = Field(default=None, max_length=255)
 
@@ -171,5 +184,79 @@ class RezervasyonOlusturModeli(BaseModel):
     @classmethod
     def tarih_formati(cls, deger):
         if isinstance(deger, str):
-            return datetime.fromisoformat(deger.replace("Z", ""))
+            return datetime.datetime.fromisoformat(deger.replace("Z", ""))
         return deger
+
+# FAIL-001: Arıza Bildirim Modeli
+class ArizaBildirimModeli(BaseModel):
+    cihaz_id: int = Field(gt=0)
+    ariza_baslik: str = Field(min_length=3, max_length=150)
+    ariza_aciklama: str = Field(min_length=5)
+    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+
+# FAIL-003: Arıza Güncelleme Modeli
+class ArizaGuncelleModeli(BaseModel):
+    ariza_baslik: str = Field(min_length=3, max_length=150)
+    ariza_aciklama: str = Field(min_length=2)
+    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+    cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
+# ADM-API-004: Personel Güncelleme İstek Modeli
+class PersonelGuncelleModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    personel_kodu: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        pattern=r"^\s*\S(?:.*\S)?\s*$"
+    )
+    aktif_mi: bool | None = None
+
+# ==========================================
+# KALİBRASYON YÖNETİMİ MODELLERİ (CALB)
+# ===================================
+class KalibrasyonOlusturModeli(BaseModel):
+    cihaz_id: int
+    kalibrasyon_yapan_kurum: str
+    gecerlilik_tarihi: date
+    sertifika_no: str
+
+class KalibrasyonGuncelleModeli(BaseModel):
+    kalibrasyon_yapan_kurum: Optional[str] = None
+    gecerlilik_tarihi: Optional[date] = None
+    sertifika_no: Optional[str] = None
+# BAKIM YÖNETİMİ MODELLERİ (MNT)
+# ==========================================
+class BakimOlusturModeli(BaseModel):
+    cihaz_id: int
+    bakim_tarihi: date
+    bakim_yapan_kisi: str
+    yapilan_islem: str
+    maliyet: Optional[float] = 0.0
+    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
+
+class BakimGuncelleModeli(BaseModel):
+    bakim_tarihi: Optional[date] = None
+    bakim_yapan_kisi: Optional[str] = None
+    yapilan_islem: Optional[str] = None
+    maliyet: Optional[float] = None
+    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
+
+# ==========================================
+# DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
+# ==========================================
+
+class DashboardOzetModeli(BaseModel):
+    toplam_cihaz: int
+    aktif_cihaz: int
+    arizali_cihaz: int
+    bakimdaki_cihaz: int
+    acik_ariza_sayisi: int
+    bugunku_randevu_sayisi: int
+
+class YaklasanIslemModeli(BaseModel):
+    cihaz_adi: str
+    islem_turu: str # 'Bakım' veya 'Kalibrasyon'
+    tarih: str
+    kalan_gun: int
+    durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
