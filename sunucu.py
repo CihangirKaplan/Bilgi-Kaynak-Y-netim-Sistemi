@@ -545,12 +545,28 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
     except ExclusionViolation:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Seçilen psikolog veya oda bu saatlerde dolu."
+        )
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Randevu oluşturulurken bir hata oluştu."
+        )
     finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 @app.get("/api/randevular")
 def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None

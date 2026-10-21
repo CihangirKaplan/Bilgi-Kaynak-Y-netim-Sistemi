@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock, patch
-
+from datetime import datetime
 import pytest
 from fastapi import HTTPException
 
@@ -148,12 +148,9 @@ def test_psikolog_kendi_randevusunu_guncelleyebilir():
             "2026-10-15T11:00:00",
             "PLANLANDI",
         ),
-        ("PSIKOLOG",),  # Kullanıcının rolü
-        (1,),           # Kullanıcının personel_id değeri
-        (1,),           # Danışan kodu aktif
-        (1,),           # Psikolog aktif
-        (1,),           # Oda aktif
-        None,           # Randevu çakışması yok
+        ("PSIKOLOG",),
+        (1,),  # Psikoloğun personel kaydı
+        None,  # Randevu çakışması yok
     ]
 
     with patch("sunucu.psycopg2.connect", return_value=mock_conn):
