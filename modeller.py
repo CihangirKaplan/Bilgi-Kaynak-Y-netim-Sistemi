@@ -260,3 +260,17 @@ class YaklasanIslemModeli(BaseModel):
     tarih: str
     kalan_gun: int
     durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
+
+class FaaliyetKayitModeli(BaseModel):
+    ogrenci_id: int
+    faaliyet_id: int
+    birim_id: int
+    miktar: int
+
+class OgrenciEkleModeli(BaseModel):
+    ad_soyad: str
+    ogrenci_numarasi: str
+    telefon: str = ""
+    tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
+    bolum: str = ""
+    sinif: str = "" 
