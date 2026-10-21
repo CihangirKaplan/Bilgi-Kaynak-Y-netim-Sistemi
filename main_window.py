@@ -1,3 +1,4 @@
+import os
 import sys
 import requests
 from PySide6.QtWidgets import (
@@ -230,7 +231,7 @@ class AnaPencere(QMainWindow):
         self.kullanici_adi = kullanici_adi
         self.rol_onizleme = rol_onizleme
 
-        self.api_url = "http://127.0.0.1:8000"
+        self.api_url = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
         self.token = token
         self.kullanici_id = kullanici_id
 
@@ -660,14 +661,17 @@ class AnaPencere(QMainWindow):
             hg.addWidget(btn, n // 4, n % 4)
         lay.addLayout(hg)
         
-        # --- İŞTE BURAYA BİZİM YENİ DASHBOARD'U EKLİYORUZ ---
+                # Dashboard istatistikleri yalnızca yetkili rollerde gösterilir.
         if self.aktif_rol in ["mudur", "admin", "memur"]:
-            self.istatistik_paneli = DashboardEkrani(self.api_url, self.token)
+            self.istatistik_paneli = DashboardEkrani(
+                self.api_url,
+                self.token
+            )
             lay.addWidget(self.istatistik_paneli)
-            # ----------------------------------------------------
 
-            lay.addStretch()
-            return self.kaydirmali(govde)
+        # Bu satırlar if bloğunun DIŞINDA olmalı.
+        lay.addStretch()
+        return self.kaydirmali(govde)
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
@@ -712,7 +716,7 @@ class AnaPencere(QMainWindow):
         lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
-        if yetkili:
+        if yetkili and oge["ad"] != "Danışma Masası":
             ab = QHBoxLayout()
             ab.setSpacing(12)
             for etiket, izin_kodu in yetkili:
@@ -745,6 +749,8 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(self.odayi_pasife_al)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
+                elif izin_kodu == "Danışma masası oturumunu yönetme":
+                    btn.clicked.connect(lambda: self.danisma_ekrani.yenile())
 
                 # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
@@ -756,7 +762,15 @@ class AnaPencere(QMainWindow):
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
-        if oge["ad"] == "Cihaz Envanteri":
+        if oge["ad"] == "Danışma Masası":
+            from danisma_masasi_ekrani import DanismaMasasiEkrani
+            self.danisma_ekrani = DanismaMasasiEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.danisma_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
             self.aktif_cihaz_ekrani = CihazYonetimEkrani(
                 api_url=self.api_url,
