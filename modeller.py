@@ -260,3 +260,11 @@ class YaklasanIslemModeli(BaseModel):
     tarih: str
     kalan_gun: int
     durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
+
+from pydantic import BaseModel
+
+class FaaliyetKayitModeli(BaseModel):
+    ogrenci_id: int
+    faaliyet_id: int
+    birim_id: int
+    miktar: int
