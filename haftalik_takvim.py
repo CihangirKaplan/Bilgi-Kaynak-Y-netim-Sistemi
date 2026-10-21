@@ -18,7 +18,7 @@ class HaftalikTakvimEkrani(QWidget):
         self.token = token
         
         self.mevcut_tarih = QDate.currentDate()
-        self.saatler = [f"{h:02d}:00" for h in range(8, 20)] # 08:00 - 19:00 arası
+        self.saatler = [f"{h:02d}:00" for h in range(8, 19)] # 08:00 - 19:00 arası
         
         self.setWindowTitle("CAL-002 - Haftalık Takvim")
         self.resize(1100, 700)
@@ -26,6 +26,7 @@ class HaftalikTakvimEkrani(QWidget):
         
         self.init_ui()
         self.haftayi_guncelle()
+        self.odalari_yukle()
 
     def init_ui(self):
         ana_layout = QHBoxLayout(self)
@@ -37,22 +38,16 @@ class HaftalikTakvimEkrani(QWidget):
         sol_panel.setSpacing(20)
         sol_panel.setAlignment(Qt.AlignTop)
         
-        # 1. Oluştur Butonu (Görseldeki gibi büyük ve yuvarlak hatlı)
-        self.btn_olustur = QPushButton("+ Oluştur")
-        self.btn_olustur.setFixedSize(130, 45)
-        self.btn_olustur.setCursor(Qt.PointingHandCursor)
-        self.btn_olustur.setStyleSheet("""
-            QPushButton {
-                background-color: #FFFFFF;
-                color: #3C4043;
-                border: 1px solid #DADCE0;
-                border-radius: 22px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #F8F9FA; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); }
+        # 1. Ana Ekrana Dön Butonu (Oluştur butonu yerine eklendi)
+        self.btn_ana_ekrana_don = QPushButton("←")
+        self.btn_ana_ekrana_don.setFixedSize(40, 40)
+        self.btn_ana_ekrana_don.setToolTip("Ana Ekrana Dön")
+        self.btn_ana_ekrana_don.setCursor(Qt.PointingHandCursor)
+        self.btn_ana_ekrana_don.setStyleSheet("""
+            QPushButton { background-color: transparent; color: #3C4043; font-size: 26px; font-weight: bold; border: none; }
+            QPushButton:hover { background-color: #E2E8F0; border-radius: 20px; }
         """)
-        sol_panel.addWidget(self.btn_olustur)
+        sol_panel.addWidget(self.btn_ana_ekrana_don)
 
         # 2. Mini Takvim
         self.mini_takvim = QCalendarWidget()
@@ -65,22 +60,15 @@ class HaftalikTakvimEkrani(QWidget):
         self.mini_takvim.selectionChanged.connect(self.mini_takvimden_tarih_secildi)
         sol_panel.addWidget(self.mini_takvim)
 
-        # 3. Filtreler (Takvimlerim / Odalar)
-        lbl_takvimler = QLabel("Takvimlerim (Odalar)")
+        # 3. Filtreler (Odalar)
+        lbl_takvimler = QLabel("Odalar")
         lbl_takvimler.setStyleSheet("font-weight: bold; color: #3C4043; margin-top: 10px;")
         sol_panel.addWidget(lbl_takvimler)
 
-        self.chk_oda1 = QCheckBox("Terapi Odası 1")
-        self.chk_oda2 = QCheckBox("Görüntüleme Merkezi")
-        self.chk_oda1.setChecked(True)
-        self.chk_oda2.setChecked(True)
-        # Mavi ve yeşil tik görünümü için basit stil
-        chk_stil = "QCheckBox { color: #3C4043; } QCheckBox::indicator:checked { background-color: #1A73E8; border: 1px solid #1A73E8; }"
-        self.chk_oda1.setStyleSheet(chk_stil)
-        self.chk_oda2.setStyleSheet("QCheckBox { color: #3C4043; } QCheckBox::indicator:checked { background-color: #0F9D58; border: 1px solid #0F9D58; }")
-        
-        sol_panel.addWidget(self.chk_oda1)
-        sol_panel.addWidget(self.chk_oda2)
+        # Dinamik odaların ekleneceği dikey düzen (layout)
+        self.oda_layout = QVBoxLayout()
+        self.oda_layout.setSpacing(10)
+        sol_panel.addLayout(self.oda_layout)
         sol_panel.addStretch()
 
         ana_layout.addLayout(sol_panel, 1)
@@ -177,7 +165,67 @@ class HaftalikTakvimEkrani(QWidget):
         self.mini_takvim.setSelectedDate(self.mevcut_tarih)
         
         self.tablo.clearContents()
-        self.ornek_veri_doldur(pazartesi)
+        self.verileri_doldur(pazartesi)
+
+    def odalari_yukle(self):
+        # 1. Eski verileri temizle
+        for i in reversed(range(self.oda_layout.count())):
+            widget = self.oda_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.setParent(None)
+
+        # ÇOK ÖNEMLİ EKLENTİ: Sadece 1 odanın seçilmesine izin veren grup!
+        from PySide6.QtWidgets import QButtonGroup
+        self.oda_grubu = QButtonGroup(self)
+        self.oda_grubu.setExclusive(True) # Bu ayar sayesinde aynı anda sadece biri seçilebilir
+
+        try:
+            api_adres = self.api_url if self.api_url else "http://127.0.0.1:8000"
+            headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+            
+            cevap = requests.get(f"{api_adres}/api/odalar", headers=headers, timeout=5)
+            
+            if cevap.status_code == 200:
+                odalar = cevap.json()
+                renkler = ["#1A73E8", "#0F9D58", "#F4B400", "#DB4437", "#9C27B0", "#00BCD4", "#E67C73", "#7986CB"]
+                
+                for i, oda in enumerate(odalar):
+                    oda_adi = oda.get("oda_adi", f"Bilinmeyen Oda {i+1}")
+                    oda_id = oda.get("oda_id", i) # Oda ID'sini de saklayacağız
+                    renk = oda.get("renk_kodu", renkler[i % len(renkler)])
+                    
+                    chk_oda = QCheckBox(oda_adi)
+                    
+                    # İlk odayı varsayılan olarak seçili yapıyoruz
+                    if i == 0:
+                        chk_oda.setChecked(True)
+                        
+                    stil = f"""
+                        QCheckBox {{ color: #3C4043; font-size: 13px; }} 
+                        QCheckBox::indicator:checked {{ 
+                            background-color: {renk}; 
+                            border: 1px solid {renk}; 
+                        }}
+                    """
+                    chk_oda.setStyleSheet(stil)
+                    
+                    # Butonu gruba ekliyoruz ki aynı anda 2 tane seçilemesin
+                    self.oda_grubu.addButton(chk_oda, id=oda_id)
+                    self.oda_layout.addWidget(chk_oda)
+                
+                # Herhangi bir oda seçimi değiştiğinde tabloyu yeniden yükle
+                self.oda_grubu.idToggled.connect(self.haftayi_guncelle)
+                    
+            else:
+                hata_lbl = QLabel("Odalar alınamadı.")
+                hata_lbl.setStyleSheet("color: #5F6368;")
+                self.oda_layout.addWidget(hata_lbl)
+                
+        except Exception as e:
+            hata_lbl = QLabel("Bağlantı hatası!")
+            hata_lbl.setStyleSheet("color: #DC2626; font-weight: bold;")
+            self.oda_layout.addWidget(hata_lbl)
+            print("Oda çekme hatası:", e)
 
     def bugune_git(self):
         self.mevcut_tarih = QDate.currentDate()
@@ -195,19 +243,73 @@ class HaftalikTakvimEkrani(QWidget):
         self.mevcut_tarih = self.mini_takvim.selectedDate()
         self.haftayi_guncelle()
 
-    def ornek_veri_doldur(self, pazartesi):
-        """Arayüzün nasıl göründüğünü test etmek için örnek bloklar ekler."""
-        # Salı günü (Sütun 1), Saat 10:00 (Satır 2)
-        item1 = QTableWidgetItem("Danışan: DAN-001\nOda: Terapi 1")
-        item1.setBackground(QColor("#4285F4")) # Google Mavi
-        item1.setForeground(QColor("white"))
-        self.tablo.setItem(2, 1, item1)
-
-        # Perşembe günü (Sütun 3), Saat 14:00 (Satır 6)
-        item2 = QTableWidgetItem("Danışan: DAN-002\nOda: MR Merkezi")
-        item2.setBackground(QColor("#0F9D58")) # Google Yeşil
-        item2.setForeground(QColor("white"))
-        self.tablo.setItem(6, 3, item2)
+    def verileri_doldur(self, pazartesi):
+        # Seçili odanın ID'sini bul
+        if not hasattr(self, 'oda_grubu') or self.oda_grubu.checkedId() == -1:
+            return # Henüz grup oluşmadıysa veya seçili oda yoksa çık
+            
+        secili_oda_id = self.oda_grubu.checkedId()
+        
+        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        api_adres = self.api_url if self.api_url else "http://127.0.0.1:8000"
+        
+        try:
+            # Tüm randevuları çek (İleride back-end'de direkt oda ID ile filtreleyen bir sorgu yazabilirsin)
+            cevap = requests.get(f"{api_adres}/api/randevular", headers=headers, timeout=5)
+            
+            if cevap.status_code == 200:
+                randevular = cevap.json()
+                
+                for r in randevular:
+                    # SADECE SEÇİLİ ODAYA AİT OLANLARI FİLTRELE ve İPTAL EDİLMEMİŞLERİ GÖSTER
+                    if r.get("oda_id") == secili_oda_id and r.get("durum") != "IPTAL_EDILDI":
+                        
+                        baslangic_zaman_metni = r.get("baslangic_zamani", "")
+                        
+                        # Eğer tarih boş gelmişse bu satırı atla
+                        if not baslangic_zaman_metni:
+                            continue
+                            
+                        # Metin formatındaki tarihi QDateTime nesnesine çevir (örn: '2026-10-13T10:00:00')
+                        q_tarih = QDateTime.fromString(baslangic_zaman_metni.split('.')[0], "yyyy-MM-ddTHH:mm:ss")
+                        
+                        # Tarih bu haftanın içindeyse tabloya yerleştir
+                        if q_tarih.date() >= pazartesi and q_tarih.date() <= pazartesi.addDays(6):
+                            
+                            # Sütunu bul (0=Pazartesi, 1=Salı ... 6=Pazar)
+                            # QDate.dayOfWeek() Pazartesi'yi 1 verir, biz 0. indexten başlıyoruz
+                            sutun_index = q_tarih.date().dayOfWeek() - 1 
+                            
+                            # Satırı bul (0=08:00, 1=09:00 ...)
+                            saat = q_tarih.time().hour()
+                            if 8 <= saat <= 18:
+                                satir_index = saat - 8
+                                
+                                # Görsel bloğu oluştur
+                                kod = r.get("danisan_kod_id", "Bilinmeyen")
+                                item = QTableWidgetItem(f"Danışan: {kod}\nID: {r.get('randevu_id')}")
+                                
+                                # Seçili odanın rengini arka plan olarak kullan
+                                secili_buton = self.oda_grubu.button(secili_oda_id)
+                                if secili_buton:
+                                    renk_kod = secili_buton.styleSheet().split("background-color: ")[1].split(";")[0]
+                                    item.setBackground(QColor(renk_kod))
+                                else:
+                                    item.setBackground(QColor("#4285F4")) # Varsayılan Google Mavisi
+                                    
+                                item.setForeground(QColor("white"))
+                                item.setTextAlignment(Qt.AlignCenter)
+                                
+                                # Eğer tabloda ilgili hücre boşsa direkt koy, doluysa üzerine ekle (çakışma durumu)
+                                mevcut_item = self.tablo.item(satir_index, sutun_index)
+                                if mevcut_item:
+                                     yeni_metin = mevcut_item.text() + f"\n---\nDanışan: {kod}\nID: {r.get('randevu_id')}"
+                                     mevcut_item.setText(yeni_metin)
+                                else:
+                                    self.tablo.setItem(satir_index, sutun_index, item)
+                                    
+        except Exception as e:
+            print("Takvime randevular yerleştirilirken hata oluştu:", e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

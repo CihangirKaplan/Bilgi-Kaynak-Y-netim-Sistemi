@@ -5,3 +5,8 @@ __pycache__/
 
 .venv/
 .env
+
+# PostgreSQL veritabani yedekleri
+backups/
+*.dump
+*.backup

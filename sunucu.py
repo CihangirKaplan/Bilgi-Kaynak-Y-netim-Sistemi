@@ -281,6 +281,12 @@ def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int 
 def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))):
     conn = None
     cursor = None
+    if kullanici_id == islem_yapan_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Kendi rolünüzü değiştiremezsiniz."
+        )
+
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
@@ -312,6 +318,10 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         conn.commit()
 
         return {"mesaj": "Kullanıcı rolü başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
@@ -351,6 +361,10 @@ def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_
         conn.commit()
 
         return {"mesaj": "Kullanıcı başarıyla pasifleştirildi.", "kullanici_id": kullanici_id, "aktif_mi": False}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Kullanıcı pasifleştirme sırasında veritabanı hatası oluştu: {str(e)}")
@@ -389,6 +403,10 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
     except psycopg2.errors.UniqueViolation:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=409, detail="Bu kullanıcıya ait personel kaydı veya personel kodu zaten mevcut.")
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Personel oluşturulurken veritabanı hatası oluştu: {str(e)}")
@@ -415,6 +433,12 @@ def personel_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIML
 
 @app.get("/api/personel/{personel_id}")
 def personel_detay(personel_id: int, islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))):
+    if personel_id <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Geçerli bir personel ID girilmelidir."
+        )
+
     conn = None
     cursor = None
     try:
@@ -792,7 +816,14 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
             (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.zimmetli_oda_id, cihaz.durum.value)
         )
         cihaz_id = cursor.fetchone()[0]
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=cihaz_id)
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="cihazlar",
+            hedef_kayit_id=cihaz_id,
+            mevcut_cursor=cursor
+        )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Cihaz başarıyla eklendi.", "cihaz_id": cihaz_id}
     finally:
@@ -800,30 +831,85 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
         if conn is not None: conn.close()
 
 @app.patch("/api/cihazlar/{cihaz_id}")
-def cihaz_guncelle(cihaz_id: int, guncelleme: CihazGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def cihaz_guncelle(
+    cihaz_id: int,
+    guncelleme: CihazGuncelleModeli,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))
+):
     conn = None
     cursor = None
+
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
+
         if not degisiklikler:
-            raise HTTPException(status_code=422, detail="Güncellenecek alan bulunamadı.")
+            raise HTTPException(
+                status_code=422,
+                detail="Güncellenecek alan bulunamadı."
+            )
+
         if "durum" in degisiklikler and hasattr(degisiklikler["durum"], "value"):
             degisiklikler["durum"] = degisiklikler["durum"].value
 
-        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
-        degerler = list(degisiklikler.values())
-        cursor.execute(f"UPDATE cihazlar SET {alanlar} WHERE cihaz_id = %s RETURNING cihaz_id;", (*degerler, cihaz_id))
-        if cursor.fetchone() is None:
+        # Mevcut cihaz durumunu oku ve satırı kilitle.
+        cursor.execute(
+            "SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;",
+            (cihaz_id,)
+        )
+        kayit = cursor.fetchone()
+
+        if kayit is None:
             raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
 
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=cihaz_id)
+        eski_durum = kayit[0]
+
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        degerler = list(degisiklikler.values())
+
+        cursor.execute(
+            f"UPDATE cihazlar SET {alanlar} WHERE cihaz_id = %s RETURNING cihaz_id;",
+            (*degerler, cihaz_id)
+        )
+
+        # Cihazın diğer bilgilerinin güncellenmesi.
+        if any(alan != "durum" for alan in degisiklikler):
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="UPDATE",
+                kullanici_id=kullanici_id,
+                hedef_tablo="cihazlar",
+                hedef_kayit_id=cihaz_id,
+                mevcut_cursor=cursor
+            )
+
+        # Cihaz durumu gerçekten değiştiyse ayrıca audit kaydı oluştur.
+        if "durum" in degisiklikler and eski_durum != degisiklikler["durum"]:
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="DEVICE_STATUS_CHANGE",
+                kullanici_id=kullanici_id,
+                hedef_tablo="cihazlar",
+                hedef_kayit_id=cihaz_id,
+                mevcut_cursor=cursor
+            )
+
         conn.commit()
+
         return {"durum": "basarili", "mesaj": "Cihaz güncellendi."}
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise
+
     finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 @app.get("/api/cihazlar")
 def cihazlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_GORUNTULE"))):
@@ -1017,16 +1103,40 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_
 
         # 5. Cihazın durumunu 'Arizali' (veritabanı formatında) olarak güncelle!
         cursor.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s;", (ariza.cihaz_id,))
-
         # 6. Denetim (Audit) logları
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_arizalari", hedef_kayit_id=ariza_id)
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihazlar", hedef_kayit_id=ariza.cihaz_id)
+        # Arıza oluşturma kaydını aynı transaction içinde tut.
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="cihaz_arizalari",
+            hedef_kayit_id=ariza_id,
+            mevcut_cursor=cursor
+        )
 
+        # Cihazın durumu gerçekten değiştiyse ayrıca kaydet.
+        if cihaz[0] != "Arizali":
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="DEVICE_STATUS_CHANGE",
+                kullanici_id=kullanici_id,
+                hedef_tablo="cihazlar",
+                hedef_kayit_id=ariza.cihaz_id,
+                mevcut_cursor=cursor
+            )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi.", "ariza_id": ariza_id}
-    except Exception as e:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="İşlem sırasında bir sunucu hatası oluştu."
+        )
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1059,19 +1169,60 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
             WHERE ariza_id = %s;
         """, (tam_aciklama, ariza.cozuldu_mu, ariza_id))
 
-        # Cihaz durumunu senkronize et
-        yeni_cihaz_durum = 'Kullanima_Hazir' if ariza.cozuldu_mu else 'Arizali'
-        cursor.execute("UPDATE cihazlar SET durum = %s WHERE cihaz_id = %s;", (yeni_cihaz_durum, cihaz_id))
+        # Cihazın mevcut durumunu oku ve satırı kilitle.
+        cursor.execute(
+            "SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;",
+            (cihaz_id,)
+        )
+        cihaz_kaydi = cursor.fetchone()
 
+        if cihaz_kaydi is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+
+        eski_cihaz_durum = cihaz_kaydi[0]
+        yeni_cihaz_durum = "Kullanima_Hazir" if ariza.cozuldu_mu else "Arizali"
+
+        # Arıza güncellemesini audit'e kaydet.
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="cihaz_arizalari",
+            hedef_kayit_id=ariza_id,
+            mevcut_cursor=cursor
+        )
+
+        # Yalnızca gerçek durum değişikliğinde cihazı güncelle ve audit oluştur.
+        if eski_cihaz_durum != yeni_cihaz_durum:
+            cursor.execute(
+                "UPDATE cihazlar SET durum = %s WHERE cihaz_id = %s;",
+                (yeni_cihaz_durum, cihaz_id)
+            )
+
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="DEVICE_STATUS_CHANGE",
+                kullanici_id=kullanici_id,
+                hedef_tablo="cihazlar",
+                hedef_kayit_id=cihaz_id,
+                mevcut_cursor=cursor
+            )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Arıza başarıyla güncellendi."}
-    except Exception as e:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="İşlem sırasında bir sunucu hatası oluştu."
+        )
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
-
 # ==========================================
 # BAKIM YÖNETİMİ MODÜLÜ (MNT-001, MNT-002)
 # ==========================================
