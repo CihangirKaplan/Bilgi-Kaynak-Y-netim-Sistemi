@@ -1,7 +1,6 @@
 # 6. Hafta - Yedekleme ve Geri Yukleme Test Raporu
 
 Tarih: 20.10.2026
-Sorumlu: Ogrenci C
 Durum: Yedekleme modulu temel testleri basarili.
 Not: 6. haftanin ekip genelindeki calismalari devam etmektedir.
 
