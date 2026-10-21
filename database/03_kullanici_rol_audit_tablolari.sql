@@ -64,7 +64,7 @@ CREATE TABLE kullanicilar (
     -- FALSE -> kullanıcı hesabı pasiftir
     aktif_mi BOOLEAN NOT NULL
         DEFAULT TRUE,
-    
+
     -- Art arda yapılan başarısız giriş denemelerinin sayısı
     basarisiz_giris_sayisi INT NOT NULL
         DEFAULT 0,
@@ -343,7 +343,8 @@ INSERT INTO izinler (izin_adi, aciklama) VALUES
     ('ROL_IZIN_YONET', 'Rollerin izinlerini yönetme'),
     ('ROL_OLUSTUR', 'Sisteme yeni rol oluşturma'),
     ('ROL_DUZENLE', 'Mevcut rolü düzenleme'),
-    ('FAALIYET_BIRIMI_DUZENLE', 'Faaliyet birimlerini yönetme');
+    ('FAALIYET_BIRIMI_DUZENLE', 'Faaliyet birimlerini yönetme'),
+
 
 
 -- ============================================================
