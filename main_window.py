@@ -253,21 +253,12 @@ class AnaPencere(QMainWindow):
         te_layout.setContentsMargins(0, 0, 0, 0)
         te_layout.setSpacing(0)
 
-        # Koyu Mavi Üst Bar ve Geri Butonu
-        ust_bar = QFrame()
-        ust_bar.setStyleSheet("background-color: #0A1F5C; padding: 12px;")
-        ust_layout = QHBoxLayout(ust_bar)
-        self.btn_geri = QPushButton("⬅ Ana Ekrana Dön")
-        self.btn_geri.setStyleSheet("color: white; font-weight: bold; font-size: 16px; border: none; background: transparent;")
-        self.btn_geri.setCursor(Qt.PointingHandCursor)
-        self.btn_geri.clicked.connect(self.ana_ekrana_don) # 0'a, yani ana menüye dön
-
-        ust_layout.addWidget(self.btn_geri)
-        ust_layout.addStretch()
-        te_layout.addWidget(ust_bar)
-
-        # Takvim bileşenimizi buraya tam ekran olarak yerleştiriyoruz
+        
+        # 1. Önce takvim sayfasını (widget) oluştur (SİLİNEN SATIR BUYDU)
         self.takvim_widget = HaftalikTakvimEkrani(api_url=self.api_url, token=self.token)
+        # 2. Sonra takvimin içindeki yeni geri ok butonuna tıklama görevi ver
+        self.takvim_widget.btn_ana_ekrana_don.clicked.connect(self.ana_ekrana_don)
+        # 3. Son olarak oluşturulan takvimi tam ekran alanına (layout) yerleştir
         te_layout.addWidget(self.takvim_widget)
 
         self.master_stack.addWidget(self.tam_ekran_takvim) # INDEX 1 olarak eklendi
@@ -922,5 +913,5 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
     pencere = AnaPencere(aktif_rol=rol, rol_onizleme=True)
-    pencere.show()
+    pencere.showMaximized()
     sys.exit(app.exec())

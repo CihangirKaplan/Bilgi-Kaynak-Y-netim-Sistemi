@@ -106,16 +106,9 @@ class RandevuOlusturFormu(QWidget):
         ana_layout.addLayout(buton_layout)
 
     def siradaki_kodu_getir(self):
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = requests.get(f"{self.api_url}/api/randevular/siradaki-kod", headers=headers, timeout=5)
-            if cevap.status_code == 200:
-                veri = cevap.json()
-                self.txt_danisan_kodu.setText(veri["siradaki_kod"])
-            else:
-                self.txt_danisan_kodu.setText("DAN-OTOMATIK-ATANACAK")
-        except Exception:
-            self.txt_danisan_kodu.setText("DAN-OTOMATIK-ATANACAK")
+        self.txt_danisan_kodu.setText("Kaydedince Otomatik Atanacak")
+        self.txt_danisan_kodu.setReadOnly(True)
+        self.txt_danisan_kodu.setStyleSheet("background-color: #F1F5F9; color: #64748B; font-weight: bold;")
 
     def odalari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -174,7 +167,7 @@ class RandevuOlusturFormu(QWidget):
     def randevuyu_kaydet(self):
         secilen_oda_id = self.cmb_odalar.currentData()
         secilen_psikolog_id = self.cmb_psikologlar.currentData()
-        
+
         if secilen_psikolog_id is None:
             QMessageBox.warning(self, "Eksik Veri", "Lütfen bir psikolog seçiniz.")
             return
@@ -185,35 +178,36 @@ class RandevuOlusturFormu(QWidget):
             QMessageBox.warning(self, "Geçersiz Zaman", "Bitiş zamanı başlangıç zamanından sonra olmalıdır!")
             return
 
+        # DÜZELTİLEN YER: Z (UTC) eki kaldırıldı, doğrudan arayüzdeki saat gidiyor
         baslangic_str = self.dt_baslangic.dateTime().toString("yyyy-MM-ddTHH:mm:ss")
         bitis_str = self.dt_bitis.dateTime().toString("yyyy-MM-ddTHH:mm:ss")
 
-        yeni_randevu = IstemciRandevu(
-            danisan_kod_id=self.txt_danisan_kodu.text(),
-            psikolog_id=secilen_psikolog_id,
-            oda_id=secilen_oda_id,
-            baslangic_zamani=baslangic_str,
-            bitis_zamani=bitis_str
-        )
+        payload = {
+            "psikolog_id": int(secilen_psikolog_id),
+            "oda_id": int(secilen_oda_id),
+            "baslangic_zamani": baslangic_str,
+            "bitis_zamani": bitis_str
+        }
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.post(f"{self.api_url}/api/randevular", 
-                                json=yeni_randevu.to_dict(), 
-                                headers=headers, timeout=5)
+            cevap = requests.post(
+                f"{self.api_url}/api/randevular", 
+                json=payload, 
+                headers=headers, 
+                timeout=5
+            )
             
-            if cevap.status_code == 201:
-                QMessageBox.information(self, "Başarılı", "Randevu başarıyla oluşturuldu!")
+            if cevap.status_code in (200, 201):
+                veri = cevap.json()
+                atanan_kod = veri.get("danisan_kod_id", "")
+                QMessageBox.information(self, "Başarılı", f"Randevu başarıyla oluşturuldu!\nAtanan Danışan Kodu: {atanan_kod}")
                 self.close() 
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", "Seçilen psikolog veya oda bu saatlerde dolu!")
             else:
-                hata_mesaji = "Bilinmeyen bir sunucu hatası oluştu."
-                try:
-                    hata_mesaji = cevap.json().get('detail', hata_mesaji)
-                except ValueError:
-                    hata_mesaji = f"Sunucu hatası: {cevap.status_code}"
-                QMessageBox.warning(self, "Hata", f"İşlem başarısız: {hata_mesaji}")
+                hata_detay = cevap.json().get('detail', 'Bilinmeyen hata') if cevap.headers.get("content-type") == "application/json" else cevap.text
+                QMessageBox.warning(self, "Hata", f"İşlem başarısız: {hata_detay}")
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", str(e))
 
@@ -461,6 +455,18 @@ class RandevuAnaEkrani(QWidget):
     def verileri_cek(self):
         self.tablo.setRowCount(0)
         headers = {"Authorization": f"Bearer {self.token}"}
+        
+        # 1. Önce odaları çekip bir eşleştirme sözlüğü (dictionary) oluşturalım
+        oda_sozlugu = {}
+        try:
+            oda_cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if oda_cevap.status_code == 200:
+                for oda in oda_cevap.json():
+                    oda_sozlugu[oda["oda_id"]] = oda["oda_adi"]
+        except Exception as e:
+            print("Oda isimleri çekilirken hata oluştu:", e)
+
+        # 2. Şimdi randevuları çekip tabloya yazalım
         try:
             cevap = requests.get(f"{self.api_url}/api/randevular", headers=headers, timeout=5)
             if cevap.status_code == 200:
@@ -472,7 +478,12 @@ class RandevuAnaEkrani(QWidget):
                     
                     item_id = QTableWidgetItem(str(r.get("randevu_id", "")))
                     item_kod = QTableWidgetItem(r.get("danisan_kod_id", ""))
-                    item_oda = QTableWidgetItem(str(r.get("oda_id", "Bilinmiyor"))) 
+                    
+                    # Oda ID'sini alıp sözlükten ismini buluyoruz
+                    oda_id = r.get("oda_id")
+                    oda_adi = oda_sozlugu.get(oda_id, f"Bilinmeyen Oda ({oda_id})")
+                    item_oda = QTableWidgetItem(oda_adi) 
+                    
                     item_bas = QTableWidgetItem(baslangic)
                     item_bit = QTableWidgetItem(bitis)
                     
