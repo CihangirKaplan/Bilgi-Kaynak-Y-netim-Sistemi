@@ -37,6 +37,9 @@ from guvenlik import (
     token_dogrula
 )
 from denetim import denetim_kaydi_olustur
+from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
+import psycopg2.errors
+from modeller import FaaliyetKayitModeli, OgrenciEkleModeli
 
 load_dotenv()
 app = FastAPI()
@@ -1416,6 +1419,137 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         return birimler
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- YENİ EKLENEN: ÖĞRENCİ LİSTESİNİ GETİRİR ---
+@app.get("/api/ogrenciler-liste")
+def ogrencileri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece Ad Soyad ve Öğrenci Numarasını çek (Bolum ve sinif iptal edildi)
+        cursor.execute("SELECT ogrenci_id, ad_soyad, ogrenci_numarasi FROM ogrenciler WHERE aktif_mi = true;")
+        
+        liste = []
+        for r in cursor.fetchall():
+            liste.append({"id": r[0], "metin": f"{r[1]} - [{r[2]}]"})
+        return liste
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# --- GÜNCELLENEN: YENİ TABLOYA (ÖĞRENCİ TAKİP) KAYIT ATAR ---
+@app.post("/api/faaliyet-kayitlari")
+def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Doğrudan senin şemandaki "ogrenci_faaliyet_takip" tablosuna yazıyoruz.
+        # Not: Senin şemanda miktar sütununun adı "adet", o yüzden "adet" olarak ekliyoruz.
+        cursor.execute("""
+            INSERT INTO ogrenci_faaliyet_takip 
+            (ogrenci_id, faaliyet_id, birim_id, adet, faaliyet_tarihi) 
+            VALUES (%s, %s, %s, %s, CURRENT_DATE) RETURNING takip_id;
+        """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar))
+        
+        yeni_id = cursor.fetchone()[0]
+        
+        # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
+# Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Öğrenci faaliyeti başarıyla sisteme işlendi."}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/ogrenci-ekle")
+def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO ogrenciler 
+            (ad_soyad, ogrenci_numarasi, telefon, tur, bolum, sinif) 
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING ogrenci_id;
+        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur, ogr.bolum, ogr.sinif))
+        
+        yeni_id = cursor.fetchone()[0]
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Öğrenci başarıyla sisteme eklendi.", "ogrenci_id": yeni_id}
+        
+    except psycopg2.errors.UniqueViolation:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=400, detail="Bu öğrenci numarası sistemde zaten kayıtlı!")
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
+@app.get("/api/faaliyet-kayitlari")
+def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # 4 tabloyu birleştirip, puanı (adet * faaliyet_puanı) olarak hesaplayan efsane SQL
+        sorgu = """
+        SELECT 
+            t.takip_id,
+            o.ad_soyad,
+            o.ogrenci_numarasi,
+            f.faaliyet_adi,
+            t.adet,
+            b.birim_adi,
+            (t.adet * f.puan) AS toplam_puan,
+            t.faaliyet_tarihi
+        FROM ogrenci_faaliyet_takip t
+        JOIN ogrenciler o ON t.ogrenci_id = o.ogrenci_id
+        JOIN faaliyetler f ON t.faaliyet_id = f.faaliyet_id
+        JOIN faaliyet_birimleri b ON t.birim_id = b.birim_id
+        ORDER BY t.olusturulma_tarihi DESC;
+        """
+        cursor.execute(sorgu)
+        
+        kayitlar = []
+        for row in cursor.fetchall():
+            kayitlar.append({
+                "id": row[0],
+                "ad_soyad": row[1],
+                "ogrenci_no": row[2],
+                "faaliyet_adi": row[3],
+                "miktar": f"{row[4]} {row[5]}", # Örn: "3 KISI" veya "5 SAAT"
+                "toplam_puan": row[6],
+                "tarih": row[7].strftime("%d.%m.%Y") if row[7] else ""
+            })
+        return kayitlar
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veri çekme hatası: {str(e)}")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
