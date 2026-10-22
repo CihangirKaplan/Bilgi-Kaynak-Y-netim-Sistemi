@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
 from modeller import (
+    FaaliyetBirimIslemModeli,
     GirisModeli,
     RolDegistirModeli,
     KullaniciOlusturModeli,
@@ -3777,6 +3778,122 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# ======================================================================
+# --- SYS-001: FAALİYET BİRİMLERİ (CRUD) İŞLEMLERİ ---
+# ======================================================================
+
+# ======================================================================
+# --- SYS-001: FAALİYET BİRİMLERİ (CRUD) İŞLEMLERİ ---
+# ======================================================================
+
+# ======================================================================
+# --- SYS-001: FAALİYET BİRİMLERİ (CRUD) İŞLEMLERİ ---
+# ======================================================================
+
+@app.post("/api/faaliyet-birimleri")
+def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute("SELECT birim_id FROM faaliyet_birimleri WHERE birim_adi = %s", (kayit.birim_adi.strip(),))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Bu birim adı zaten mevcut!")
+
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute(
+            "INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id;", 
+            (kayit.birim_adi.strip().upper(),) 
+        )
+        yeni_id = cursor.fetchone()[0]
+        
+        # Audit Log (Denetim Kaydı)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Ekleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.put("/api/faaliyet-birimleri/{birim_id}")
+def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM faaliyet_birimleri WHERE birim_id = %s", (birim_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Güncellenecek birim bulunamadı.")
+
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute(
+            "UPDATE faaliyet_birimleri SET birim_adi = %s WHERE birim_id = %s;", 
+            (kayit.birim_adi.strip().upper(), birim_id)
+        )
+        
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.delete("/api/faaliyet-birimleri/{birim_id}")
+def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT 1 FROM ogrenci_faaliyet_takip WHERE birim_id = %s LIMIT 1", (birim_id,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="DİKKAT: Bu birim geçmiş faaliyet kayıtlarında kullanıldığı için SİLİNEMEZ! İsterseniz adını güncelleyebilirsiniz.")
+
+        cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
+        
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
+    except HTTPException:
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")

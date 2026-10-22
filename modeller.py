@@ -276,3 +276,9 @@ class OgrenciEkleModeli(BaseModel):
     tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
     bolum: Optional[str] = None
     sinif: Optional[str] = None
+
+# ==========================================
+# SİSTEM YÖNETİMİ MODELLERİ (SYS)
+# ==========================================
+class FaaliyetBirimIslemModeli(BaseModel):
+    birim_adi: str = Field(min_length=1, max_length=50)
