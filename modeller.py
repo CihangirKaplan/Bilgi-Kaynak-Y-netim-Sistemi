@@ -268,3 +268,11 @@ class FaaliyetKayitModeli(BaseModel):
     faaliyet_id: int
     birim_id: int
     miktar: int
+
+class OgrenciEkleModeli(BaseModel):
+    ad_soyad: str
+    ogrenci_numarasi: str
+    telefon: Optional[str] = None
+    tur: Optional[str] = None
+    bolum: Optional[str] = None
+    sinif: Optional[str] = None
