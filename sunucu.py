@@ -3715,3 +3715,71 @@ def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+# --- YENİ: FAALİYET DÜZENLEME (PUT) ---
+@app.put("/api/faaliyet-kayitlari/{takip_id}")
+def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kaydın var olup olmadığını kontrol edelim
+        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Güncellenecek kayıt bulunamadı.")
+
+        cursor.execute("""
+            UPDATE ogrenci_faaliyet_takip 
+            SET ogrenci_id = %s, faaliyet_id = %s, birim_id = %s, adet = %s 
+            WHERE takip_id = %s;
+        """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar, takip_id))
+        
+        # Audit log (Denetim kaydı)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- YENİ: FAALİYET SİLME (DELETE) ---
+@app.delete("/api/faaliyet-kayitlari/{takip_id}")
+def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Silinmeden önce kaydın var olup olmadığını kontrol edelim
+        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Silinecek kayıt zaten yok veya bulunamadı.")
+
+        # Kaydı acımadan veritabanından siliyoruz
+        cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
+        
+        # Audit log (Denetim kaydı) - Kim sildi bilelim
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
