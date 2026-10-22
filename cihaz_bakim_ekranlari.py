@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
-from streamlit import form
 
 class YeniBakimFormu(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -14,7 +13,7 @@ class YeniBakimFormu(QDialog):
         self.token = token
         
         self.setWindowTitle("🛠️ Yeni Bakım Kaydı Ekle")
-        self.setMinimumSize(450, 450)
+        self.setMinimumSize(450, 500)
         
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
@@ -28,7 +27,6 @@ class YeniBakimFormu(QDialog):
 
         layout = QVBoxLayout(self)
         
-        # DİKKAT: Karmaşa çıkmasın diye adını form_layout yaptık ve parantezlerini ekledik!
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
         
@@ -38,27 +36,28 @@ class YeniBakimFormu(QDialog):
         self.txt_islem.setMaximumHeight(80)
         self.txt_maliyet = QLineEdit("0.0")
         
-        self.dt_bakim = QDateEdit(QDate.currentDate())
-        self.dt_bakim.setCalendarPopup(True)
+        # --- YENİ EKLENEN: BAŞLANGIÇ VE BİTİŞ TARİHLERİ ---
+        self.dt_baslangic = QDateEdit(QDate.currentDate())
+        self.dt_baslangic.setCalendarPopup(True)
+        
+        self.dt_bitis = QDateEdit(QDate.currentDate())
+        self.dt_bitis.setCalendarPopup(True)
         
         self.dt_sonraki_bakim = QDateEdit(QDate.currentDate().addMonths(6))
         self.dt_sonraki_bakim.setCalendarPopup(True)
 
-        # Elemanları form_layout içine ekliyoruz
         form_layout.addRow("Cihaz (*):", self.cmb_cihaz)
         form_layout.addRow("Bakım Yapan Kişi (*):", self.txt_kisi)
         form_layout.addRow("Yapılan İşlem (*):", self.txt_islem)
         form_layout.addRow("Maliyet (₺):", self.txt_maliyet)
-        form_layout.addRow("Bakım Tarihi (*):", self.dt_bakim)
+        form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
         form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim)
         
         layout.addLayout(form_layout)
 
         btn_kaydet = QPushButton("✅ Kaydet")
-        btn_kaydet.setStyleSheet("""
-            QPushButton { background-color: #27AE60; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;}
-            QPushButton:hover { background-color: #229954; }
-        """)
+        btn_kaydet.setStyleSheet("QPushButton { background-color: #27AE60; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;} QPushButton:hover { background-color: #229954; }")
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(btn_kaydet)
@@ -75,17 +74,29 @@ class YeniBakimFormu(QDialog):
             pass
 
     def kaydet(self):
+# TL Formatı Düzeltici: 10.000,50 veya 10000 veya 10,50'yi anlar
+        metin = self.txt_maliyet.text().strip()
+        if '.' in metin and ',' in metin:
+            metin = metin.replace('.', '').replace(',', '.')
+        elif '.' in metin and len(metin.split('.')[-1]) == 3:
+            metin = metin.replace('.', '')
+        else:
+            metin = metin.replace(',', '.')
+            
         try:
-            maliyet = float(self.txt_maliyet.text().replace(',', '.'))
+            maliyet = float(metin)
         except ValueError:
             maliyet = 0.0
 
+        # GÜVENLİK YAMASI: Eski model "bakim_tarihi" bekliyorsa diye onu da pakete ekliyoruz
         veri = {
             "cihaz_id": self.cmb_cihaz.currentData(),
+            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"), # EKLENDİ
             "bakim_yapan_kisi": self.txt_kisi.text().strip(),
             "yapilan_islem": self.txt_islem.toPlainText().strip(),
             "maliyet": maliyet,
-            "bakim_tarihi": self.dt_bakim.date().toString("yyyy-MM-dd"),
+            "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
             "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd")
         }
         
@@ -99,9 +110,11 @@ class YeniBakimFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "✅ Bakım kaydı başarıyla eklendi!")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", "Kayıt yapılamadı.")
-        except Exception:
-            QMessageBox.critical(self, "Hata", "Sunucu hatası.")
+                # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
+                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimDuzenleFormu(QDialog):
     def __init__(self, api_url, token, bakim_verisi, parent=None):
@@ -111,7 +124,7 @@ class BakimDuzenleFormu(QDialog):
         self.bakim_verisi = bakim_verisi
         
         self.setWindowTitle("🛠️ Bakım Kaydını Düzenle")
-        self.setMinimumSize(450, 480)
+        self.setMinimumSize(450, 520)
         
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
@@ -129,61 +142,69 @@ class BakimDuzenleFormu(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
         
-        self.txt_cihaz = QLineEdit(bakim_verisi["cihaz_adi"])
+        self.txt_cihaz = QLineEdit(bakim_verisi.get("cihaz_adi", ""))
         self.txt_cihaz.setReadOnly(True)
-        
-        self.dt_bakim = QDateEdit(QDate.fromString(bakim_verisi["bakim_tarihi"][:10], "yyyy-MM-dd"))
-        self.dt_bakim.setCalendarPopup(True)
-        
-        self.txt_kisi = QLineEdit(bakim_verisi["bakim_yapan_kisi"])
+        self.txt_kisi = QLineEdit(bakim_verisi.get("bakim_yapan_kisi", ""))
         
         maliyet_str = str(bakim_verisi.get("maliyet", "0.0"))
         self.txt_maliyet = QLineEdit(maliyet_str)
         
-        self.txt_islem = QTextEdit(bakim_verisi["yapilan_islem"])
+        self.txt_islem = QTextEdit(bakim_verisi.get("yapilan_islem", ""))
         self.txt_islem.setMaximumHeight(80)
 
-        # --- YENİ EKLENEN KISIM: Sonraki Bakım Tarihi ---
-        sonraki_str = bakim_verisi.get("sonraki_bakim_tarihi", "")
-        if sonraki_str and sonraki_str != "Belirtilmedi":
-            s_date = QDate.fromString(sonraki_str[:10], "yyyy-MM-dd")
-        else:
-            s_date = QDate.currentDate().addMonths(6)
+        # --- TARİHLERİ GÜVENLİ ÇEKME (Hiçbir şekilde patlamaz) ---
+        baslangic_str = bakim_verisi.get("bakim_baslangic_tarihi") or bakim_verisi.get("bakim_tarihi") or QDate.currentDate().toString("yyyy-MM-dd")
+        bitis_str = bakim_verisi.get("bakim_bitis_tarihi") or baslangic_str
+        sonraki_str = bakim_verisi.get("sonraki_bakim_tarihi") or QDate.currentDate().addMonths(6).toString("yyyy-MM-dd")
             
-        self.dt_sonraki_bakim = QDateEdit(s_date)
+        self.dt_baslangic = QDateEdit(QDate.fromString(str(baslangic_str)[:10], "yyyy-MM-dd"))
+        self.dt_baslangic.setCalendarPopup(True)
+        
+        self.dt_bitis = QDateEdit(QDate.fromString(str(bitis_str)[:10], "yyyy-MM-dd"))
+        self.dt_bitis.setCalendarPopup(True)
+
+        self.dt_sonraki_bakim = QDateEdit(QDate.fromString(str(sonraki_str)[:10], "yyyy-MM-dd"))
         self.dt_sonraki_bakim.setCalendarPopup(True)
-        # ------------------------------------------------
 
         form_layout.addRow("Cihaz (Değiştirilemez):", self.txt_cihaz)
-        form_layout.addRow("Bakım Tarihi (*):", self.dt_bakim)
         form_layout.addRow("Bakımı Yapan Kişi (*):", self.txt_kisi)
         form_layout.addRow("Maliyet (₺):", self.txt_maliyet)
         form_layout.addRow("Yapılan İşlem (*):", self.txt_islem)
-        form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim) # Ekrana eklendi
+        form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
+        form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim) 
         
         layout.addLayout(form_layout)
 
         btn_kaydet = QPushButton("💾 Değişiklikleri Kaydet")
-        btn_kaydet.setStyleSheet("""
-            QPushButton { background-color: #2980B9; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;}
-            QPushButton:hover { background-color: #2471A3; }
-        """)
+        btn_kaydet.setStyleSheet("QPushButton { background-color: #2980B9; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;} QPushButton:hover { background-color: #2471A3; }")
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(btn_kaydet)
 
     def kaydet(self):
+        # TL Formatı Düzeltici
+        metin = self.txt_maliyet.text().strip()
+        if '.' in metin and ',' in metin:
+            metin = metin.replace('.', '').replace(',', '.')
+        elif '.' in metin and len(metin.split('.')[-1]) == 3:
+            metin = metin.replace('.', '')
+        else:
+            metin = metin.replace(',', '.')
+            
         try:
-            maliyet = float(self.txt_maliyet.text().replace(',', '.'))
+            maliyet = float(metin)
         except ValueError:
             maliyet = 0.0
 
         veri = {
-            "bakim_tarihi": self.dt_bakim.date().toString("yyyy-MM-dd"),
+            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "bakim_yapan_kisi": self.txt_kisi.text().strip(),
             "yapilan_islem": self.txt_islem.toPlainText().strip(),
             "maliyet": maliyet,
-            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd") # API'ye gönderiliyor
+            "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
+            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd") 
         }
         
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
@@ -193,15 +214,16 @@ class BakimDuzenleFormu(QDialog):
         try:
             res = requests.put(f"{self.api_url}/api/bakimlar/{self.bakim_verisi['bakim_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
             if res.status_code == 200:
+                QMessageBox.information(self, "Başarılı", "✅ Bakım kaydı başarıyla güncellendi!")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", "Güncelleme yapılamadı.")
-        except Exception:
-            QMessageBox.critical(self, "Hata", "Sunucu hatası.")
-
+                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimYonetimEkrani(QWidget):
-    """Bakım Kayıtlarının Listelendiği Ana Ekran"""
+    """Bakım Kayıtlarının Listelendiği Saf Tablo Ekranı"""
     def __init__(self, api_url, token):
         super().__init__()
         self.api_url = api_url
@@ -233,22 +255,22 @@ class BakimYonetimEkrani(QWidget):
 
         layout.addLayout(ust_panel)
 
-        self.tablo = QTableWidget(0, 8) # Sütun sayısını 8 yaptık
-        self.tablo.setHorizontalHeaderLabels(["ID", "Cihaz", "Yapan Kişi", "İşlem", "Maliyet", "Bakım Tarihi", "Sonraki Bakım", "İşlem"])
+        # Tabloya Başlangıç ve Bitiş Sütunları Eklendi (Toplam 9 Sütun)
+        self.tablo = QTableWidget(0, 9) 
+        self.tablo.setHorizontalHeaderLabels(["ID", "Cihaz", "Yapan Kişi", "İşlem", "Maliyet", "Başlangıç", "Bitiş", "Sonraki Bakım", "İşlem"])
         
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.tablo.horizontalHeader().setStretchLastSection(False) 
         
-        self.tablo.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch) 
-        self.tablo.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        # Hizalamayı Jilet Gibi Yapan Esneme Ayarları
+        self.tablo.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch) # İşlem sütunu uzasın
+        self.tablo.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents) # Başlangıç daralsın
+        self.tablo.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents) # Bitiş daralsın
+        self.tablo.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents) # Sonraki Bakım daralsın
         
         self.tablo.setWordWrap(True)
         self.tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        
-        # --- İŞTE BUTONU KURTARAN KOD BURASI ---
-        # Satır boyu metne göre uzayabilir ama ASLA 50 pikselin altına inemez!
         self.tablo.verticalHeader().setMinimumSectionSize(50) 
-        
         self.tablo.verticalHeader().setVisible(False)
 
         self.tablo.setAlternatingRowColors(True)
@@ -265,7 +287,6 @@ class BakimYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(0, 70)
         self.tablo.setColumnWidth(1, 180)
         self.tablo.setColumnWidth(2, 100)
-        self.tablo.setColumnWidth(3, 130)
         self.tablo.setColumnWidth(4, 110)
 
         self.verileri_yukle()
@@ -279,41 +300,48 @@ class BakimYonetimEkrani(QWidget):
                 bakimlar = res.json()
                 for satir_indeks, b in enumerate(bakimlar):
                     self.tablo.insertRow(satir_indeks)
-                    self.bakim_detaylari[b["bakim_id"]] = b # Tüm satır verisini hafızaya alıyoruz
+                    self.bakim_detaylari[b["bakim_id"]] = b 
                     
                     id_item = QTableWidgetItem(str(b["bakim_id"]))
                     id_item.setTextAlignment(Qt.AlignCenter)
                     
-                    temiz_tarih = b["bakim_tarihi"][:10]
-                    tarih_item = QTableWidgetItem(temiz_tarih)
-                    tarih_item.setTextAlignment(Qt.AlignCenter)
-                    
-                    maliyet_degeri = float(b['maliyet'])
+                    maliyet_degeri = float(b.get('maliyet', 0.0))
                     maliyet_metni = f"{maliyet_degeri:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                     maliyet_item = QTableWidgetItem(f"{maliyet_metni} ₺")
                     maliyet_item.setTextAlignment(Qt.AlignCenter)
 
-                    self.tablo.setItem(satir_indeks, 0, id_item)
-                    self.tablo.setItem(satir_indeks, 1, QTableWidgetItem(b["cihaz_adi"]))
-                    self.tablo.setItem(satir_indeks, 2, tarih_item)
-                    self.tablo.setItem(satir_indeks, 3, QTableWidgetItem(b["bakim_yapan_kisi"]))
-                    self.tablo.setItem(satir_indeks, 4, maliyet_item)
-                    self.tablo.setItem(satir_indeks, 5, QTableWidgetItem(b["yapilan_islem"]))
+                    # --- GÜVENLİ TARİH OKUMA (None veya boş gelirse patlamaz) ---
+                    baslangic = b.get("bakim_baslangic_tarihi")
+                    baslangic_metni = baslangic[:10] if baslangic else str(b.get("bakim_tarihi", "Belirtilmedi"))[:10]
                     
-                    # YENİ EKLENDİ: Sonraki Bakım Tarihi (6. Sütun)
-                    sonraki_tarih = b.get("sonraki_bakim_tarihi", "Belirtilmedi")
-                    sonraki_tarih_metni = sonraki_tarih[:10] if sonraki_tarih != "Belirtilmedi" else "Belirtilmedi"
+                    bitis = b.get("bakim_bitis_tarihi")
+                    bitis_metni = bitis[:10] if bitis else "Belirtilmedi"
+
+                    sonraki = b.get("sonraki_bakim_tarihi")
+                    sonraki_metni = sonraki[:10] if sonraki else "Belirtilmedi"
+
+                    baslangic_item = QTableWidgetItem(baslangic_metni)
+                    baslangic_item.setTextAlignment(Qt.AlignCenter)
                     
-                    sonraki_item = QTableWidgetItem(sonraki_tarih_metni)
+                    bitis_item = QTableWidgetItem(bitis_metni)
+                    bitis_item.setTextAlignment(Qt.AlignCenter)
+                    
+                    sonraki_item = QTableWidgetItem(sonraki_metni)
                     sonraki_item.setTextAlignment(Qt.AlignCenter)
-                    self.tablo.setItem(satir_indeks, 6, sonraki_item)
+
+                    # Hücreleri sıfır hata ile yerleştiriyoruz
+                    self.tablo.setItem(satir_indeks, 0, id_item)
+                    self.tablo.setItem(satir_indeks, 1, QTableWidgetItem(b.get("cihaz_adi", "")))
+                    self.tablo.setItem(satir_indeks, 2, QTableWidgetItem(b.get("bakim_yapan_kisi", "")))
+                    self.tablo.setItem(satir_indeks, 3, QTableWidgetItem(b.get("yapilan_islem", "")))
+                    self.tablo.setItem(satir_indeks, 4, maliyet_item)
+                    self.tablo.setItem(satir_indeks, 5, baslangic_item)
+                    self.tablo.setItem(satir_indeks, 6, bitis_item)
+                    self.tablo.setItem(satir_indeks, 7, sonraki_item)
                     
-                    # --- DÜZENLE BUTONU EKLENİYOR (7. Sütun) ---
+                    # Düzenle Butonu (8. Sütun)
                     btn_duz = QPushButton("✎ Düzenle")
-                    btn_duz.setStyleSheet("""
-                        QPushButton { background-color: #F39C12; color: white; border-radius: 4px; padding: 5px; font-weight: bold; font-size: 11px; }
-                        QPushButton:hover { background-color: #D68910; }
-                    """)
+                    btn_duz.setStyleSheet("QPushButton { background-color: #F39C12; color: white; border-radius: 4px; padding: 5px; font-weight: bold; font-size: 11px; } QPushButton:hover { background-color: #D68910; }")
                     btn_duz.setCursor(Qt.PointingHandCursor)
                     btn_duz.clicked.connect(lambda checked=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id))
                     
@@ -323,18 +351,18 @@ class BakimYonetimEkrani(QWidget):
                     btn_layout.setAlignment(Qt.AlignCenter)
                     btn_layout.addWidget(btn_duz)
                     
-                    # Butonu olması gerektiği gibi 7. sütuna yerleştiriyoruz!
-                    self.tablo.setCellWidget(satir_indeks, 7, btn_widget)
+                    self.tablo.setCellWidget(satir_indeks, 8, btn_widget)
         except Exception as e:
-            pass
+            print("Tablo yükleme hatası:", e)
+
     def yeni_bakim_ekle(self):
         form = YeniBakimFormu(self.api_url, self.token, self)
         if form.exec():
-            self.verileri_yukle() # Yenileme işlemi form kapandığında otomatik çalışır
+            self.verileri_yukle() 
             
     def bakim_duzenle_ac(self, bakim_id):
         secili_bakim = self.bakim_detaylari.get(bakim_id)
         if secili_bakim:
             form = BakimDuzenleFormu(self.api_url, self.token, secili_bakim, self)
             if form.exec():
-                self.verileri_yukle() # Düzenleme bittiğinde tabloyu otomatik yenile
+                self.verileri_yukle()
