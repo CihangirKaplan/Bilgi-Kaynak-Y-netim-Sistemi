@@ -1234,10 +1234,11 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # SQL Sorgusuna b.sonraki_bakim_tarihi eklendi
         cursor.execute("""
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
-                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, b.bakim_tarihi, b.sonraki_bakim_tarihi
+                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, 
+                   b.bakim_tarihi, b.sonraki_bakim_tarihi,
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.bakim_tarihi DESC;
@@ -1252,7 +1253,9 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
                 "yapilan_islem": k[4],
                 "maliyet": float(k[5]) if k[5] else 0.0,
                 "bakim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
-                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi")
+                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi"),
+                "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
+                "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi")
             }
             for k in kayitlar
         ]
@@ -1270,14 +1273,25 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # INSERT sorgusuna sonraki_bakim_tarihi eklendi
+        # DİKKAT: Veritabanında eski "bakim_tarihi" zorunlu alan (NOT NULL) olabilir diye, 
+        # garanti olsun diye başlangıç tarihini oraya da basıyoruz.
         cursor.execute("""
-            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, sonraki_bakim_tarihi)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING bakim_id;
-        """, (bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, bakim.bakim_tarihi, bakim.sonraki_bakim_tarihi))
+            INSERT INTO cihaz_bakimlari (
+                cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, 
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+        """, (
+            bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, 
+            bakim.bakim_baslangic_tarihi, bakim.bakim_baslangic_tarihi, bakim.bakim_bitis_tarihi, bakim.sonraki_bakim_tarihi
+        ))
         bakim_id = cursor.fetchone()[0]
 
-        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        except ImportError:
+            pass
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
@@ -3247,10 +3261,12 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # SQL Sorgusuna b.sonraki_bakim_tarihi eklendi
+        # EKSİK OLAN KISIM: SQL sorgusuna b.bakim_baslangic_tarihi ve b.bakim_bitis_tarihi EKLENDİ
         cursor.execute("""
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
-                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, b.bakim_tarihi, b.sonraki_bakim_tarihi
+                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, 
+                   b.bakim_tarihi, b.sonraki_bakim_tarihi,
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.bakim_tarihi DESC;
@@ -3265,7 +3281,11 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
                 "yapilan_islem": k[4],
                 "maliyet": float(k[5]) if k[5] else 0.0,
                 "bakim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
-                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi")
+                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi"),
+                
+                # EKSİK OLAN KISIM: JSON sözlüğüne başlangıç ve bitiş eklendi (eski kayıtlarda null gelirse bakim_tarihi kurtarır)
+                "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
+                "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi")
             }
             for k in kayitlar
         ]
@@ -3283,14 +3303,29 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # INSERT sorgusuna sonraki_bakim_tarihi eklendi
         cursor.execute("""
-            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, sonraki_bakim_tarihi)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING bakim_id;
-        """, (bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, bakim.bakim_tarihi, bakim.sonraki_bakim_tarihi))
+            INSERT INTO cihaz_bakimlari (
+                cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, 
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+        """, (
+            bakim.cihaz_id, 
+            bakim.bakim_yapan_kisi, 
+            bakim.yapilan_islem, 
+            bakim.maliyet, 
+            bakim.bakim_tarihi,           # Buradaki eşleşme düzeltildi
+            bakim.bakim_baslangic_tarihi, 
+            bakim.bakim_bitis_tarihi, 
+            bakim.sonraki_bakim_tarihi
+        ))
         bakim_id = cursor.fetchone()[0]
 
-        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        except ImportError:
+            pass
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
