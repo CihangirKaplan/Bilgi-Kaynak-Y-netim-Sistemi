@@ -2,23 +2,31 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QC
 import requests
 
 # Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
-from ogrenci_dialog import OgrenciEkleDialog 
+from ogrenci_dialog import OgrenciEkleDialog
 
 class FaaliyetEkleDialog(QDialog):
-    def __init__(self, api_url, token, parent=None):
+    # DİKKAT: __init__ içine mevcut_veri=None ekledik!
+    def __init__(self, api_url, token, parent=None, mevcut_veri=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
-        self.setWindowTitle("Öğrenci Faaliyet Kaydı")
+        self.mevcut_veri = mevcut_veri  # Gelen veriyi sınıfın hafızasına alıyoruz
+        
+        # Başlığı moda göre ayarlıyoruz
+        if self.mevcut_veri:
+            self.setWindowTitle("Öğrenci Faaliyetini Düzenle")
+        else:
+            self.setWindowTitle("Öğrenci Faaliyet Kaydı")
+            
         self.setMinimumWidth(450)
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
-            QComboBox, QSpinBox { 
-                background-color: white; 
-                color: #2C3E50; 
-                padding: 6px; 
-                border: 1px solid #BDC3C7; 
-                border-radius: 4px; 
+            QComboBox, QSpinBox {
+                background-color: white;
+                color: #2C3E50;
+                padding: 6px;
+                border: 1px solid #BDC3C7;
+                border-radius: 4px;
             }
             QComboBox:focus, QSpinBox:focus {
                 border: 1px solid #3498DB;
@@ -26,7 +34,7 @@ class FaaliyetEkleDialog(QDialog):
             }
             QPushButton { background-color: #2980B9; color: white; font-weight: bold; padding: 8px; border-radius: 4px; }
             QPushButton:hover { background-color: #3498DB; }
-            
+
             /* Yeni eklediğimiz küçük yeşil butonun özel stili */
             QPushButton#btnYeniOgr { background-color: #27AE60; padding: 5px; font-size: 12px; }
             QPushButton#btnYeniOgr:hover { background-color: #2ECC71; }
@@ -35,14 +43,17 @@ class FaaliyetEkleDialog(QDialog):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
 
-        # Öğrenci Seçimi ve Yeni Öğrenci Ekleme Butonu
         ogr_layout = QHBoxLayout()
         self.cb_ogrenci = QComboBox()
-        
+
         self.btn_yeni_ogrenci = QPushButton("➕ Yeni Öğrenci Ekle")
         self.btn_yeni_ogrenci.setObjectName("btnYeniOgr")
         self.btn_yeni_ogrenci.clicked.connect(self.yeni_ogrenci_ekle_formunu_ac)
-        
+
+        # Düzenleme modundaysak, karışıklık olmasın diye "Yeni Öğrenci Ekle" butonunu gizleyebiliriz
+        if self.mevcut_veri:
+            self.btn_yeni_ogrenci.hide()
+            
         ogr_layout.addWidget(self.cb_ogrenci, stretch=3)
         ogr_layout.addWidget(self.btn_yeni_ogrenci, stretch=1)
 
@@ -58,7 +69,9 @@ class FaaliyetEkleDialog(QDialog):
 
         layout.addLayout(form_layout)
 
-        self.btn_kaydet = QPushButton("Kaydet")
+        # Buton ismini moda göre ayarlıyoruz
+        buton_metni = "Güncelle" if self.mevcut_veri else "Kaydet"
+        self.btn_kaydet = QPushButton(buton_metni)
         self.btn_kaydet.clicked.connect(self.kaydet_tiklandi)
         layout.addWidget(self.btn_kaydet)
 
@@ -78,7 +91,7 @@ class FaaliyetEkleDialog(QDialog):
 
     def verileri_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
-        
+
         self.ogrencileri_yukle()
 
         try:
@@ -98,6 +111,29 @@ class FaaliyetEkleDialog(QDialog):
                     self.cb_birim.addItem(b["ad"], b["id"])
         except Exception as e:
             print("Birimler yüklenemedi:", e)
+
+        # --- YENİ: EĞER DÜZENLEME MODUNDAYSAK COMBOKUTULARINI ESKİ VERİYLE DOLDUR ---
+        if hasattr(self, 'mevcut_veri') and self.mevcut_veri:
+            # 1. Öğrenciyi seç
+            for i in range(self.cb_ogrenci.count()):
+                if self.mevcut_veri["ogrenci_adi"] in self.cb_ogrenci.itemText(i):
+                    self.cb_ogrenci.setCurrentIndex(i)
+                    break
+            
+            # 2. Faaliyeti seç
+            for i in range(self.cb_faaliyet.count()):
+                if self.cb_faaliyet.itemText(i).startswith(self.mevcut_veri["faaliyet_adi"]):
+                    self.cb_faaliyet.setCurrentIndex(i)
+                    break
+                    
+            # 3. Birimi seç
+            for i in range(self.cb_birim.count()):
+                if self.mevcut_veri["birim_adi"] in self.cb_birim.itemText(i):
+                    self.cb_birim.setCurrentIndex(i)
+                    break
+                    
+            # 4. Miktarı yaz
+            self.sb_miktar.setValue(int(self.mevcut_veri["miktar"]))
 
     def yeni_ogrenci_ekle_formunu_ac(self):
         dialog = OgrenciEkleDialog(self.api_url, self.token, self)
@@ -121,20 +157,31 @@ class FaaliyetEkleDialog(QDialog):
             "birim_id": birim_id,
             "miktar": miktar
         }
-        
+
         try:
             headers = {"Authorization": f"Bearer {self.token}"}
-            res = requests.post(f"{self.api_url}/api/faaliyet-kayitlari", json=payload, headers=headers)
+            
+            if hasattr(self, 'mevcut_veri') and self.mevcut_veri:
+                # EĞER DÜZENLEME MODUYSA PUT (GÜNCELLEME) İSTEĞİ AT
+                takip_id = str(self.mevcut_veri["takip_id"]).strip() # Görünmez boşlukları temizle
+                hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}" # Adresi güvenli hale getir
+                
+                print(f"--- GÜNCELLEME İSTEĞİ ATIYORUZ ---")
+                print(f"Gidilen Adres: {hedef_url}")
+                
+                res = requests.put(hedef_url, json=payload, headers=headers)
+            else:
+                # EĞER NORMAL MODSA POST (YENİ EKLEME) İSTEĞİ AT
+                res = requests.post(f"{self.api_url}/api/faaliyet-kayitlari", json=payload, headers=headers)
             
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", res.json().get("mesaj", "Faaliyet başarıyla kaydedildi!"))
+                QMessageBox.information(self, "Başarılı", res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
                 self.accept()
             else:
-                # Sunucunun gönderdiği asıl hatayı ekrana bastırıyoruz
                 try:
                     hata_detayi = res.json().get("detail", res.text)
                 except:
                     hata_detayi = res.text
-                QMessageBox.critical(self, "Hata", f"Kayıt işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+                QMessageBox.critical(self, "Hata", f"İşlem başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")

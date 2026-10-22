@@ -8,16 +8,16 @@ class OgrenciEkleDialog(QDialog):
         self.token = token
         self.setWindowTitle("Yeni Öğrenci Ekle")
         self.setMinimumWidth(400)
-        
+
         # Bembeyaz ve şık form tasarımı
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
-            QLineEdit, QComboBox, QSpinBox { 
-                background-color: white; 
-                color: #2C3E50; 
-                padding: 6px; 
-                border: 1px solid #BDC3C7; 
-                border-radius: 4px; 
+            QLineEdit, QComboBox, QSpinBox {
+                background-color: white;
+                color: #2C3E50;
+                padding: 6px;
+                border: 1px solid #BDC3C7;
+                border-radius: 4px;
             }
             QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
                 border: 1px solid #3498DB;
@@ -32,11 +32,11 @@ class OgrenciEkleDialog(QDialog):
 
         # Form Elemanları ve Kısıtlamalar
         self.le_ad_soyad = QLineEdit()
-        
+
         self.le_ogrenci_no = QLineEdit()
         self.le_ogrenci_no.setMaxLength(15)
         self.le_ogrenci_no.setPlaceholderText("Örn: 23100011036")
-        
+
         self.cb_tur = QComboBox()
         self.cb_tur.addItem("Gönüllü Öğrenci", "GONULLU")
         self.cb_tur.addItem("Danışma Masası Öğrencisi", "DANISMA_MASASI")
@@ -45,7 +45,7 @@ class OgrenciEkleDialog(QDialog):
         self.le_telefon = QLineEdit()
         self.le_telefon.setMaxLength(11)
         self.le_telefon.setPlaceholderText("Örn: 05551234567")
-        
+
         self.le_bolum = QLineEdit()
         self.le_sinif = QLineEdit()
 
@@ -103,7 +103,7 @@ class OgrenciEkleDialog(QDialog):
         try:
             headers = {"Authorization": f"Bearer {self.token}"}
             res = requests.post(f"{self.api_url}/api/ogrenci-ekle", json=payload, headers=headers)
-            
+
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Öğrenci sisteme başarıyla eklendi!")
                 self.accept()
