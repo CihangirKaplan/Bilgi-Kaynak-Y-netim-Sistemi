@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QSpinBox, QPushButton, QMessageBox
 import requests
 
-from ogrenci_dialog import OgrenciEkleDialog 
+# Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
+from ogrenci_dialog import OgrenciEkleDialog
 
 class FaaliyetEkleDialog(QDialog):
     # DİKKAT: __init__ içine mevcut_veri=None ekledik!
@@ -20,12 +21,12 @@ class FaaliyetEkleDialog(QDialog):
         self.setMinimumWidth(450)
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
-            QComboBox, QSpinBox { 
-                background-color: white; 
-                color: #2C3E50; 
-                padding: 6px; 
-                border: 1px solid #BDC3C7; 
-                border-radius: 4px; 
+            QComboBox, QSpinBox {
+                background-color: white;
+                color: #2C3E50;
+                padding: 6px;
+                border: 1px solid #BDC3C7;
+                border-radius: 4px;
             }
             QComboBox:focus, QSpinBox:focus {
                 border: 1px solid #3498DB;
@@ -33,7 +34,8 @@ class FaaliyetEkleDialog(QDialog):
             }
             QPushButton { background-color: #2980B9; color: white; font-weight: bold; padding: 8px; border-radius: 4px; }
             QPushButton:hover { background-color: #3498DB; }
-            
+
+            /* Yeni eklediğimiz küçük yeşil butonun özel stili */
             QPushButton#btnYeniOgr { background-color: #27AE60; padding: 5px; font-size: 12px; }
             QPushButton#btnYeniOgr:hover { background-color: #2ECC71; }
         """)
@@ -43,11 +45,11 @@ class FaaliyetEkleDialog(QDialog):
 
         ogr_layout = QHBoxLayout()
         self.cb_ogrenci = QComboBox()
-        
+
         self.btn_yeni_ogrenci = QPushButton("➕ Yeni Öğrenci Ekle")
         self.btn_yeni_ogrenci.setObjectName("btnYeniOgr")
         self.btn_yeni_ogrenci.clicked.connect(self.yeni_ogrenci_ekle_formunu_ac)
-        
+
         # Düzenleme modundaysak, karışıklık olmasın diye "Yeni Öğrenci Ekle" butonunu gizleyebiliriz
         if self.mevcut_veri:
             self.btn_yeni_ogrenci.hide()
@@ -89,7 +91,7 @@ class FaaliyetEkleDialog(QDialog):
 
     def verileri_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
-        
+
         self.ogrencileri_yukle()
 
         try:
@@ -155,7 +157,7 @@ class FaaliyetEkleDialog(QDialog):
             "birim_id": birim_id,
             "miktar": miktar
         }
-        
+
         try:
             headers = {"Authorization": f"Bearer {self.token}"}
             

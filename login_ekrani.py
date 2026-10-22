@@ -1,3 +1,4 @@
+import os
 import sys
 import requests
 from PySide6.QtWidgets import (
@@ -12,7 +13,7 @@ from sifre_degistir_ekrani import SifreDegistirEkrani
 # ======================================================================
 #  TEMA VE SABİTLER
 # ======================================================================
-API_URL = "http://127.0.0.1:8000" # Sunucu adresimiz
+API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000") # Sunucu adresimiz
 MAX_DENEME = 5
 KILIT_SANIYE = 30
 

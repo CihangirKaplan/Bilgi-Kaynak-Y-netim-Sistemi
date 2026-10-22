@@ -200,6 +200,7 @@ class ArizaGuncelleModeli(BaseModel):
     ariza_aciklama: str = Field(min_length=2)
     aciliyet: str # Düşük, Orta, Yüksek, Kritik
     cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
+
 # ADM-API-004: Personel Güncelleme İstek Modeli
 class PersonelGuncelleModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -225,6 +226,7 @@ class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = None
     gecerlilik_tarihi: Optional[date] = None
     sertifika_no: Optional[str] = None
+
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
 # ==========================================
 class BakimOlusturModeli(BaseModel):
@@ -257,11 +259,9 @@ class DashboardOzetModeli(BaseModel):
 class YaklasanIslemModeli(BaseModel):
     cihaz_adi: str
     islem_turu: str # 'Bakım' veya 'Kalibrasyon'
-    tarih: str
+    tاريخ: str
     kalan_gun: int
     durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
-
-from pydantic import BaseModel
 
 class FaaliyetKayitModeli(BaseModel):
     ogrenci_id: int
@@ -273,6 +273,6 @@ class OgrenciEkleModeli(BaseModel):
     ad_soyad: str
     ogrenci_numarasi: str
     telefon: Optional[str] = None
-    tur: Optional[str] = None
+    tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
     bolum: Optional[str] = None
     sinif: Optional[str] = None

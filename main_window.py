@@ -1,9 +1,10 @@
+import os
 import sys
 import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView,QTableWidgetItem
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem
 )
 from oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal
@@ -147,7 +148,7 @@ MENU = [
 #  3. KURUMSAL MAVİ TEMA
 # ======================================================================
 STIL = """
-* { font-family: 'Segoe UI', 'Inter', Arial; }
+- { font-family: 'Segoe UI', 'Inter', Arial; }
 QMainWindow { background: #EAF0FA; }
 QLabel { background: transparent; color: #0F2552; }
 
@@ -233,7 +234,7 @@ class AnaPencere(QMainWindow):
         self.kullanici_adi = kullanici_adi
         self.rol_onizleme = rol_onizleme
 
-        self.api_url = "http://127.0.0.1:8000"
+        self.api_url = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
         self.token = token
         self.kullanici_id = kullanici_id
 
@@ -256,8 +257,8 @@ class AnaPencere(QMainWindow):
         te_layout.setContentsMargins(0, 0, 0, 0)
         te_layout.setSpacing(0)
 
-        
-        # 1. Önce takvim sayfasını (widget) oluştur (SİLİNEN SATIR BUYDU)
+
+        # 1. Önce takvim sayfasını (widget) oluştur
         self.takvim_widget = HaftalikTakvimEkrani(api_url=self.api_url, token=self.token)
         # 2. Sonra takvimin içindeki yeni geri ok butonuna tıklama görevi ver
         self.takvim_widget.btn_ana_ekrana_don.clicked.connect(self.ana_ekrana_don)
@@ -658,18 +659,20 @@ class AnaPencere(QMainWindow):
             btn.setMinimumHeight(78)
             golge(btn, 22, 24, 4)
             btn.clicked.connect(lambda _=False, ad=oge["ad"]: self.nav_btnler[ad].click())
-# ... (Hızlı erişim butonlarını ekleyen döngü) ...
             hg.addWidget(btn, n // 4, n % 4)
         lay.addLayout(hg)
-        
-        # --- İŞTE BURAYA BİZİM YENİ DASHBOARD'U EKLİYORUZ ---
-        if self.aktif_rol in ["mudur", "admin", "memur"]:
-            self.istatistik_paneli = DashboardEkrani(self.api_url, self.token)
-            lay.addWidget(self.istatistik_paneli)
-            # ----------------------------------------------------
 
-            lay.addStretch()
-            return self.kaydirmali(govde)
+        # Dashboard istatistikleri yalnızca yetkili rollerde gösterilir.
+        if self.aktif_rol in ["mudur", "admin", "memur"]:
+            self.istatistik_paneli = DashboardEkrani(
+                self.api_url,
+                self.token
+            )
+            lay.addWidget(self.istatistik_paneli)
+
+        # Bu satırlar if bloğunun DIŞINDA olmalı.
+        lay.addStretch()
+        return self.kaydirmali(govde)
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
@@ -714,7 +717,7 @@ class AnaPencere(QMainWindow):
         lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
-        if yetkili:
+        if yetkili and oge["ad"] != "Danışma Masası":
             ab = QHBoxLayout()
             ab.setSpacing(12)
             for etiket, izin_kodu in yetkili:
@@ -747,6 +750,9 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(self.odayi_pasife_al)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
+                elif izin_kodu == "Danışma masası oturumunu yönetme":
+                    btn.clicked.connect(lambda: self.danisma_ekrani.yenile())
+
                 # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
                     btn.clicked.connect(self.yeni_bakim_ekrani_ac)
@@ -764,7 +770,15 @@ class AnaPencere(QMainWindow):
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
-        if oge["ad"] == "Cihaz Envanteri":
+        if oge["ad"] == "Danışma Masası":
+            from danisma_masasi_ekrani import DanismaMasasiEkrani
+            self.danisma_ekrani = DanismaMasasiEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.danisma_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
             self.aktif_cihaz_ekrani = CihazYonetimEkrani(
                 api_url=self.api_url,
@@ -774,11 +788,11 @@ class AnaPencere(QMainWindow):
             lay.addWidget(self.aktif_cihaz_ekrani, 1)
 
         elif oge["ad"] == "Kalibrasyon":
-         self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
-             api_url=self.api_url,
-             token=self.token
-         )
-         lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
+            self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
 
         elif oge["ad"] == "Cihaz Rezervasyonu":
             rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
@@ -888,12 +902,12 @@ class AnaPencere(QMainWindow):
                 }
             """)
             il.addWidget(self.tablo_faaliyetler)
-            
+
             # Tablo çizildiği an veriyi çekecek fonksiyonu çağırıyoruz
-            self.faaliyet_tablosunu_guncelle() 
-            
+            self.faaliyet_tablosunu_guncelle()
+
             lay.addWidget(ik, 1)
-        
+
         else:
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -910,7 +924,6 @@ class AnaPencere(QMainWindow):
             e3 = QLabel("Bu alan veritabanı katmanına bağlandığında kayıtlar tablo olarak görünecek.")
             e3.setObjectName("bosAlt")
             e3.setAlignment(Qt.AlignCenter)
-
 
             il.addWidget(e1)
             il.addWidget(e2)
@@ -966,20 +979,20 @@ class AnaPencere(QMainWindow):
     def faaliyet_tablosunu_guncelle(self):
         if not hasattr(self, 'tablo_faaliyetler'):
             return
-            
+
         self.tablo_faaliyetler.setRowCount(0)
-        
+
         try:
             import requests
             from PySide6.QtWidgets import QTableWidgetItem, QMessageBox
-            
+
             headers = {"Authorization": f"Bearer {self.token}"}
             res = requests.get(f"{self.api_url}/api/faaliyet-kayitlari", headers=headers)
-            
+
             if res.status_code == 200:
                 kayitlar = res.json()
                 self.tablo_faaliyetler.setRowCount(len(kayitlar))
-                
+
                 for satir_no, kayit in enumerate(kayitlar):
                     self.tablo_faaliyetler.setItem(satir_no, 0, QTableWidgetItem(str(kayit.get("id", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 1, QTableWidgetItem(str(kayit.get("ad_soyad", ""))))
@@ -988,7 +1001,7 @@ class AnaPencere(QMainWindow):
                     self.tablo_faaliyetler.setItem(satir_no, 4, QTableWidgetItem(str(kayit.get("miktar", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 5, QTableWidgetItem(f"{kayit.get('toplam_puan', '0')} Puan"))
                     self.tablo_faaliyetler.setItem(satir_no, 6, QTableWidgetItem(str(kayit.get("tarih", ""))))
-                    
+
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{str(e)}")
@@ -1126,6 +1139,7 @@ class AnaPencere(QMainWindow):
                     QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
             except Exception as e:
                 QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
