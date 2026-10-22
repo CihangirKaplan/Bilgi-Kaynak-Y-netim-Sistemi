@@ -57,7 +57,8 @@ IZIN_LISTESI = [
     ("Kullanıcı pasifleştirme",              "Kullanıcı & Denetim","HHEHHE"),
     ("Rol atama/değiştirme",                 "Kullanıcı & Denetim","HHEHHE"),
     ("Audit kayıtlarını inceleme",           "Kullanıcı & Denetim","HHEHHE"),
-    ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HEEEHE"),
+    ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
+    ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
 
     ("Yeni izin tanımlama",                  "Sistem Yönetimi",   "HHHHHE"),
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
