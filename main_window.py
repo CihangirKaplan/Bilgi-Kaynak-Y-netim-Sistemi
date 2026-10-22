@@ -148,7 +148,7 @@ MENU = [
 #  3. KURUMSAL MAVİ TEMA
 # ======================================================================
 STIL = """
-- { font-family: 'Segoe UI', 'Inter', Arial; }
+* { font-family: 'Segoe UI', 'Inter', Arial; }
 QMainWindow { background: #EAF0FA; }
 QLabel { background: transparent; color: #0F2552; }
 
@@ -764,6 +764,8 @@ class AnaPencere(QMainWindow):
                 elif "Faaliyet Sil" in etiket:
                     btn.clicked.connect(self.faaliyet_sil_tetikle)
                     btn.setStyleSheet("background-color: #E74C3C; color: white; font-weight: bold; border-radius: 4px;") # Kan kırmızı tehlike butonu
+                elif "Faaliyet Birimleri" in etiket:
+                    btn.clicked.connect(self.faaliyet_birimleri_ekrani_ac)
 
                 ab.addWidget(btn)
             ab.addStretch()
@@ -1140,6 +1142,12 @@ class AnaPencere(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
+    def faaliyet_birimleri_ekrani_ac(self):
+        # Az önce yazdığımız arayüz dosyasını çağırıyoruz
+        from birim_dialog import BirimYonetimDialog
+        dialog = BirimYonetimDialog(self.api_url, self.token, self)
+        dialog.exec()
+    
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
