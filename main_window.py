@@ -59,6 +59,7 @@ IZIN_LISTESI = [
     ("Audit kayıtlarını inceleme",           "Kullanıcı & Denetim","HHEHHE"),
     ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
     ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
+    ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
 
     ("Yeni izin tanımlama",                  "Sistem Yönetimi",   "HHHHHE"),
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
@@ -88,9 +89,18 @@ MENU = [
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
-        dict(ikon="🛎️", ad="Danışma Masası", izin="Danışma masası oturumunu yönetme",
-             aciklama="Danışma masası oturum yönetimi",
-             aksiyon=[("▶  Oturumu Yönet", "Danışma masası oturumunu yönetme")]),
+        dict(ikon="🛎️", ad="Danışma Masası",
+             izin="Danışma masası oturumunu yönetme",
+             aciklama="Görev başlatma, bitirme ve geçmiş görevler",
+             aksiyon=[]),
+        dict(ikon="📋", ad="Danışma Masası Yönetimi",
+             izin="Danışma masası yönetimi",
+             aciklama="Öğrencilerin görevlerini takip etme ve onaylama",
+             aksiyon=[]),
+        dict(ikon="📊", ad="Danışma Masası Raporları",
+             izin="Danışma masası raporlarını görüntüleme",
+             aciklama="Öğrencilerin çalışma süreleri ve görev raporları",
+             aksiyon=[]),
         dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
              aciklama="Faaliyet kayıtlarının düzenlenmesi",
              aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"), 
@@ -149,7 +159,7 @@ MENU = [
 #  3. KURUMSAL MAVİ TEMA
 # ======================================================================
 STIL = """
-- { font-family: 'Segoe UI', 'Inter', Arial; }
+* { font-family: 'Segoe UI', 'Inter', Arial; }
 QMainWindow { background: #EAF0FA; }
 QLabel { background: transparent; color: #0F2552; }
 
@@ -370,7 +380,7 @@ class AnaPencere(QMainWindow):
     def rol_uygula(self, rol):
         self.aktif_rol = rol
         info = ROL_BILGI[rol]
-        self.setWindowTitle(f"BKYS — Travma Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
+        self.setWindowTitle(f"TKYS — Travma Kaynak Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
         if self.kullanici_adi:
             self.lbl_rol_ad.setText(self.kullanici_adi)
             self.lbl_kullanici.setText(info["ad"])
@@ -714,7 +724,8 @@ class AnaPencere(QMainWindow):
         bl.addWidget(ikon)
         bl.addLayout(mt)
         bl.addStretch()
-        bl.addWidget(rozet, 0, Qt.AlignVCenter)
+        if oge["ad"] != "Danışma Masası":
+            bl.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
@@ -778,6 +789,26 @@ class AnaPencere(QMainWindow):
                 token=self.token
             )
             lay.addWidget(self.danisma_ekrani, 1)
+
+        elif oge["ad"] == "Danışma Masası Yönetimi":
+            from danisma_masasi_yonetimi import DanismaMasasiYonetimi
+
+            self.danisma_yonetim_ekrani = DanismaMasasiYonetimi(
+                api_url=self.api_url,
+                token=self.token
+            )
+
+            lay.addWidget(self.danisma_yonetim_ekrani, 1)
+
+        elif oge["ad"] == "Danışma Masası Raporları":
+            from danisma_masasi_raporlari import DanismaMasasiRaporlari
+
+            self.danisma_rapor_ekrani = DanismaMasasiRaporlari(
+                api_url=self.api_url,
+                token=self.token
+            )
+
+            lay.addWidget(self.danisma_rapor_ekrani, 1)
 
         elif oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
