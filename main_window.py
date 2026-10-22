@@ -103,7 +103,7 @@ MENU = [
              aksiyon=[]),
         dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
              aciklama="Faaliyet kayıtlarının düzenlenmesi",
-             aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"), 
+             aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
                       ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
                       ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
     ]),
@@ -776,6 +776,8 @@ class AnaPencere(QMainWindow):
                 elif "Faaliyet Sil" in etiket:
                     btn.clicked.connect(self.faaliyet_sil_tetikle)
                     btn.setStyleSheet("background-color: #E74C3C; color: white; font-weight: bold; border-radius: 4px;") # Kan kırmızı tehlike butonu
+                elif "Faaliyet Birimleri" in etiket:
+                    btn.clicked.connect(self.faaliyet_birimleri_ekrani_ac)
 
                 ab.addWidget(btn)
             ab.addStretch()
@@ -1048,14 +1050,14 @@ class AnaPencere(QMainWindow):
     def faaliyet_duzenle_tetikle(self):
         # 1. Buton bağlandıysa terminale bunu yazdıracak:
         print("--- DÜZENLE BUTONUNA BASILDI! ---")
-        
+
         # 2. Tabloyu bulamazsa sessizce kapanmayacak, bize bağıracak:
         if not hasattr(self, 'tablo_faaliyetler'):
             print("HATA: 'tablo_faaliyetler' adında bir tablo yok! Acaba tablonun adı başka bir şey mi?")
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Hata", "Tablo bulunamadı! Terminale bak.")
             return
-            
+
         secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
         if not secili_satirlar:
             from PySide6.QtWidgets import QMessageBox
@@ -1071,16 +1073,16 @@ class AnaPencere(QMainWindow):
             """)
             uyari.exec()
             return
-            
+
         satir = secili_satirlar[0].row()
         takip_id = self.tablo_faaliyetler.item(satir, 0).text()
         print(f"Seçilen satırın ID'si: {takip_id}") # ID'yi yakaladık mı görelim
-        
+
         # Miktar sütununda hem rakam hem birim var, onları parçalıyoruz
         miktar_hücresi = self.tablo_faaliyetler.item(satir, 4).text().split(" ")
         miktar_rakam = miktar_hücresi[0]
         birim_adi = miktar_hücresi[1] if len(miktar_hücresi) > 1 else ""
-        
+
         mevcut_veri = {
             "takip_id": takip_id,
             "ogrenci_adi": self.tablo_faaliyetler.item(satir, 1).text(),
@@ -1088,7 +1090,7 @@ class AnaPencere(QMainWindow):
             "miktar": miktar_rakam,
             "birim_adi": birim_adi
         }
-        
+
         from faaliyet_dialog import FaaliyetEkleDialog
         dialog = FaaliyetEkleDialog(self.api_url, self.token, self, mevcut_veri=mevcut_veri)
         if dialog.exec():
@@ -1097,9 +1099,9 @@ class AnaPencere(QMainWindow):
     def faaliyet_sil_tetikle(self):
         if not hasattr(self, 'tablo_faaliyetler'):
             return
-            
+
         secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
-        
+
         # 1. SATIR SEÇİLMEMİŞSE ÇIKACAK ŞIK UYARI
         if not secili_satirlar:
             from PySide6.QtWidgets import QMessageBox
@@ -1115,12 +1117,12 @@ class AnaPencere(QMainWindow):
             """)
             uyari.exec()
             return
-            
+
         satir = secili_satirlar[0].row()
         takip_id = str(self.tablo_faaliyetler.item(satir, 0).text()).strip()
         ogrenci_adi = self.tablo_faaliyetler.item(satir, 1).text()
         faaliyet_adi = self.tablo_faaliyetler.item(satir, 3).text()
-        
+
         # 2. EMİN MİSİN SORUSUNUN ŞIK VERSİYONU
         from PySide6.QtWidgets import QMessageBox
         soru = QMessageBox(self)
@@ -1138,17 +1140,17 @@ class AnaPencere(QMainWindow):
             QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; }
             QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
         """)
-        
+
         cevap = soru.exec()
-        
+
         if cevap == QMessageBox.Yes:
             import requests
             headers = {"Authorization": f"Bearer {self.token}"}
             hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}"
-            
+
             try:
                 res = requests.delete(hedef_url, headers=headers)
-                
+
                 if res.status_code == 200:
                     bilgi = QMessageBox(self)
                     bilgi.setWindowTitle("Başarılı")
@@ -1161,7 +1163,7 @@ class AnaPencere(QMainWindow):
                         QPushButton:hover { background-color: #2ECC71; }
                     """)
                     bilgi.exec()
-                    
+
                     self.faaliyet_tablosunu_guncelle() # Tabloyu yenile ki kayıt ekrandan kaybolsun
                 else:
                     try:
@@ -1171,6 +1173,12 @@ class AnaPencere(QMainWindow):
                     QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
             except Exception as e:
                 QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+
+    def faaliyet_birimleri_ekrani_ac(self):
+        # Az önce yazdığımız arayüz dosyasını çağırıyoruz
+        from birim_dialog import BirimYonetimDialog
+        dialog = BirimYonetimDialog(self.api_url, self.token, self)
+        dialog.exec()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

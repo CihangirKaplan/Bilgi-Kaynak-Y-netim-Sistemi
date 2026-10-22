@@ -227,23 +227,27 @@ class KalibrasyonGuncelleModeli(BaseModel):
     gecerlilik_tarihi: Optional[date] = None
     sertifika_no: Optional[str] = None
 
+# ==========================================
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
 # ==========================================
 class BakimOlusturModeli(BaseModel):
     cihaz_id: int
-    bakim_tarihi: date
+    bakim_tarihi: date  # <-- SİSTEMİN ÇÖKMESİNİ ENGELLEYEN EKSİK PARÇA
     bakim_yapan_kisi: str
     yapilan_islem: str
     maliyet: Optional[float] = 0.0
-    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
+    bakim_baslangic_tarihi: date
+    bakim_bitis_tarihi: date
+    sonraki_bakim_tarihi: Optional[date] = None
 
 class BakimGuncelleModeli(BaseModel):
-    bakim_tarihi: Optional[date] = None
+    bakim_tarihi: Optional[date] = None  # <-- DÜZENLEME İÇİN EKSİK PARÇA
     bakim_yapan_kisi: Optional[str] = None
     yapilan_islem: Optional[str] = None
     maliyet: Optional[float] = None
-    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
-
+    bakim_baslangic_tarihi: Optional[date] = None
+    bakim_bitis_tarihi: Optional[date] = None
+    sonraki_bakim_tarihi: Optional[date] = None
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
 # ==========================================
@@ -293,3 +297,9 @@ class DanismaGorevDuzenleModeli(BaseModel):
 
     baslangic_zamani: datetime.datetime
     bitis_zamani: datetime.datetime
+
+# ==========================================
+# SİSTEM YÖNETİMİ MODELLERİ (SYS)
+# ==========================================
+class FaaliyetBirimIslemModeli(BaseModel):
+    birim_adi: str = Field(min_length=1, max_length=50)
