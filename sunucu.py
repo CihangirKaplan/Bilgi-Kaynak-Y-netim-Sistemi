@@ -1370,9 +1370,11 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
+        # SQL Sorgusuna yeni sütunlar eklendi
         cursor.execute("""
             SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu,
-                   k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi
+                   k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi,
+                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             ORDER BY k.islem_tarihi DESC;
@@ -1386,7 +1388,10 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
                 "kalibrasyon_yapan_kurum": k[3],
                 "gecerlilik_tarihi": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]),
                 "sertifika_no": k[5],
-                "islem_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6])
+                "islem_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
+                # Yeni alanlar ve Fallback mantığı (Eski kayıtlarda null gelirse işlem tarihi baz alınır)
+                "kalibrasyon_baslangic_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
+                "kalibrasyon_bitis_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi")
             }
             for k in kayitlar
         ]
@@ -1396,6 +1401,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+
 @app.post("/api/kalibrasyonlar", status_code=201)
 def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
@@ -1404,14 +1410,28 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # islem_tarihi veritabanı tarafından otomatik veya backend'den eklenecek
+        # INSERT sorgusuna ve VALUES kısmına yeni sütunlar eklendi
         cursor.execute("""
-            INSERT INTO cihaz_kalibrasyonlari (cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi)
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP) RETURNING kalibrasyon_id;
-        """, (kalib.cihaz_id, kalib.kalibrasyon_yapan_kurum, kalib.gecerlilik_tarihi, kalib.sertifika_no))
+            INSERT INTO cihaz_kalibrasyonlari (
+                cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi,
+                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi
+            )
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s) RETURNING kalibrasyon_id;
+        """, (
+            kalib.cihaz_id, 
+            kalib.kalibrasyon_yapan_kurum, 
+            kalib.gecerlilik_tarihi, 
+            kalib.sertifika_no,
+            kalib.kalibrasyon_baslangic_tarihi, # EKLENDİ
+            kalib.kalibrasyon_bitis_tarihi      # EKLENDİ
+        ))
         kalibrasyon_id = cursor.fetchone()[0]
 
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+        except ImportError:
+            pass
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon başarıyla eklendi.", "kalibrasyon_id": kalibrasyon_id}
@@ -1421,7 +1441,6 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
-
 @app.put("/api/kalibrasyonlar/{kalibrasyon_id}")
 def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
