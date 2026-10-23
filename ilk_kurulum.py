@@ -22,7 +22,7 @@ TEST_KULLANICILARI = [
     {"k_adi": "memur", "sifre": "Memur.123", "rol": "MEMUR", "p_kodu": "PER-MEM-001"},
     {"k_adi": "mudur", "sifre": "Mudur.123", "rol": "MUDUR", "p_kodu": "PER-MUD-001"},
     {"k_adi": "ogrenci", "sifre": "Ogrenci.123", "rol": "DANISMA_OGRENCISI", "p_kodu": "PER-OGR-001"},
-    {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "ASISTAN", "p_kodu": "PER-AST-001"}
+    {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "PROJE_ASISTANI", "p_kodu": "PER-AST-001"}
 ]
 def ilk_kurulumu_yap():
     conn = None
