@@ -630,32 +630,13 @@ class AnaPencere(QMainWindow):
         erisilebilir = [o for _, og in MENU for o in og
                         if o["izin"] is not None and izin_var(rol, o["izin"])]
 
-        grid = QGridLayout()
-        grid.setSpacing(18)
-        kartlar = [
-            ("Aktif Rol", info["ad"], "Oturum sahibi"),
-            ("Erişilebilir Modül", str(len(erisilebilir)), "Menüde görünen modüller"),
-            ("Güvenlik Durumu", "Korumalı", "Güvenlik denetimi başarılı"),
-            ("Veritabanı", "Bağlı", "Senkronizasyon aktif"),
-        ]
-        for i, (bs, dg, al) in enumerate(kartlar):
-            k = kart_olustur()
-            kl = QVBoxLayout(k)
-            kl.setContentsMargins(22, 18, 22, 18)
-            kl.setSpacing(2)
-
-            l1 = QLabel(bs.upper())
-            l1.setObjectName("kartBaslik")
-            l2 = QLabel(dg)
-            l2.setObjectName("kartDeger")
-            l3 = QLabel(al)
-            l3.setObjectName("kartAlt")
-
-            kl.addWidget(l1)
-            kl.addWidget(l2)
-            kl.addWidget(l3)
-            grid.addWidget(k, 0, i)
-        lay.addLayout(grid)
+                # Randevu listesi her rolde, cihaz özeti yalnızca yetkili rollerde gösterilir.
+        self.istatistik_paneli = DashboardEkrani(
+            self.api_url,
+            self.token,
+            cihaz_ozeti=self.aktif_rol in ["mudur", "admin", "memur"]
+        )
+        lay.addWidget(self.istatistik_paneli)
 
         baslik = QLabel("Hızlı Erişim")
         baslik.setStyleSheet("font-size:17px; font-weight:800; color:#0A1F5C;")
@@ -673,13 +654,6 @@ class AnaPencere(QMainWindow):
             hg.addWidget(btn, n // 4, n % 4)
         lay.addLayout(hg)
 
-        # Dashboard istatistikleri yalnızca yetkili rollerde gösterilir.
-        if self.aktif_rol in ["mudur", "admin", "memur"]:
-            self.istatistik_paneli = DashboardEkrani(
-                self.api_url,
-                self.token
-            )
-            lay.addWidget(self.istatistik_paneli)
 
         # Bu satırlar if bloğunun DIŞINDA olmalı.
         lay.addStretch()

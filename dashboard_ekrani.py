@@ -1,133 +1,219 @@
+import datetime
 import requests
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QGridLayout, QLabel, 
-                               QTableWidget, QTableWidgetItem, QHeaderView, QFrame)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+                               QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
+                               QSizePolicy)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
+AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
+         "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+
+DURUM_METIN = {
+    "PLANLANDI": ("Planlandı", "#1D4ED8", "#DBEAFE"),
+    "TAMAMLANDI": ("Tamamlandı", "#15803D", "#DCFCE7"),
+    "IPTAL_EDILDI": ("İptal", "#B91C1C", "#FEE2E2"),
+}
+
+TABLO_STIL = """
+    QTableWidget { background: white; border: none; gridline-color: transparent;
+                   font-size: 13px; color: #0F2552; }
+    QTableWidget::item { padding: 6px; border-bottom: 1px solid #EEF2FA; }
+    QHeaderView::section { background: #F3F7FF; color: #6B7FA8; padding: 9px;
+                           font-size: 11px; font-weight: 800; border: none; }
+"""
+
+
+def _tablo_olustur(kolonlar, yukseklik):
+    tablo = QTableWidget(0, len(kolonlar))
+    tablo.setHorizontalHeaderLabels(kolonlar)
+    tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    tablo.verticalHeader().setVisible(False)
+    tablo.setEditTriggers(QTableWidget.NoEditTriggers)
+    tablo.setSelectionBehavior(QTableWidget.SelectRows)
+    tablo.setShowGrid(False)
+    tablo.setFixedHeight(yukseklik)
+    tablo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    tablo.setStyleSheet(TABLO_STIL)
+    return tablo
+
+
+def _item(metin, ortala=True, renk=None, arka=None, kalin=False):
+    item = QTableWidgetItem(metin)
+    if ortala:
+        item.setTextAlignment(Qt.AlignCenter)
+    if renk:
+        item.setForeground(QColor(renk))
+    if arka:
+        item.setBackground(QColor(arka))
+    if kalin:
+        f = item.font()
+        f.setBold(True)
+        item.setFont(f)
+    return item
+
+
 class DashboardEkrani(QWidget):
-    def __init__(self, api_url, token):
+    """Ana kontrol paneli gövdesi.
+
+    cihaz_ozeti=True  -> cihaz kartları + yaklaşan bakım/kalibrasyon tablosu da gösterilir
+                         (müdür, admin, memur).
+    Bugünkü randevu listesi her rolde gösterilir.
+    """
+
+    def __init__(self, api_url, token, cihaz_ozeti=True):
         super().__init__()
         self.api_url = api_url
         self.token = token
-        
-        # Ana Düzen
-        ana_layout = QVBoxLayout(self)
-        ana_layout.setContentsMargins(20, 20, 20, 20)
-        ana_layout.setSpacing(20)
+        self.cihaz_ozeti = cihaz_ozeti
+        self.basliklar = {"Authorization": f"Bearer {token}"}
 
-        # 1. BÖLÜM: ÜST İSTATİSTİK KARTLARI
-        kart_layout = QGridLayout()
-        kart_layout.setSpacing(15)
-        
+        ana = QVBoxLayout(self)
+        ana.setContentsMargins(0, 0, 0, 0)
+        ana.setSpacing(20)
+
+        # ---- 1. ÖZET KARTLARI ----
         self.lbl_degerler = {}
-        
-        # Kartlar: Başlık, JSON Anahtarı, Renk, Satır, Sütun
-        kartlar = [
-            ("Bugünkü Randevular", "bugunku_randevu_sayisi", "#3498DB", 0, 0),
-            ("Aktif Cihazlar", "aktif_cihaz", "#27AE60", 0, 1),
-            ("Bakımdaki Cihazlar", "bakimdaki_cihaz", "#F39C12", 0, 2),
-            ("Arızalı Cihazlar", "arizali_cihaz", "#E74C3C", 1, 0),
-            ("Açık Arızalar", "acik_ariza_sayisi", "#C0392B", 1, 1),
-            ("Toplam Cihaz", "toplam_cihaz", "#8E44AD", 1, 2)
-        ]
+        kartlar = [("BUGÜNKÜ RANDEVULAR", "bugunku_randevu_sayisi", "Bugün planlanan seans", "#1D4ED8")]
+        if cihaz_ozeti:
+            kartlar += [
+                ("KULLANILABİLİR CİHAZ", "aktif_cihaz", "Şu an kullanıma hazır", "#15803D"),
+                ("BAKIMDAKİ CİHAZ", "bakimdaki_cihaz", "Geçici olarak kullanılamaz", "#B45309"),
+                ("ARIZALI CİHAZ", "arizali_cihaz", "Onarım bekleyen", "#B91C1C"),
+                ("AÇIK ARIZA KAYDI", "acik_ariza_sayisi", "Çözülmemiş bildirim", "#B91C1C"),
+                ("TOPLAM CİHAZ", "toplam_cihaz", "Envanterdeki tüm cihazlar", "#6D28D9"),
+            ]
+        grid = QGridLayout()
+        grid.setSpacing(18)
+        for i, (baslik, anahtar, alt, renk) in enumerate(kartlar):
+            kart, lbl = self._kart(baslik, alt, renk)
+            self.lbl_degerler[anahtar] = lbl
+            grid.addWidget(kart, i // 3, i % 3)
+        for c in range(3):
+            grid.setColumnStretch(c, 1)
+        ana.addLayout(grid)
 
-        for baslik, anahtar, renk, r, c in kartlar:
-            kart, lbl_deger = self.kart_olustur(baslik, renk)
-            self.lbl_degerler[anahtar] = lbl_deger
-            kart_layout.addWidget(kart, r, c)
-            
-        ana_layout.addLayout(kart_layout)
+        # ---- 2. BUGÜNKÜ RANDEVULAR ----
+        bugun = datetime.date.today()
+        self.lbl_randevu_baslik = QLabel(
+            f"📅  Bugünkü Randevular  —  {bugun.day} {AYLAR[bugun.month - 1]} {bugun.year}")
+        self.tablo_randevu = _tablo_olustur(
+            ["SAAT", "DANIŞAN KODU", "PSİKOLOG", "ODA", "DURUM"], 220)
+        self.lbl_randevu_bos = QLabel("Bugün için kayıtlı randevu bulunmuyor.")
+        ana.addWidget(self._panel(self.lbl_randevu_baslik, self.tablo_randevu, self.lbl_randevu_bos))
 
-        # 2. BÖLÜM: YAKLAŞAN İŞLEMLER TABLOSU
-        lbl_tablo_baslik = QLabel("⚠️ Yaklaşan Bakımlar ve Kalibrasyonlar (Son 30 Gün)")
-        lbl_tablo_baslik.setStyleSheet("font-size: 16px; font-weight: bold; color: #2C3E50; margin-top: 15px;")
-        ana_layout.addWidget(lbl_tablo_baslik)
+        # ---- 3. YAKLAŞAN BAKIM / KALİBRASYON ----
+        if cihaz_ozeti:
+            self.tablo_islem = _tablo_olustur(
+                ["CİHAZ", "İŞLEM", "SON TARİH", "KALAN"], 200)
+            self.lbl_islem_bos = QLabel("Önümüzdeki 60 gün içinde bakım veya kalibrasyon yok.")
+            ana.addWidget(self._panel(
+                QLabel("🛠️  Yaklaşan Bakım ve Kalibrasyonlar  (önümüzdeki 60 gün)"),
+                self.tablo_islem, self.lbl_islem_bos))
 
-        self.tablo = QTableWidget(0, 4)
-        self.tablo.setHorizontalHeaderLabels(["Cihaz", "İşlem Türü", "Son Tarih", "Kalan Gün"])
-        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tablo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.tablo.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tablo.setSelectionBehavior(QTableWidget.SelectRows)
-
-        # --- İŞTE TABLOYU KURTARAN KODLAR ---
-        from PySide6.QtWidgets import QSizePolicy
-        self.tablo.setMinimumHeight(250) # Tablonun boyunu uzattık
-        self.tablo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # Aşağı doğru esnemesine izin verdik
-        # ------------------------------------
-
-        self.tablo.setStyleSheet("""
-            QTableWidget { background-color: white; border: 1px solid #BDC3C7; border-radius: 5px; }
-            QHeaderView::section { background-color: #34495E; color: white; padding: 8px; font-weight: bold; border: none; }
-        """)
-        ana_layout.addWidget(self.tablo)
-
-        # Sayfa açılır açılmaz verileri çeker
         self.verileri_yukle()
 
-    def kart_olustur(self, baslik, renk):
-        frame = QFrame()
-        frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: white; border-radius: 8px;
-                border-left: 6px solid {renk};
-                border-top: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB;
-            }}
-        """)
-        layout = QVBoxLayout(frame)
-        
-        lbl_baslik = QLabel(baslik)
-        lbl_baslik.setStyleSheet("font-size: 14px; color: #7F8C8D; font-weight: bold; border: none;")
-        
-        lbl_deger = QLabel("0")
-        lbl_deger.setStyleSheet(f"font-size: 28px; color: {renk}; font-weight: bold; border: none;")
-        lbl_deger.setAlignment(Qt.AlignLeft)
-        
-        layout.addWidget(lbl_baslik)
-        layout.addWidget(lbl_deger)
-        
-        return frame, lbl_deger
+    # ------------------------------------------------------------------
+    def _kart(self, baslik, alt, renk):
+        kart = QFrame()
+        kart.setObjectName("kart")
+        lay = QVBoxLayout(kart)
+        lay.setContentsMargins(22, 18, 22, 18)
+        lay.setSpacing(2)
+        l1 = QLabel(baslik)
+        l1.setObjectName("kartBaslik")
+        l2 = QLabel("–")
+        l2.setObjectName("kartDeger")
+        l2.setStyleSheet(f"font-size: 30px; font-weight: 800; color: {renk};")
+        l3 = QLabel(alt)
+        l3.setObjectName("kartAlt")
+        for w in (l1, l2, l3):
+            lay.addWidget(w)
+        return kart, l2
 
+    def _panel(self, baslik_lbl, tablo, bos_lbl):
+        panel = QFrame()
+        panel.setObjectName("kart")
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(22, 18, 22, 18)
+        lay.setSpacing(10)
+        baslik_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #0A1F5C;")
+        bos_lbl.setStyleSheet("font-size: 13px; color: #8A9BC0; padding: 24px;")
+        bos_lbl.setAlignment(Qt.AlignCenter)
+        bos_lbl.hide()
+        lay.addWidget(baslik_lbl)
+        lay.addWidget(tablo)
+        lay.addWidget(bos_lbl)
+        return panel
+
+    def _getir(self, yol):
+        yanit = requests.get(f"{self.api_url}{yol}", headers=self.basliklar, timeout=10)
+        yanit.raise_for_status()
+        return yanit.json()
+
+    # ------------------------------------------------------------------
     def verileri_yukle(self):
-        # 1. Özet Verilerini Çekip Kartlara Basma
+        if self.cihaz_ozeti:
+            self._ozet_yukle()
+        self._randevulari_yukle()
+        if self.cihaz_ozeti:
+            self._islemleri_yukle()
+
+    def _ozet_yukle(self):
         try:
-            res_ozet = requests.get(f"{self.api_url}/api/dashboard/ozet", headers={"Authorization": f"Bearer {self.token}"})
-            if res_ozet.status_code == 200:
-                veri = res_ozet.json()
-                for anahtar, lbl in self.lbl_degerler.items():
-                    lbl.setText(str(veri.get(anahtar, 0)))
+            veri = self._getir("/api/dashboard/ozet")
+            for anahtar, lbl in self.lbl_degerler.items():
+                lbl.setText(str(veri.get(anahtar, 0)))
         except Exception as e:
             print("Özet yükleme hatası:", e)
 
-        # 2. Yaklaşan İşlemleri Çekip Tabloya Basma
-        self.tablo.setRowCount(0)
+    def _randevulari_yukle(self):
+        self.tablo_randevu.setRowCount(0)
         try:
-            res_islem = requests.get(f"{self.api_url}/api/dashboard/yaklasan-islemler", headers={"Authorization": f"Bearer {self.token}"})
-            if res_islem.status_code == 200:
-                islemler = res_islem.json()
-                
-                # TABLOYU DOLDURMA MANTIĞI SAĞLAMA ALINDI
-                self.tablo.setRowCount(len(islemler))
-                
-                for i, islem in enumerate(islemler):
-                    item_cihaz = QTableWidgetItem(islem["cihaz_adi"])
-                    item_turu = QTableWidgetItem(islem["islem_turu"])
-                    item_turu.setTextAlignment(Qt.AlignCenter)
-                    item_tarih = QTableWidgetItem(islem["tarih"])
-                    item_tarih.setTextAlignment(Qt.AlignCenter)
-                    item_kalan = QTableWidgetItem(f"{islem['kalan_gun']} Gün")
-                    item_kalan.setTextAlignment(Qt.AlignCenter)
-
-                    arkaplan = QColor("#FADBD8") if islem["durum_kodu"] == "KRITIK" else QColor("#FCF3CF")
-                    metin_renk = QColor("#922B21") if islem["durum_kodu"] == "KRITIK" else QColor("#9A7D0A")
-
-                    for item in (item_cihaz, item_turu, item_tarih, item_kalan):
-                        item.setBackground(arkaplan)
-                        item.setForeground(metin_renk)
-                        
-                    self.tablo.setItem(i, 0, item_cihaz)
-                    self.tablo.setItem(i, 1, item_turu)
-                    self.tablo.setItem(i, 2, item_tarih)
-                    self.tablo.setItem(i, 3, item_kalan)
+            randevular = self._getir("/api/dashboard/bugunku-randevular")
         except Exception as e:
-            print("Tablo yükleme hatası:", e) # Sessizce yutmasını engelledik!
+            print("Randevu listesi yükleme hatası:", e)
+            self.lbl_degerler["bugunku_randevu_sayisi"].setText("?")
+            self.lbl_randevu_bos.setText("Randevular yüklenemedi.")
+            self.lbl_randevu_bos.show()
+            self.tablo_randevu.hide()
+            return
+
+        aktif = [r for r in randevular if r["durum"] != "IPTAL_EDILDI"]
+        self.lbl_degerler["bugunku_randevu_sayisi"].setText(str(len(aktif)))
+
+        self.lbl_randevu_bos.setText("Bugün için kayıtlı randevu bulunmuyor.")
+        self.lbl_randevu_bos.setVisible(not randevular)
+        self.tablo_randevu.setVisible(bool(randevular))
+        self.tablo_randevu.setRowCount(len(randevular))
+        for i, r in enumerate(randevular):
+            iptal = r["durum"] == "IPTAL_EDILDI"
+            gri = "#9CA3AF" if iptal else None
+            metin, renk, arka = DURUM_METIN.get(r["durum"], (r["durum"], "#374151", "#F3F4F6"))
+            self.tablo_randevu.setItem(i, 0, _item(f"{r['baslangic']} – {r['bitis']}", renk=gri, kalin=not iptal))
+            self.tablo_randevu.setItem(i, 1, _item(r["danisan_kod_id"], renk=gri))
+            self.tablo_randevu.setItem(i, 2, _item(r["psikolog"], renk=gri))
+            self.tablo_randevu.setItem(i, 3, _item(r["oda"], renk=gri))
+            self.tablo_randevu.setItem(i, 4, _item(metin, renk=renk, arka=arka, kalin=True))
+        self.tablo_randevu.setFixedHeight(min(44 + 38 * len(randevular), 420))
+
+    def _islemleri_yukle(self):
+        self.tablo_islem.setRowCount(0)
+        try:
+            islemler = self._getir("/api/dashboard/yaklasan-islemler")
+        except Exception as e:
+            print("Yaklaşan işlemler yükleme hatası:", e)
+            return
+        self.lbl_islem_bos.setVisible(not islemler)
+        self.tablo_islem.setVisible(bool(islemler))
+        self.tablo_islem.setRowCount(len(islemler))
+        self.tablo_islem.setFixedHeight(min(44 + 38 * len(islemler), 420))
+        for i, islem in enumerate(islemler):
+            kritik = islem["durum_kodu"] == "KRITIK"
+            arka = "#FEE2E2" if kritik else "#FEF9C3"
+            renk = "#991B1B" if kritik else "#854D0E"
+            kalan = "Bugün" if islem["kalan_gun"] == 0 else f"{islem['kalan_gun']} gün"
+            self.tablo_islem.setItem(i, 0, _item(islem["cihaz_adi"], ortala=False))
+            self.tablo_islem.setItem(i, 1, _item(islem["islem_turu"]))
+            self.tablo_islem.setItem(i, 2, _item(islem["tarih"]))
+            self.tablo_islem.setItem(i, 3, _item(kalan, renk=renk, arka=arka, kalin=True))
