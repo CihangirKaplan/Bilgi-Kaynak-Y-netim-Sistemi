@@ -13,7 +13,7 @@ class YeniKalibrasyonFormu(QDialog):
         self.token = token
         
         self.setWindowTitle("🎯 Yeni Kalibrasyon Kaydı Ekle")
-        self.setMinimumSize(450, 350)
+        self.setMinimumSize(450, 420)
         
         self.setObjectName("KalibrasyonKutusu")
         self.setStyleSheet("""
@@ -40,9 +40,18 @@ class YeniKalibrasyonFormu(QDialog):
         self.dt_gecerlilik = QDateEdit(QDate.currentDate().addYears(1))
         self.dt_gecerlilik.setCalendarPopup(True)
 
+        # --- YENİ EKLENEN TARİHLER ---
+        self.dt_baslangic = QDateEdit(QDate.currentDate())
+        self.dt_baslangic.setCalendarPopup(True)
+        
+        self.dt_bitis = QDateEdit(QDate.currentDate())
+        self.dt_bitis.setCalendarPopup(True)
+
         form.addRow("Cihaz (*):", self.cmb_cihaz)
         form.addRow("Yapan Kurum (*):", self.txt_kurum)
         form.addRow("Sertifika No (*):", self.txt_sertifika)
+        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
+        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
         form.addRow("Geçerlilik Tarihi (*):", self.dt_gecerlilik)
         layout.addLayout(form)
 
@@ -71,7 +80,10 @@ class YeniKalibrasyonFormu(QDialog):
             "cihaz_id": self.cmb_cihaz.currentData(),
             "kalibrasyon_yapan_kurum": self.txt_kurum.text().strip(),
             "sertifika_no": self.txt_sertifika.text().strip(),
-            "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd")
+            "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
+            # YENİ EKLENEN VERİLER
+            "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd")
         }
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
             QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
@@ -83,9 +95,11 @@ class YeniKalibrasyonFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "✅ Kalibrasyon başarıyla eklendi!")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", "Kayıt yapılamadı.")
-        except Exception:
-            QMessageBox.critical(self, "Hata", "Sunucu hatası.")
+                # Hatayı gizlemiyoruz, ekrana basıyoruz!
+                hata_mesaji = res.json().get("detail", "Kayıt yapılamadı.")
+                QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class KalibrasyonDuzenleFormu(QDialog):
     def __init__(self, api_url, token, veri, parent=None):
@@ -95,7 +109,7 @@ class KalibrasyonDuzenleFormu(QDialog):
         self.k_veri = veri
         
         self.setWindowTitle("🎯 Kalibrasyon Düzenle")
-        self.setMinimumSize(450, 350)
+        self.setMinimumSize(450, 420)
         
         self.setObjectName("KalibrasyonKutusu")
         self.setStyleSheet("""
@@ -115,16 +129,28 @@ class KalibrasyonDuzenleFormu(QDialog):
         form = QFormLayout()
         form.setSpacing(15)
 
-        self.txt_cihaz = QLineEdit(veri["cihaz_adi"])
+        self.txt_cihaz = QLineEdit(veri.get("cihaz_adi", ""))
         self.txt_cihaz.setReadOnly(True)
-        self.txt_kurum = QLineEdit(veri["kalibrasyon_yapan_kurum"])
-        self.txt_sertifika = QLineEdit(veri["sertifika_no"])
-        self.dt_gecerlilik = QDateEdit(QDate.fromString(veri["gecerlilik_tarihi"][:10], "yyyy-MM-dd"))
+        self.txt_kurum = QLineEdit(veri.get("kalibrasyon_yapan_kurum", ""))
+        self.txt_sertifika = QLineEdit(veri.get("sertifika_no", ""))
+        self.dt_gecerlilik = QDateEdit(QDate.fromString(str(veri.get("gecerlilik_tarihi", QDate.currentDate().toString("yyyy-MM-dd")))[:10], "yyyy-MM-dd"))
         self.dt_gecerlilik.setCalendarPopup(True)
+
+        # --- YENİ TARİHLERİ GÜVENLİ ÇEKME ---
+        baslangic_str = veri.get("kalibrasyon_baslangic_tarihi") or QDate.currentDate().toString("yyyy-MM-dd")
+        bitis_str = veri.get("kalibrasyon_bitis_tarihi") or baslangic_str
+        
+        self.dt_baslangic = QDateEdit(QDate.fromString(str(baslangic_str)[:10], "yyyy-MM-dd"))
+        self.dt_baslangic.setCalendarPopup(True)
+        
+        self.dt_bitis = QDateEdit(QDate.fromString(str(bitis_str)[:10], "yyyy-MM-dd"))
+        self.dt_bitis.setCalendarPopup(True)
 
         form.addRow("Cihaz:", self.txt_cihaz)
         form.addRow("Yapan Kurum (*):", self.txt_kurum)
         form.addRow("Sertifika No (*):", self.txt_sertifika)
+        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
+        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
         form.addRow("Geçerlilik (*):", self.dt_gecerlilik)
         layout.addLayout(form)
 
@@ -141,7 +167,10 @@ class KalibrasyonDuzenleFormu(QDialog):
         veri = {
             "kalibrasyon_yapan_kurum": self.txt_kurum.text().strip(),
             "sertifika_no": self.txt_sertifika.text().strip(),
-            "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd")
+            "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
+            # YENİ EKLENEN VERİLER
+            "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd")
         }
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
             QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
@@ -153,9 +182,10 @@ class KalibrasyonDuzenleFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "✅ Kalibrasyon başarıyla güncellendi!")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", "Güncelleme yapılamadı.")
-        except Exception:
-            QMessageBox.critical(self, "Hata", "Sunucu hatası.")
+                hata_mesaji = res.json().get("detail", "Güncelleme yapılamadı.")
+                QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class KalibrasyonYonetimEkrani(QWidget):
     def __init__(self, api_url, token):
@@ -182,12 +212,27 @@ class KalibrasyonYonetimEkrani(QWidget):
         ust.addWidget(baslik); ust.addStretch(); ust.addWidget(btn_yenile); ust.addWidget(btn_yeni)
         layout.addLayout(ust)
 
-        self.tablo = QTableWidget(0, 7)
-        self.tablo.setHorizontalHeaderLabels(["ID", "Cihaz", "Kurum", "Sertifika No", "Geçerlilik", "İşlem Tarihi", "İşlem"])
+# Tabloyu 7 sütundan 9 sütuna çıkardık ve başlıkları güncelledik
+        self.tablo = QTableWidget(0, 9)
+        self.tablo.setHorizontalHeaderLabels([
+            "ID", "Cihaz", "Kurum", "Sertifika No", 
+            "Başlangıç", "Bitiş", "Geçerlilik", "İşlem Tarihi", "İşlem"
+        ])
         
-        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.tablo.horizontalHeader().setStretchLastSection(False)
-        self.tablo.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+# Sabit width (genişlik) yerine içeriğe göre dinamik boyutlanma yapıyoruz
+        self.tablo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents) # ID
+        self.tablo.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)          # Cihaz (Esner)
+        self.tablo.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)          # Kurum (Esner)
+        self.tablo.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents) # Sertifika
+        self.tablo.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents) # Başlangıç
+        self.tablo.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents) # Bitiş
+        self.tablo.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents) # Geçerlilik
+        
+        # --- DEĞİŞEN KISIM: 7 ve 8. Sütunları "Fixed" yapıyoruz ---
+        self.tablo.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed) # İşlem Tarihi
+        self.tablo.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed) # Düzenle Butonu
+
+        # Diğer standart tablo ayarların
         self.tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.tablo.verticalHeader().setMinimumSectionSize(50) 
         self.tablo.verticalHeader().setVisible(False)
@@ -202,13 +247,10 @@ class KalibrasyonYonetimEkrani(QWidget):
         
         layout.addWidget(self.tablo)
         
-        self.tablo.setColumnWidth(0, 50)
-        self.tablo.setColumnWidth(1, 150)
-        self.tablo.setColumnWidth(3, 120)
-        self.tablo.setColumnWidth(4, 100)
-        self.tablo.setColumnWidth(5, 140)
-        self.tablo.setColumnWidth(6, 110)
-
+        # --- DEĞİŞEN KISIM: Sadece bu iki sütuna asla daralmayacak net genişlik veriyoruz ---
+        self.tablo.setColumnWidth(7, 130) # Tarih ve saat tek satırda aslanlar gibi duracak
+        self.tablo.setColumnWidth(8, 105) # Düzenle butonu yazısı tam sığacak
+        
         self.yukle()
 
     def yukle(self):
@@ -220,33 +262,53 @@ class KalibrasyonYonetimEkrani(QWidget):
                     self.tablo.insertRow(i)
                     self.detaylar[k["kalibrasyon_id"]] = k
                     
+                    # 0. ID
                     id_item = QTableWidgetItem(str(k["kalibrasyon_id"]))
                     id_item.setTextAlignment(Qt.AlignCenter)
                     self.tablo.setItem(i, 0, id_item)
                     
-                    self.tablo.setItem(i, 1, QTableWidgetItem(k["cihaz_adi"]))
-                    self.tablo.setItem(i, 2, QTableWidgetItem(k["kalibrasyon_yapan_kurum"]))
+                    # 1. Cihaz ve 2. Kurum
+                    self.tablo.setItem(i, 1, QTableWidgetItem(k.get("cihaz_adi", "")))
+                    self.tablo.setItem(i, 2, QTableWidgetItem(k.get("kalibrasyon_yapan_kurum", "")))
                     
-                    sert_item = QTableWidgetItem(k["sertifika_no"])
+                    # 3. Sertifika No
+                    sert_item = QTableWidgetItem(k.get("sertifika_no", ""))
                     sert_item.setTextAlignment(Qt.AlignCenter)
                     self.tablo.setItem(i, 3, sert_item)
                     
-                    gec_item = QTableWidgetItem(k["gecerlilik_tarihi"][:10])
-                    gec_item.setTextAlignment(Qt.AlignCenter)
-                    self.tablo.setItem(i, 4, gec_item)
+                    # 4. YENİ: Başlangıç Tarihi
+                    baslangic_str = k.get("kalibrasyon_baslangic_tarihi", "Belirtilmedi")
+                    bas_item = QTableWidgetItem(baslangic_str[:10] if baslangic_str != "Belirtilmedi" else "Belirtilmedi")
+                    bas_item.setTextAlignment(Qt.AlignCenter)
+                    self.tablo.setItem(i, 4, bas_item)
+
+                    # 5. YENİ: Bitiş Tarihi
+                    bitis_str = k.get("kalibrasyon_bitis_tarihi", "Belirtilmedi")
+                    bitis_item = QTableWidgetItem(bitis_str[:10] if bitis_str != "Belirtilmedi" else "Belirtilmedi")
+                    bitis_item.setTextAlignment(Qt.AlignCenter)
+                    self.tablo.setItem(i, 5, bitis_item)
                     
-                    tarih_metni = k["islem_tarihi"][:16].replace("T", " ") if "T" in k["islem_tarihi"] else k["islem_tarihi"][:16]
+                    # 6. Geçerlilik Tarihi (Kayıp geldi)
+                    gecerlilik_str = k.get("gecerlilik_tarihi", "Belirtilmedi")
+                    gec_item = QTableWidgetItem(gecerlilik_str[:10] if gecerlilik_str != "Belirtilmedi" else "Belirtilmedi")
+                    gec_item.setTextAlignment(Qt.AlignCenter)
+                    self.tablo.setItem(i, 6, gec_item)
+                    
+                    # 7. İşlem Tarihi (Kayıp geldi)
+                    islem_str = k.get("islem_tarihi", "")
+                    tarih_metni = islem_str[:16].replace("T", " ") if "T" in islem_str else islem_str[:16]
                     tarih_item = QTableWidgetItem(tarih_metni)
                     tarih_item.setTextAlignment(Qt.AlignCenter)
-                    self.tablo.setItem(i, 5, tarih_item)
+                    self.tablo.setItem(i, 7, tarih_item)
                     
+                    # 8. İşlem Butonu
                     btn = QPushButton("✎ Düzenle")
                     btn.setStyleSheet("background-color: #F39C12; color: white; border-radius: 4px; padding: 6px 12px; font-weight: bold;")
                     btn.setCursor(Qt.PointingHandCursor)
                     btn.clicked.connect(lambda _, kid=k["kalibrasyon_id"]: self.duzenle(kid))
                     
                     w = QWidget(); l = QHBoxLayout(w); l.setContentsMargins(5, 2, 5, 2); l.setAlignment(Qt.AlignCenter); l.addWidget(btn)
-                    self.tablo.setCellWidget(i, 6, w)
+                    self.tablo.setCellWidget(i, 8, w)
         except Exception:
             pass
 
