@@ -282,6 +282,23 @@ class OgrenciEkleModeli(BaseModel):
     sinif: Optional[str] = None
 
 # ==========================================
+# DANIŞMA MASASI YÖNETİMİ MODELLERİ
+# ==========================================
+
+class DanismaGorevOlusturModeli(BaseModel):
+    ogrenci_id: int = Field(gt=0)
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
+
+
+class DanismaGorevDuzenleModeli(BaseModel):
+    """Tamamlanmış danışma masası görevinin saatlerini düzenleme."""
+    model_config = ConfigDict(extra="forbid")
+
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
+
+# ==========================================
 # SİSTEM YÖNETİMİ MODELLERİ (SYS)
 # ==========================================
 class FaaliyetBirimIslemModeli(BaseModel):

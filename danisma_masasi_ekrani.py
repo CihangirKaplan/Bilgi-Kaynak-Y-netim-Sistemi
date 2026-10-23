@@ -663,7 +663,7 @@ class DanismaMasasiEkrani(QWidget):
 
             else:
                 self.lbl_durum.setText(
-                    "○  Aktif Görev Yok"
+                    "○  Devam Eden Görev Yok"
                 )
 
                 self.lbl_durum.setStyleSheet(

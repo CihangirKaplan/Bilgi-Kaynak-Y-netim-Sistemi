@@ -14,18 +14,18 @@ class BirimYonetimDialog(QDialog):
 
         self.setWindowTitle("Faaliyet Birimleri Yönetimi")
         self.setMinimumSize(450, 450)
-        
+
         # HAYALET BUTONLARI VE SİYAH KUTULARI ÇÖZEN YENİ STİL YAPISI
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
             QLabel { color: #2C3E50; font-weight: bold; font-size: 13px; }
-            
+
             /* Metin giriş kutularının siyah olmasını engeller, beyaz ve okunaklı yapar */
-            QLineEdit { 
-                background-color: white; color: #2C3E50; 
-                border: 1px solid #BDC3C7; border-radius: 4px; padding: 6px; 
+            QLineEdit {
+                background-color: white; color: #2C3E50;
+                border: 1px solid #BDC3C7; border-radius: 4px; padding: 6px;
             }
-            
+
             QTableWidget {
                 background-color: white; color: #2C3E50;
                 border: 1px solid #D0D7E5; border-radius: 4px;
@@ -35,14 +35,14 @@ class BirimYonetimDialog(QDialog):
                 background-color: #0A1F5C; color: white; font-weight: bold;
                 padding: 8px; border: none;
             }
-            
+
             /* GÖRÜNMEZ BUTON ÇÖZÜMÜ: Tüm standart butonlar (OK/Cancel/Yes/No) açık gri ve koyu yazılı olacak */
-            QPushButton { 
-                font-weight: bold; padding: 8px 15px; border-radius: 4px; 
+            QPushButton {
+                font-weight: bold; padding: 8px 15px; border-radius: 4px;
                 background-color: #E2E8F0; color: #1E293B; border: 1px solid #CBD5E1;
             }
             QPushButton:hover { background-color: #CBD5E1; }
-            
+
             /* BİZİM ANA EKRANDAKİ ÖZEL BUTONLARIMIZ (Ekle, Düzenle, Sil) */
             QPushButton#btnStandart { background-color: #2980B9; color: white; border: none; }
             QPushButton#btnStandart:hover { background-color: #3498DB; }
@@ -66,17 +66,17 @@ class BirimYonetimDialog(QDialog):
 
         # ALT KISIM: WİNDOWS STANDART KONTROL BUTONLARI
         btn_layout = QHBoxLayout()
-        
+
         self.btn_ekle = QPushButton("➕ Yeni Ekle")
         self.btn_ekle.setObjectName("btnStandart")
         self.btn_ekle.setCursor(Qt.PointingHandCursor)
         self.btn_ekle.clicked.connect(self.birim_ekle)
-        
+
         self.btn_duzenle = QPushButton("✎ Düzenle")
         self.btn_duzenle.setObjectName("btnStandart")
         self.btn_duzenle.setCursor(Qt.PointingHandCursor)
         self.btn_duzenle.clicked.connect(self.birim_duzenle)
-        
+
         self.btn_sil = QPushButton("🗑️ Sil")
         self.btn_sil.setObjectName("btnSil")
         self.btn_sil.setCursor(Qt.PointingHandCursor)
@@ -85,7 +85,7 @@ class BirimYonetimDialog(QDialog):
         btn_layout.addWidget(self.btn_ekle)
         btn_layout.addWidget(self.btn_duzenle)
         btn_layout.addWidget(self.btn_sil)
-        
+
         layout.addLayout(btn_layout)
 
         self.verileri_yukle()
@@ -109,7 +109,7 @@ class BirimYonetimDialog(QDialog):
 
     def birim_ekle(self):
         yeni_ad, ok = QInputDialog.getText(self, "Yeni Birim Ekle", "Eklenecek birim adını girin (Örn: SAAT, KİŞİ):")
-        
+
         if ok and yeni_ad.strip():
             headers = {"Authorization": f"Bearer {self.token}"}
             payload = {"birim_adi": yeni_ad.strip()}
@@ -125,17 +125,17 @@ class BirimYonetimDialog(QDialog):
 
     def birim_duzenle(self):
         secili = self.tablo.selectionModel().selectedRows()
-        
+
         if not secili:
             QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen güncellemek istediğiniz kutucuğu (birimi) tablodan seçin!")
             return
-            
+
         satir = secili[0].row()
         birim_id = int(self.tablo.item(satir, 0).text())
         eski_ad = self.tablo.item(satir, 1).text()
-        
+
         yeni_ad, ok = QInputDialog.getText(self, "Birim Güncelle", "Yeni birim adını girin:", QLineEdit.Normal, eski_ad)
-        
+
         if ok and yeni_ad.strip() and yeni_ad.strip() != eski_ad:
             headers = {"Authorization": f"Bearer {self.token}"}
             payload = {"birim_adi": yeni_ad.strip()}
@@ -154,11 +154,11 @@ class BirimYonetimDialog(QDialog):
         if not secili:
             QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen silmek istediğiniz birimi tablodan seçin!")
             return
-            
+
         satir = secili[0].row()
         birim_id = int(self.tablo.item(satir, 0).text())
         birim_adi = self.tablo.item(satir, 1).text()
-        
+
         # SİLME ONAY KUTUSU İÇİN ÖZEL KIRMIZI BUTON TASARIMI
         soru = QMessageBox(self)
         soru.setWindowTitle("Silme Onayı")
@@ -176,7 +176,7 @@ class BirimYonetimDialog(QDialog):
             QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
         """)
         cevap = soru.exec()
-        
+
         if cevap == QMessageBox.Yes:
             headers = {"Authorization": f"Bearer {self.token}"}
             try:
