@@ -1,6 +1,6 @@
 
 import requests
-
+from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
@@ -54,6 +54,25 @@ class SifreDegistirEkrani(QWidget):
             QCheckBox {
                 background: transparent;
                 color: #0A1F5C;
+                font-size: 12px;
+                spacing: 10px;
+            }
+
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 2px solid #7BA6F8;
+                border-radius: 0px;
+                background-color: white;
+            }
+
+            QCheckBox::indicator:checked {
+                background-color: #2563EB;
+                border: 2px solid #2563EB;
+            }
+
+            QCheckBox::indicator:hover {
+                border: 2px solid #1D4ED8;
             }
         """)
 
@@ -93,6 +112,21 @@ class SifreDegistirEkrani(QWidget):
         layout.addWidget(self.yeni_sifre_tekrar)
 
         self.goster = QCheckBox("Şifreleri göster")
+        tik_resmi = (
+            Path(__file__).resolve().parent
+            / "assets/ui/checkbox_checked.png"
+        )
+
+        self.goster.setStyleSheet(f"""
+            QCheckBox::indicator:checked {{
+                width: 16px;
+                height: 16px;
+                border: none;
+                border-radius: 0px;
+                background: transparent;
+                image: url("{tik_resmi.as_posix()}");
+            }}
+        """)
         self.goster.toggled.connect(self.sifreleri_goster)
         layout.addWidget(self.goster)
 

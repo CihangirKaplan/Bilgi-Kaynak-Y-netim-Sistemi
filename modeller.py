@@ -200,6 +200,7 @@ class ArizaGuncelleModeli(BaseModel):
     ariza_aciklama: str = Field(min_length=2)
     aciliyet: str # Düşük, Orta, Yüksek, Kritik
     cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
+
 # ADM-API-004: Personel Güncelleme İstek Modeli
 class PersonelGuncelleModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -225,23 +226,28 @@ class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = None
     gecerlilik_tarihi: Optional[date] = None
     sertifika_no: Optional[str] = None
+
+# ==========================================
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
 # ==========================================
 class BakimOlusturModeli(BaseModel):
     cihaz_id: int
-    bakim_tarihi: date
+    bakim_tarihi: date  # <-- SİSTEMİN ÇÖKMESİNİ ENGELLEYEN EKSİK PARÇA
     bakim_yapan_kisi: str
     yapilan_islem: str
     maliyet: Optional[float] = 0.0
-    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
+    bakim_baslangic_tarihi: date
+    bakim_bitis_tarihi: date
+    sonraki_bakim_tarihi: Optional[date] = None
 
 class BakimGuncelleModeli(BaseModel):
-    bakim_tarihi: Optional[date] = None
+    bakim_tarihi: Optional[date] = None  # <-- DÜZENLEME İÇİN EKSİK PARÇA
     bakim_yapan_kisi: Optional[str] = None
     yapilan_islem: Optional[str] = None
     maliyet: Optional[float] = None
-    sonraki_bakim_tarihi: Optional[date] = None  # YENİ EKLENDİ
-
+    bakim_baslangic_tarihi: Optional[date] = None
+    bakim_bitis_tarihi: Optional[date] = None
+    sonraki_bakim_tarihi: Optional[date] = None
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
 # ==========================================
@@ -257,6 +263,43 @@ class DashboardOzetModeli(BaseModel):
 class YaklasanIslemModeli(BaseModel):
     cihaz_adi: str
     islem_turu: str # 'Bakım' veya 'Kalibrasyon'
-    tarih: str
+    tاريخ: str
     kalan_gun: int
     durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
+
+class FaaliyetKayitModeli(BaseModel):
+    ogrenci_id: int
+    faaliyet_id: int
+    birim_id: int
+    miktar: int
+
+class OgrenciEkleModeli(BaseModel):
+    ad_soyad: str
+    ogrenci_numarasi: str
+    telefon: Optional[str] = None
+    tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
+    bolum: Optional[str] = None
+    sinif: Optional[str] = None
+
+# ==========================================
+# DANIŞMA MASASI YÖNETİMİ MODELLERİ
+# ==========================================
+
+class DanismaGorevOlusturModeli(BaseModel):
+    ogrenci_id: int = Field(gt=0)
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
+
+
+class DanismaGorevDuzenleModeli(BaseModel):
+    """Tamamlanmış danışma masası görevinin saatlerini düzenleme."""
+    model_config = ConfigDict(extra="forbid")
+
+    baslangic_zamani: datetime.datetime
+    bitis_zamani: datetime.datetime
+
+# ==========================================
+# SİSTEM YÖNETİMİ MODELLERİ (SYS)
+# ==========================================
+class FaaliyetBirimIslemModeli(BaseModel):
+    birim_adi: str = Field(min_length=1, max_length=50)

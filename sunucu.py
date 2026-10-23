@@ -1,3 +1,4 @@
+from modeller import DanismaGorevOlusturModeli
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
@@ -6,8 +7,9 @@ import os
 import time
 from dotenv import load_dotenv
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from modeller import (
+    FaaliyetBirimIslemModeli,
     GirisModeli,
     RolDegistirModeli,
     KullaniciOlusturModeli,
@@ -37,6 +39,9 @@ from guvenlik import (
     token_dogrula
 )
 from denetim import denetim_kaydi_olustur
+from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
+import psycopg2.errors
+from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli
 
 load_dotenv()
 app = FastAPI()
@@ -578,12 +583,28 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
     except ExclusionViolation:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Seçilen psikolog veya oda bu saatlerde dolu."
+        )
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Randevu oluşturulurken bir hata oluştu."
+        )
     finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 @app.get("/api/randevular")
 def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
@@ -1265,10 +1286,12 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # SQL Sorgusuna b.sonraki_bakim_tarihi eklendi
+        # EKSİK OLAN KISIM: SQL sorgusuna b.bakim_baslangic_tarihi ve b.bakim_bitis_tarihi EKLENDİ
         cursor.execute("""
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
-                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet, b.bakim_tarihi, b.sonraki_bakim_tarihi
+                   b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet,
+                   b.bakim_tarihi, b.sonraki_bakim_tarihi,
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.bakim_tarihi DESC;
@@ -1283,7 +1306,11 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
                 "yapilan_islem": k[4],
                 "maliyet": float(k[5]) if k[5] else 0.0,
                 "bakim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
-                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi")
+                "sonraki_bakim_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[7]) if k[7] else "Belirtilmedi"),
+
+                # EKSİK OLAN KISIM: JSON sözlüğüne başlangıç ve bitiş eklendi (eski kayıtlarda null gelirse bakim_tarihi kurtarır)
+                "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
+                "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi")
             }
             for k in kayitlar
         ]
@@ -1301,14 +1328,29 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # INSERT sorgusuna sonraki_bakim_tarihi eklendi
         cursor.execute("""
-            INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, sonraki_bakim_tarihi)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING bakim_id;
-        """, (bakim.cihaz_id, bakim.bakim_yapan_kisi, bakim.yapilan_islem, bakim.maliyet, bakim.bakim_tarihi, bakim.sonraki_bakim_tarihi))
+            INSERT INTO cihaz_bakimlari (
+                cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+        """, (
+            bakim.cihaz_id,
+            bakim.bakim_yapan_kisi,
+            bakim.yapilan_islem,
+            bakim.maliyet,
+            bakim.bakim_tarihi,           # Buradaki eşleşme düzeltildi
+            bakim.bakim_baslangic_tarihi,
+            bakim.bakim_bitis_tarihi,
+            bakim.sonraki_bakim_tarihi
+        ))
         bakim_id = cursor.fetchone()[0]
 
-        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
+        except ImportError:
+            pass
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
@@ -1455,9 +1497,9 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        
+
         ozet = {
-            "toplam_cihaz": 0, "aktif_cihaz": 0, "arizali_cihaz": 0, 
+            "toplam_cihaz": 0, "aktif_cihaz": 0, "arizali_cihaz": 0,
             "bakimdaki_cihaz": 0, "acik_ariza_sayisi": 0, "bugunku_randevu_sayisi": 0
         }
 
@@ -1549,6 +1591,1483 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
     except Exception as e:
         print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# ==========================================
+# FAALİYET YÖNETİMİ MODÜLÜ API UÇLARI
+# ==========================================
+
+@app.get("/api/faaliyetler")
+def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece aktif olan faaliyetleri listele
+        cursor.execute("SELECT faaliyet_id, faaliyet_adi, puan FROM faaliyetler WHERE aktif_mi = true ORDER BY faaliyet_id;")
+
+        faaliyetler = []
+        for kayit in cursor.fetchall():
+            faaliyetler.append({
+                "id": kayit[0],
+                "ad": kayit[1],
+                "puan": kayit[2]
+            })
+        return faaliyetler
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.get("/api/faaliyet-birimleri")
+def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece aktif olan birimleri listele
+        cursor.execute("SELECT birim_id, birim_adi FROM faaliyet_birimleri WHERE aktif_mi = true ORDER BY birim_id;")
+
+        birimler = []
+        for kayit in cursor.fetchall():
+            birimler.append({
+                "id": kayit[0],
+                "ad": kayit[1]
+            })
+        return birimler
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- YENİ EKLENEN: ÖĞRENCİ LİSTESİNİ GETİRİR ---
+@app.get("/api/ogrenciler-liste")
+def ogrencileri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece Ad Soyad ve Öğrenci Numarasını çek (Bolum ve sinif iptal edildi)
+        cursor.execute("SELECT ogrenci_id, ad_soyad, ogrenci_numarasi FROM ogrenciler WHERE aktif_mi = true;")
+
+        liste = []
+        for r in cursor.fetchall():
+            liste.append({"id": r[0], "metin": f"{r[1]} - [{r[2]}]"})
+        return liste
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# --- GÜNCELLENEN: YENİ TABLOYA (ÖĞRENCİ TAKİP) KAYIT ATAR ---
+@app.post("/api/faaliyet-kayitlari")
+def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Doğrudan senin şemandaki "ogrenci_faaliyet_takip" tablosuna yazıyoruz.
+        # Not: Senin şemanda miktar sütununun adı "adet", o yüzden "adet" olarak ekliyoruz.
+        cursor.execute("""
+            INSERT INTO ogrenci_faaliyet_takip
+            (ogrenci_id, faaliyet_id, birim_id, adet, faaliyet_tarihi)
+            VALUES (%s, %s, %s, %s, CURRENT_DATE) RETURNING takip_id;
+        """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar))
+
+        yeni_id = cursor.fetchone()[0]
+
+        # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
+# Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Öğrenci faaliyeti başarıyla sisteme işlendi."}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/ogrenci-ekle")
+def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO ogrenciler
+            (ad_soyad, ogrenci_numarasi, telefon, tur)
+            VALUES (%s, %s, %s, %s) RETURNING ogrenci_id;
+        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur))
+
+        yeni_id = cursor.fetchone()[0]
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Öğrenci başarıyla sisteme eklendi.", "ogrenci_id": yeni_id}
+
+    except psycopg2.errors.UniqueViolation:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=400, detail="Bu öğrenci numarası sistemde zaten kayıtlı!")
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
+@app.get("/api/faaliyet-kayitlari")
+def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # 4 tabloyu birleştirip, puanı (adet * faaliyet_puanı) olarak hesaplayan efsane SQL
+        sorgu = """
+        SELECT
+            t.takip_id,
+            o.ad_soyad,
+            o.ogrenci_numarasi,
+            f.faaliyet_adi,
+            t.adet,
+            b.birim_adi,
+            (t.adet * f.puan) AS toplam_puan,
+            t.faaliyet_tarihi
+        FROM ogrenci_faaliyet_takip t
+        JOIN ogrenciler o ON t.ogrenci_id = o.ogrenci_id
+        JOIN faaliyetler f ON t.faaliyet_id = f.faaliyet_id
+        JOIN faaliyet_birimleri b ON t.birim_id = b.birim_id
+        ORDER BY t.olusturulma_tarihi DESC;
+        """
+        cursor.execute(sorgu)
+
+        kayitlar = []
+        for row in cursor.fetchall():
+            kayitlar.append({
+                "id": row[0],
+                "ad_soyad": row[1],
+                "ogrenci_no": row[2],
+                "faaliyet_adi": row[3],
+                "miktar": f"{row[4]} {row[5]}", # Örn: "3 KISI" veya "5 SAAT"
+                "toplam_puan": row[6],
+                "tarih": row[7].strftime("%d.%m.%Y") if row[7] else ""
+            })
+        return kayitlar
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Veri çekme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+# --- YENİ: FAALİYET DÜZENLEME (PUT) ---
+@app.put("/api/faaliyet-kayitlari/{takip_id}")
+def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kaydın var olup olmadığını kontrol edelim
+        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Güncellenecek kayıt bulunamadı.")
+
+        cursor.execute("""
+            UPDATE ogrenci_faaliyet_takip
+            SET ogrenci_id = %s, faaliyet_id = %s, birim_id = %s, adet = %s
+            WHERE takip_id = %s;
+        """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar, takip_id))
+
+        # Audit log (Denetim kaydı)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# --- YENİ: FAALİYET SİLME (DELETE) ---
+@app.delete("/api/faaliyet-kayitlari/{takip_id}")
+def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Silinmeden önce kaydın var olup olmadığını kontrol edelim
+        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Silinecek kayıt zaten yok veya bulunamadı.")
+
+        # Kaydı acımadan veritabanından siliyoruz
+        cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
+
+        # Audit log (Denetim kaydı) - Kim sildi bilelim
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+# DANIŞMA MASASI OTURUM ENDPOINTLERİ
+
+@app.post("/api/danisma/oturum/baslat", status_code=201)
+def danisma_oturumu_baslat(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONET")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Öğrencinin kaydını kilitle.
+        # Eşzamanlı başlatma işlemlerini sıraya alır.
+        cursor.execute(
+            """
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE kullanici_id = %s
+              AND aktif_mi = TRUE
+            FOR UPDATE;
+            """,
+            (kullanici_id,)
+        )
+
+        ogrenci = cursor.fetchone()
+
+        if ogrenci is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Aktif danışma öğrencisi kaydınız bulunamadı."
+            )
+
+        ogrenci_id = ogrenci[0]
+
+        # Açık oturum kontrolü
+        cursor.execute(
+            """
+            SELECT oturum_id
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND bitis_zamani IS NULL;
+            """,
+            (ogrenci_id,)
+        )
+
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Zaten devam eden bir göreviniz bulunuyor."
+            )
+
+        # Yeni görev başlat
+        cursor.execute(
+            """
+            INSERT INTO danisma_masasi_oturumlari
+                (ogrenci_id, baslangic_zamani)
+            VALUES (%s, CURRENT_TIMESTAMP)
+            RETURNING oturum_id, baslangic_zamani;
+            """,
+            (ogrenci_id,)
+        )
+
+        oturum_id, baslangic = cursor.fetchone()
+
+        # Audit kaydı
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu,
+                 hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (
+                kullanici_id,
+                "CREATE",
+                "danisma_masasi_oturumlari",
+                oturum_id
+            )
+        )
+
+        conn.commit()
+
+        return {
+            "mesaj": "Danışma masası göreviniz başlatıldı.",
+            "oturum_id": oturum_id,
+            "baslangic_zamani": baslangic.isoformat(),
+            "durum": "AKTIF"
+        }
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Zaten devam eden bir göreviniz bulunuyor."
+        )
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Görev başlatılırken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.patch("/api/danisma/oturum/bitir")
+def danisma_oturumu_bitir(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONET")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Giriş yapan öğrenciyi bul ve kilitle
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE kullanici_id = %s
+              AND aktif_mi = TRUE
+            FOR UPDATE;
+        """, (kullanici_id,))
+
+        ogrenci = cursor.fetchone()
+
+        if ogrenci is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Aktif öğrenci kaydınız bulunamadı."
+            )
+
+        ogrenci_id = ogrenci[0]
+
+        # Öğrencinin açık görevini bul
+        cursor.execute("""
+            SELECT oturum_id
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND bitis_zamani IS NULL
+            FOR UPDATE;
+        """, (ogrenci_id,))
+
+        oturum = cursor.fetchone()
+
+        if oturum is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Devam eden bir göreviniz bulunmuyor."
+            )
+
+        oturum_id = oturum[0]
+
+        # Görevi sonlandır
+        cursor.execute("""
+            UPDATE danisma_masasi_oturumlari
+            SET bitis_zamani = clock_timestamp()
+            WHERE oturum_id = %s
+            RETURNING baslangic_zamani, bitis_zamani;
+        """, (oturum_id,))
+
+        baslangic, bitis = cursor.fetchone()
+
+        toplam_saniye = max(
+            0, int((bitis - baslangic).total_seconds())
+        )
+
+        saat, kalan = divmod(toplam_saniye, 3600)
+        dakika = kalan // 60
+
+        # Audit kaydı
+        cursor.execute("""
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu,
+                 hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+        """, (
+            kullanici_id,
+            "UPDATE",
+            "danisma_masasi_oturumlari",
+            oturum_id
+        ))
+
+        conn.commit()
+
+        return {
+            "mesaj": "Göreviniz başarıyla tamamlandı.",
+            "oturum_id": oturum_id,
+            "baslangic_zamani": baslangic.isoformat(),
+            "bitis_zamani": bitis.isoformat(),
+            "toplam_saniye": toplam_saniye,
+            "toplam_dakika": toplam_saniye // 60,
+            "calisilan_sure": f"{saat} saat {dakika} dakika",
+            "durum": "TAMAMLANDI"
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Görev bitirilirken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/danisma/oturum/aktif")
+def danisma_aktif_oturum(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONET")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Giriş yapan öğrenciyi bul
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE kullanici_id = %s
+              AND aktif_mi = TRUE;
+        """, (kullanici_id,))
+
+        ogrenci = cursor.fetchone()
+
+        if ogrenci is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Aktif öğrenci kaydınız bulunamadı."
+            )
+
+        # Devam eden görevi sorgula
+        cursor.execute("""
+            SELECT
+                oturum_id,
+                baslangic_zamani,
+                clock_timestamp()::timestamp
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND bitis_zamani IS NULL
+            ORDER BY baslangic_zamani DESC
+            LIMIT 1;
+        """, (ogrenci[0],))
+
+        oturum = cursor.fetchone()
+
+        if oturum is None:
+            return {
+                "durum": "PASIF",
+                "mesaj": "Devam eden göreviniz bulunmuyor.",
+                "oturum_id": None,
+                "calisilan_sure": "0 saat 0 dakika",
+                "toplam_saniye": 0
+            }
+
+        oturum_id, baslangic, simdi = oturum
+
+        toplam_saniye = max(
+            0, int((simdi - baslangic).total_seconds())
+        )
+
+        saat, kalan = divmod(toplam_saniye, 3600)
+        dakika = kalan // 60
+
+        return {
+            "durum": "AKTIF",
+            "oturum_id": oturum_id,
+            "baslangic_zamani": baslangic.isoformat(),
+            "toplam_saniye": toplam_saniye,
+            "toplam_dakika": toplam_saniye // 60,
+            "calisilan_sure": f"{saat} saat {dakika} dakika"
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Aktif görev bilgisi alınamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/danisma/oturum/gecmis")
+def danisma_oturum_gecmisi(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONET")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE kullanici_id = %s
+              AND aktif_mi = TRUE;
+        """, (kullanici_id,))
+
+        ogrenci = cursor.fetchone()
+
+        if ogrenci is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Aktif öğrenci kaydınız bulunamadı."
+            )
+
+        cursor.execute("""
+            SELECT oturum_id,
+                   baslangic_zamani,
+                   bitis_zamani,
+                   onaylandi_mi
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND bitis_zamani IS NOT NULL
+            ORDER BY baslangic_zamani DESC
+            LIMIT 50;
+        """, (ogrenci[0],))
+
+        kayitlar = cursor.fetchall()
+        gecmis = []
+
+        for oturum_id, baslangic, bitis, onay in kayitlar:
+            saniye = max(
+                0, int((bitis - baslangic).total_seconds())
+            )
+            saat, kalan = divmod(saniye, 3600)
+            dakika = kalan // 60
+
+            gecmis.append({
+                "oturum_id": oturum_id,
+                "tarih": baslangic.date().isoformat(),
+                "baslangic_zamani": baslangic.isoformat(),
+                "bitis_zamani": bitis.isoformat(),
+                "toplam_dakika": saniye // 60,
+                "calisilan_sure": f"{saat} saat {dakika} dakika",
+                "onaylandi_mi": onay
+            })
+
+        return {
+            "toplam_kayit": len(gecmis),
+            "oturumlar": gecmis
+        }
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Zaten devam eden bir göreviniz bulunuyor."
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Görev geçmişi alınamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+# ==========================================
+# DANIŞMA MASASI YÖNETİMİ
+# ==========================================
+
+@app.get("/api/danisma/yonetim/oturumlar")
+def danisma_yonetim_oturumlari(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                d.oturum_id,
+                d.ogrenci_id,
+                o.ad_soyad,
+                o.ogrenci_numarasi,
+                d.baslangic_zamani,
+                d.bitis_zamani,
+                d.onaylandi_mi
+            FROM danisma_masasi_oturumlari d
+            JOIN ogrenciler o
+                ON d.ogrenci_id = o.ogrenci_id
+            ORDER BY d.baslangic_zamani DESC
+            LIMIT 200;
+        """)
+
+        kayitlar = cursor.fetchall()
+        oturumlar = []
+
+        for (
+            oturum_id,
+            ogrenci_id,
+            ad_soyad,
+            ogrenci_numarasi,
+            baslangic,
+            bitis,
+            onay
+        ) in kayitlar:
+
+            bitis_hesap = bitis if bitis is not None else datetime.now()
+            toplam_saniye = max(
+                0,
+                int((bitis_hesap - baslangic).total_seconds())
+            )
+
+            saat, kalan = divmod(toplam_saniye, 3600)
+            dakika, saniye = divmod(kalan, 60)
+
+            oturumlar.append({
+                "oturum_id": oturum_id,
+                "ogrenci_id": ogrenci_id,
+                "ad_soyad": ad_soyad,
+                "ogrenci_numarasi": ogrenci_numarasi,
+                "baslangic_zamani": baslangic.isoformat(),
+                "bitis_zamani": bitis.isoformat() if bitis else None,
+                "toplam_saniye": toplam_saniye,
+                "calisilan_sure": (
+                    f"{saat} saat {dakika} dakika {saniye} saniye"
+                ),
+                "durum": "AKTIF" if bitis is None else "TAMAMLANDI",
+                "onaylandi_mi": onay
+            })
+
+        return {
+            "toplam_kayit": len(oturumlar),
+            "oturumlar": oturumlar
+        }
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Danışma masası görev kayıtları alınamadı."
+        )
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.patch("/api/danisma/yonetim/oturumlar/{oturum_id}/onayla")
+def danisma_yonetim_oturum_onayla(
+    oturum_id: int,
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT bitis_zamani, onaylandi_mi
+            FROM danisma_masasi_oturumlari
+            WHERE oturum_id = %s
+            FOR UPDATE;
+        """, (oturum_id,))
+
+        oturum = cursor.fetchone()
+
+        if oturum is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Görev kaydı bulunamadı."
+            )
+
+        bitis_zamani, onaylandi_mi = oturum
+
+        if bitis_zamani is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Devam eden görev onaylanamaz."
+            )
+
+        if onaylandi_mi:
+            raise HTTPException(
+                status_code=409,
+                detail="Bu görev zaten onaylanmış."
+            )
+
+        cursor.execute("""
+            UPDATE danisma_masasi_oturumlari
+            SET onaylandi_mi = TRUE
+            WHERE oturum_id = %s;
+        """, (oturum_id,))
+
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="danisma_masasi_oturumlari",
+            hedef_kayit_id=oturum_id,
+            mevcut_cursor=cursor
+        )
+
+        conn.commit()
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Danışma masası görevi onaylandı.",
+            "oturum_id": oturum_id,
+            "onaylandi_mi": True
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Görev onaylanırken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/danisma/yonetim/ogrenciler")
+def danisma_yonetim_ogrencileri(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT ogrenci_id, ad_soyad, ogrenci_numarasi
+            FROM ogrenciler
+            WHERE aktif_mi = TRUE
+            ORDER BY ad_soyad, ogrenci_numarasi;
+        """)
+
+        ogrenciler = [
+            {
+                "ogrenci_id": ogrenci_id,
+                "ad_soyad": ad_soyad,
+                "ogrenci_numarasi": ogrenci_numarasi
+            }
+            for ogrenci_id, ad_soyad, ogrenci_numarasi
+            in cursor.fetchall()
+        ]
+
+        return {"ogrenciler": ogrenciler}
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Öğrenci listesi alınamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.post("/api/danisma/yonetim/oturumlar", status_code=201)
+def danisma_yonetim_oturum_olustur(
+    veri: DanismaGorevOlusturModeli,
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        # Önce tarih ve saatleri doğrula.
+        if veri.bitis_zamani <= veri.baslangic_zamani:
+            raise HTTPException(
+                status_code=422,
+                detail="Bitiş zamanı başlangıçtan sonra olmalıdır."
+            )
+
+        if veri.bitis_zamani > datetime.now():
+            raise HTTPException(
+                status_code=422,
+                detail="Gelecekte biten görev kaydı oluşturulamaz."
+            )
+
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Öğrenci kaydını kilitleyerek eşzamanlı
+        # görev ekleme işlemlerini sıraya al.
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE ogrenci_id = %s
+              AND aktif_mi = TRUE
+            FOR UPDATE;
+        """, (veri.ogrenci_id,))
+
+        if cursor.fetchone() is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Aktif öğrenci bulunamadı."
+            )
+
+        # Aynı öğrencinin görevleriyle zaman çakışması.
+        # Açık görevlerde bitiş zamanı henüz bilinmediğinden
+        # bitişi sonsuz kabul ediyoruz.
+        cursor.execute("""
+            SELECT oturum_id
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND baslangic_zamani < %s
+              AND (
+                  bitis_zamani IS NULL
+                  OR bitis_zamani > %s
+              )
+            LIMIT 1;
+        """, (
+            veri.ogrenci_id,
+            veri.bitis_zamani,
+            veri.baslangic_zamani
+        ))
+
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Öğrencinin bu saatlerle çakışan görevi var."
+            )
+
+        cursor.execute("""
+            INSERT INTO danisma_masasi_oturumlari
+                (
+                    ogrenci_id,
+                    baslangic_zamani,
+                    bitis_zamani,
+                    onaylandi_mi
+                )
+            VALUES (%s, %s, %s, FALSE)
+            RETURNING oturum_id;
+        """, (
+            veri.ogrenci_id,
+            veri.baslangic_zamani,
+            veri.bitis_zamani
+        ))
+
+        oturum_id = cursor.fetchone()[0]
+
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="danisma_masasi_oturumlari",
+            hedef_kayit_id=oturum_id,
+            mevcut_cursor=cursor
+        )
+
+        conn.commit()
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Danışma masası görevi oluşturuldu.",
+            "oturum_id": oturum_id,
+            "onaylandi_mi": False
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Görev oluşturulurken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.patch("/api/danisma/yonetim/oturumlar/{oturum_id}")
+def danisma_yonetim_oturum_duzenle(
+    oturum_id: int,
+    veri: DanismaGorevDuzenleModeli,
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    conn = None
+    cursor = None
+
+    try:
+        # Tarih-saat doğrulamaları
+        baslangic = veri.baslangic_zamani
+        bitis = veri.bitis_zamani
+
+        if baslangic.tzinfo is not None or bitis.tzinfo is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Tarih ve saatler yerel saat biçiminde olmalıdır."
+            )
+
+        if bitis <= baslangic:
+            raise HTTPException(
+                status_code=422,
+                detail="Bitiş zamanı başlangıçtan sonra olmalıdır."
+            )
+
+        if bitis > datetime.now():
+            raise HTTPException(
+                status_code=422,
+                detail="Gelecekte biten görev kaydı oluşturulamaz."
+            )
+
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Önce görevin hangi öğrenciye ait olduğunu belirle.
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM danisma_masasi_oturumlari
+            WHERE oturum_id = %s;
+        """, (oturum_id,))
+
+        sonuc = cursor.fetchone()
+
+        if sonuc is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Düzenlenecek görev bulunamadı."
+            )
+
+        ogrenci_id = sonuc[0]
+
+        # Diğer görev işlemleriyle eşzamanlı değişiklikleri
+        # sıraya almak için öğrenci kaydını kilitle.
+        cursor.execute("""
+            SELECT ogrenci_id
+            FROM ogrenciler
+            WHERE ogrenci_id = %s
+            FOR UPDATE;
+        """, (ogrenci_id,))
+
+        if cursor.fetchone() is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Öğrenci kaydı bulunamadı."
+            )
+
+        # Düzenlenecek görev kaydını kilitle.
+        cursor.execute("""
+            SELECT bitis_zamani, onaylandi_mi
+            FROM danisma_masasi_oturumlari
+            WHERE oturum_id = %s
+              AND ogrenci_id = %s
+            FOR UPDATE;
+        """, (oturum_id, ogrenci_id))
+
+        oturum = cursor.fetchone()
+
+        if oturum is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Düzenlenecek görev bulunamadı."
+            )
+
+        eski_bitis, onaylandi_mi = oturum
+
+        if eski_bitis is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Devam eden görev düzenlenemez."
+            )
+
+        if onaylandi_mi:
+            raise HTTPException(
+                status_code=409,
+                detail="Onaylanmış görev düzenlenemez."
+            )
+
+        # Diğer görevlerle çakışma var mı?
+        # Düzenlediğimiz kaydı kontrol dışında tutuyoruz.
+        cursor.execute("""
+            SELECT oturum_id
+            FROM danisma_masasi_oturumlari
+            WHERE ogrenci_id = %s
+              AND oturum_id <> %s
+              AND baslangic_zamani < %s
+              AND (
+                  bitis_zamani IS NULL
+                  OR bitis_zamani > %s
+              )
+            LIMIT 1;
+        """, (
+            ogrenci_id,
+            oturum_id,
+            bitis,
+            baslangic
+        ))
+
+        if cursor.fetchone() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Öğrencinin bu saatlerle çakışan görevi var."
+            )
+
+        # Görev saatlerini güncelle.
+        cursor.execute("""
+            UPDATE danisma_masasi_oturumlari
+            SET baslangic_zamani = %s,
+                bitis_zamani = %s
+            WHERE oturum_id = %s;
+        """, (baslangic, bitis, oturum_id))
+
+        # Audit kaydı aynı transaction içinde tutulur.
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="danisma_masasi_oturumlari",
+            hedef_kayit_id=oturum_id,
+            mevcut_cursor=cursor
+        )
+
+        conn.commit()
+
+        toplam_saniye = int(
+            (bitis - baslangic).total_seconds()
+        )
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Danışma masası görevi güncellendi.",
+            "oturum_id": oturum_id,
+            "baslangic_zamani": baslangic.isoformat(),
+            "bitis_zamani": bitis.isoformat(),
+            "toplam_saniye": toplam_saniye
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Görev düzenlenirken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+# ==========================================
+# DANIŞMA MASASI RAPORLARI - SALT OKUNUR
+# ==========================================
+
+@app.get("/api/danisma/raporlar")
+def danisma_raporlari(
+    baslangic_tarihi: date | None = None,
+    bitis_tarihi: date | None = None,
+    ogrenci_id: int | None = None,
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_GORUNTULE")
+    )
+):
+    if (
+        baslangic_tarihi is not None
+        and bitis_tarihi is not None
+        and bitis_tarihi < baslangic_tarihi
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Bitiş tarihi başlangıç tarihinden önce olamaz."
+        )
+
+    if ogrenci_id is not None and ogrenci_id <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Geçerli bir öğrenci seçilmelidir."
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        kosullar = []
+        parametreler = []
+
+        if baslangic_tarihi is not None:
+            kosullar.append("d.baslangic_zamani >= %s")
+            parametreler.append(baslangic_tarihi)
+
+        if bitis_tarihi is not None:
+            kosullar.append(
+                "d.baslangic_zamani < (%s::date + INTERVAL '1 day')"
+            )
+            parametreler.append(bitis_tarihi)
+
+        if ogrenci_id is not None:
+            kosullar.append("d.ogrenci_id = %s")
+            parametreler.append(ogrenci_id)
+
+        where = (
+            "WHERE " + " AND ".join(kosullar)
+            if kosullar else ""
+        )
+
+        cursor.execute(f"""
+            SELECT
+                d.oturum_id,
+                d.ogrenci_id,
+                o.ad_soyad,
+                o.ogrenci_numarasi,
+                d.baslangic_zamani,
+                d.bitis_zamani,
+                d.onaylandi_mi
+            FROM danisma_masasi_oturumlari d
+            JOIN ogrenciler o
+                ON o.ogrenci_id = d.ogrenci_id
+            {where}
+            ORDER BY d.baslangic_zamani DESC, d.oturum_id DESC;
+        """, parametreler)
+
+        kayitlar = cursor.fetchall()
+
+        ozet = {
+            "toplam_gorev": 0,
+            "devam_eden": 0,
+            "tamamlanan": 0,
+            "onay_bekleyen": 0,
+            "onaylanan": 0,
+            "toplam_calisma_saniye": 0,
+            "onaylanan_calisma_saniye": 0
+        }
+
+        ogrenciler = {}
+        oturumlar = []
+
+        for (
+            oturum_id,
+            ogr_id,
+            ad_soyad,
+            ogrenci_no,
+            baslangic,
+            bitis,
+            onaylandi
+        ) in kayitlar:
+
+            tamamlandi = bitis is not None
+
+            # Rapor toplamlarına yalnızca tamamlanan
+            # görevlerin kesinleşmiş süreleri eklenir.
+            saniye = (
+                max(0, int((bitis - baslangic).total_seconds()))
+                if tamamlandi else 0
+            )
+
+            ozet["toplam_gorev"] += 1
+
+            if tamamlandi:
+                ozet["tamamlanan"] += 1
+                ozet["toplam_calisma_saniye"] += saniye
+
+                if onaylandi:
+                    ozet["onaylanan"] += 1
+                    ozet["onaylanan_calisma_saniye"] += saniye
+                else:
+                    ozet["onay_bekleyen"] += 1
+            else:
+                ozet["devam_eden"] += 1
+
+            if ogr_id not in ogrenciler:
+                ogrenciler[ogr_id] = {
+                    "ogrenci_id": ogr_id,
+                    "ad_soyad": ad_soyad,
+                    "ogrenci_numarasi": ogrenci_no,
+                    "toplam_gorev": 0,
+                    "devam_eden": 0,
+                    "onay_bekleyen": 0,
+                    "onaylanan": 0,
+                    "toplam_saniye": 0,
+                    "onaylanan_saniye": 0
+                }
+
+            ogr_ozet = ogrenciler[ogr_id]
+            ogr_ozet["toplam_gorev"] += 1
+            ogr_ozet["toplam_saniye"] += saniye
+
+            if not tamamlandi:
+                ogr_ozet["devam_eden"] += 1
+            elif onaylandi:
+                ogr_ozet["onaylanan"] += 1
+                ogr_ozet["onaylanan_saniye"] += saniye
+            else:
+                ogr_ozet["onay_bekleyen"] += 1
+
+            oturumlar.append({
+                "oturum_id": oturum_id,
+                "ogrenci_id": ogr_id,
+                "ad_soyad": ad_soyad,
+                "ogrenci_numarasi": ogrenci_no,
+                "baslangic_zamani": baslangic.isoformat(),
+                "bitis_zamani": (
+                    bitis.isoformat() if bitis else None
+                ),
+                "toplam_saniye": saniye,
+                "durum": (
+                    "TAMAMLANDI" if tamamlandi else "AKTIF"
+                ),
+                "onaylandi_mi": onaylandi
+            })
+
+        return {
+            "ozet": ozet,
+            "ogrenci_ozetleri": sorted(
+                ogrenciler.values(),
+                key=lambda x: x["ad_soyad"].casefold()
+            ),
+            "oturumlar": oturumlar
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Danışma masası raporları alınamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.post("/api/faaliyet-birimleri")
+def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute("SELECT birim_id FROM faaliyet_birimleri WHERE birim_adi = %s", (kayit.birim_adi.strip(),))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Bu birim adı zaten mevcut!")
+
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute(
+            "INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id;",
+            (kayit.birim_adi.strip().upper(),)
+        )
+        yeni_id = cursor.fetchone()[0]
+
+        # Audit Log (Denetim Kaydı)
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Ekleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.put("/api/faaliyet-birimleri/{birim_id}")
+def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM faaliyet_birimleri WHERE birim_id = %s", (birim_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Güncellenecek birim bulunamadı.")
+
+        # 'ad' olan yer 'birim_adi' olarak düzeltildi
+        cursor.execute(
+            "UPDATE faaliyet_birimleri SET birim_adi = %s WHERE birim_id = %s;",
+            (kayit.birim_adi.strip().upper(), birim_id)
+        )
+
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.delete("/api/faaliyet-birimleri/{birim_id}")
+def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT 1 FROM ogrenci_faaliyet_takip WHERE birim_id = %s LIMIT 1", (birim_id,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="DİKKAT: Bu birim geçmiş faaliyet kayıtlarında kullanıldığı için SİLİNEMEZ! İsterseniz adını güncelleyebilirsiniz.")
+
+        cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
+
+        try:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id)
+        except ImportError:
+            pass
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

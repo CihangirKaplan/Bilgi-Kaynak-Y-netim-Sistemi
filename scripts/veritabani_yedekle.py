@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -29,8 +30,15 @@ def main():
     ortam = os.environ.copy()
     ortam["PGPASSWORD"] = ortam["DB_PASSWORD"]
 
+    pg_dump = os.getenv("PG_DUMP_PATH") or shutil.which("pg_dump")
+    if not pg_dump:
+        raise RuntimeError(
+            "pg_dump bulunamadi. PostgreSQL bin klasorunu PATH'e "
+            "ekleyin veya PG_DUMP_PATH tanimlayin."
+        )
+
     komut = [
-        "pg_dump",
+        pg_dump,
         "--format=custom",
         "--no-password",
         "--host", ortam["DB_HOST"],

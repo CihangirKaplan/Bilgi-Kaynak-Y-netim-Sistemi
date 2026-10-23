@@ -1,9 +1,10 @@
+import os
 import sys
 import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem
 )
 from oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal
@@ -17,7 +18,7 @@ from cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
 from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
 from dashboard_ekrani import DashboardEkrani
 from k_personel_ekranlari import KullaniciPersonelEkrani
-
+from faaliyet_dialog import FaaliyetEkleDialog
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -57,7 +58,9 @@ IZIN_LISTESI = [
     ("Kullanıcı pasifleştirme",              "Kullanıcı & Denetim","HHEHHE"),
     ("Rol atama/değiştirme",                 "Kullanıcı & Denetim","HHEHHE"),
     ("Audit kayıtlarını inceleme",           "Kullanıcı & Denetim","HHEHHE"),
-    ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HEEEHE"),
+    ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
+    ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
+    ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
 
     ("Yeni izin tanımlama",                  "Sistem Yönetimi",   "HHHHHE"),
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
@@ -87,9 +90,23 @@ MENU = [
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
-        dict(ikon="🛎️", ad="Danışma Masası", izin="Danışma masası oturumunu yönetme",
-             aciklama="Danışma masası oturum yönetimi",
-             aksiyon=[("▶  Oturumu Yönet", "Danışma masası oturumunu yönetme")]),
+        dict(ikon="🛎️", ad="Danışma Masası",
+             izin="Danışma masası oturumunu yönetme",
+             aciklama="Görev başlatma, bitirme ve geçmiş görevler",
+             aksiyon=[]),
+        dict(ikon="📋", ad="Danışma Masası Yönetimi",
+             izin="Danışma masası yönetimi",
+             aciklama="Öğrencilerin görevlerini takip etme ve onaylama",
+             aksiyon=[]),
+        dict(ikon="📊", ad="Danışma Masası Raporları",
+             izin="Danışma masası raporlarını görüntüleme",
+             aciklama="Öğrencilerin çalışma süreleri ve görev raporları",
+             aksiyon=[]),
+        dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
+             aciklama="Faaliyet kayıtlarının düzenlenmesi",
+             aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
+                      ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
+                      ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
@@ -111,9 +128,7 @@ MENU = [
         dict(ikon="⚠️", ad="Arıza Kayıtları", izin="Arıza kayıtlarını yönetme",
              aciklama="Arıza bildirimi ve takibi",
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
-        dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
-             aciklama="Faaliyet kayıtlarının düzenlenmesi",
-             aksiyon=[("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme")]),
+
     ]),
     ("YÖNETİM & DENETİM", [
         dict(ikon="👥", ad="Kullanıcı & Personel", izin="Kullanıcı oluşturma",
@@ -231,7 +246,7 @@ class AnaPencere(QMainWindow):
         self.kullanici_adi = kullanici_adi
         self.rol_onizleme = rol_onizleme
 
-        self.api_url = "http://127.0.0.1:8000"
+        self.api_url = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
         self.token = token
         self.kullanici_id = kullanici_id
 
@@ -254,8 +269,8 @@ class AnaPencere(QMainWindow):
         te_layout.setContentsMargins(0, 0, 0, 0)
         te_layout.setSpacing(0)
 
-        
-        # 1. Önce takvim sayfasını (widget) oluştur (SİLİNEN SATIR BUYDU)
+
+        # 1. Önce takvim sayfasını (widget) oluştur
         self.takvim_widget = HaftalikTakvimEkrani(api_url=self.api_url, token=self.token)
         # 2. Sonra takvimin içindeki yeni geri ok butonuna tıklama görevi ver
         self.takvim_widget.btn_ana_ekrana_don.clicked.connect(self.ana_ekrana_don)
@@ -360,14 +375,13 @@ class AnaPencere(QMainWindow):
         self.nav_grup = QButtonGroup(self)
         self.nav_grup.setExclusive(True)
         self.sayfa_bilgi = []
-
         self.rol_uygula(self.aktif_rol)
 
     # ------------------------------------------------------------------
     def rol_uygula(self, rol):
         self.aktif_rol = rol
         info = ROL_BILGI[rol]
-        self.setWindowTitle(f"BKYS — Travma Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
+        self.setWindowTitle(f"TKYS — Travma Kaynak Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
         if self.kullanici_adi:
             self.lbl_rol_ad.setText(self.kullanici_adi)
             self.lbl_kullanici.setText(info["ad"])
@@ -657,16 +671,18 @@ class AnaPencere(QMainWindow):
             btn.setMinimumHeight(78)
             golge(btn, 22, 24, 4)
             btn.clicked.connect(lambda _=False, ad=oge["ad"]: self.nav_btnler[ad].click())
-# ... (Hızlı erişim butonlarını ekleyen döngü) ...
             hg.addWidget(btn, n // 4, n % 4)
         lay.addLayout(hg)
-        
-        # --- İŞTE BURAYA BİZİM YENİ DASHBOARD'U EKLİYORUZ ---
-        if self.aktif_rol in ["mudur", "admin", "memur"]:
-            self.istatistik_paneli = DashboardEkrani(self.api_url, self.token)
-            lay.addWidget(self.istatistik_paneli)
-            # ----------------------------------------------------
 
+        # Dashboard istatistikleri yalnızca yetkili rollerde gösterilir.
+        if self.aktif_rol in ["mudur", "admin", "memur"]:
+            self.istatistik_paneli = DashboardEkrani(
+                self.api_url,
+                self.token
+            )
+            lay.addWidget(self.istatistik_paneli)
+
+        # Bu satırlar if bloğunun DIŞINDA olmalı.
         lay.addStretch()
         return self.kaydirmali(govde)
 
@@ -709,11 +725,12 @@ class AnaPencere(QMainWindow):
         bl.addWidget(ikon)
         bl.addLayout(mt)
         bl.addStretch()
-        bl.addWidget(rozet, 0, Qt.AlignVCenter)
+        if oge["ad"] != "Danışma Masası":
+            bl.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
-        if yetkili:
+        if yetkili and oge["ad"] != "Danışma Masası":
             ab = QHBoxLayout()
             ab.setSpacing(12)
             for etiket, izin_kodu in yetkili:
@@ -746,6 +763,8 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(self.odayi_pasife_al)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
+                elif izin_kodu == "Danışma masası oturumunu yönetme":
+                    btn.clicked.connect(lambda: self.danisma_ekrani.yenile())
 
                 # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
@@ -758,12 +777,50 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_durum_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif "Rol Ata / Değiştir" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_rol_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
+                elif etiket == "＋  Yeni Faaliyet Ekle":
+                    btn.clicked.connect(self.yeni_faaliyet_ekrani_ac)
+                elif "Faaliyet Düzenle" in etiket:
+                    btn.clicked.connect(self.faaliyet_duzenle_tetikle)
+                elif "Faaliyet Sil" in etiket:
+                    btn.clicked.connect(self.faaliyet_sil_tetikle)
+                    btn.setStyleSheet("background-color: #E74C3C; color: white; font-weight: bold; border-radius: 4px;") # Kan kırmızı tehlike butonu
+                elif "Faaliyet Birimleri" in etiket:
+                    btn.clicked.connect(self.faaliyet_birimleri_ekrani_ac)
+
                 ab.addWidget(btn)
             ab.addStretch()
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
-        if oge["ad"] == "Cihaz Envanteri":
+        if oge["ad"] == "Danışma Masası":
+            from danisma_masasi_ekrani import DanismaMasasiEkrani
+            self.danisma_ekrani = DanismaMasasiEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.danisma_ekrani, 1)
+
+        elif oge["ad"] == "Danışma Masası Yönetimi":
+            from danisma_masasi_yonetimi import DanismaMasasiYonetimi
+
+            self.danisma_yonetim_ekrani = DanismaMasasiYonetimi(
+                api_url=self.api_url,
+                token=self.token
+            )
+
+            lay.addWidget(self.danisma_yonetim_ekrani, 1)
+
+        elif oge["ad"] == "Danışma Masası Raporları":
+            from danisma_masasi_raporlari import DanismaMasasiRaporlari
+
+            self.danisma_rapor_ekrani = DanismaMasasiRaporlari(
+                api_url=self.api_url,
+                token=self.token
+            )
+
+            lay.addWidget(self.danisma_rapor_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
             self.aktif_cihaz_ekrani = CihazYonetimEkrani(
                 api_url=self.api_url,
@@ -773,11 +830,11 @@ class AnaPencere(QMainWindow):
             lay.addWidget(self.aktif_cihaz_ekrani, 1)
 
         elif oge["ad"] == "Kalibrasyon":
-         self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
-             api_url=self.api_url,
-             token=self.token
-         )
-         lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
+            self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
 
         elif oge["ad"] == "Cihaz Rezervasyonu":
             rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
@@ -854,6 +911,51 @@ class AnaPencere(QMainWindow):
             il.addWidget(self.randevu_ana_ekrani)
 
             lay.addWidget(ik, 1)
+
+        elif oge["ad"] == "Faaliyet Kayıtları":
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
+
+            self.tablo_faaliyetler = QTableWidget()
+            self.tablo_faaliyetler.setColumnCount(7)
+            self.tablo_faaliyetler.setHorizontalHeaderLabels([
+                "ID", "Öğrenci Adı", "Öğrenci No", "Faaliyet", "Miktar", "Toplam Puan", "Tarih"
+            ])
+            self.tablo_faaliyetler.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.tablo_faaliyetler.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            self.tablo_faaliyetler.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+            self.tablo_faaliyetler.setStyleSheet("""
+                QTableWidget {
+                    background-color: white;
+                    color: #2C3E50; /* YAZI RENGİNİ ZORLA KOYU LACİVERT/SİYAH YAPTIK */
+                    border: 1px solid #D0D7E5;
+                    border-radius: 8px;
+                    gridline-color: #E2E8F0;
+                }
+                QTableWidget::item {
+                    color: #2C3E50; /* Hücre içindeki yazılar kesinlikle görünür olacak */
+                }
+                QTableWidget::item:selected {
+                    background-color: #3498DB; /* Satıra tıklanınca arka plan mavi */
+                    color: white; /* Satıra tıklanınca yazı beyaz */
+                }
+                QHeaderView::section {
+                    background-color: #0A1F5C;
+                    color: white;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                }
+            """)
+            il.addWidget(self.tablo_faaliyetler)
+
+            # Tablo çizildiği an veriyi çekecek fonksiyonu çağırıyoruz
+            self.faaliyet_tablosunu_guncelle()
+
+            lay.addWidget(ik, 1)
+
         else:
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -938,6 +1040,177 @@ class AnaPencere(QMainWindow):
         if self.personel_formu.exec(): 
             if hasattr(self, 'aktif_personel_ekrani'):
                 self.aktif_personel_ekrani.verileri_cek()
+
+    def faaliyet_tablosunu_guncelle(self):
+        if not hasattr(self, 'tablo_faaliyetler'):
+            return
+
+        self.tablo_faaliyetler.setRowCount(0)
+
+        try:
+            import requests
+            from PySide6.QtWidgets import QTableWidgetItem, QMessageBox
+
+            headers = {"Authorization": f"Bearer {self.token}"}
+            res = requests.get(f"{self.api_url}/api/faaliyet-kayitlari", headers=headers)
+
+            if res.status_code == 200:
+                kayitlar = res.json()
+                self.tablo_faaliyetler.setRowCount(len(kayitlar))
+
+                for satir_no, kayit in enumerate(kayitlar):
+                    self.tablo_faaliyetler.setItem(satir_no, 0, QTableWidgetItem(str(kayit.get("id", ""))))
+                    self.tablo_faaliyetler.setItem(satir_no, 1, QTableWidgetItem(str(kayit.get("ad_soyad", ""))))
+                    self.tablo_faaliyetler.setItem(satir_no, 2, QTableWidgetItem(str(kayit.get("ogrenci_no", ""))))
+                    self.tablo_faaliyetler.setItem(satir_no, 3, QTableWidgetItem(str(kayit.get("faaliyet_adi", ""))))
+                    self.tablo_faaliyetler.setItem(satir_no, 4, QTableWidgetItem(str(kayit.get("miktar", ""))))
+                    self.tablo_faaliyetler.setItem(satir_no, 5, QTableWidgetItem(f"{kayit.get('toplam_puan', '0')} Puan"))
+                    self.tablo_faaliyetler.setItem(satir_no, 6, QTableWidgetItem(str(kayit.get("tarih", ""))))
+
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{str(e)}")
+
+    def yeni_faaliyet_ekrani_ac(self):
+        from faaliyet_dialog import FaaliyetEkleDialog
+        dialog = FaaliyetEkleDialog(self.api_url, self.token, self)
+        if dialog.exec():
+            # Kullanıcı formu doldurup kaydete basınca tablo şak diye yenilenecek
+            self.faaliyet_tablosunu_guncelle()
+
+    def faaliyet_duzenle_tetikle(self):
+        # 1. Buton bağlandıysa terminale bunu yazdıracak:
+        print("--- DÜZENLE BUTONUNA BASILDI! ---")
+
+        # 2. Tabloyu bulamazsa sessizce kapanmayacak, bize bağıracak:
+        if not hasattr(self, 'tablo_faaliyetler'):
+            print("HATA: 'tablo_faaliyetler' adında bir tablo yok! Acaba tablonun adı başka bir şey mi?")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Hata", "Tablo bulunamadı! Terminale bak.")
+            return
+
+        secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
+        if not secili_satirlar:
+            from PySide6.QtWidgets import QMessageBox
+            uyari = QMessageBox(self)
+            uyari.setWindowTitle("Uyarı")
+            uyari.setText("Lütfen düzenlemek istediğiniz faaliyeti tablodan seçin!")
+            uyari.setIcon(QMessageBox.Warning)
+            uyari.setStyleSheet("""
+                QMessageBox { background-color: #F8F9FA; }
+                QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
+                QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
+                QPushButton:hover { background-color: #3498DB; }
+            """)
+            uyari.exec()
+            return
+
+        satir = secili_satirlar[0].row()
+        takip_id = self.tablo_faaliyetler.item(satir, 0).text()
+        print(f"Seçilen satırın ID'si: {takip_id}") # ID'yi yakaladık mı görelim
+
+        # Miktar sütununda hem rakam hem birim var, onları parçalıyoruz
+        miktar_hücresi = self.tablo_faaliyetler.item(satir, 4).text().split(" ")
+        miktar_rakam = miktar_hücresi[0]
+        birim_adi = miktar_hücresi[1] if len(miktar_hücresi) > 1 else ""
+
+        mevcut_veri = {
+            "takip_id": takip_id,
+            "ogrenci_adi": self.tablo_faaliyetler.item(satir, 1).text(),
+            "faaliyet_adi": self.tablo_faaliyetler.item(satir, 3).text(),
+            "miktar": miktar_rakam,
+            "birim_adi": birim_adi
+        }
+
+        from faaliyet_dialog import FaaliyetEkleDialog
+        dialog = FaaliyetEkleDialog(self.api_url, self.token, self, mevcut_veri=mevcut_veri)
+        if dialog.exec():
+            self.faaliyet_tablosunu_guncelle()
+
+    def faaliyet_sil_tetikle(self):
+        if not hasattr(self, 'tablo_faaliyetler'):
+            return
+
+        secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
+
+        # 1. SATIR SEÇİLMEMİŞSE ÇIKACAK ŞIK UYARI
+        if not secili_satirlar:
+            from PySide6.QtWidgets import QMessageBox
+            uyari = QMessageBox(self)
+            uyari.setWindowTitle("Uyarı")
+            uyari.setText("Lütfen silmek istediğiniz faaliyeti tablodan seçin!")
+            uyari.setIcon(QMessageBox.Warning)
+            uyari.setStyleSheet("""
+                QMessageBox { background-color: #F8F9FA; }
+                QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
+                QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
+                QPushButton:hover { background-color: #3498DB; }
+            """)
+            uyari.exec()
+            return
+
+        satir = secili_satirlar[0].row()
+        takip_id = str(self.tablo_faaliyetler.item(satir, 0).text()).strip()
+        ogrenci_adi = self.tablo_faaliyetler.item(satir, 1).text()
+        faaliyet_adi = self.tablo_faaliyetler.item(satir, 3).text()
+
+        # 2. EMİN MİSİN SORUSUNUN ŞIK VERSİYONU
+        from PySide6.QtWidgets import QMessageBox
+        soru = QMessageBox(self)
+        soru.setWindowTitle("Kayıt Silme Onayı")
+        soru.setText(f"DİKKAT: {ogrenci_adi} adlı öğrencinin '{faaliyet_adi}' kaydını kalıcı olarak silmek istediğinize emin misiniz?")
+        soru.setIcon(QMessageBox.Question)
+        soru.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        soru.setDefaultButton(QMessageBox.No)
+        # Soru kutusuna özel, Yes (Evet) butonunu tehlike rengi yapalım
+        soru.setStyleSheet("""
+            QMessageBox { background-color: #F8F9FA; }
+            QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
+            QPushButton { background-color: #BDC3C7; color: black; padding: 6px 15px; border-radius: 4px; }
+            QPushButton:hover { background-color: #95A5A6; }
+            QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; }
+            QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
+        """)
+
+        cevap = soru.exec()
+
+        if cevap == QMessageBox.Yes:
+            import requests
+            headers = {"Authorization": f"Bearer {self.token}"}
+            hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}"
+
+            try:
+                res = requests.delete(hedef_url, headers=headers)
+
+                if res.status_code == 200:
+                    bilgi = QMessageBox(self)
+                    bilgi.setWindowTitle("Başarılı")
+                    bilgi.setText("Kayıt veritabanından kalıcı olarak silindi!")
+                    bilgi.setIcon(QMessageBox.Information)
+                    bilgi.setStyleSheet("""
+                        QMessageBox { background-color: #F8F9FA; }
+                        QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
+                        QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; }
+                        QPushButton:hover { background-color: #2ECC71; }
+                    """)
+                    bilgi.exec()
+
+                    self.faaliyet_tablosunu_guncelle() # Tabloyu yenile ki kayıt ekrandan kaybolsun
+                else:
+                    try:
+                        hata_detayi = res.json().get("detail", res.text)
+                    except:
+                        hata_detayi = res.text
+                    QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+            except Exception as e:
+                QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+
+    def faaliyet_birimleri_ekrani_ac(self):
+        # Az önce yazdığımız arayüz dosyasını çağırıyoruz
+        from birim_dialog import BirimYonetimDialog
+        dialog = BirimYonetimDialog(self.api_url, self.token, self)
+        dialog.exec()
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"

@@ -225,6 +225,7 @@ def test_bos_guncelleme_reddedilir():
                 "PLANLANDI",
             ),
             ("ADMIN",),
+            None,  # Randevu çakışması yok
         ]
 
         with pytest.raises(HTTPException) as hata:
@@ -362,10 +363,7 @@ def test_gecerli_randevu_guncellenir():
                 "PLANLANDI",
             ),
             ("ADMIN",),  # Kullanıcı rolü
-            (1,),        # Danışan kodu geçerli
-            (1,),        # Psikolog geçerli
-            (1,),        # Yeni oda geçerli
-            None,        # Saat çakışması yok
+            None,        # Randevu çakışması yok
         ]
 
         sonuc = randevu_guncelle(

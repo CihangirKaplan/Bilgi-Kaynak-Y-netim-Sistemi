@@ -64,7 +64,7 @@ CREATE TABLE kullanicilar (
     -- FALSE -> kullanıcı hesabı pasiftir
     aktif_mi BOOLEAN NOT NULL
         DEFAULT TRUE,
-    
+
     -- Art arda yapılan başarısız giriş denemelerinin sayısı
     basarisiz_giris_sayisi INT NOT NULL
         DEFAULT 0,
@@ -334,7 +334,9 @@ INSERT INTO izinler (izin_adi, aciklama) VALUES
     ('KULLANICI_PASIFLESTIR', 'Kullanıcı pasifleştirme'),
     ('ROL_ATAMA_DEGISTIRME', 'Rol atama veya değiştirme'),
     ('AUDIT_KAYITLARI_INCELE', 'Audit kayıtlarını inceleme'),
-    ('DANISMA_OTURUMU_YONET', 'Danışma masası oturumunu yönetme'),
+    ('DANISMA_OTURUMU_YONET', 'Öğrencinin kendi görevini başlatması ve bitirmesi'),
+    ('DANISMA_OTURUMU_YONETIM', 'Danışma masası görevlerini ekleme, düzenleme ve onaylama'),
+    ('DANISMA_OTURUMU_GORUNTULE', 'Danışma masası raporlarını görüntüleme'),
     ('CIHAZ_EKLE', 'Sisteme yeni cihaz ekleme'),
     ('FAALIYET_KAYITLARI_DUZENLE', 'Faaliyet kayıtlarını düzenleme'),
     ('CIHAZ_TAKIP_KONTROL_LISTESI', 'Cihaz takip kontrol listesini yönetme'),
@@ -344,6 +346,7 @@ INSERT INTO izinler (izin_adi, aciklama) VALUES
     ('ROL_OLUSTUR', 'Sisteme yeni rol oluşturma'),
     ('ROL_DUZENLE', 'Mevcut rolü düzenleme'),
     ('FAALIYET_BIRIMI_DUZENLE', 'Faaliyet birimlerini yönetme');
+
 
 
 -- ============================================================
@@ -386,7 +389,8 @@ SELECT
         'BAKIM_KAYITLARI_YONET',
         'KALIBRASYON_KAYITLARI_YONET',
         'ARIZA_KAYITLARI_YONET',
-        'DANISMA_OTURUMU_YONET',
+        'DANISMA_OTURUMU_YONETIM',
+        'DANISMA_OTURUMU_GORUNTULE',
         'CIHAZ_EKLE',
         'FAALIYET_KAYITLARI_DUZENLE',
         'CIHAZ_TAKIP_KONTROL_LISTESI'
@@ -419,7 +423,7 @@ SELECT
         'KULLANICI_PASIFLESTIR',
         'ROL_ATAMA_DEGISTIRME',
         'AUDIT_KAYITLARI_INCELE',
-        'DANISMA_OTURUMU_YONET',
+        'DANISMA_OTURUMU_GORUNTULE',
         'CIHAZ_EKLE',
         'FAALIYET_KAYITLARI_DUZENLE',
         'CIHAZ_TAKIP_KONTROL_LISTESI'
@@ -472,7 +476,7 @@ WHERE r.rol_adi = 'PROJE_ASISTANI';
 
 -- ============================================================
 -- 14.10 ADMIN IZINLERI
--- ADMIN süper kullanıcıdır ve sistemde tanımlı tüm izinlere sahiptir.
+-- ADMIN, öğrenciye özel DANISMA_OTURUMU_YONET dışındaki tüm izinlere sahiptir.
 -- Yeni izin oluşturma işleminde FastAPI, yeni izni ADMIN rolüne de
 -- otomatik olarak izin_var = 1 ile bağlamalıdır.
 -- ============================================================
@@ -481,7 +485,11 @@ INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
 SELECT
     r.rol_id,
     i.izin_id,
-    1
+    CASE
+        WHEN i.izin_adi = 'DANISMA_OTURUMU_YONET'
+        THEN 0
+        ELSE 1
+    END
 FROM roller r
 CROSS JOIN izinler i
 WHERE r.rol_adi = 'ADMIN';
