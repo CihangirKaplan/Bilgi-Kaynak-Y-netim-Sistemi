@@ -1,10 +1,13 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
-    QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit
+    QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit, QFrame
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
+                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
+                            yenile_butonu_olustur, bos_mesaj_olustur)
 
 class YeniBakimFormu(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -12,18 +15,10 @@ class YeniBakimFormu(QDialog):
         self.api_url = api_url
         self.token = token
 
-        self.setWindowTitle("🛠️ Yeni Bakım Kaydı Ekle")
+        self.setWindowTitle("Yeni Bakım Kaydı")
         self.setMinimumSize(450, 500)
 
-        self.setStyleSheet("""
-            QDialog { background-color: #F8F9FA; }
-            QLabel { font-weight: bold; color: #2C3E50; font-size: 13px; }
-            QLineEdit, QComboBox, QDateEdit, QTextEdit {
-                background-color: white; border: 1px solid #BDC3C7;
-                border-radius: 4px; padding: 6px; color: #2C3E50;
-            }
-            QComboBox:focus, QDateEdit:focus, QLineEdit:focus, QTextEdit:focus { border: 1px solid #3498DB; }
-        """)
+        self.setStyleSheet(FORM_STIL)
 
         layout = QVBoxLayout(self)
 
@@ -56,8 +51,8 @@ class YeniBakimFormu(QDialog):
 
         layout.addLayout(form_layout)
 
-        btn_kaydet = QPushButton("✅ Kaydet")
-        btn_kaydet.setStyleSheet("QPushButton { background-color: #27AE60; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;} QPushButton:hover { background-color: #229954; }")
+        btn_kaydet = QPushButton("Kaydet")
+        btn_kaydet.setObjectName("kaydet")
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(btn_kaydet)
@@ -74,7 +69,7 @@ class YeniBakimFormu(QDialog):
             pass
 
     def kaydet(self):
-# TL Formatı Düzeltici: 10.000,50 veya 10000 veya 10,50'yi anlar
+        # TL Formatı Düzeltici: 10.000,50 veya 10000 veya 10,50'yi anlar
         metin = self.txt_maliyet.text().strip()
         if '.' in metin and ',' in metin:
             metin = metin.replace('.', '').replace(',', '.')
@@ -107,7 +102,7 @@ class YeniBakimFormu(QDialog):
         try:
             res = requests.post(f"{self.api_url}/api/bakimlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
             if res.status_code == 201:
-                QMessageBox.information(self, "Başarılı", "✅ Bakım kaydı başarıyla eklendi!")
+                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
                 self.accept()
             else:
                 # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
@@ -123,19 +118,10 @@ class BakimDuzenleFormu(QDialog):
         self.token = token
         self.bakim_verisi = bakim_verisi
 
-        self.setWindowTitle("🛠️ Bakım Kaydını Düzenle")
+        self.setWindowTitle("Bakım Kaydını Düzenle")
         self.setMinimumSize(450, 520)
 
-        self.setStyleSheet("""
-            QDialog { background-color: #F8F9FA; }
-            QLabel { font-weight: bold; color: #2C3E50; font-size: 13px; }
-            QLineEdit, QComboBox, QDateEdit, QTextEdit {
-                background-color: white; border: 1px solid #BDC3C7;
-                border-radius: 4px; padding: 6px; color: #2C3E50;
-            }
-            QComboBox:focus, QDateEdit:focus, QLineEdit:focus, QTextEdit:focus { border: 1px solid #3498DB; }
-            QLineEdit:read-only { background-color: #EAECEE; color: #7F8C8D; }
-        """)
+        self.setStyleSheet(FORM_STIL)
 
         layout = QVBoxLayout(self)
 
@@ -176,8 +162,8 @@ class BakimDuzenleFormu(QDialog):
 
         layout.addLayout(form_layout)
 
-        btn_kaydet = QPushButton("💾 Değişiklikleri Kaydet")
-        btn_kaydet.setStyleSheet("QPushButton { background-color: #2980B9; color: white; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 14px;} QPushButton:hover { background-color: #2471A3; }")
+        btn_kaydet = QPushButton("Değişiklikleri Kaydet")
+        btn_kaydet.setObjectName("kaydet")
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(btn_kaydet)
@@ -214,7 +200,7 @@ class BakimDuzenleFormu(QDialog):
         try:
             res = requests.put(f"{self.api_url}/api/bakimlar/{self.bakim_verisi['bakim_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "✅ Bakım kaydı başarıyla güncellendi!")
+                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
                 self.accept()
             else:
                 hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
@@ -223,137 +209,121 @@ class BakimDuzenleFormu(QDialog):
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimYonetimEkrani(QWidget):
-    """Bakım Kayıtlarının Listelendiği Saf Tablo Ekranı"""
+    """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
     def __init__(self, api_url, token):
         super().__init__()
         self.api_url = api_url
         self.token = token
+        self.basliklar = {"Authorization": f"Bearer {token}"}
         self.bakim_detaylari = {}
         self.arayuzu_olustur()
 
     def arayuzu_olustur(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
 
-        ust_panel = QHBoxLayout()
-        lbl_baslik = QLabel("🛠️ Cihaz Bakım Geçmişi")
-        lbl_baslik.setStyleSheet("font-size: 20px; font-weight: bold; color: #2C3E50;")
+        self.arama = QLineEdit()
+        self.arama.setPlaceholderText("🔍  Cihaz, kişi veya işlem ara...")
+        self.arama.textChanged.connect(self.filtrele)
 
-        self.btn_yeni_bakim = QPushButton("+ Yeni Bakım Kaydı")
-        self.btn_yeni_bakim.setStyleSheet("background-color: #2980B9; color: white; padding: 8px 15px; font-weight: bold; border-radius: 4px;")
-        self.btn_yeni_bakim.setCursor(Qt.PointingHandCursor)
-        self.btn_yeni_bakim.clicked.connect(self.yeni_bakim_ekle)
+        self.cip_toplam = sayi_cipi("0 kayıt")
+        self.cip_yaklasan = sayi_cipi("0 yaklaşan", "#854D0E", "#FEF3C7")
+        self.cip_gecmis = sayi_cipi("0 gecikmiş", "#991B1B", "#FEE2E2")
 
-        self.btn_yenile = QPushButton("🔄 Yenile")
-        self.btn_yenile.setStyleSheet("background-color: #7F8C8D; color: white; padding: 8px 15px; font-weight: bold; border-radius: 4px;")
-        self.btn_yenile.setCursor(Qt.PointingHandCursor)
-        self.btn_yenile.clicked.connect(self.verileri_yukle)
+        layout.addWidget(sayfa_basligi(
+            "Cihaz Bakım Geçmişi", "Yapılan bakımlar ve planlanan sonraki bakım tarihleri",
+            self.arama, yenile_butonu_olustur(self.verileri_yukle),
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
-        ust_panel.addWidget(lbl_baslik)
-        ust_panel.addStretch()
-        ust_panel.addWidget(self.btn_yenile)
-        ust_panel.addWidget(self.btn_yeni_bakim)
+        self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "İŞLEM"])
+        kb = self.tablo.horizontalHeader()
+        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(2, QHeaderView.Stretch)
+        kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(5, QHeaderView.Fixed)
+        kb.setSectionResizeMode(6, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(5, 230)
+        self.tablo.setColumnWidth(6, 110)
 
-        layout.addLayout(ust_panel)
+        self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
 
-        # Tabloya Başlangıç ve Bitiş Sütunları Eklendi (Toplam 9 Sütun)
-        self.tablo = QTableWidget(0, 9)
-        self.tablo.setHorizontalHeaderLabels(["ID", "Cihaz", "Yapan Kişi", "İşlem", "Maliyet", "Başlangıç", "Bitiş", "Sonraki Bakım", "İşlem"])
-
-        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.tablo.horizontalHeader().setStretchLastSection(False)
-
-        # Hizalamayı Jilet Gibi Yapan Esneme Ayarları
-        self.tablo.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch) # İşlem sütunu uzasın
-        self.tablo.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents) # Başlangıç daralsın
-        self.tablo.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents) # Bitiş daralsın
-        self.tablo.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents) # Sonraki Bakım daralsın
-
-        self.tablo.setWordWrap(True)
-        self.tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.tablo.verticalHeader().setMinimumSectionSize(50)
-        self.tablo.verticalHeader().setVisible(False)
-
-        self.tablo.setAlternatingRowColors(True)
-        self.tablo.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tablo.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tablo.setStyleSheet("""
-            QTableWidget { background-color: white; alternate-background-color: #F2F4F4; color: #0A1F5C; }
-            QTableWidget::item { color: #0A1F5C; padding: 8px; }
-            QHeaderView::section { background-color: #34495E; color: white; font-weight: bold; padding: 8px; border: none; }
-        """)
-
-        layout.addWidget(self.tablo)
-
-        self.tablo.setColumnWidth(0, 70)
-        self.tablo.setColumnWidth(1, 180)
-        self.tablo.setColumnWidth(2, 100)
-        self.tablo.setColumnWidth(4, 110)
+        kart = QFrame()
+        kart.setObjectName("kart")
+        kl = QVBoxLayout(kart)
+        kl.setContentsMargins(8, 8, 8, 8)
+        kl.addWidget(self.tablo)
+        kl.addWidget(self.bos_mesaj)
+        layout.addWidget(kart, 1)
 
         self.verileri_yukle()
 
     def verileri_yukle(self):
         self.tablo.setRowCount(0)
         self.bakim_detaylari.clear()
+        yaklasan = gecmis = 0
         try:
-            res = requests.get(f"{self.api_url}/api/bakimlar", headers={"Authorization": f"Bearer {self.token}"})
-            if res.status_code == 200:
-                bakimlar = res.json()
-                for satir_indeks, b in enumerate(bakimlar):
-                    self.tablo.insertRow(satir_indeks)
-                    self.bakim_detaylari[b["bakim_id"]] = b
-
-                    id_item = QTableWidgetItem(str(b["bakim_id"]))
-                    id_item.setTextAlignment(Qt.AlignCenter)
-
-                    maliyet_degeri = float(b.get('maliyet', 0.0))
-                    maliyet_metni = f"{maliyet_degeri:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    maliyet_item = QTableWidgetItem(f"{maliyet_metni} ₺")
-                    maliyet_item.setTextAlignment(Qt.AlignCenter)
-
-                    # --- GÜVENLİ TARİH OKUMA (None veya boş gelirse patlamaz) ---
-                    baslangic = b.get("bakim_baslangic_tarihi")
-                    baslangic_metni = baslangic[:10] if baslangic else str(b.get("bakim_tarihi", "Belirtilmedi"))[:10]
-
-                    bitis = b.get("bakim_bitis_tarihi")
-                    bitis_metni = bitis[:10] if bitis else "Belirtilmedi"
-
-                    sonraki = b.get("sonraki_bakim_tarihi")
-                    sonraki_metni = sonraki[:10] if sonraki else "Belirtilmedi"
-
-                    baslangic_item = QTableWidgetItem(baslangic_metni)
-                    baslangic_item.setTextAlignment(Qt.AlignCenter)
-
-                    bitis_item = QTableWidgetItem(bitis_metni)
-                    bitis_item.setTextAlignment(Qt.AlignCenter)
-
-                    sonraki_item = QTableWidgetItem(sonraki_metni)
-                    sonraki_item.setTextAlignment(Qt.AlignCenter)
-
-                    # Hücreleri sıfır hata ile yerleştiriyoruz
-                    self.tablo.setItem(satir_indeks, 0, id_item)
-                    self.tablo.setItem(satir_indeks, 1, QTableWidgetItem(b.get("cihaz_adi", "")))
-                    self.tablo.setItem(satir_indeks, 2, QTableWidgetItem(b.get("bakim_yapan_kisi", "")))
-                    self.tablo.setItem(satir_indeks, 3, QTableWidgetItem(b.get("yapilan_islem", "")))
-                    self.tablo.setItem(satir_indeks, 4, maliyet_item)
-                    self.tablo.setItem(satir_indeks, 5, baslangic_item)
-                    self.tablo.setItem(satir_indeks, 6, bitis_item)
-                    self.tablo.setItem(satir_indeks, 7, sonraki_item)
-
-                    # Düzenle Butonu (8. Sütun)
-                    btn_duz = QPushButton("✎ Düzenle")
-                    btn_duz.setStyleSheet("QPushButton { background-color: #F39C12; color: white; border-radius: 4px; padding: 5px; font-weight: bold; font-size: 11px; } QPushButton:hover { background-color: #D68910; }")
-                    btn_duz.setCursor(Qt.PointingHandCursor)
-                    btn_duz.clicked.connect(lambda checked=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id))
-
-                    btn_widget = QWidget()
-                    btn_layout = QHBoxLayout(btn_widget)
-                    btn_layout.setContentsMargins(5, 2, 5, 2)
-                    btn_layout.setAlignment(Qt.AlignCenter)
-                    btn_layout.addWidget(btn_duz)
-
-                    self.tablo.setCellWidget(satir_indeks, 8, btn_widget)
+            res = requests.get(f"{self.api_url}/api/bakimlar", headers=self.basliklar, timeout=10)
+            res.raise_for_status()
+            bakimlar = res.json()
         except Exception as e:
-            print("Tablo yükleme hatası:", e)
+            print("Bakım listesi yükleme hatası:", e)
+            self.bos_mesaj.setText("Bakım kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
+            self.bos_mesaj.show()
+            self.tablo.hide()
+            return
+
+        self.tablo.setRowCount(len(bakimlar))
+        for i, b in enumerate(bakimlar):
+            self.bakim_detaylari[b["bakim_id"]] = b
+
+            maliyet = float(b.get("maliyet") or 0.0)
+            maliyet_metni = f"{maliyet:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
+
+            bas = tarih_goster(b.get("bakim_baslangic_tarihi") or b.get("bakim_tarihi"))
+            bit = tarih_goster(b.get("bakim_bitis_tarihi"))
+            tarih_metni = bas if bas == bit else f"{bas} – {bit}"
+
+            cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
+            cihaz_item.setData(Qt.UserRole, b["bakim_id"])
+            self.tablo.setItem(i, 0, cihaz_item)
+            self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
+            self.tablo.setItem(i, 2, metin_item(b.get("yapilan_islem", "")))
+            self.tablo.setItem(i, 3, metin_item(maliyet_metni, ortala=True))
+            self.tablo.setItem(i, 4, metin_item(tarih_metni, ortala=True))
+
+            sonraki = b.get("sonraki_bakim_tarihi")
+            if sonraki and sonraki != "Belirtilmedi":
+                widget, durum = kalan_gun_hapi(sonraki)
+                yaklasan += durum == "yaklasiyor"
+                gecmis += durum == "gecmis"
+            else:
+                widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
+            self.tablo.setCellWidget(i, 5, widget)
+
+            self.tablo.setCellWidget(i, 6, islem_butonlari(
+                lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
+                lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
+
+        self.cip_toplam.setText(f"{len(bakimlar)} kayıt")
+        self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
+        self.cip_gecmis.setText(f"{gecmis} gecikmiş")
+        self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
+        self.bos_mesaj.setVisible(not bakimlar)
+        self.tablo.setVisible(bool(bakimlar))
+        self.filtrele(self.arama.text())
+
+    def filtrele(self, metin):
+        """Cihaz, kişi ve işlem sütunlarında arama yapar."""
+        aranan = metin.strip().lower()
+        for satir in range(self.tablo.rowCount()):
+            icerik = " ".join(
+                (self.tablo.item(satir, k).text() if self.tablo.item(satir, k) else "")
+                for k in (0, 1, 2)).lower()
+            self.tablo.setRowHidden(satir, aranan not in icerik)
 
     def yeni_bakim_ekle(self):
         form = YeniBakimFormu(self.api_url, self.token, self)
@@ -366,3 +336,20 @@ class BakimYonetimEkrani(QWidget):
             form = BakimDuzenleFormu(self.api_url, self.token, secili_bakim, self)
             if form.exec():
                 self.verileri_yukle()
+
+    def bakim_sil(self, bakim_id):
+        kayit = self.bakim_detaylari.get(bakim_id)
+        if not kayit:
+            return
+        if not sil_onayi(self, "Bakım Kaydını Sil",
+                         f"“{kayit.get('cihaz_adi', '')}” cihazının bu bakım kaydı silinsin mi?"):
+            return
+        try:
+            res = requests.delete(f"{self.api_url}/api/bakimlar/{bakim_id}", headers=self.basliklar, timeout=10)
+            if res.status_code == 200:
+                self.verileri_yukle()
+            else:
+                hata = res.json().get("detail", "Bilinmeyen hata")
+                QMessageBox.warning(self, "Silinemedi", hata)
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
