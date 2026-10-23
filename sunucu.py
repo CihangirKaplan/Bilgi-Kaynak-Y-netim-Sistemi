@@ -1359,6 +1359,37 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+
+
+@app.delete("/api/bakimlar/{bakim_id}")
+def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM cihaz_bakimlari WHERE bakim_id = %s RETURNING bakim_id;", (bakim_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Bakım kaydı bulunamadı.")
+
+        # Silme ile denetim kaydı aynı işlemde (transaction) yazılır.
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Bakım kaydı silindi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        print("BAKIM SILME HATA:", str(e))
+        raise HTTPException(status_code=500, detail="Bakım kaydı silinemedi.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 # KALİBRASYON YÖNETİMİ MODÜLÜ (CALB-001, CALB-002)
 # ==========================================
 
@@ -1441,6 +1472,7 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
 @app.put("/api/kalibrasyonlar/{kalibrasyon_id}")
 def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
@@ -1471,6 +1503,35 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+
+@app.delete("/api/kalibrasyonlar/{kalibrasyon_id}")
+def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s RETURNING kalibrasyon_id;", (kalibrasyon_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Kalibrasyon kaydı bulunamadı.")
+
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_kalibrasyonlari", kalibrasyon_id, mevcut_cursor=cursor)
+
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Kalibrasyon kaydı silindi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception as e:
+        if conn is not None: conn.rollback()
+        print("KALIBRASYON SILME HATA:", str(e))
+        raise HTTPException(status_code=500, detail="Kalibrasyon kaydı silinemedi.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODÜLÜ (DASH-001)
@@ -1554,6 +1615,47 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.get("/api/dashboard/bugunku-rezervasyonlar")
+def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Bugünle kesişen (bugün başlayan, biten veya bugünü kapsayan) aktif rezervasyonlar
+        cursor.execute("""
+            SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi,
+                   COALESCE(k.kullanici_adi, '-'), COALESCE(o.oda_adi, '-'),
+                   r.baslangic_zamani, r.bitis_zamani
+            FROM cihaz_rezervasyonlari r
+            JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
+            LEFT JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
+            LEFT JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+            LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id
+            WHERE COALESCE(r.iptal_edildi_mi, FALSE) = FALSE
+              AND r.baslangic_zamani < CURRENT_DATE + 1
+              AND r.bitis_zamani >= CURRENT_DATE
+            ORDER BY r.baslangic_zamani;
+        """)
+        bugun = date.today()
+
+        def zaman(z):
+            return z.strftime("%H:%M") if z.date() == bugun else z.strftime("%d.%m %H:%M")
+
+        return [{
+            "rezervasyon_id": s[0],
+            "cihaz": f"{s[1]} - {s[2]}",
+            "rezerve_eden": s[3],
+            "oda": s[4],
+            "baslangic": zaman(s[5]),
+            "bitis": zaman(s[6])
+        } for s in cursor.fetchall()]
+    except Exception as e:
+        print("DASHBOARD REZERVASYON HATA:", str(e))
+        raise HTTPException(status_code=500, detail="Bugünkü rezervasyonlar alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
 
 @app.get("/api/dashboard/yaklasan-islemler")
 def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
@@ -1566,15 +1668,20 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         islemler = []
         bugun = datetime.date.today()
 
-        # 1. YAKLAŞAN BAKIMLAR (Saf Python Hesabı)
+        # 1. YAKLAŞAN BAKIMLAR
+        # Her cihaz için yalnızca SON bakım kaydı dikkate alınır (eski kayıtların planı geçersizdir).
         cursor.execute("""
-            SELECT c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi
+            SELECT DISTINCT ON (b.cihaz_id) c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
-            WHERE b.sonraki_bakim_tarihi IS NOT NULL
+            ORDER BY b.cihaz_id,
+                     COALESCE(b.bakim_baslangic_tarihi::date, b.bakim_tarihi::date) DESC,
+                     b.bakim_id DESC
         """)
         for kayit in cursor.fetchall():
             hedef_tarih = kayit[2]
+            if hedef_tarih is None:
+                continue
             kalan_gun = (hedef_tarih - bugun).days
             if 0 <= kalan_gun <= 60:
                 islemler.append({
@@ -1585,12 +1692,14 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
                     "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
                 })
 
-        # 2. YAKLAŞAN KALİBRASYONLAR (Saf Python Hesabı)
+        # 2. YAKLAŞAN KALİBRASYONLAR
+        # Her cihaz için geçerliliği en ileri olan (güncel) kalibrasyon kaydı dikkate alınır.
         cursor.execute("""
-            SELECT c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi
+            SELECT DISTINCT ON (k.cihaz_id) c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             WHERE k.gecerlilik_tarihi IS NOT NULL
+            ORDER BY k.cihaz_id, k.gecerlilik_tarihi DESC, k.kalibrasyon_id DESC
         """)
         for kayit in cursor.fetchall():
             hedef_tarih = kayit[2]
