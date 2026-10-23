@@ -1554,6 +1554,39 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.get("/api/dashboard/bugunku-randevular")
+def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.randevu_id, r.danisan_kod_id, k.kullanici_adi, o.oda_adi,
+                   r.baslangic_zamani, r.bitis_zamani, r.durum
+            FROM randevular r
+            JOIN personel p ON r.psikolog_id = p.personel_id
+            JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+            JOIN odalar o ON r.oda_id = o.oda_id
+            WHERE DATE(r.baslangic_zamani) = CURRENT_DATE
+            ORDER BY r.baslangic_zamani;
+        """)
+        return [{
+            "randevu_id": s[0],
+            "danisan_kod_id": s[1],
+            "psikolog": s[2],
+            "oda": s[3],
+            "baslangic": s[4].strftime("%H:%M"),
+            "bitis": s[5].strftime("%H:%M"),
+            "durum": s[6]
+        } for s in cursor.fetchall()]
+    except Exception as e:
+        print("DASHBOARD RANDEVU HATA:", str(e))
+        raise HTTPException(status_code=500, detail="Bugünkü randevular alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 @app.get("/api/dashboard/yaklasan-islemler")
 def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
