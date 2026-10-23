@@ -135,9 +135,11 @@ def giris_yap(giris: GirisModeli):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT kullanici_id, kullanici_adi, parola_hash, rol_id, aktif_mi,
-                   basarisiz_giris_sayisi, kilit_bitis_zamani, ilk_giris_mi
-            FROM kullanicilar WHERE kullanici_adi = %s;
+            SELECT k.kullanici_id, k.kullanici_adi, k.parola_hash, k.rol_id, k.aktif_mi,
+                   k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi
+            FROM kullanicilar k
+            LEFT JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_adi = %s;
             """, (giris.kullanici_adi,)
         )
         kullanici = cursor.fetchone()
@@ -170,7 +172,13 @@ def giris_yap(giris: GirisModeli):
 
         cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici[0],))
         pers = cursor.fetchone()
-        personel_id = pers[0] if pers else None
+        # YENİ KONTROL: Personel kaydı yoksa 403 hatası fırlat ve girişi kes
+        if not pers:
+            raise HTTPException(
+                status_code=403, 
+                detail="Yöneticinizden sizi personel olarak tanımlamasını isteyiniz."
+            )
+        personel_id = pers[0]
 
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
         return {
@@ -182,7 +190,8 @@ def giris_yap(giris: GirisModeli):
             "personel_id": personel_id,
             "kullanici_adi": kullanici[1],
             "rol_id": kullanici[3],
-            "sifre_degistirme_gerekli": kullanici[7]
+            "sifre_degistirme_gerekli": kullanici[7],
+            "rol_adi": kullanici[8]
         }
     finally:
         if cursor is not None: cursor.close()
@@ -331,8 +340,8 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-@app.patch("/api/kullanicilar/{kullanici_id}/pasiflestir")
-def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
+@app.patch("/api/kullanicilar/{kullanici_id}/durum-degistir")
+def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
     conn = None
     cursor = None
     try:
@@ -340,36 +349,38 @@ def kullanici_pasiflestir(kullanici_id: int, islem_yapan_id: int = Depends(izin_
         cursor = conn.cursor()
 
         if kullanici_id == islem_yapan_id:
-            raise HTTPException(status_code=403, detail="Kendi hesabınızı pasifleştiremezsiniz.")
+            raise HTTPException(status_code=403, detail="Kendi hesabınızın durumunu değiştiremezsiniz.")
 
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (islem_yapan_id,))
         islem_yapan = cursor.fetchone()
-        if islem_yapan is None:
-            raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
 
         cursor.execute("SELECT r.rol_adi, k.aktif_mi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s FOR UPDATE OF k;", (kullanici_id,))
         hedef = cursor.fetchone()
+        
         if hedef is None:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
 
-        hedef_rol, aktif_mi = hedef
+        hedef_rol, mevcut_durum = hedef
         if hedef_rol == "ADMIN" and islem_yapan[0] != "ADMIN":
-            raise HTTPException(status_code=403, detail="ADMIN hesabını yalnızca ADMIN pasifleştirebilir.")
-        if not aktif_mi:
-            raise HTTPException(status_code=409, detail="Kullanıcı zaten pasif durumda.")
+            raise HTTPException(status_code=403, detail="ADMIN hesabını yalnızca ADMIN düzenleyebilir.")
 
-        cursor.execute("UPDATE kullanicilar SET aktif_mi = FALSE WHERE kullanici_id = %s;", (kullanici_id,))
+        # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
+        yeni_durum = not mevcut_durum
+
+        # Her iki tabloyu da eşzamanlı güncelle
+        cursor.execute("UPDATE kullanicilar SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
+        cursor.execute("UPDATE personel SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
+        
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
         conn.commit()
 
-        return {"mesaj": "Kullanıcı başarıyla pasifleştirildi.", "kullanici_id": kullanici_id, "aktif_mi": False}
+        return {"mesaj": "Durum başarıyla güncellendi.", "kullanici_id": kullanici_id, "yeni_durum": yeni_durum}
     except HTTPException:
-        if conn is not None:
-            conn.rollback()
+        if conn is not None: conn.rollback()
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Kullanıcı pasifleştirme sırasında veritabanı hatası oluştu: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -429,6 +440,28 @@ def personel_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIML
         """)
         kayitlar = cursor.fetchall()
         return [{"personel_id": k[0], "kullanici_id": k[1], "kullanici_adi": k[2], "personel_kodu": k[3], "rol_adi": k[4], "aktif_mi": k[5], "olusturulma_tarihi": k[6]} for k in kayitlar]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.get("/api/kullanicilar/personel-olmayanlar")
+def personel_olmayan_kullanicilari_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        # Sadece henüz personel tablosunda kaydı OLMAYAN aktif kullanıcıları getirir
+        cursor.execute("""
+            SELECT k.kullanici_id, k.kullanici_adi, r.rol_adi 
+            FROM kullanicilar k 
+            JOIN roller r ON k.rol_id = r.rol_id 
+            LEFT JOIN personel p ON k.kullanici_id = p.kullanici_id
+            WHERE p.personel_id IS NULL AND k.aktif_mi = TRUE
+            ORDER BY k.kullanici_adi;
+        """)
+        kayitlar = cursor.fetchall()
+        return [{"kullanici_id": k[0], "kullanici_adi": k[1], "rol_adi": k[2]} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

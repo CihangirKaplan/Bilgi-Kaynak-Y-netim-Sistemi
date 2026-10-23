@@ -3,12 +3,21 @@ import sys
 import requests
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QFrame, QPushButton, QCheckBox, QGraphicsDropShadowEffect
+    QFrame, QPushButton, QCheckBox, QGraphicsDropShadowEffect, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from main_window import AnaPencere
 from sifre_degistir_ekrani import SifreDegistirEkrani
+import faulthandler, traceback
+faulthandler.enable()
+
+def hata_yakala(tip, deger, tb):
+    metin = "".join(traceback.format_exception(tip, deger, tb))
+    print(metin)
+    QMessageBox.critical(None, "Beklenmeyen Hata", metin)
+
+sys.excepthook = hata_yakala
 
 # ======================================================================
 #  TEMA VE SABİTLER
@@ -18,14 +27,12 @@ MAX_DENEME = 5
 KILIT_SANIYE = 30
 
 STIL = """
-* { font-family: 'Segoe UI', 'Inter', Arial; }
-QWidget#kok { background: #EAF0FA; }
+QWidget#kok { background: #EAF0FA; font-family: 'Segoe UI', Arial; }
 QFrame#loginKart { background: white; border-radius: 24px; }
 
 QFrame#marka {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0A1F5C, stop:0.55 #1D4ED8, stop:1 #3B82F6);
     border-top-left-radius: 24px; border-bottom-left-radius: 24px;
-    border-top-right-radius: 0px; border-bottom-right-radius: 0px;
 }
 QLabel#logoYazi { color: white; font-size: 34px; font-weight: 900; letter-spacing: 5px; background: transparent; }
 QLabel#markaBaslik { color: white; font-size: 19px; font-weight: 700; background: transparent; }
@@ -41,15 +48,11 @@ QLabel#etiket { color: #1E3A8A; font-size: 12px; font-weight: 700; background: t
 QLineEdit {
     background: #F3F7FF; color: #0A1F5C; border: 1.5px solid #D5E2FB;
     border-radius: 12px; padding: 13px 14px; font-size: 14px;
-    selection-background-color: #2563EB;
 }
 QLineEdit:hover { border: 1.5px solid #9DB9F2; }
 QLineEdit:focus { border: 1.5px solid #2563EB; background: white; }
 
-QCheckBox { color: #6B7FA8; font-size: 12px; spacing: 8px; background: transparent; }
-QCheckBox::indicator { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid #9DB9F2; background: white; }
-QCheckBox::indicator:checked { background: #2563EB; border: 1.5px solid #2563EB; }
-
+QCheckBox { color: #6B7FA8; font-size: 12px; background: transparent; }
 QLabel#hata {
     color: #B91C1C; background: #FEE2E2; border-radius: 10px;
     padding: 10px 14px; font-size: 12px; font-weight: 600;
@@ -60,8 +63,6 @@ QPushButton#giris {
     font-size: 15px; font-weight: 800; letter-spacing: 1px;
 }
 QPushButton#giris:hover { background: #1E40AF; }
-QPushButton#giris:pressed { background: #172554; }
-QPushButton#giris:disabled { background: #B7C6E6; color: #EEF3FF; }
 QLabel#guvenlik { color: #8A9BC0; font-size: 11px; background: transparent; }
 """
 
@@ -90,7 +91,7 @@ class LoginEkrani(QWidget):
         kl.setContentsMargins(0, 0, 0, 0)
         kl.setSpacing(0)
 
-        # -------------------- SOL: MARKA PANELİ --------------------
+        # SOL: MARKA PANELİ
         marka = QFrame()
         marka.setObjectName("marka")
         marka.setFixedWidth(400)
@@ -124,7 +125,7 @@ class LoginEkrani(QWidget):
         ml.addWidget(mab)
         kl.addWidget(marka)
 
-        # -------------------- SAĞ: FORM --------------------
+        # SAĞ: FORM
         form = QFrame()
         form.setObjectName("form")
         fl = QVBoxLayout(form)
@@ -184,7 +185,6 @@ class LoginEkrani(QWidget):
 
         kok.addWidget(kart)
 
-        # Enter tuşu ile giriş
         self.kullanici_input.returnPressed.connect(self.sifre_input.setFocus)
         self.sifre_input.returnPressed.connect(self.giris_yap)
         self.kullanici_input.setFocus()
@@ -194,8 +194,7 @@ class LoginEkrani(QWidget):
         self.hata_lbl.show()
 
     def rol_adindan_koda(self, rol_id):
-        # API'den gelen Rol ID'sini arayüzün anladığı kelimelere (slug) çevirir.
-        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 9: "asistan", 6: "admin"}
+        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
         return roller.get(rol_id, None)
 
     def giris_yap(self):
@@ -209,9 +208,6 @@ class LoginEkrani(QWidget):
             self.hata_goster("Kullanıcı adı ve şifre boş bırakılamaz.")
             return
 
-        # ==========================================
-        # GERÇEK API'YE (SUNUCUYA) BAĞLANTI KATMANI
-        # ==========================================
         try:
             cevap = requests.post(
                 f"{API_URL}/api/login",
@@ -219,11 +215,6 @@ class LoginEkrani(QWidget):
                 timeout=5
             )
             
-            # Gelen cevabı önce ekrana düz metin (text) olarak basalım ki sunucu ne diyor görelim!
-            print(f"Sunucudan Gelen Ham Cevap (Text): {cevap.text}")
-            print(f"Sunucudan Gelen HTTP Kodu: {cevap.status_code}")
-            
-            # Eğer sunucu tamamen boş döndüyse (char 0 hatası buradan çıkar)
             if not cevap.text.strip():
                  self.hata_goster(f"Sunucu {cevap.status_code} kodu döndürdü ama içeriği bomboş!")
                  return
@@ -231,48 +222,39 @@ class LoginEkrani(QWidget):
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
-
-                # Yetki ve Rol Kontrolü
-                r_id = veri.get("rol_id")
-                aktif_rol = self.rol_adindan_koda(r_id)
-
-                if aktif_rol is None:
-                    self.hata_goster("Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
-                    return
-
-                # Güvenli Giriş Onayı
-                self.hatali_deneme = 0
-                self.hata_lbl.hide()
-
-                gercek_token = veri.get("access_token")
-                k_adi = veri.get("kullanici_adi")
-                k_id = veri.get("kullanici_id")
-                p_id = veri.get("personel_id")
-                aktif_personel_id = p_id if p_id else k_id
-
-                # İlk girişte zorunlu şifre değiştirme
+                
+                # 1. İlk giriş şifre değiştirme kontrolü
                 if veri.get("sifre_degistirme_gerekli") is True:
-                    self.sifre_penceresi = SifreDegistirEkrani(gercek_token)
-                    self.sifre_penceresi.sifre_degistirildi.connect(
-                        self.ilk_giris_sifresi_degisti
-                    )
-                    self.sifre_penceresi.iptal_edildi.connect(
-                        self.ilk_giris_iptal
-                    )
+                    self.sifre_penceresi = SifreDegistirEkrani(veri.get("access_token"))
+                    self.sifre_penceresi.sifre_degistirildi.connect(self.ilk_giris_sifresi_degisti)
+                    self.sifre_penceresi.iptal_edildi.connect(self.ilk_giris_iptal)
                     self.sifre_penceresi.show()
                     self.hide()
                     return
 
-                # 1. Ana Pencereyi var olan yapısına uygun yaratıyoruz (Çökmeyi engeller)
-# Token'ı ve ID'yi pencere yaratılırken doğrudan içeri yolluyoruz
-                # ki Cihaz ekranı çizilirken token'ı kapabilsin!
+                # 2. Rol kontrolü
+                r_id = veri.get("rol_id")
+                aktif_rol = self.rol_adindan_koda(r_id)
+
+                if not aktif_rol:
+                    QMessageBox.warning(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
+                    return
+
+                # 3. Hataları sıfırla ve ana pencereyi aç
+                self.hatali_deneme = 0
+                self.hata_lbl.hide()
+
+                print("DEBUG: AnaPencere oluşturulmaya çalışılıyor...")
+                print(f"DEBUG Parametreler -> Rol: {aktif_rol}, Kullanıcı: {veri.get('kullanici_adi')}, ID: {veri.get('personel_id') or veri.get('kullanici_id')}")
+
                 self.ana_pencere = AnaPencere(
                     aktif_rol=aktif_rol,
-                    kullanici_adi=k_adi,
-                    token=gercek_token,
-                    kullanici_id=aktif_personel_id
+                    kullanici_adi=veri.get("kullanici_adi"),
+                    token=veri.get("access_token"),
+                    kullanici_id=veri.get("personel_id") or veri.get("kullanici_id")
                 )
-
+                print("DEBUG: AnaPencere başarıyla oluşturuldu!")
+                
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.showMaximized()
 
@@ -281,10 +263,15 @@ class LoginEkrani(QWidget):
                 self.goster.setChecked(False)
                 self.hide()
 
-            elif cevap.status_code == 429: # Çok fazla hatalı giriş (Kilitlenme)
+            elif cevap.status_code == 429:
                 self.kilitle()
-
-            else: # 401 veya 403 (Hatalı şifre / Pasif hesap)
+            elif cevap.status_code == 403:
+                hata_mesaji = veri.get("detail", "Erişim reddedildi.")
+                QMessageBox.warning(self, "Giriş Engellendi", hata_mesaji)
+                self.sifre_input.clear()
+                self.sifre_input.setFocus()
+                return
+            else:
                 self.hata_goster(veri.get("detail", "Giriş başarısız."))
                 self.hatali_deneme += 1
                 self.sifre_input.clear()
@@ -296,7 +283,6 @@ class LoginEkrani(QWidget):
             self.hata_goster(f"Beklenmeyen bir hata oluştu: {str(e)}")
 
     def ilk_giris_sifresi_degisti(self):
-        """Şifre değişince yeni şifreyle tekrar giriş yapılmasını sağlar."""
         self.sifre_penceresi.close()
         self.kullanici_input.clear()
         self.sifre_input.clear()
@@ -306,13 +292,11 @@ class LoginEkrani(QWidget):
         self.kullanici_input.setFocus()
 
     def ilk_giris_iptal(self):
-        """Şifre değiştirme ekranı kapatılırsa giriş ekranına döner."""
         self.sifre_input.clear()
         self.show()
         self.sifre_input.setFocus()
 
     def oturum_kapandi(self):
-        """Ana pencerede 'Oturumu Kapat'a basılınca giriş ekranı geri gelir."""
         self.kullanici_input.setFocus()
         self.show()
 
