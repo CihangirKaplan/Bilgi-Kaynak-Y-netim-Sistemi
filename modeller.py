@@ -215,17 +215,21 @@ class PersonelGuncelleModeli(BaseModel):
 
 # ==========================================
 # KALİBRASYON YÖNETİMİ MODELLERİ (CALB)
-# ===================================
+# ==========================================
 class KalibrasyonOlusturModeli(BaseModel):
     cihaz_id: int
     kalibrasyon_yapan_kurum: str
     gecerlilik_tarihi: date
     sertifika_no: str
+    kalibrasyon_baslangic_tarihi: date  # YENİ EKLENDİ
+    kalibrasyon_bitis_tarihi: date      # YENİ EKLENDİ
 
 class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = None
     gecerlilik_tarihi: Optional[date] = None
     sertifika_no: Optional[str] = None
+    kalibrasyon_baslangic_tarihi: Optional[date] = None # YENİ EKLENDİ
+    kalibrasyon_bitis_tarihi: Optional[date] = None     # YENİ EKLENDİ
 
 # ==========================================
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
