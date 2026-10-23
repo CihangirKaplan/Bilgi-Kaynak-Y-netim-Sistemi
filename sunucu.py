@@ -3232,3 +3232,171 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+
+# =========================================================
+# AUDIT KAYITLARI — SALT OKUNUR
+# =========================================================
+
+from fastapi import Query
+
+
+@app.get("/api/audit-kayitlari")
+def audit_kayitlarini_getir(
+    kullanici: str | None = Query(None, max_length=100),
+    olay_turu: list[str] | None = Query(None),
+    baslangic_tarihi: date | None = None,
+    bitis_tarihi: date | None = None,
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    kullanici_id: int = Depends(
+        izin_kontrol("AUDIT_KAYITLARI_INCELE")
+    )
+):
+    if (
+        baslangic_tarihi is not None
+        and bitis_tarihi is not None
+        and baslangic_tarihi > bitis_tarihi
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Başlangıç tarihi bitiş tarihinden sonra olamaz."
+        )
+
+    if olay_turu:
+        gecerli_olaylar = {
+            "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE"
+        }
+        if (
+            len(olay_turu) > len(gecerli_olaylar)
+            or not set(olay_turu).issubset(gecerli_olaylar)
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Geçersiz işlem türü seçildi."
+            )
+
+    kosullar = []
+    parametreler = []
+
+    if kullanici:
+        kosullar.append("k.kullanici_adi ILIKE %s")
+        parametreler.append(f"%{kullanici}%")
+
+    if olay_turu:
+        kosullar.append("d.olay_turu::text = ANY(%s)")
+        parametreler.append(olay_turu)
+
+    if baslangic_tarihi:
+        kosullar.append("d.olusturulma_tarihi >= %s")
+        parametreler.append(baslangic_tarihi)
+
+    if bitis_tarihi:
+        kosullar.append(
+            "d.olusturulma_tarihi < (%s::date + INTERVAL '1 day')"
+        )
+        parametreler.append(bitis_tarihi)
+
+    where_sql = (
+        "WHERE " + " AND ".join(kosullar)
+        if kosullar else ""
+    )
+
+    from_sql = """
+        FROM denetim_kayitlari d
+        LEFT JOIN kullanicilar k
+            ON k.kullanici_id = d.kullanici_id
+    """
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f"""
+            SELECT
+                COUNT(*),
+                COUNT(*) FILTER (
+                    WHERE d.olay_turu::text = 'LOGIN_FAILED'
+                ),
+                COUNT(*) FILTER (
+                    WHERE d.olay_turu::text IN (
+                        'CREATE', 'UPDATE', 'ROLE_CHANGE'
+                    )
+                ),
+                COUNT(*) FILTER (
+                    WHERE d.olusturulma_tarihi >= CURRENT_DATE
+                      AND d.olusturulma_tarihi <
+                          CURRENT_DATE + INTERVAL '1 day'
+                )
+            {from_sql}
+            {where_sql}
+            """,
+            tuple(parametreler)
+        )
+
+        toplam, basarisiz, islemler, bugun = cursor.fetchone()
+
+        cursor.execute(
+            f"""
+            SELECT
+                d.denetim_id,
+                d.kullanici_id,
+                k.kullanici_adi,
+                d.olay_turu::text,
+                d.hedef_tablo,
+                d.hedef_kayit_id,
+                d.olusturulma_tarihi
+            {from_sql}
+            {where_sql}
+            ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(parametreler) + (limit, offset)
+        )
+
+        kayitlar = []
+
+        for satir in cursor.fetchall():
+            kayitlar.append({
+                "denetim_id": satir[0],
+                "kullanici_id": satir[1],
+                "kullanici_adi": satir[2] or "Bilinmeyen kullanıcı",
+                "olay_turu": satir[3],
+                "hedef_tablo": satir[4],
+                "hedef_kayit_id": satir[5],
+                "olusturulma_tarihi": (
+                    satir[6].isoformat() if satir[6] else None
+                )
+            })
+
+        return {
+            "ozet": {
+                "toplam_kayit": toplam,
+                "basarisiz_giris": basarisiz,
+                "kullanici_islemleri": islemler,
+                "bugunku_islemler": bugun
+            },
+            "kayitlar": kayitlar,
+            "limit": limit,
+            "offset": offset
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Denetim kayıtları alınamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()

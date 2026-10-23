@@ -774,6 +774,15 @@ class AnaPencere(QMainWindow):
             )
             lay.addWidget(self.danisma_ekrani, 1)
 
+        elif oge["ad"] == "Audit Kayıtları":
+            from audit_kayitlari_ekrani import AuditKayitlariEkrani
+
+            self.audit_ekrani = AuditKayitlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.audit_ekrani, 1)
+
         elif oge["ad"] == "Danışma Masası Yönetimi":
             from danisma_masasi_yonetimi import DanismaMasasiYonetimi
 
