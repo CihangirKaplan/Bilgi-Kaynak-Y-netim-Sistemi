@@ -116,9 +116,9 @@ class SifreDegistirEkrani(QWidget):
         self.yeni_sifre_tekrar.setEchoMode(mod)
 
     def sifre_degistir(self):
-        eski = self.eski_sifre.text()
-        yeni = self.yeni_sifre.text()
-        tekrar = self.yeni_sifre_tekrar.text()
+        eski = self.eski_sifre.text().strip()
+        yeni = self.yeni_sifre.text().strip()
+        tekrar = self.yeni_sifre_tekrar.text().strip()
 
         if not eski or not yeni or not tekrar:
             self.hata_lbl.setText("Tüm alanları doldurmalısınız.")

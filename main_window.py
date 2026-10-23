@@ -16,6 +16,7 @@ from cihaz_ariza_ekranlari import ArizaYonetimEkrani
 from cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
 from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
 from dashboard_ekrani import DashboardEkrani
+from k_personel_ekranlari import KullaniciPersonelEkrani
 
 
 # ======================================================================
@@ -119,7 +120,7 @@ MENU = [
              aciklama="Kullanıcı, personel ve rol atama işlemleri",
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
                       ("🧑‍💼  Personel Tanımla", "Personel tanımlama"),
-                      ("⏸  Kullanıcı Pasifleştir", "Kullanıcı pasifleştirme"),
+                      ("⏸  Aktiflik Düzenle", "Kullanıcı pasifleştirme"),
                       ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
@@ -666,8 +667,8 @@ class AnaPencere(QMainWindow):
             lay.addWidget(self.istatistik_paneli)
             # ----------------------------------------------------
 
-            lay.addStretch()
-            return self.kaydirmali(govde)
+        lay.addStretch()
+        return self.kaydirmali(govde)
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
@@ -749,8 +750,14 @@ class AnaPencere(QMainWindow):
                 # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
                     btn.clicked.connect(self.yeni_bakim_ekrani_ac)
-
-
+                elif etiket == "＋  Kullanıcı Oluştur":
+                    btn.clicked.connect(self.yeni_kullanici_formunu_ac)
+                elif "Personel Tanımla" in etiket:
+                    btn.clicked.connect(self.personel_tanimla_formunu_ac)
+                elif "Aktiflik Düzenle" in etiket:
+                    btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_durum_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
+                elif "Rol Ata / Değiştir" in etiket:
+                    btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_rol_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 ab.addWidget(btn)
             ab.addStretch()
             lay.addLayout(ab)
@@ -799,7 +806,13 @@ class AnaPencere(QMainWindow):
                 token=self.token
             )
             lay.addWidget(self.aktif_bakim_ekrani, 1)
-
+        elif oge["ad"] == "Kullanıcı & Personel":
+            self.aktif_personel_ekrani = KullaniciPersonelEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_personel_ekrani, 1)
+            
         elif oge["ad"] == "Oda Yönetimi":
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -877,6 +890,8 @@ class AnaPencere(QMainWindow):
             else: event.accept()
         self.randevu_formu.closeEvent = kapanma_yakala
         self.randevu_formu.show()
+    
+
 
     def randevu_listesi_ekrani_ac(self):
         self.liste_formu = RandevuListesiFormu(
@@ -908,7 +923,21 @@ class AnaPencere(QMainWindow):
         """Ana yetki kartındaki 'Bakım Kaydı' butonuna basılınca formu açar."""
         if hasattr(self, 'aktif_bakim_ekrani'):
             self.aktif_bakim_ekrani.yeni_bakim_ekle()
-
+    def yeni_kullanici_formunu_ac(self):
+        from k_personel_ekranlari import KullaniciOlusturFormu
+        
+        self.kullanici_formu = KullaniciOlusturFormu(api_url=self.api_url, token=self.token, ebeveyn=self)
+        self.kullanici_formu.exec() # Formu ekranda üstte tutacak şekilde (Modal) açar
+    
+    def personel_tanimla_formunu_ac(self):
+        from k_personel_ekranlari import PersonelTanimlaFormu
+        
+        self.personel_formu = PersonelTanimlaFormu(api_url=self.api_url, token=self.token, ebeveyn=self)
+        
+        # Form başarılı şekilde kapanırsa arka plandaki listeyi yenile
+        if self.personel_formu.exec(): 
+            if hasattr(self, 'aktif_personel_ekrani'):
+                self.aktif_personel_ekrani.verileri_cek()
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
