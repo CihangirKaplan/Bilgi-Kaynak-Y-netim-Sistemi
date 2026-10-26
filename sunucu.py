@@ -3400,3 +3400,133 @@ def audit_kayitlarini_getir(
             cursor.close()
         if conn is not None:
             conn.close()
+
+
+# ==========================================
+# CİHAZ RAPORLARI (DASH-003)
+# ==========================================
+def _tarih_metni(deger):
+    return deger.isoformat() if deger is not None and hasattr(deger, "isoformat") else None
+
+
+@app.get("/api/cihaz-raporlari")
+def cihaz_raporlari(
+    baslangic_tarihi: date | None = None,
+    bitis_tarihi: date | None = None,
+    cihaz_id: int | None = None,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))
+):
+    """Bakım, kalibrasyon ve arıza kayıtlarını tarih/cihaz filtresiyle listeler (salt okunur)."""
+    if (
+        baslangic_tarihi is not None
+        and bitis_tarihi is not None
+        and bitis_tarihi < baslangic_tarihi
+    ):
+        raise HTTPException(status_code=422, detail="Bitiş tarihi başlangıç tarihinden önce olamaz.")
+
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+
+    def kosul_olustur(tarih_sutunu):
+        kosullar = []
+        parametreler = []
+        if baslangic_tarihi is not None:
+            kosullar.append(f"{tarih_sutunu} >= %s")
+            parametreler.append(baslangic_tarihi)
+        if bitis_tarihi is not None:
+            kosullar.append(f"{tarih_sutunu} < (%s::date + INTERVAL '1 day')")
+            parametreler.append(bitis_tarihi)
+        if cihaz_id is not None:
+            kosullar.append("t.cihaz_id = %s")
+            parametreler.append(cihaz_id)
+        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
+        return where, parametreler
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        where, parametreler = kosul_olustur("t.bakim_tarihi")
+        cursor.execute(f"""
+            SELECT t.bakim_id, c.envanter_kodu, c.cihaz_adi, t.bakim_yapan_kisi,
+                   t.yapilan_islem, t.maliyet, t.bakim_tarihi, t.sonraki_bakim_tarihi
+            FROM cihaz_bakimlari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.bakim_tarihi DESC;
+        """, parametreler)
+        bakimlar = [
+            {
+                "bakim_id": k[0],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "bakim_yapan_kisi": k[3],
+                "yapilan_islem": k[4],
+                "maliyet": float(k[5]) if k[5] is not None else 0.0,
+                "bakim_tarihi": _tarih_metni(k[6]),
+                "sonraki_bakim_tarihi": _tarih_metni(k[7]),
+            }
+            for k in cursor.fetchall()
+        ]
+
+        where, parametreler = kosul_olustur("t.islem_tarihi")
+        cursor.execute(f"""
+            SELECT t.kalibrasyon_id, c.envanter_kodu, c.cihaz_adi, t.kalibrasyon_yapan_kurum,
+                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi
+            FROM cihaz_kalibrasyonlari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.islem_tarihi DESC;
+        """, parametreler)
+        kalibrasyonlar = [
+            {
+                "kalibrasyon_id": k[0],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "kalibrasyon_yapan_kurum": k[3],
+                "sertifika_no": k[4],
+                "islem_tarihi": _tarih_metni(k[5]),
+                "gecerlilik_tarihi": _tarih_metni(k[6]),
+            }
+            for k in cursor.fetchall()
+        ]
+
+        where, parametreler = kosul_olustur("t.bildirim_tarihi")
+        cursor.execute(f"""
+            SELECT t.ariza_id, c.envanter_kodu, c.cihaz_adi, t.bildiren_personel,
+                   t.ariza_aciklamasi, t.bildirim_tarihi, t.cozum_tarihi, t.cozuldu_mu
+            FROM cihaz_arizalari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.bildirim_tarihi DESC;
+        """, parametreler)
+        arizalar = [
+            {
+                "ariza_id": k[0],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "bildiren_personel": k[3],
+                "ariza_aciklamasi": k[4],
+                "bildirim_tarihi": _tarih_metni(k[5]),
+                "cozum_tarihi": _tarih_metni(k[6]),
+                "durum": "Çözüldü" if k[7] else "Açık",
+            }
+            for k in cursor.fetchall()
+        ]
+
+        return {
+            "ozet": {
+                "bakim_sayisi": len(bakimlar),
+                "toplam_bakim_maliyeti": round(sum(b["maliyet"] for b in bakimlar), 2),
+                "kalibrasyon_sayisi": len(kalibrasyonlar),
+                "ariza_sayisi": len(arizalar),
+                "acik_ariza_sayisi": sum(1 for a in arizalar if a["durum"] == "Açık"),
+            },
+            "bakimlar": bakimlar,
+            "kalibrasyonlar": kalibrasyonlar,
+            "arizalar": arizalar,
+        }
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()

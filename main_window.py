@@ -47,6 +47,7 @@ IZIN_LISTESI = [
     ("Cihaz rezervasyonu yapma",             "Cihaz Yönetimi",    "HEHHEE"),
     ("Cihaz ekleme",                         "Cihaz Yönetimi",    "HEEHHE"),
     ("Cihaz takip kontrol listesini yönetme","Cihaz Yönetimi",    "HEEHHE"),
+    ("Cihaz raporlarını görüntüleme",        "Cihaz Yönetimi",    "HEEHHE"),
 
     ("Bakım kayıtlarını yönetme",            "Kayıt & Bakım",     "HEEHHE"),
     ("Kalibrasyon kayıtlarını yönetme",      "Kayıt & Bakım",     "HEEHHE"),
@@ -128,6 +129,8 @@ MENU = [
         dict(ikon="⚠️", ad="Arıza Kayıtları", izin="Arıza kayıtlarını yönetme",
              aciklama="Arıza bildirimi ve takibi",
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
+        dict(ikon="📈", ad="Cihaz Raporları", izin="Cihaz raporlarını görüntüleme",
+             aciklama="Bakım, kalibrasyon ve arıza raporları", aksiyon=[]),
 
     ]),
     ("YÖNETİM & DENETİM", [
@@ -836,6 +839,16 @@ class AnaPencere(QMainWindow):
                 yetkili_mi=ariza_yetkisi
             )
             lay.addWidget(self.aktif_ariza_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Raporları":
+            from cihaz_raporlari_ekrani import CihazRaporlariEkrani
+
+            self.aktif_cihaz_rapor_ekrani = CihazRaporlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_cihaz_rapor_ekrani, 1)
+
 
         # =========================================================
         # CİHAZ BAKIM KAYITLARI (MNT-002) YÖNLENDİRMESİ
