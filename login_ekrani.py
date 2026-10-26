@@ -24,7 +24,6 @@ sys.excepthook = hata_yakala
 # ======================================================================
 API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000") # Sunucu adresimiz
 MAX_DENEME = 5
-KILIT_SANIYE = 30
 
 STIL = """
 QWidget#kok { background: #EAF0FA; font-family: 'Segoe UI', Arial; }
@@ -264,7 +263,9 @@ class LoginEkrani(QWidget):
                 self.hide()
 
             elif cevap.status_code == 429:
-                self.kilitle()
+                sure = cevap.headers.get("Retry-After", "")
+                saniye = int(sure) if sure.isdigit() else 60
+                self.kilitle(saniye)
             elif cevap.status_code == 403:
                 hata_mesaji = veri.get("detail", "Erişim reddedildi.")
                 QMessageBox.warning(self, "Giriş Engellendi", hata_mesaji)
@@ -300,19 +301,34 @@ class LoginEkrani(QWidget):
         self.kullanici_input.setFocus()
         self.show()
 
-    def kilitle(self):
-        self.kalan = KILIT_SANIYE
+    def kilitle(self, saniye):
+        import time
+
+        if hasattr(self, "zamanlayici"):
+            self.zamanlayici.stop()
+
+        self.kilit_bitis_monotonik = time.monotonic() + max(1, saniye)
         self.hatali_deneme = 0
+
         self.giris_btn.setEnabled(False)
         self.kullanici_input.setEnabled(False)
         self.sifre_input.setEnabled(False)
-        self.kilit_guncelle()
+
         self.zamanlayici = QTimer(self)
         self.zamanlayici.timeout.connect(self.kilit_guncelle)
+        self.kilit_guncelle()
         self.zamanlayici.start(1000)
 
     def kilit_guncelle(self):
-        if self.kalan <= 0:
+        import time
+        import math
+
+        kalan = max(
+            0,
+            math.ceil(self.kilit_bitis_monotonik - time.monotonic())
+        )
+
+        if kalan == 0:
             self.zamanlayici.stop()
             self.giris_btn.setEnabled(True)
             self.kullanici_input.setEnabled(True)
@@ -320,8 +336,13 @@ class LoginEkrani(QWidget):
             self.hata_lbl.hide()
             self.kullanici_input.setFocus()
             return
-        self.hata_goster(f"Çok fazla hatalı deneme. {self.kalan} saniye kilitlendiniz.")
-        self.kalan -= 1
+
+        dakika, saniye = divmod(kalan, 60)
+
+        self.hata_goster(
+            f"Çok fazla hatalı deneme. "
+            f"{dakika:02d}:{saniye:02d} sonra tekrar deneyebilirsiniz."
+        )
 
 
 if __name__ == "__main__":
