@@ -151,19 +151,29 @@ def giris_yap(giris: GirisModeli):
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if kullanici[6] is not None and kullanici[6] > datetime.now():
-            raise HTTPException(status_code=429, detail="Çok fazla hatalı giriş denemesi. Lütfen daha sonra tekrar deneyin.")
+            kalan_saniye = max(1, int((kullanici[6] - datetime.now()).total_seconds()) + 1)
+            raise HTTPException(
+                status_code=429,
+                detail="Hesap geçici olarak kilitli.",
+                headers={"Retry-After": str(kalan_saniye)},
+            )
 
         if not parola_dogrula(giris.parola, kullanici[2]):
             yeni_basarisiz_giris_sayisi = kullanici[5] + 1
             if yeni_basarisiz_giris_sayisi >= 5:
-                kilit_bitis_zamani = datetime.now() + timedelta(minutes=15)
+                kilit_saniye = 900 if yeni_basarisiz_giris_sayisi >= 10 else 60
+                kilit_bitis_zamani = datetime.now() + timedelta(seconds=kilit_saniye)
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s, kilit_bitis_zamani = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kilit_bitis_zamani, kullanici[0]))
             else:
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kullanici[0]))
             conn.commit()
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             if yeni_basarisiz_giris_sayisi >= 5:
-                raise HTTPException(status_code=429, detail="Çok fazla hatalı giriş denemesi. Hesap 15 dakika kilitlendi.")
+                raise HTTPException(
+                    status_code=429,
+                    detail="Çok fazla hatalı giriş denemesi. Hesap geçici olarak kilitlendi.",
+                    headers={"Retry-After": str(kilit_saniye)},
+                )
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
 
         cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = 0, kilit_bitis_zamani = NULL WHERE kullanici_id = %s;", (kullanici[0],))

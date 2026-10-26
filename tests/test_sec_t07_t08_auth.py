@@ -59,7 +59,7 @@ def test_besinci_hatali_giris_hesabi_kilitler():
 
     kilit_zamani = guncelleme[0].args[1][1]
     kalan = kilit_zamani - datetime.now()
-    assert timedelta(minutes=14) < kalan <= timedelta(minutes=15)
+    assert timedelta(seconds=59) < kalan <= timedelta(seconds=60)
 
     conn.commit.assert_called_once()
     assert audit.call_args.kwargs["olay_turu"] == "LOGIN_FAILED"
@@ -166,4 +166,38 @@ def test_kilit_suresi_dolunca_dogru_parolayla_giris():
     )
 
     assert audit.call_args.kwargs["olay_turu"] == "LOGIN"
+    conn.commit.assert_called_once()
+
+
+def test_onuncu_hatali_giris_on_bes_dakika_kilitler():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchone.return_value = sahte_kullanici(hata_sayisi=9)
+
+    with (
+        patch("sunucu.psycopg2.connect", return_value=conn),
+        patch("sunucu.parola_dogrula", return_value=False),
+        patch("sunucu.denetim_kaydi_olustur"),
+    ):
+        with pytest.raises(HTTPException) as hata:
+            giris_yap(
+                GirisModeli(
+                    kullanici_adi="test_psikolog",
+                    parola="hatali_parola",
+                )
+            )
+
+    assert hata.value.status_code == 429
+    assert hata.value.headers["Retry-After"] == "900"
+
+    guncellemeler = [
+        c for c in cursor.execute.call_args_list
+        if "kilit_bitis_zamani = %s" in c.args[0]
+    ]
+
+    assert len(guncellemeler) == 1
+    assert guncellemeler[0].args[1][0] == 10
+
+    kalan = guncellemeler[0].args[1][1] - datetime.now()
+    assert timedelta(seconds=899) < kalan <= timedelta(seconds=900)
     conn.commit.assert_called_once()
