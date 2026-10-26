@@ -4,12 +4,14 @@ from datetime import datetime
 
 import requests
 
+from rapor_excel import excel_dosyasi_olustur
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDateEdit,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -31,6 +33,8 @@ class CihazRaporlariEkrani(QWidget):
         self.api_url = api_url.rstrip("/")
         self.token = token
         self._cihazlar_yuklendi = False
+        self._son_veri = None
+        self._son_filtre = []
 
         self._arayuz_kur()
         self.yenile()
@@ -111,7 +115,7 @@ class CihazRaporlariEkrani(QWidget):
         filtre_satiri.addWidget(QLabel("Dönem:"))
         self.donem = QComboBox()
         self.donem.addItems(["Tümü", "Bugün", "Bu Hafta", "Bu Ay", "Tarih Aralığı"])
-        self.donem.currentIndexChanged.connect(self._tarih_alanlari)
+        self.donem.currentIndexChanged.connect(self._donem_degisti)
         filtre_satiri.addWidget(self.donem)
 
         filtre_satiri.addWidget(QLabel("Başlangıç:"))
@@ -119,6 +123,7 @@ class CihazRaporlariEkrani(QWidget):
         self.baslangic.setCalendarPopup(True)
         self.baslangic.setDisplayFormat("dd.MM.yyyy")
         self.baslangic.setDate(QDate.currentDate().addDays(-30))
+        self.baslangic.dateChanged.connect(self._tarih_degisti)
         filtre_satiri.addWidget(self.baslangic)
 
         filtre_satiri.addWidget(QLabel("Bitiş:"))
@@ -126,6 +131,7 @@ class CihazRaporlariEkrani(QWidget):
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         self.bitis.setDate(QDate.currentDate())
+        self.bitis.dateChanged.connect(self._tarih_degisti)
         filtre_satiri.addWidget(self.bitis)
 
         filtre_satiri.addWidget(QLabel("Cihaz:"))
@@ -137,8 +143,17 @@ class CihazRaporlariEkrani(QWidget):
         yenile_btn.clicked.connect(self.yenile)
         filtre_satiri.addWidget(yenile_btn)
 
+        self.excel_btn = QPushButton("⬇ Excel'e Aktar")
+        self.excel_btn.setEnabled(False)
+        self.excel_btn.setStyleSheet(
+            "QPushButton { background: #16803C; } "
+            "QPushButton:hover { background: #126A31; } "
+            "QPushButton:disabled { background: #AEB9CC; }"
+        )
+        self.excel_btn.clicked.connect(self.excel_aktar)
+        filtre_satiri.addWidget(self.excel_btn)
+
         ana.addLayout(filtre_satiri)
-        self._tarih_alanlari()
 
         # Özet kartları
         kart_satiri = QHBoxLayout()
@@ -226,28 +241,43 @@ class CihazRaporlariEkrani(QWidget):
         self.rapor_sekmeleri.addTab(sayfa, baslik)
         return tablo
 
-    def _tarih_alanlari(self, *args):
-        ozel = self.donem.currentText() == "Tarih Aralığı"
-        self.baslangic.setEnabled(ozel)
-        self.bitis.setEnabled(ozel)
-
-    def _parametreler(self):
+    def _donem_araligi(self):
+        """Seçili dönemin (başlangıç, bitiş) tarihlerini döndürür; 'Tümü' için (None, None)."""
         bugun = QDate.currentDate()
         secim = self.donem.currentText()
-        params = {}
 
         if secim == "Bugün":
-            bas, bit = bugun, bugun
-        elif secim == "Bu Hafta":
-            bas, bit = bugun.addDays(1 - bugun.dayOfWeek()), bugun
-        elif secim == "Bu Ay":
-            bas, bit = QDate(bugun.year(), bugun.month(), 1), bugun
-        elif secim == "Tarih Aralığı":
-            bas, bit = self.baslangic.date(), self.bitis.date()
-            if bit < bas:
-                raise ValueError("Bitiş tarihi başlangıçtan önce olamaz.")
-        else:
-            bas = bit = None
+            return bugun, bugun
+        if secim == "Bu Hafta":
+            return bugun.addDays(1 - bugun.dayOfWeek()), bugun
+        if secim == "Bu Ay":
+            return QDate(bugun.year(), bugun.month(), 1), bugun
+        if secim == "Tarih Aralığı":
+            return self.baslangic.date(), self.bitis.date()
+        return None, None
+
+    def _donem_degisti(self, *args):
+        """Hazır bir dönem seçilince tarih kutuları o dönemin tarihlerini göstersin."""
+        bas, bit = self._donem_araligi()
+        if bas is None or self.donem.currentText() == "Tarih Aralığı":
+            return
+        for kutu, tarih in ((self.baslangic, bas), (self.bitis, bit)):
+            kutu.blockSignals(True)
+            kutu.setDate(tarih)
+            kutu.blockSignals(False)
+
+    def _tarih_degisti(self, *args):
+        """Tarih elle değiştirilince dönem otomatik 'Tarih Aralığı' olur."""
+        if self.donem.currentText() != "Tarih Aralığı":
+            self.donem.setCurrentText("Tarih Aralığı")
+
+    def _parametreler(self):
+        params = {}
+
+        bas, bit = self._donem_araligi()
+        if self.donem.currentText() == "Tarih Aralığı" and bit < bas:
+            raise ValueError("Bitiş tarihi başlangıçtan önce olamaz.")
+
 
         if bas is not None:
             params["baslangic_tarihi"] = bas.toString("yyyy-MM-dd")
@@ -292,6 +322,43 @@ class CihazRaporlariEkrani(QWidget):
                 renk = renkler.get((sutun, deger)) if renkler else None
                 self._hucre(tablo, satir, sutun, deger, renk)
 
+    def _filtre_ozeti(self, params):
+        if "baslangic_tarihi" in params:
+            donem = f"{self._tarih(params['baslangic_tarihi'])} - {self._tarih(params['bitis_tarihi'])}"
+        else:
+            donem = "Tümü"
+        return [
+            ("Dönem", donem),
+            ("Cihaz", self.cihaz_sec.currentText()),
+        ]
+
+    def excel_aktar(self):
+        if self._son_veri is None:
+            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            return
+
+        varsayilan = f"cihaz_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        dosya_yolu, _ = QFileDialog.getSaveFileName(
+            self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)"
+        )
+        if not dosya_yolu:
+            return
+        if not dosya_yolu.lower().endswith(".xlsx"):
+            dosya_yolu += ".xlsx"
+
+        try:
+            excel_dosyasi_olustur(self._son_veri, self._son_filtre, dosya_yolu)
+        except OSError as hata:
+            QMessageBox.warning(
+                self,
+                "Kaydedilemedi",
+                "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
+                f"ya da klasöre yazma izniniz olmayabilir.\n{hata}",
+            )
+            return
+
+        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+
     def yenile(self):
         try:
             params = self._parametreler()
@@ -316,6 +383,11 @@ class CihazRaporlariEkrani(QWidget):
                 self, "Rapor Hatası", f"Rapor bilgileri alınamadı:\n{hata}"
             )
             return
+
+        # Excel çıktısı ekranda gösterilen (son çekilen) veriyle ve o anki filtrelerle üretilir.
+        self._son_veri = veri
+        self._son_filtre = self._filtre_ozeti(params)
+        self.excel_btn.setEnabled(True)
 
         ozet = veri.get("ozet", {})
         for anahtar, etiket in self.kartlar.items():
