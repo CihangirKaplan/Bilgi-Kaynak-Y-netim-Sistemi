@@ -1,4 +1,3 @@
-
 from unittest.mock import MagicMock, patch
 
 from sunucu import kullanici_durum_degistir
@@ -146,12 +145,7 @@ def test_yetkisiz_kullanici_pasiflestiremez():
     assert hata.value.status_code == 403
 
     mock_conn.close.assert_called_once()
-def test_olmayan_kullanici_pasiflestirilemez():
-    import pytest
-    from fastapi import HTTPException
 
-    mock_conn = MagicMock()
-    mock_cursor = mock_conn.cursor.return_value
 
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),  # İşlemi yapan kullanıcı
@@ -236,6 +230,8 @@ def test_pasif_kullanici_mevcut_token_ile_erisim_saglayamaz():
     assert hata.value.detail == "Kullanıcı hesabı aktif değil."
 
     mock_conn.close.assert_called_once()
+
+
 def test_pasif_kullanici_giris_yapamaz():
     import pytest
     from fastapi import HTTPException
