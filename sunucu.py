@@ -335,7 +335,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -380,7 +380,7 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -422,7 +422,7 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Personel oluşturulurken veritabanı hatası oluştu: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -542,7 +542,36 @@ def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEV
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+def randevu_deadlock_yeniden_dene(fonksiyon):
+    """QA-001 #186: Randevu deadlock durumunda sinirli yeniden deneme."""
+    from functools import wraps
+    import time
+
+    @wraps(fonksiyon)
+    def sarmalayici(*args, **kwargs):
+        maksimum_deneme = 3
+
+        for deneme in range(maksimum_deneme):
+            try:
+                return fonksiyon(*args, **kwargs)
+
+            except DeadlockDetected:
+                if deneme == maksimum_deneme - 1:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Randevu işlemi eşzamanlı yoğunluk nedeniyle "
+                            "tamamlanamadı. Lütfen tekrar deneyin."
+                        )
+                    )
+
+                time.sleep(0.1 * (deneme + 1))
+
+    return sarmalayici
+
+
 @app.post("/api/randevular", status_code=201)
+@randevu_deadlock_yeniden_dene
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
@@ -589,6 +618,10 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
             status_code=409,
             detail="Seçilen psikolog veya oda bu saatlerde dolu."
         )
+    except DeadlockDetected:
+        if conn is not None:
+            conn.rollback()
+        raise
     except HTTPException:
         if conn is not None:
             conn.rollback()
@@ -755,7 +788,7 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
         if conn is not None: conn.close()
 
 @app.get("/api/odalar")
-def odalari_listele():
+def odalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:
@@ -1043,12 +1076,23 @@ def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kont
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s RETURNING rezervasyon_id;", (rezervasyon_id,))
+        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s AND iptal_edildi_mi = FALSE RETURNING rezervasyon_id;", (rezervasyon_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Rezervasyon bulunamadı veya yetkiniz yok.")
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CANCEL", kullanici_id=kullanici_id, hedef_tablo="cihaz_rezervasyonlari", hedef_kayit_id=rezervasyon_id)
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CANCEL",
+            kullanici_id=kullanici_id,
+            hedef_tablo="cihaz_rezervasyonlari",
+            hedef_kayit_id=rezervasyon_id,
+            mevcut_cursor=cursor
+        )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Rezervasyon iptal edildi."}
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1118,7 +1162,7 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return sonuc
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1315,7 +1359,7 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             for k in kayitlar
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1346,17 +1390,14 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         ))
         bakim_id = cursor.fetchone()[0]
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1381,13 +1422,17 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         degerler = list(degisiklikler.values())
 
         cursor.execute(f"UPDATE cihaz_bakimlari SET {alanlar} WHERE bakim_id = %s;", (*degerler, bakim_id))
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id)
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Bakım kaydı başarıyla güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1460,7 +1505,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             for k in kayitlar
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1491,17 +1536,14 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         ))
         kalibrasyon_id = cursor.fetchone()[0]
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon başarıyla eklendi.", "kalibrasyon_id": kalibrasyon_id}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1526,13 +1568,17 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
         degerler = list(degisiklikler.values())
 
         cursor.execute(f"UPDATE cihaz_kalibrasyonlari SET {alanlar} WHERE kalibrasyon_id = %s;", (*degerler, kalibrasyon_id))
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili"}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1610,7 +1656,7 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         return ozet
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dashboard veri çekme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1751,7 +1797,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
 
     except Exception as e:
         print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1779,7 +1825,7 @@ def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return faaliyetler
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1802,7 +1848,7 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return birimler
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1848,23 +1894,20 @@ def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(iz
 
         # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
 # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Öğrenci faaliyeti başarıyla sisteme işlendi."}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 @app.post("/api/ogrenci-ekle")
-def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullanici_id)):
+def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -1878,6 +1921,17 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullan
         """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur))
 
         yeni_id = cursor.fetchone()[0]
+
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=yetkili_id,
+            hedef_tablo="ogrenciler",
+            hedef_kayit_id=yeni_id,
+            mevcut_cursor=cursor
+        )
+
         conn.commit()
         return {"durum": "basarili", "mesaj": "Öğrenci başarıyla sisteme eklendi.", "ogrenci_id": yeni_id}
 
@@ -1886,7 +1940,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullan
         raise HTTPException(status_code=400, detail="Bu öğrenci numarası sistemde zaten kayıtlı!")
     except Exception as e:
         if conn: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1933,7 +1987,7 @@ def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id))
         return kayitlar
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veri çekme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1958,17 +2012,18 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
         """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar, takip_id))
 
         # Audit log (Denetim kaydı)
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1991,17 +2046,18 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
         cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
 
         # Audit log (Denetim kaydı) - Kim sildi bilelim
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3148,11 +3204,8 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         yeni_id = cursor.fetchone()[0]
 
         # Audit Log (Denetim Kaydı)
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
@@ -3160,7 +3213,7 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Ekleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3184,11 +3237,8 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
             (kayit.birim_adi.strip().upper(), birim_id)
         )
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
@@ -3196,7 +3246,7 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3216,11 +3266,8 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
 
         cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
@@ -3228,7 +3275,7 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail='İşlem sırasında bir sunucu hatası oluştu.')
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
