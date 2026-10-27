@@ -56,6 +56,9 @@ jobs:
             denetim.py \
             tests
 
+      - name: Test icin gecici JWT anahtari olustur
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Guvenli QA testlerini calistir
         run: |
           python -m pytest tests/ -q --tb=short \

@@ -47,20 +47,20 @@ ve bu düzeltmeleri otomatik testlerle doğrulamaktır.
 
 Son genel regresyon testi:
 
-- Başarılı test: **313**
+- Başarılı test: **336**
 - Başarısız test: **0**
 - Seçim filtresiyle hariç tutulan test: **1**
-- Test süresi: **6,41 saniye**
-- Genel kod kapsamı: **%65**
+- Test süresi: **6,60 saniye**
+- Genel kod kapsamı: **%66**
 
 ### Dosya bazında Coverage
 
 | Dosya | Coverage |
 |---|---:|
-| sunucu.py | %64 |
+| sunucu.py | %65 |
 | guvenlik.py | %100 |
 | denetim.py | %100 |
-| TOPLAM | %65 |
+| TOPLAM | %66 |
 
 Coverage ölçümü, satır ve branch kapsamını içermektedir.
 
@@ -154,8 +154,8 @@ gerektiren belirli test dosyaları hariç tutulmuştur.
 Bu nedenle 313 başarılı test sonucu, tüm entegrasyon
 ve üretim ortamı senaryolarının doğrulandığı anlamına gelmez.
 
-Test sırasında bir StarletteDeprecationWarning görülmüştür.
-Bu uyarı testlerin başarısını etkilememiştir.
+Test sırasında StarletteDeprecationWarning ve InsecureKeyLengthWarning görülmüştür.
+Bu uyarılar testlerin başarısını etkilememiştir.
 
 ## 11. Sonuç
 
@@ -163,8 +163,8 @@ QA-001 kapsamında güvenlik, hata yönetimi, audit,
 transaction ve arayüz davranışlarına yönelik iyileştirmeler
 yapılmıştır.
 
-Son genel regresyonda **313 test başarılı**, başarısız
-test sayısı **0**, toplam Coverage oranı **%65** olmuştur.
+Son genel regresyonda **336 test başarılı**, başarısız
+test sayısı **0**, toplam Coverage oranı **%66** olmuştur.
 
 Değişiklikler Pull Request ve ekip incelemesine
 hazırlanmıştır.
