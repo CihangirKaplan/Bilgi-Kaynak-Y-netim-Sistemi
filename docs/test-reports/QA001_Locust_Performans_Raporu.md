@@ -157,3 +157,34 @@ hata metni HTTP yanitinda gorulmedi.
   baglanti sayisi, CPU ve bellek kullanimi bilinmemektedir.
 - Deadlock nedenleri mevcut eszamanlilik ve transaction
   testleriyle birlikte ayrica incelenmelidir.
+
+## 9. Eszamanlilik ve EXCLUDE Kisitlari
+
+**Tarih:** 28.10.2026
+**Veritabani:** crkys_alembic_test
+
+PostgreSQL sistem kataloglari uzerinden asagidaki
+EXCLUDE kisitlarinin mevcut oldugu dogrulandi:
+
+- cihaz_rezervasyon_cakisma
+- oda_randevu_cakisma
+- psikolog_randevu_cakisma
+
+Cihaz rezervasyonlarinda iptal edilmemis kayitlar,
+randevularda ise PLANLANDI durumundaki kayitlar
+icin zaman cakismalari veritabani seviyesinde
+engellenmektedir.
+
+Randevu ve cihaz rezervasyonu kodlarinda
+deadlock sonrasi rollback ve sinirli yeniden
+deneme mekanizmalari incelendi.
+
+Onceki PostgreSQL entegrasyon testleri basarilidir.
+
+PostgreSQL istatistiklerinde gorulen 33 deadlock
+kaydinin tarihsel kaynagi belirlenememistir.
+Bu sayinin Locust testlerinden kaynaklandigina
+yonelik kanit bulunmamaktadir.
+
+Bu incelemede yeni bir veri butunlugu hatasi
+tespit edilmemistir.
