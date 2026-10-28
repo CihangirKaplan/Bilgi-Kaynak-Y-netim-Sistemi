@@ -83,3 +83,21 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
 
     bilgi.assert_called_once()
     assert dialog.result() == QDialog.Accepted
+
+
+@pytest.mark.parametrize(
+    "gecersiz_rol",
+    ["tanimsiz", "", None, 123],
+)
+def test_gui_gecersiz_rol_reddedilir(qt_app, gecersiz_rol):
+    from main_window import AnaPencere
+
+    with pytest.raises(ValueError, match="Geçersiz kullanıcı rolü"):
+        AnaPencere(aktif_rol=gecersiz_rol)
+
+
+def test_gui_rol_belirtilmeden_acilamaz(qt_app):
+    from main_window import AnaPencere
+
+    with pytest.raises(ValueError, match="Geçersiz kullanıcı rolü"):
+        AnaPencere()
