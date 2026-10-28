@@ -20,6 +20,8 @@
 
 **Toplam:** 1.437 istek, 0 başarısız istek.
 
+**Kanıt dosyaları hakkında:** Yukarıdaki istek sayıları Locust'un terminalde gösterdiği son özetlere dayanmaktadır. Kaydedilmiş `stats.csv` dosyalarındaki sayılar ise sırasıyla 1: 38, 5: 198, 10: 389, 20: 796 şeklindedir. CSV ve terminal özetleri arasında küçük farklılıklar vardır; raporda bu iki kaynak ayrı belirtilmiştir. Testler yeniden çalıştırılmamıştır.
+
 ## 2. Değerlendirme
 
 - Dört yük seviyesinde de gözlenen hata oranı %0'dır.
