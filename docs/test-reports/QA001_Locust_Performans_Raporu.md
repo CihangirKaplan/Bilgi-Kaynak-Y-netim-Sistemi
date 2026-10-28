@@ -88,3 +88,35 @@ gosterebilir; ham CSV dosyalari ayri kanit olarak saklanmistir.
 - Veritabani baglanti sayilari, CPU ve bellek kullanimi
   yuk altinda ayrica olculmemistir.
 - Testler bir endpoint ve tek bir JWT hesabi ile sinirlidir.
+
+
+## 7. PostgreSQL Baglanti Kesintisi ve Toparlanma
+
+**Tarih:** 28.10.2026
+**Test veritabani:** crkys_alembic_test
+**Endpoint:** GET /api/odalar
+**Yontem:** httpx.ASGITransport ve psycopg2.connect hata simulasyonu
+
+| Asama | HTTP | Sonuc |
+|---|---|---|
+| Normal baglanti | 200 | Basarili |
+| Baglanti hatasi simulasyonu | 500 | Hata algilandi |
+| Simulasyon sonrasi toparlanma | 200 | Basarili |
+
+### Guvenlik Kontrolu
+
+Simulasyon icin kullanilan
+`QA001_SIMULATED_DB_UNAVAILABLE`
+hata metni HTTP yanitinda gorulmedi.
+
+### Degerlendirme
+
+- Normal durumda API basarili yanit vermistir.
+- Veritabani baglantisi hata verdiginde API HTTP 500 donmustur.
+- Hata simulasyonu kaldirildiginda API yeniden HTTP 200 donmustur.
+- Simulasyona ait hata metni istemciye yansimamistir.
+- Test sirasinda PostgreSQL servisi durdurulmamistir.
+- Bu test, gercek servis kesintisini ve servis yeniden
+  baslatildiktan sonraki toparlanmayi kanitlamaz.
+- HTTP 500 yerine kontrollu HTTP 503 donulmesi
+  ayri bir iyilestirme olarak degerlendirilebilir.
