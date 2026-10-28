@@ -58,3 +58,33 @@ stres testleri ve veritabanı kaynak analizleri ayrıca değerlendirilmelidir.
 Aynı klasörde her yük seviyesi için Locust tarafından oluşturulan
 stats.csv, stats_history.csv, failures.csv ve exceptions.csv
 dosyaları bulunmaktadır.
+
+
+## 6. Kontrollu Stres Testi ve Veri Kumesi Karsilastirmasi
+
+**Tarih:** 28.10.2026
+**Endpoint:** GET /api/odalar
+**Ortam:** Yerel FastAPI, JWT ve crkys_alembic_test
+**Sure:** Her seviye icin 45 saniye
+
+| Senaryo | Istek | Ortalama | P95 | P99 | Istek/sn | Hata |
+|---|---:|---:|---:|---:|---:|---:|
+| 40 kullanici, 0 oda | 1156 | 20 ms | 33 ms | 59 ms | 25.93 | %0 |
+| 60 kullanici, 0 oda | 1701 | 19 ms | 41 ms | 62 ms | 37.90 | %0 |
+| 60 kullanici, 20 oda | 1701 | 20 ms | 36 ms | 62 ms | 37.93 | %0 |
+
+Bu sayilar Locust terminalinin son ozetlerinden alinmistir.
+Kaydedilen CSV dosyalarindaki son istek sayilari farklilik
+gosterebilir; ham CSV dosyalari ayri kanit olarak saklanmistir.
+
+### Degerlendirme
+
+- Uc senaryoda da gozlenen HTTP hata orani %0'dir.
+- 60 kullanicida 20 odali tabloyla P95 36 ms olarak olculmustur.
+- Bos ve 20 kayitli tablo arasinda belirgin bir performans
+  bozulmasi gozlenmemistir.
+- Bu kontrollu yuk olcumleri sistemin maksimum kapasitesini
+  veya uzun sureli dayanikliligini belirlememektedir.
+- Veritabani baglanti sayilari, CPU ve bellek kullanimi
+  yuk altinda ayrica olculmemistir.
+- Testler bir endpoint ve tek bir JWT hesabi ile sinirlidir.
