@@ -120,3 +120,40 @@ hata metni HTTP yanitinda gorulmedi.
   baslatildiktan sonraki toparlanmayi kanitlamaz.
 - HTTP 500 yerine kontrollu HTTP 503 donulmesi
   ayri bir iyilestirme olarak degerlendirilebilir.
+
+
+## 8. PostgreSQL Baglanti ve Istatistik Analizi
+
+**Tarih:** 28.10.2026
+**Veritabani:** crkys_alembic_test
+**Olcum zamani:** Locust testleri tamamlandiktan sonra
+
+| Metrik | Deger |
+|---|---:|
+| Aktif baglanti | 1 |
+| Bosta baglanti | 1 |
+| Maksimum sunucu baglanti limiti | 100 |
+| COMMIT sayaci | 26220 |
+| ROLLBACK sayaci | 12834 |
+| Okunan blok | 41 |
+| Onbellek isabeti | 4520042 |
+| Deadlock sayaci | 33 |
+| Veritabani boyutu | 9622 kB |
+| Odalar sirali tarama | 6029 |
+| Odalar indeks tarama | 110 |
+| Odalar tahmini canli kayit | 0 |
+| Odalar tahmini olu kayit | 28 |
+
+### Degerlendirme
+
+- Kontrol aninda 2 PostgreSQL baglantisi bulunmustur.
+- Okumalarin buyuk kismi PostgreSQL onbelleginden karsilanmistir.
+- Odalar tablosundaki 0 tahmini canli kayit, gecici test
+  odalarinin temizlenmesiyle uyumludur.
+- 33 deadlock kaydi gozlenmistir. Bunlarin hangi testlerden
+  veya islemlerden kaynaklandigi belirlenememistir.
+- COMMIT, ROLLBACK ve deadlock sayaclari birikimlidir.
+- Bu olcum yuk testi sirasinda yapilmadigindan zirve
+  baglanti sayisi, CPU ve bellek kullanimi bilinmemektedir.
+- Deadlock nedenleri mevcut eszamanlilik ve transaction
+  testleriyle birlikte ayrica incelenmelidir.
