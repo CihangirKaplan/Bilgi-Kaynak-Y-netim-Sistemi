@@ -101,3 +101,62 @@ def test_gui_rol_belirtilmeden_acilamaz(qt_app):
 
     with pytest.raises(ValueError, match="Geçersiz kullanıcı rolü"):
         AnaPencere()
+
+
+def test_gui_login_beklenmeyen_hata_ayrintisi_gizlenir():
+    from unittest.mock import MagicMock, patch
+    import login_ekrani as modul
+
+    ekran_sinifi = next(
+        sinif
+        for sinif in vars(modul).values()
+        if isinstance(sinif, type)
+        and sinif.__module__ == modul.__name__
+        and "giris_yap" in vars(sinif)
+    )
+
+    ekran = MagicMock()
+    ekran.kalan = 0
+    ekran.kullanici_input.text.return_value = "qa_test"
+    ekran.sifre_input.text.return_value = "test_parolasi"
+
+    with patch(
+        "login_ekrani.requests.post",
+        side_effect=RuntimeError("QA001_GIZLI_TEKNIK_AYRINTI")
+    ):
+        ekran_sinifi.giris_yap(ekran)
+
+    ekran.hata_goster.assert_called_once()
+    mesaj = ekran.hata_goster.call_args.args[0]
+
+    assert "QA001_GIZLI_TEKNIK_AYRINTI" not in mesaj
+    assert "Giriş işlemi tamamlanamadı" in mesaj
+
+
+def test_gui_login_zaman_asimi_mesaji():
+    from unittest.mock import MagicMock, patch
+    import requests
+    import login_ekrani as modul
+
+    ekran_sinifi = next(
+        sinif
+        for sinif in vars(modul).values()
+        if isinstance(sinif, type)
+        and sinif.__module__ == modul.__name__
+        and "giris_yap" in vars(sinif)
+    )
+
+    ekran = MagicMock()
+    ekran.kalan = 0
+    ekran.kullanici_input.text.return_value = "qa_test"
+    ekran.sifre_input.text.return_value = "test_parolasi"
+
+    with patch(
+        "login_ekrani.requests.post",
+        side_effect=requests.exceptions.Timeout()
+    ):
+        ekran_sinifi.giris_yap(ekran)
+
+    ekran.hata_goster.assert_called_once_with(
+        "Sunucu yanıt vermedi. Lütfen tekrar deneyin."
+    )
