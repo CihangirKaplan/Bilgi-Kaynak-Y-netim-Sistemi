@@ -6,7 +6,8 @@
 **GitHub Issue:** #186\
 **Sorumlu:** Öğrenci C\
 **Branch:** `test/qa-001-quality-testing`\
-**Tarih:** 27.10.2026
+**İlk rapor:** 27.10.2026  
+**Son güncelleme:** 30.10.2026
 
 ---
 
@@ -51,7 +52,7 @@ Son genel regresyon testi:
 - Başarısız test: **0**
 - Seçim filtresiyle hariç tutulan test: **1**
 - Test süresi: **6,60 saniye**
-- Genel kod kapsamı: **%66**
+- Ölçülen üç dosyada birleşik kod kapsamı: **%66**
 
 ### Dosya bazında Coverage
 
@@ -62,7 +63,7 @@ Son genel regresyon testi:
 | denetim.py | %100 |
 | TOPLAM | %66 |
 
-Coverage ölçümü, satır ve branch kapsamını içermektedir.
+Coverage ölçümü `sunucu.py`, `guvenlik.py` ve `denetim.py` dosyalarının satır ve branch kapsamını içermektedir. Bu oran tüm TKYS projesinin kapsamı değildir.
 
 ## 5. Güvenlik Testleri
 
@@ -131,47 +132,155 @@ Uygulama kapatılıp yeniden açılarak yapılacak gerçek
 uçtan uca oturum kontrolü manuel kabul testi olarak
 ayrıca değerlendirilmelidir.
 
-## 9. GitHub Actions
+## 9. GitHub Actions ve Pull Request Durumu
 
-`.github/workflows/qa-tests.yml` oluşturulmuştur.
+QA-001 kapsamında otomatik testler GitHub Actions
+iş akışına entegre edilmiştir.
 
-Hazırlanan CI yapılandırması:
+- PR #189: Merge edildi.
+- PR #190: Merge edildi.
+- PR #191: GitHub Actions başarılı; ekip incelemesi bekleniyor.
 
-- Python 3.13 ortamını hazırlar.
-- Proje bağımlılıklarını kurar.
-- Güvenli QA test grubunu çalıştırır.
-- Coverage raporu oluşturur.
-- Coverage XML çıktısını artifact olarak saklar.
+CI, PostgreSQL servisi gerektiren belirli entegrasyon
+testlerini hariç tutmaktadır. Bu testler yerel test
+veritabanında ayrıca değerlendirilmiştir.
 
-**Durum:** Yerel yapılandırma tamamlanmıştır.
-GitHub üzerinde başarılı çalıştığı henüz doğrulanmamıştır.
+## 10. Gerçek PostgreSQL Entegrasyon Testleri
 
-## 10. Kapsam ve Sınırlamalar
+28 Ekim 2026 çalışmalarında `crkys_alembic_test`
+veritabanında 7 gerçek PostgreSQL testi başarılı olmuştur.
 
-Son genel regresyonda gerçek PostgreSQL entegrasyonu
-gerektiren belirli test dosyaları hariç tutulmuştur.
+Kontrol edilen alanlar:
 
-Bu nedenle 313 başarılı test sonucu, tüm entegrasyon
-ve üretim ortamı senaryolarının doğrulandığı anlamına gelmez.
+- Transaction ve rollback davranışları
+- Audit işlemleri
+- Eşzamanlı rezervasyon senaryoları
+- Test verilerinin izolasyonu ve temizlenmesi
+- Randevu ve cihaz rezervasyonu EXCLUDE kısıtları
 
-Test sırasında StarletteDeprecationWarning ve InsecureKeyLengthWarning görülmüştür.
-Bu uyarılar testlerin başarısını etkilememiştir.
+Bu sonuçlar, bütün PostgreSQL kısıtlarının tüm negatif
+senaryolarının test edildiği anlamına gelmez.
 
-## 11. Sonuç
+İlgili çalışmalar PR #190 ile develop'a alınmıştır.
 
-QA-001 kapsamında güvenlik, hata yönetimi, audit,
-transaction ve arayüz davranışlarına yönelik iyileştirmeler
-yapılmıştır.
+## 11. Gerçek API Performans Ölçümleri
 
-Son genel regresyonda **336 test başarılı**, başarısız
-test sayısı **0**, toplam Coverage oranı **%66** olmuştur.
+Locust kullanılarak gerçek FastAPI ve PostgreSQL
+üzerinden kontrollü yük testleri gerçekleştirilmiştir.
 
-Değişiklikler Pull Request ve ekip incelemesine
-hazırlanmıştır.
+Test edilen sanal kullanıcı sayıları:
+1, 5, 10, 20, 40 ve 60.
 
-**Bekleyen kontroller:**
+30 Ekim 2026 tarihli son 60 kullanıcı testinde:
 
-- GitHub Actions çalışma sonucunun doğrulanması
-- Ayrı PostgreSQL entegrasyon testlerinin değerlendirilmesi
-- Danışma masası uygulama kapanma/açılma manuel testi
-- Ekip arkadaşının PR incelemesi
+| Metrik | Sonuç |
+|---|---:|
+| Test süresi | 45 saniye |
+| Toplam HTTP isteği | 1707 |
+| Başarısız istek | 0 |
+| Ortalama yanıt süresi | 21 ms |
+| P95 | 38 ms |
+| P99 | 60 ms |
+| İstek/saniye | 38,11 |
+| Ortalama CPU | %17,23 |
+| Maksimum CPU | %23,20 |
+| Ortalama RAM | 51,43 MB |
+| Maksimum RAM | 51,89 MB |
+
+Test edilen endpoint: `GET /api/odalar`.
+
+CPU/RAM değerleri FastAPI sürecine aittir;
+PostgreSQL süreçlerinin kaynak tüketimini içermez.
+
+Ayrıntılı sonuçlar:
+
+`docs/test-reports/QA001_Locust_Performans_Raporu.md`
+
+Son kaynak ölçümleri PR #191 kapsamındadır.
+
+## 12. Gerçek GUI Entegrasyon Kontrolleri
+
+PySide6 masaüstü uygulaması, MEMUR rolündeki test
+hesabıyla gerçek FastAPI ve PostgreSQL ortamında
+manuel olarak kontrol edilmiştir.
+
+Başarılı gözlemlenen işlemler:
+
+- Kullanıcı girişi ve oturum kapatma
+- Ana kontrol panelinin yüklenmesi
+- Bakım ve kalibrasyon ekranları
+- Cihaz raporları ekranı
+- Rol bazlı menü ve erişim davranışları
+
+Test sırasında eksik veritabanı sütunları nedeniyle
+HTTP 500 hataları tespit edilmiştir.
+
+Test veritabanı yedeklendikten sonra Alembic sürümü
+`c01930448638` seviyesinden `b7e41c9d2a60`
+seviyesine yükseltilmiştir.
+
+Eksik bakım ve kalibrasyon tarihi sütunlarının
+eklendiği doğrulanmış, ilgili ekranlar yeniden
+kontrol edilmiştir.
+
+Ayrıntılı manuel GUI raporu:
+
+`docs/test-reports/QA001_GUI_Entegrasyon_Raporu.md`
+
+Bu rapor PR #191 kapsamındadır.
+
+## 13. Bağımlılık Güvenlik Taraması
+
+30 Ekim 2026 tarihinde `pip-audit 2.10.1`
+ile `requirements.txt` taranmıştır.
+
+Tarama sonucu:
+
+`No known vulnerabilities found`
+
+Tarama sırasında önbellek uyarıları görülmüş,
+ancak bilinen güvenlik açığı raporlanmamıştır.
+
+Bu sonuç yalnızca tarama anında ve belirtilen
+bağımlılıklar için geçerlidir. Taramanın terminal
+çıktısı alınmış, ayrı bir tarama kanıt dosyası
+henüz repoya eklenmemiştir.
+
+## 14. Kapsam ve Açık Kalan Kriterler
+
+Aşağıdaki konular henüz tamamen doğrulanmamıştır:
+
+- Gerçek PostgreSQL servis kesintisi ve toparlanması
+- Sistemin maksimum yük sınırı
+- Uzun süreli dayanıklılık ve kaynak tüketimi
+- Bütün desteklenen işletim sistemlerinde GUI kontrolü
+- Diğer kullanıcı rollerinin tam uçtan uca testleri
+- Tüm veritabanı kısıtlarının negatif senaryoları
+- Normal yük için ekipçe onaylanmış sayısal P95 hedefi
+
+Veritabanı bağlantı kesintisi daha önce uygulama
+seviyesinde simüle edilmiştir; gerçek PostgreSQL
+servisi durdurulmamıştır.
+
+Son güvenli regresyonda 336 test başarılı,
+1 test seçim filtresiyle hariç tutulmuştur.
+Ayrıca 5 PostgreSQL test dosyası güvenli regresyon
+koşumuna dahil edilmemiştir.
+
+## 15. Genel Değerlendirme
+
+QA-001 kapsamında otomatik regresyon, güvenlik,
+gerçek PostgreSQL entegrasyonu, kontrollü yük,
+kaynak tüketimi ve GUI kontrollerinde önemli
+doğrulamalar gerçekleştirilmiştir.
+
+PR #189 ve #190 develop branch'ine alınmıştır.
+PR #191 ekip incelemesi aşamasındadır.
+
+Mevcut sonuçlar değerlendirilen senaryolarda
+olumlu olsa da TKYS v1.0'ın bütün kurumsal
+kabul kriterlerini karşıladığı henüz doğrulanmamıştır.
+
+Issue #186'nın Definition of Done koşulları için
+açık kalan kriterlerin ekip tarafından değerlendirilmesi
+ve ilgili PR incelemelerinin tamamlanması gerekmektedir.
