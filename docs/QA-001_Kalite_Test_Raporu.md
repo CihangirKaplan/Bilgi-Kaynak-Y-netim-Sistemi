@@ -250,7 +250,6 @@ henüz repoya eklenmemiştir.
 
 Aşağıdaki konular henüz tamamen doğrulanmamıştır:
 
-- Gerçek PostgreSQL servis kesintisi ve toparlanması
 - Sistemin maksimum yük sınırı
 - Uzun süreli dayanıklılık ve kaynak tüketimi
 - Bütün desteklenen işletim sistemlerinde GUI kontrolü
@@ -258,9 +257,22 @@ Aşağıdaki konular henüz tamamen doğrulanmamıştır:
 - Tüm veritabanı kısıtlarının negatif senaryoları
 - Normal yük için ekipçe onaylanmış sayısal P95 hedefi
 
-Veritabanı bağlantı kesintisi daha önce uygulama
-seviyesinde simüle edilmiştir; gerçek PostgreSQL
-servisi durdurulmamıştır.
+30.10.2026 tarihinde bağımsız PostgreSQL 18 sunucusu
+üzerinde (55432 portu) gerçek kesinti ve toparlanma
+testi gerçekleştirilmiştir.
+
+`GET /api/odalar` endpoint'i FastAPI TestClient ile
+kontrol edilmiştir. Kimlik doğrulama bağımlılığı test
+ortamında geçici olarak devre dışı bırakılmıştır.
+
+Sonuç: HTTP 200 → 500 → 200.
+
+PostgreSQL durdurulmuş, yeniden başlatılmış ve
+API'nin yeniden çalıştığı doğrulanmıştır.
+Geçici test ortamı güvenle temizlenmiştir.
+
+Bu sonuç yalnızca test edilen endpoint ve bağlantı
+senaryosu için geçerlidir.
 
 Son güvenli regresyonda 336 test başarılı,
 1 test seçim filtresiyle hariç tutulmuştur.
