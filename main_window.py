@@ -243,9 +243,12 @@ def kart_olustur():
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()
 
-    def __init__(self, aktif_rol="admin", kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
+    def __init__(self, aktif_rol=None, kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
         super().__init__()
-        self.aktif_rol = aktif_rol.lower() if aktif_rol.lower() in ROLLER else "admin"
+        if not isinstance(aktif_rol, str) or aktif_rol.lower() not in ROLLER:
+            raise ValueError("Geçersiz kullanıcı rolü.")
+
+        self.aktif_rol = aktif_rol.lower()
         self.kullanici_adi = kullanici_adi
         self.rol_onizleme = rol_onizleme
 

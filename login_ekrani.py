@@ -280,8 +280,14 @@ class LoginEkrani(QWidget):
 
         except requests.exceptions.ConnectionError:
             self.hata_goster("Sunucuya bağlanılamadı. API'nin açık olduğundan emin olun.")
-        except Exception as e:
-            self.hata_goster(f"Beklenmeyen bir hata oluştu: {str(e)}")
+        except requests.exceptions.Timeout:
+            self.hata_goster(
+                "Sunucu yanıt vermedi. Lütfen tekrar deneyin."
+            )
+        except Exception:
+            self.hata_goster(
+                "Giriş işlemi tamamlanamadı. Lütfen tekrar deneyin."
+            )
 
     def ilk_giris_sifresi_degisti(self):
         self.sifre_penceresi.close()
