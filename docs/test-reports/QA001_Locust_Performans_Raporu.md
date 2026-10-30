@@ -188,3 +188,65 @@ yonelik kanit bulunmamaktadir.
 
 Bu incelemede yeni bir veri butunlugu hatasi
 tespit edilmemistir.
+
+## Ek Ölçüm — 30.10.2026 CPU ve RAM Kullanımı
+
+QA-001 kapsamında daha önce gerçekleştirilen yük testlerine
+ek olarak sunucunun işlemci ve bellek tüketimi ölçülmüştür.
+
+### Test Ortamı
+
+- Test veritabanı: crkys_alembic_test
+- API: http://127.0.0.1:8001
+- Test aracı: Locust 2.47.0
+- Sanal kullanıcı: 60
+- Test süresi: 45 saniye
+- Test edilen endpoint: GET /api/odalar
+- Ölçüm sıklığı: Yaklaşık 1 saniye
+
+### CPU ve RAM Sonuçları
+
+| Metrik | Sonuç |
+|---|---:|
+| Ortalama CPU | %17,23 |
+| Maksimum CPU | %23,20 |
+| Ortalama RAM | 51,43 MB |
+| Maksimum RAM | 51,89 MB |
+| Ölçüm sayısı | 46 |
+
+### HTTP Performansı
+
+| Metrik | Sonuç |
+|---|---:|
+| Toplam istek | 1707 |
+| Başarısız istek | 0 |
+| Ortalama yanıt süresi | 21 ms |
+| P95 | 38 ms |
+| P99 | 60 ms |
+| Maksimum yanıt süresi | 140 ms |
+| İstek/saniye | 38,11 |
+
+### Değerlendirme
+
+60 sanal kullanıcılı kontrollü yük senaryosunda
+1707 HTTP isteği başarıyla tamamlanmıştır.
+
+Ölçüm sırasında FastAPI işleminin maksimum CPU
+kullanımı %23,20, maksimum RAM kullanımı 51,89 MB
+olarak gözlemlenmiştir.
+
+Bu sonuçlar yerel test ortamına ve tek bir okuma
+endpoint'ine aittir. PostgreSQL süreçlerinin CPU/RAM
+tüketimi ölçüme dahil değildir.
+
+Sonuçlar sistemin maksimum kapasitesini veya bütün
+modüllerdeki performansını temsil etmez.
+
+### Kanıt Dosyaları
+
+- QA001_CPU_RAM_60_olcum.csv
+- QA001_kaynak_60_stats.csv
+- QA001_kaynak_60_stats_history.csv
+- QA001_kaynak_60_failures.csv
+- QA001_kaynak_60_exceptions.csv
+- QA001_kaynak_60_locust.log

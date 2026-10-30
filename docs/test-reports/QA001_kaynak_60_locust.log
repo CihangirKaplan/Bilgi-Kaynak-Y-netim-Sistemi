@@ -1,0 +1,19 @@
+[2026-10-30 10:34:29,779] ayse-MacBook-Air-2/INFO/locust.main: Starting Locust 2.47.0
+[2026-10-30 10:34:29,781] ayse-MacBook-Air-2/INFO/locust.main: Run time limit set to 45 seconds
+[2026-10-30 10:34:29,782] ayse-MacBook-Air-2/INFO/locust.runners: Ramping to 60 users at a rate of 10.00 per second
+[2026-10-30 10:34:34,804] ayse-MacBook-Air-2/INFO/locust.runners: All users spawned: {"TKYSKullanicisi": 60} (60 total users)
+[2026-10-30 10:35:14,619] ayse-MacBook-Air-2/INFO/locust.main: --run-time limit reached, shutting down
+[2026-10-30 10:35:14,666] ayse-MacBook-Air-2/INFO/locust.main: Shutting down (exit code 0)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      GET /api/odalar                                                                 1707     0(0.00%) |     21       8     140     20 |   38.11        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                      1707     0(0.00%) |     21       8     140     20 |   38.11        0.00
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      GET /api/odalar                                                                        20     22     24     25     28     38     53     60    140    140    140   1707
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             20     22     24     25     28     38     53     60    140    140    140   1707
+
