@@ -27,7 +27,7 @@ def yedek_ortami(tmp_path):
     """Gerçek backups klasörünü kullanmadan test ortamı oluştur."""
     script = tmp_path / "scripts" / "yedek_rotasyonu.py"
     script.parent.mkdir()
-    script.write_text(SCRIPT.read_text())
+    script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
 
     klasor = tmp_path / "backups"
     klasor.mkdir()
@@ -95,7 +95,7 @@ def test_yedekleme_hatasinda_eksik_dosya_temizlenir(tmp_path):
 
     script = tmp_path / "scripts" / "veritabani_yedekle.py"
     script.parent.mkdir(exist_ok=True)
-    script.write_text(kaynak.read_text())
+    script.write_text(kaynak.read_text(encoding="utf-8"), encoding="utf-8")
 
     sahte_komut = tmp_path / "pg_dump"
     sahte_komut.write_text("""#!/bin/sh
