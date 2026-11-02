@@ -196,23 +196,23 @@ class AuditKayitlariEkrani(QWidget):
                 color: #173263;
             }
 
-            QFrame#ozetKart, QFrame#filtreKart, QFrame#tabloKart {
+            QFrame#ozetKart, QFrame#tabloKart {
                 background: #FFFFFF;
-                border: 1px solid #DDE6F3;
-                border-radius: 13px;
+                border: 1px solid #E3EAF5;
+                border-radius: 10px;
             }
 
             QLabel#ozetBaslik {
-                color: #647795;
-                font-size: 13px;
+                color: #697993;
+                font-size: 12px;
                 font-weight: 500;
                 border: none;
                 background: transparent;
             }
 
             QLabel#ozetDeger {
-                color: #0A1F5C;
-                font-size: 29px;
+                color: #16294B;
+                font-size: 24px;
                 font-weight: bold;
                 border: none;
                 background: transparent;
@@ -233,7 +233,7 @@ class AuditKayitlariEkrani(QWidget):
                 border: none;
             }
 
-            QLineEdit, QComboBox, QDateEdit {
+            QLineEdit, QComboBox {
                 background: #FFFFFF;
                 color: #183461;
                 border: 1px solid #D1DDED;
@@ -243,7 +243,7 @@ class AuditKayitlariEkrani(QWidget):
                 font-size: 13px;
             }
 
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
+            QLineEdit:focus, QComboBox:focus {
                 border: 1px solid #3778D8;
                 background: #FFFFFF;
             }
@@ -252,24 +252,19 @@ class AuditKayitlariEkrani(QWidget):
                 color: #96A5B8;
             }
 
-            QDateEdit:disabled {
-                background: #F5F7FC;
-                color: #A2AFC0;
-            }
-
             QPushButton {
-                background: #0A1F5C;
+                background: #285CE6;
                 color: #FFFFFF;
                 border: none;
                 border-radius: 8px;
-                padding: 5px 13px;
-                min-height: 25px;
+                padding: 7px 12px;
+                min-height: 28px;
                 font-size: 13px;
                 font-weight: bold;
             }
 
             QPushButton:hover {
-                background: #15367F;
+                background: #1E4BC5;
             }
 
             QPushButton#temizleBtn,
@@ -287,10 +282,10 @@ class AuditKayitlariEkrani(QWidget):
             QTableWidget {
                 background: #FFFFFF;
                 color: #243650;
-                border: none;
+                border: 1px solid #E3EAF5;
                 border-radius: 7px;
-                alternate-background-color: #F7F9FD;
-                gridline-color: #ECF0F7;
+                alternate-background-color: #FFFFFF;
+                gridline-color: #E3EAF5;
                 font-size: 13px;
                 selection-background-color: #E6EEFC;
                 selection-color: #173263;
@@ -308,13 +303,14 @@ class AuditKayitlariEkrani(QWidget):
             }
 
             QHeaderView::section {
-                background: #0A1F5C;
-                color: #FFFFFF;
-                padding: 9px;
+                background: #E8F0FF;
+                color: #16294B;
+                padding: 9px 5px;
                 font-size: 12px;
                 font-weight: bold;
                 border: none;
-                border-right: 1px solid #173675;
+                border-right: 1px solid #D6E2F3;
+                border-bottom: 1px solid #D6E2F3;
             }
 
             QCheckBox {
@@ -372,30 +368,30 @@ class AuditKayitlariEkrani(QWidget):
         self.ozet_degerleri = {}
 
         basliklar = [
-            ("toplam_kayit", "Toplam Kayıt"),
-            ("basarisiz_giris", "Başarısız Giriş"),
-            ("kullanici_islemleri", "Değişiklik İşlemleri"),
-            ("bugunku_islemler", "Bugünkü Kayıtlar"),
+            ("toplam_kayit", "Toplam Kayıt", "#16294B"),
+            ("basarisiz_giris", "Başarısız Giriş", "#B03840"),
+            ("kullanici_islemleri", "Değişiklik İşlemleri", "#285CE6"),
+            ("bugunku_islemler", "Bugünkü Kayıtlar", "#16803C"),
         ]
 
-        for sira, (anahtar, baslik) in enumerate(basliklar):
+        for sira, (anahtar, baslik, renk) in enumerate(basliklar):
             kart = QFrame()
             kart.setObjectName("ozetKart")
 
             icerik = QVBoxLayout(kart)
-            icerik.setContentsMargins(19, 18, 19, 18)
+            icerik.setContentsMargins(15, 12, 15, 12)
 
             baslik_etiketi = QLabel(baslik)
             baslik_etiketi.setObjectName("ozetBaslik")
 
             deger = QLabel("—")
             deger.setObjectName("ozetDeger")
+            deger.setStyleSheet(f"color: {renk};")
 
             self.ozet_degerleri[anahtar] = deger
 
             icerik.addWidget(baslik_etiketi)
             icerik.addWidget(deger)
-            kart_golgesi(kart)
             kartlar.addWidget(kart, 0, sira)
 
         ana.addLayout(kartlar)
@@ -413,6 +409,7 @@ class AuditKayitlariEkrani(QWidget):
         arama_satiri.addWidget(self.kullanici_arama, 3)
 
         self.olay_secimi = CokluIslemSecici()
+        self.olay_secimi.setCursor(Qt.CursorShape.PointingHandCursor)
         arama_satiri.addWidget(self.olay_secimi, 2)
 
         filtre_btn = QPushButton("Filtrele")
@@ -429,17 +426,35 @@ class AuditKayitlariEkrani(QWidget):
         yenile_btn.clicked.connect(self.kayitlari_getir)
         arama_satiri.addWidget(yenile_btn)
 
+        for buton in (filtre_btn, temizle_btn, yenile_btn):
+            buton.setCursor(Qt.CursorShape.PointingHandCursor)
+
         filtre_alani.addLayout(arama_satiri)
 
         tarih_satiri = QHBoxLayout()
         tarih_satiri.setSpacing(9)
 
-        self.tarih_aktif = QCheckBox("Tarih aralığı kullan")
-        tarih_satiri.addWidget(self.tarih_aktif)
+        tarih_satiri.addWidget(QLabel("Dönem:"))
+
+        self.donem_secimi = QComboBox()
+        self.donem_secimi.setFixedWidth(185)
+        self.donem_secimi.setFixedHeight(36)
+        self.donem_secimi.addItems([
+            "Tümü",
+            "Bugün",
+            "Son 7 Gün",
+            "Son 30 Gün",
+            "Tarih Aralığı"
+        ])
+        self.donem_secimi.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        tarih_satiri.addWidget(self.donem_secimi)
 
         tarih_satiri.addWidget(QLabel("Başlangıç:"))
 
         self.baslangic = QDateEdit()
+        self.baslangic.setFixedWidth(150)
         self.baslangic.setCalendarPopup(True)
         self.baslangic.setDisplayFormat("dd.MM.yyyy")
         self.baslangic.setDate(QDate.currentDate().addDays(-7))
@@ -449,25 +464,22 @@ class AuditKayitlariEkrani(QWidget):
         tarih_satiri.addWidget(QLabel("Bitiş:"))
 
         self.bitis = QDateEdit()
+        self.bitis.setFixedWidth(150)
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         self.bitis.setDate(QDate.currentDate())
         self.bitis.setEnabled(False)
         tarih_satiri.addWidget(self.bitis)
 
-        self.tarih_aktif.toggled.connect(self.baslangic.setEnabled)
-        self.tarih_aktif.toggled.connect(self.bitis.setEnabled)
+        self.donem_secimi.currentIndexChanged.connect(
+            self._donem_degisti
+        )
 
         tarih_satiri.addStretch()
         filtre_alani.addLayout(tarih_satiri)
-        filtre_kart = QFrame()
-        filtre_kart.setObjectName("filtreKart")
-        filtre_alani.setContentsMargins(13, 8, 13, 8)
-        filtre_alani.setSpacing(12)
-        filtre_kart.setLayout(filtre_alani)
-
-        kart_golgesi(filtre_kart)
-        ana.addWidget(filtre_kart)
+        filtre_alani.setContentsMargins(0, 0, 0, 0)
+        filtre_alani.setSpacing(9)
+        ana.insertLayout(0, filtre_alani)
 
         # Salt okunur kayıt tablosu
         self.tablo = QTableWidget()
@@ -480,7 +492,7 @@ class AuditKayitlariEkrani(QWidget):
 
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tablo.setAlternatingRowColors(True)
+        self.tablo.setAlternatingRowColors(False)
         self.tablo.verticalHeader().setVisible(False)
 
         baslik = self.tablo.horizontalHeader()
@@ -495,7 +507,7 @@ class AuditKayitlariEkrani(QWidget):
         self.tablo.setColumnWidth(5, 115)
         self.tablo.setColumnWidth(6, 100)
 
-        self.tablo.setShowGrid(False)
+        self.tablo.setShowGrid(True)
         self.tablo.verticalHeader().setDefaultSectionSize(42)
         self.tablo.horizontalHeader().setFixedHeight(46)
         self.tablo.setItemDelegateForColumn(
@@ -539,7 +551,6 @@ class AuditKayitlariEkrani(QWidget):
 
         tablo_duzen.addWidget(self.tablo, 1)
 
-        kart_golgesi(tablo_kart)
         ana.addWidget(tablo_kart, 1)
 
         # Sayfalama ve durum bilgisi
@@ -561,17 +572,22 @@ class AuditKayitlariEkrani(QWidget):
 
         # Sayfalama butonlari her durumda ayni lacivert renkte
         for buton in (self.onceki_btn, self.sonraki_btn):
+            buton.setCursor(Qt.CursorShape.PointingHandCursor)
             buton.setStyleSheet("""
-                QPushButton,
-                QPushButton:disabled,
-                QPushButton:hover,
-                QPushButton:pressed {
-                    background-color: #0A1F5C;
+                QPushButton {
+                    background: #285CE6;
                     color: white;
                     border: none;
-                    border-radius: 6px;
+                    border-radius: 8px;
                     padding: 9px 15px;
                     font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: #1E4BC5;
+                }
+                QPushButton:disabled {
+                    background: #DCE6F5;
+                    color: #8192AD;
                 }
             """)
 
@@ -583,6 +599,26 @@ class AuditKayitlariEkrani(QWidget):
 
         self.sayfalama_guncelle()
 
+    def _donem_degisti(self, *_):
+        secim = self.donem_secimi.currentText()
+        bugun = QDate.currentDate()
+
+        if secim == "Bugün":
+            self.baslangic.setDate(bugun)
+            self.bitis.setDate(bugun)
+
+        elif secim == "Son 7 Gün":
+            self.baslangic.setDate(bugun.addDays(-6))
+            self.bitis.setDate(bugun)
+
+        elif secim == "Son 30 Gün":
+            self.baslangic.setDate(bugun.addDays(-29))
+            self.bitis.setDate(bugun)
+
+        manuel = secim == "Tarih Aralığı"
+        self.baslangic.setEnabled(manuel)
+        self.bitis.setEnabled(manuel)
+
     def filtrele(self):
         self.offset = 0
         self.kayitlari_getir()
@@ -590,7 +626,7 @@ class AuditKayitlariEkrani(QWidget):
     def filtreleri_temizle(self):
         self.kullanici_arama.clear()
         self.olay_secimi.temizle()
-        self.tarih_aktif.setChecked(False)
+        self.donem_secimi.setCurrentIndex(0)
         self.baslangic.setDate(QDate.currentDate().addDays(-7))
         self.bitis.setDate(QDate.currentDate())
         self.offset = 0
@@ -613,6 +649,17 @@ class AuditKayitlariEkrani(QWidget):
         )
 
     def kayitlari_getir(self):
+        self._donem_degisti()
+
+        if (
+            self.donem_secimi.currentText() == "Tarih Aralığı"
+            and self.baslangic.date() > self.bitis.date()
+        ):
+            self.durum.setText(
+                "Başlangıç tarihi bitiş tarihinden sonra olamaz."
+            )
+            return
+
         parametreler = {
             "limit": self.limit,
             "offset": self.offset
@@ -626,7 +673,7 @@ class AuditKayitlariEkrani(QWidget):
         if olay:
             parametreler["olay_turu"] = olay
 
-        if self.tarih_aktif.isChecked():
+        if (self.donem_secimi.currentIndex() != 0):
             if self.baslangic.date() > self.bitis.date():
                 self.durum.setText(
                     "Başlangıç tarihi bitiş tarihinden sonra olamaz."
