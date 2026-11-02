@@ -1,5 +1,9 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QSpinBox, QPushButton, QMessageBox
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 # Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
 from ogrenci_dialog import OgrenciEkleDialog
@@ -81,7 +85,9 @@ class FaaliyetEkleDialog(QDialog):
         self.cb_ogrenci.clear()
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            res_ogr = requests.get(f"{self.api_url}/api/ogrenciler-liste", headers=headers)
+            res_ogr = oturum_kontrollu_istek("GET", f"{self.api_url}/api/ogrenciler-liste", headers=headers)
+            if oturum_hatasi_mi(res_ogr):
+                return
             if res_ogr.status_code == 200:
                 self.cb_ogrenci.addItem("Öğrenci Seçiniz...", None)
                 for ogr in res_ogr.json():
@@ -95,7 +101,9 @@ class FaaliyetEkleDialog(QDialog):
         self.ogrencileri_yukle()
 
         try:
-            res_faaliyet = requests.get(f"{self.api_url}/api/faaliyetler", headers=headers)
+            res_faaliyet = oturum_kontrollu_istek("GET", f"{self.api_url}/api/faaliyetler", headers=headers)
+            if oturum_hatasi_mi(res_faaliyet):
+                return
             if res_faaliyet.status_code == 200:
                 self.cb_faaliyet.addItem("Seçiniz...", None)
                 for f in res_faaliyet.json():
@@ -104,7 +112,9 @@ class FaaliyetEkleDialog(QDialog):
             print("Faaliyetler yüklenemedi:", e)
 
         try:
-            res_birim = requests.get(f"{self.api_url}/api/faaliyet-birimleri", headers=headers)
+            res_birim = oturum_kontrollu_istek("GET", f"{self.api_url}/api/faaliyet-birimleri", headers=headers)
+            if oturum_hatasi_mi(res_birim):
+                return
             if res_birim.status_code == 200:
                 self.cb_birim.addItem("Seçiniz...", None)
                 for b in res_birim.json():
@@ -169,10 +179,14 @@ class FaaliyetEkleDialog(QDialog):
                 print(f"--- GÜNCELLEME İSTEĞİ ATIYORUZ ---")
                 print(f"Gidilen Adres: {hedef_url}")
                 
-                res = requests.put(hedef_url, json=payload, headers=headers)
+                res = oturum_kontrollu_istek("PUT", hedef_url, json=payload, headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
             else:
                 # EĞER NORMAL MODSA POST (YENİ EKLEME) İSTEĞİ AT
-                res = requests.post(f"{self.api_url}/api/faaliyet-kayitlari", json=payload, headers=headers)
+                res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/faaliyet-kayitlari", json=payload, headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
             
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))

@@ -3,6 +3,10 @@
 from datetime import datetime
 
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 from rapor_excel import excel_dosyasi_olustur
 from PySide6.QtCore import Qt, QDate
@@ -292,9 +296,11 @@ class CihazRaporlariEkrani(QWidget):
     def _cihazlari_yukle(self):
         """Cihaz filtresini yalnızca ilk yüklemede doldurur; hata olursa rapor yine çalışır."""
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/cihazlar", headers=self._headers(), timeout=15
             )
+            if oturum_hatasi_mi(yanit):
+                return
             yanit.raise_for_status()
             for cihaz in yanit.json():
                 self.cihaz_sec.addItem(
@@ -370,12 +376,14 @@ class CihazRaporlariEkrani(QWidget):
             self._cihazlari_yukle()
 
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/cihaz-raporlari",
                 headers=self._headers(),
                 params=params,
                 timeout=15,
             )
+            if oturum_hatasi_mi(yanit):
+                return
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:

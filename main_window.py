@@ -1,3 +1,13 @@
+import base64
+import json
+import time
+from PySide6.QtCore import QTimer
+from api_yoneticisi import oturum_olaylari
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
+
 import os
 import sys
 import requests
@@ -256,6 +266,27 @@ class AnaPencere(QMainWindow):
         self.token = token
         self.kullanici_id = kullanici_id
 
+        # JWT bitiş zamanını takip et
+        self._token_bitis_zamani = self._token_bitisini_oku()
+
+        self._oturum_kapatiliyor = False
+
+        oturum_olaylari.token_reddedildi.connect(
+            self._api_token_reddedildi
+        )
+
+        self._oturum_zamanlayici = QTimer(self)
+        self._oturum_zamanlayici.setInterval(1000)
+        self._oturum_zamanlayici.timeout.connect(
+            self._oturum_suresini_kontrol_et
+        )
+
+        if self.token:
+            self._oturum_zamanlayici.start()
+            QTimer.singleShot(
+                0, self._oturum_suresini_kontrol_et
+            )
+
         self.resize(1360, 820)
         self.setMinimumSize(1100, 700)
         self.setStyleSheet(STIL)
@@ -446,7 +477,141 @@ class AnaPencere(QMainWindow):
         self.statusBar().showMessage(
             f"Sistem Çevrim İçi  |  Güvenlik Denetimi: Başarılı  |  Aktif Oturum: {info['ad']}  |  Yetki: {aktif}/{len(IZIN)}")
 
+    def _api_token_reddedildi(self, token, neden):
+        """Yalnizca aktif oturumun token hatasini isler."""
+
+        if token != self.token or self._oturum_kapatiliyor:
+            return
+
+        self._oturum_nedeni = neden
+        self._oturum_kapatiliyor = True
+        self._oturum_zamanlayici.stop()
+
+        QTimer.singleShot(0, self._api_oturum_uyarisi)
+
+    def _oturum_pencerelerini_temizle(self):
+        """Yalnizca mevcut oturuma ait pencereleri temizler."""
+        from PySide6.QtWidgets import QDialog
+
+        if getattr(self, "_pencereler_temizlendi", False):
+            return
+
+        self._pencereler_temizlendi = True
+
+        # Oturuma ait zamanlayicilari durdur
+        for zamanlayici in self.findChildren(QTimer):
+            zamanlayici.stop()
+
+        # Ana pencereye bagli modal formlar
+        pencereler = list(self.findChildren(QDialog))
+
+        # Ana pencereden bagimsiz acilan formlar
+        bagimsiz_formlar = (
+            "oda_ekle_penceresi",
+            "oda_duzenle_penceresi",
+            "randevu_formu",
+            "liste_formu",
+        )
+
+        for ad in bagimsiz_formlar:
+            pencere = getattr(self, ad, None)
+
+            if isinstance(pencere, QWidget):
+                pencereler.append(pencere)
+
+        gorulen = set()
+
+        for pencere in pencereler:
+            if id(pencere) in gorulen:
+                continue
+
+            gorulen.add(id(pencere))
+
+            try:
+                if not pencere.isVisible():
+                    continue
+
+                if isinstance(pencere, QDialog):
+                    pencere.reject()
+                else:
+                    pencere.close()
+
+            except RuntimeError:
+                # Qt tarafindan daha once silinmis pencere
+                continue
+
+    def _api_oturum_uyarisi(self):
+        self._oturum_pencerelerini_temizle()
+
+        mesaj = (
+            "Oturum süreniz sona ermiştir.\n\n"
+            if getattr(self, "_oturum_nedeni", "sure_doldu") == "sure_doldu"
+            else "Oturumunuz geçersiz hâle gelmiştir.\n\n"
+        )
+
+        QMessageBox.information(
+            self,
+            "Oturum Sona Erdi",
+            mesaj + "Uygulamayı kullanmaya devam etmek için "
+            "lütfen yeniden giriş yapın.",
+            QMessageBox.StandardButton.Ok
+        )
+
+        self.oturum_kapat()
+
+    def _token_bitisini_oku(self):
+        """JWT bitiş zamanını zamanlayıcı için okur."""
+        if not self.token:
+            return 0
+
+        try:
+            parca = self.token.split(".")[1]
+            parca += "=" * (-len(parca) % 4)
+
+            veri = json.loads(
+                base64.urlsafe_b64decode(parca)
+            )
+
+            return int(veri["exp"])
+
+        except (ValueError, TypeError, KeyError, IndexError):
+            return 0
+
+    def _oturum_suresini_kontrol_et(self):
+        """Token süresi dolunca oturumu sonlandırır."""
+        if self._oturum_kapatiliyor:
+            return
+
+        if time.time() < self._token_bitis_zamani:
+            return
+
+        self._oturum_kapatiliyor = True
+        self._oturum_zamanlayici.stop()
+        self._oturum_pencerelerini_temizle()
+
+        QMessageBox.information(
+            self,
+            "Oturum Sona Erdi",
+            "Oturum süreniz sona ermiştir.\n\n"
+            "Uygulamayı kullanmaya devam etmek için "
+            "lütfen yeniden giriş yapın.",
+            QMessageBox.StandardButton.Ok
+        )
+
+        self.oturum_kapat()
+
     def oturum_kapat(self):
+        self._oturum_kapatiliyor = True
+        self._oturum_zamanlayici.stop()
+        self._oturum_pencerelerini_temizle()
+
+        try:
+            oturum_olaylari.token_reddedildi.disconnect(
+                self._api_token_reddedildi
+            )
+        except (TypeError, RuntimeError):
+            pass
+
         self.oturum_kapatildi.emit()
         self.close()
 
@@ -455,7 +620,8 @@ class AnaPencere(QMainWindow):
 
         orijinal_close = self.oda_ekle_penceresi.closeEvent
         def kapanma_yakala(event):
-            self.odalari_getir()
+            if not self._oturum_kapatiliyor:
+                self.odalari_getir()
             if orijinal_close:
                 orijinal_close(event)
             else:
@@ -494,7 +660,8 @@ class AnaPencere(QMainWindow):
 
         orijinal_close = self.oda_duzenle_penceresi.closeEvent
         def kapanma_yakala(event):
-            self.odalari_getir()
+            if not self._oturum_kapatiliyor:
+                self.odalari_getir()
             if orijinal_close:
                 orijinal_close(event)
             else:
@@ -527,12 +694,14 @@ class AnaPencere(QMainWindow):
         if cevap == QMessageBox.Yes:
             headers = {"Authorization": f"Bearer {self.token}"}
             try:
-                res = requests.patch(
+                res = oturum_kontrollu_istek("PATCH",
                     f"{self.api_url}/api/odalar/{oda_id}",
                     json={"aktif_mi": False},
                     headers=headers,
                     timeout=5
                 )
+                if oturum_hatasi_mi(res):
+                    return
 
                 if res.status_code == 200:
                     QMessageBox.information(self, "Başarılı", "Oda başarıyla pasife alındı.")
@@ -571,7 +740,9 @@ class AnaPencere(QMainWindow):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 odalar = cevap.json()
                 self.oda_tablosu.setRowCount(len(odalar))
@@ -985,7 +1156,10 @@ class AnaPencere(QMainWindow):
         )
         orijinal_close = self.randevu_formu.closeEvent
         def kapanma_yakala(event):
-            if hasattr(self, 'randevu_ana_ekrani'):
+            if (
+                not self._oturum_kapatiliyor
+                and hasattr(self, 'randevu_ana_ekrani')
+            ):
                 self.randevu_ana_ekrani.verileri_cek()
             if orijinal_close: orijinal_close(event)
             else: event.accept()
@@ -1051,7 +1225,9 @@ class AnaPencere(QMainWindow):
             from PySide6.QtWidgets import QTableWidgetItem, QMessageBox
 
             headers = {"Authorization": f"Bearer {self.token}"}
-            res = requests.get(f"{self.api_url}/api/faaliyet-kayitlari", headers=headers)
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/faaliyet-kayitlari", headers=headers)
+            if oturum_hatasi_mi(res):
+                return
 
             if res.status_code == 200:
                 kayitlar = res.json()
@@ -1179,7 +1355,9 @@ class AnaPencere(QMainWindow):
             hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}"
 
             try:
-                res = requests.delete(hedef_url, headers=headers)
+                res = oturum_kontrollu_istek("DELETE", hedef_url, headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
 
                 if res.status_code == 200:
                     bilgi = QMessageBox(self)

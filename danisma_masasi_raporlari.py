@@ -3,6 +3,10 @@
 from datetime import datetime
 
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
@@ -359,12 +363,14 @@ class DanismaMasasiRaporlari(QWidget):
             return
 
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/danisma/raporlar",
                 headers=self._headers(),
                 params=params,
                 timeout=15
             )
+            if oturum_hatasi_mi(yanit):
+                return
             yanit.raise_for_status()
             veri = yanit.json()
 

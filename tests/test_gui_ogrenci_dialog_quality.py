@@ -7,6 +7,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+from requests import Response
 from PySide6.QtWidgets import QApplication, QDialog
 
 from ogrenci_dialog import OgrenciEkleDialog
@@ -32,7 +33,7 @@ def dialog(qt_app):
 
 def test_gui_zorunlu_alanlar_bos(dialog):
     with (
-        patch("ogrenci_dialog.requests.post") as post,
+        patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
         patch("ogrenci_dialog.QMessageBox.warning") as uyari,
     ):
         dialog.kaydet_tiklandi()
@@ -46,7 +47,7 @@ def test_gui_ogrenci_numarasi_harf_iceremez(dialog):
     dialog.le_ogrenci_no.setText("123ABC")
 
     with (
-        patch("ogrenci_dialog.requests.post") as post,
+        patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
         patch("ogrenci_dialog.QMessageBox.warning") as uyari,
     ):
         dialog.kaydet_tiklandi()
@@ -62,9 +63,10 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
     dialog.cb_tur.setCurrentIndex(0)
 
     with (
-        patch("ogrenci_dialog.requests.post") as post,
+        patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
         patch("ogrenci_dialog.QMessageBox.information") as bilgi,
     ):
+        post.return_value = Response()
         post.return_value.status_code = 200
 
         dialog.kaydet_tiklandi()
@@ -73,7 +75,8 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
 
     args, kwargs = post.call_args
 
-    assert args[0] == "http://testserver/api/ogrenci-ekle"
+    assert args[0] == "POST"
+    assert args[1] == "http://testserver/api/ogrenci-ekle"
     assert kwargs["json"]["ogrenci_numarasi"] == "23100011036"
     assert kwargs["json"]["tur"] == "GONULLU"
 

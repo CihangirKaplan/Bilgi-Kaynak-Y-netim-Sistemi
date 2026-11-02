@@ -5,6 +5,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
                             yenile_butonu_olustur, bos_mesaj_olustur)
@@ -57,7 +61,9 @@ class YeniKalibrasyonFormu(QDialog):
 
     def cihazlari_yukle(self):
         try:
-            res = requests.get(f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 200:
                 for c in res.json():
                     self.cmb_cihaz.addItem(f"{c['envanter_kodu']} - {c['cihaz_adi']}", c['cihaz_id'])
@@ -79,7 +85,9 @@ class YeniKalibrasyonFormu(QDialog):
             return
 
         try:
-            res = requests.post(f"{self.api_url}/api/kalibrasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/kalibrasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 201:
                 QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla eklendi.")
                 self.accept()
@@ -151,7 +159,9 @@ class KalibrasyonDuzenleFormu(QDialog):
             return
 
         try:
-            res = requests.put(f"{self.api_url}/api/kalibrasyonlar/{self.k_veri['kalibrasyon_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            res = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/kalibrasyonlar/{self.k_veri['kalibrasyon_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla güncellendi.")
                 self.accept()
@@ -216,7 +226,9 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.detaylar.clear()
         yaklasan = gecmis = 0
         try:
-            res = requests.get(f"{self.api_url}/api/kalibrasyonlar", headers=self.basliklar, timeout=10)
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/kalibrasyonlar", headers=self.basliklar, timeout=10)
+            if oturum_hatasi_mi(res):
+                return
             res.raise_for_status()
             kayitlar = res.json()
         except Exception as e:
@@ -281,7 +293,9 @@ class KalibrasyonYonetimEkrani(QWidget):
                          f"“{kayit.get('cihaz_adi', '')}” cihazının bu kalibrasyon kaydı silinsin mi?"):
             return
         try:
-            res = requests.delete(f"{self.api_url}/api/kalibrasyonlar/{kid}", headers=self.basliklar, timeout=10)
+            res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/kalibrasyonlar/{kid}", headers=self.basliklar, timeout=10)
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 200:
                 self.yukle()
             else:

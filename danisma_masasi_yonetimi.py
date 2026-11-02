@@ -3,6 +3,10 @@
 from datetime import datetime
 
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont
@@ -253,7 +257,7 @@ class DanismaMasasiYonetimi(QWidget):
                     secili_id = kayit.get("oturum_id")
 
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/danisma/yonetim/oturumlar",
                 headers=self._headers(),
                 timeout=10
@@ -377,6 +381,9 @@ class DanismaMasasiYonetimi(QWidget):
             self._secim_degisti()
 
         except requests.RequestException as hata:
+            if oturum_hatasi_mi(hata):
+                return
+
             if not sessiz:
                 QMessageBox.warning(
                     self,
@@ -448,7 +455,7 @@ class DanismaMasasiYonetimi(QWidget):
             return
 
         try:
-            yanit = requests.patch(
+            yanit = oturum_kontrollu_istek("PATCH",
                 f"{self.api_url}/api/danisma/yonetim/oturumlar/"
                 f"{oturum['oturum_id']}/onayla",
                 headers=self._headers(),
@@ -464,6 +471,9 @@ class DanismaMasasiYonetimi(QWidget):
             self.yenile()
 
         except requests.RequestException as hata:
+            if oturum_hatasi_mi(hata):
+                return
+
             QMessageBox.warning(
                 self,
                 "Onay Hatası",
@@ -477,7 +487,7 @@ class DanismaMasasiYonetimi(QWidget):
         )
 
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/danisma/yonetim/ogrenciler",
                 headers=self._headers(),
                 timeout=10
@@ -485,6 +495,9 @@ class DanismaMasasiYonetimi(QWidget):
             yanit.raise_for_status()
             ogrenciler = yanit.json().get("ogrenciler", [])
         except (requests.RequestException, ValueError) as hata:
+            if oturum_hatasi_mi(hata):
+                return
+
             QMessageBox.warning(
                 self, "Bağlantı Hatası",
                 f"Öğrenci listesi alınamadı:\n{hata}"
@@ -561,7 +574,7 @@ class DanismaMasasiYonetimi(QWidget):
             }
 
             try:
-                yanit = requests.post(
+                yanit = oturum_kontrollu_istek("POST",
                     f"{self.api_url}/api/danisma/yonetim/oturumlar",
                     json=veri,
                     headers=self._headers(),
@@ -569,6 +582,9 @@ class DanismaMasasiYonetimi(QWidget):
                 )
                 yanit.raise_for_status()
             except requests.HTTPError:
+                if oturum_hatasi_mi(yanit):
+                    return
+
                 try:
                     mesaj = yanit.json().get("detail", "Kayıt oluşturulamadı.")
                 except ValueError:
@@ -576,6 +592,9 @@ class DanismaMasasiYonetimi(QWidget):
                 QMessageBox.warning(pencere, "Kayıt Hatası", str(mesaj))
                 return
             except requests.RequestException as hata:
+                if oturum_hatasi_mi(hata):
+                    return
+
                 QMessageBox.warning(
                     pencere, "Bağlantı Hatası", str(hata)
                 )
@@ -696,7 +715,7 @@ class DanismaMasasiYonetimi(QWidget):
             }
 
             try:
-                yanit = requests.patch(
+                yanit = oturum_kontrollu_istek("PATCH",
                     f"{self.api_url}/api/danisma/yonetim/oturumlar/"
                     f"{oturum['oturum_id']}",
                     json=veri,
@@ -706,6 +725,9 @@ class DanismaMasasiYonetimi(QWidget):
                 yanit.raise_for_status()
 
             except requests.HTTPError:
+                if oturum_hatasi_mi(yanit):
+                    return
+
                 try:
                     mesaj = yanit.json().get(
                         "detail", "Görev düzenlenemedi."
@@ -719,6 +741,9 @@ class DanismaMasasiYonetimi(QWidget):
                 return
 
             except requests.RequestException as hata:
+                if oturum_hatasi_mi(hata):
+                    return
+
                 QMessageBox.warning(
                     pencere, "Bağlantı Hatası", str(hata)
                 )

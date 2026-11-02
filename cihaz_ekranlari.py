@@ -1,5 +1,9 @@
 import sys
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog, 
@@ -68,7 +72,9 @@ class CihazIslemFormu(QDialog):
 
     def odalari_yukle(self):
         try:
-            cevap = requests.get(f"{self.api_url}/api/odalar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 for oda in cevap.json():
                     if oda.get("aktif_mi"):
@@ -119,9 +125,13 @@ class CihazIslemFormu(QDialog):
         
         try:
             if self.islem_turu == "EKLE":
-                cevap = requests.post(f"{self.api_url}/api/cihazlar", json=veri, headers=headers)
+                cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/cihazlar", json=veri, headers=headers)
+                if oturum_hatasi_mi(cevap):
+                    return
             else:
-                cevap = requests.patch(f"{self.api_url}/api/cihazlar/{self.cihaz_veri['cihaz_id']}", json=veri, headers=headers)
+                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/cihazlar/{self.cihaz_veri['cihaz_id']}", json=veri, headers=headers)
+                if oturum_hatasi_mi(cevap):
+                    return
             
             if cevap.status_code in [200, 201]:
                 QMessageBox.information(self, "Başarılı", "İşlem başarıyla kaydedildi.")
@@ -161,7 +171,9 @@ class CihazYonetimEkrani(QWidget):
     def verileri_yukle(self):
         self.tablo.setRowCount(0)
         try:
-            cevap = requests.get(f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 cihazlar = cevap.json()
                 self.tablo.setRowCount(len(cihazlar))
@@ -226,7 +238,9 @@ class CihazDuzenlemeListesi(QDialog):
     def verileri_yukle(self):
         self.tablo.setRowCount(0)
         try:
-            cevap = requests.get(f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 cihazlar = cevap.json()
                 self.tablo.setRowCount(len(cihazlar))

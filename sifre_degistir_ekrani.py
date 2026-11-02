@@ -1,13 +1,22 @@
 
+import base64
+import json
+import os
+import time
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+    oturum_olaylari,
+)
 from pathlib import Path
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QCheckBox
+    QPushButton, QFrame, QCheckBox, QMessageBox
 )
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
 
 
 class SifreDegistirEkrani(QWidget):
@@ -18,6 +27,9 @@ class SifreDegistirEkrani(QWidget):
         super().__init__()
 
         self.token = token
+        self._oturum_kapatiliyor = False
+        self._sifre_basariyla_degisti = False
+        self._token_bitis_zamani = self._token_bitisini_oku()
         self.setWindowTitle("TKYS - İlk Giriş Şifre Değiştirme")
         self.setFixedSize(480, 490)
 
@@ -142,6 +154,82 @@ class SifreDegistirEkrani(QWidget):
         ana_layout.addWidget(kart)
         self.eski_sifre.setFocus()
 
+        self._oturum_zamanlayici = QTimer(self)
+        self._oturum_zamanlayici.setInterval(1000)
+        self._oturum_zamanlayici.timeout.connect(
+            self._oturum_suresini_kontrol_et
+        )
+
+        oturum_olaylari.token_reddedildi.connect(
+            self._api_token_reddedildi
+        )
+
+        self._oturum_zamanlayici.start()
+        QTimer.singleShot(
+            0, self._oturum_suresini_kontrol_et
+        )
+
+    def _token_bitisini_oku(self):
+        """JWT bitis zamanini istemci zamanlayicisi icin okur."""
+        try:
+            parca = self.token.split(".")[1]
+            parca += "=" * (-len(parca) % 4)
+
+            veri = json.loads(
+                base64.urlsafe_b64decode(parca)
+            )
+            return int(veri["exp"])
+
+        except (ValueError, TypeError, KeyError, IndexError):
+            return 0
+
+    def _oturum_suresini_kontrol_et(self):
+        if self._oturum_kapatiliyor:
+            return
+
+        if time.time() >= self._token_bitis_zamani:
+            self._oturum_sonlandir()
+
+    def _api_token_reddedildi(self, token, neden):
+        if token != self.token:
+            return
+
+        self._oturum_sonlandir(neden)
+
+    def _oturum_sonlandir(self, neden="sure_doldu"):
+        if (
+            self._oturum_kapatiliyor
+            or self._sifre_basariyla_degisti
+        ):
+            return
+
+        self._oturum_nedeni = neden
+        self._oturum_kapatiliyor = True
+        self._oturum_zamanlayici.stop()
+        self.kaydet_btn.setEnabled(False)
+
+        QTimer.singleShot(0, self._oturum_uyarisi)
+
+    def _oturum_uyarisi(self):
+        if not self.isVisible():
+            return
+
+        mesaj = (
+            "Oturum süreniz sona ermiştir.\n\n"
+            if getattr(self, "_oturum_nedeni", "sure_doldu") == "sure_doldu"
+            else "Oturumunuz geçersiz hâle gelmiştir.\n\n"
+        )
+
+        QMessageBox.information(
+            self,
+            "Oturum Sona Erdi",
+            mesaj + "Uygulamayı kullanmaya devam etmek için "
+            "lütfen yeniden giriş yapın.",
+            QMessageBox.StandardButton.Ok
+        )
+
+        self.close()
+
     def sifreleri_goster(self, goster):
         mod = QLineEdit.Normal if goster else QLineEdit.Password
 
@@ -150,6 +238,13 @@ class SifreDegistirEkrani(QWidget):
         self.yeni_sifre_tekrar.setEchoMode(mod)
 
     def sifre_degistir(self):
+        if self._oturum_kapatiliyor:
+            return
+
+        if time.time() >= self._token_bitis_zamani:
+            self._oturum_sonlandir()
+            return
+
         eski = self.eski_sifre.text().strip()
         yeni = self.yeni_sifre.text().strip()
         tekrar = self.yeni_sifre_tekrar.text().strip()
@@ -169,7 +264,7 @@ class SifreDegistirEkrani(QWidget):
         self.kaydet_btn.setEnabled(False)
 
         try:
-            yanit = requests.post(
+            yanit = oturum_kontrollu_istek("POST",
                 f"{API_URL}/api/sifre-degistir",
                 headers={
                     "Authorization": f"Bearer {self.token}"
@@ -181,8 +276,12 @@ class SifreDegistirEkrani(QWidget):
                 },
                 timeout=10
             )
+            if oturum_hatasi_mi(yanit):
+                return
 
             if yanit.status_code == 200:
+                self._sifre_basariyla_degisti = True
+                self._oturum_zamanlayici.stop()
                 self.eski_sifre.clear()
                 self.yeni_sifre.clear()
                 self.yeni_sifre_tekrar.clear()
@@ -200,9 +299,21 @@ class SifreDegistirEkrani(QWidget):
         except requests.exceptions.RequestException:
             self.hata_lbl.setText("Sunucuya bağlanılamadı.")
         finally:
-            self.kaydet_btn.setEnabled(True)
+            if not self._oturum_kapatiliyor:
+                self.kaydet_btn.setEnabled(True)
 
     def closeEvent(self, event):
-        self.iptal_edildi.emit()
+        self._oturum_zamanlayici.stop()
+
+        try:
+            oturum_olaylari.token_reddedildi.disconnect(
+                self._api_token_reddedildi
+            )
+        except (TypeError, RuntimeError):
+            pass
+
+        if not self._sifre_basariyla_degisti:
+            self.iptal_edildi.emit()
+
         super().closeEvent(event)
 

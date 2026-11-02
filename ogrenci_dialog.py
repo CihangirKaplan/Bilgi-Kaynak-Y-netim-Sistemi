@@ -1,5 +1,9 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox, QPushButton, QMessageBox
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 class OgrenciEkleDialog(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -102,7 +106,9 @@ class OgrenciEkleDialog(QDialog):
 
         try:
             headers = {"Authorization": f"Bearer {self.token}"}
-            res = requests.post(f"{self.api_url}/api/ogrenci-ekle", json=payload, headers=headers)
+            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/ogrenci-ekle", json=payload, headers=headers)
+            if oturum_hatasi_mi(res):
+                return
 
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Öğrenci sisteme başarıyla eklendi!")

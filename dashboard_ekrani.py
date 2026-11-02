@@ -1,6 +1,10 @@
 import datetime
 import time
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
                                QSizePolicy)
@@ -244,7 +248,9 @@ class DashboardEkrani(QWidget):
         return panel
 
     def _getir(self, yol):
-        yanit = requests.get(f"{self.api_url}{yol}", headers=self.basliklar, timeout=10)
+        yanit = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers=self.basliklar, timeout=10)
+        if oturum_hatasi_mi(yanit):
+            return
         yanit.raise_for_status()
         return yanit.json()
 
