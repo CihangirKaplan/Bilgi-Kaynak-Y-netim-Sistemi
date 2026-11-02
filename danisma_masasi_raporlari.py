@@ -284,7 +284,24 @@ class DanismaMasasiRaporlari(QWidget):
         ana.addWidget(self.rapor_sekmeleri, 1)
 
     def _tarih_alanlari(self, *args):
-        ozel = self.donem.currentText() == "Tarih Aralığı"
+        secim = self.donem.currentText()
+        bugun = QDate.currentDate()
+
+        if secim == "Bugün":
+            self.baslangic.setDate(bugun)
+            self.bitis.setDate(bugun)
+
+        elif secim == "Bu Hafta":
+            pazartesi = bugun.addDays(1 - bugun.dayOfWeek())
+            self.baslangic.setDate(pazartesi)
+            self.bitis.setDate(bugun)
+
+        elif secim == "Geçen Hafta":
+            bu_hafta = bugun.addDays(1 - bugun.dayOfWeek())
+            self.baslangic.setDate(bu_hafta.addDays(-7))
+            self.bitis.setDate(bu_hafta.addDays(-1))
+
+        ozel = secim == "Tarih Aralığı"
         self.baslangic.setEnabled(ozel)
         self.bitis.setEnabled(ozel)
 
