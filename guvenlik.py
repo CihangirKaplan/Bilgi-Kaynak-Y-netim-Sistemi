@@ -14,7 +14,7 @@ if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET ortam değişkeni tanımlı değil.")
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "45"))
 
 def gecici_parola_uret() -> str:
     karakterler = string.ascii_letters + string.digits + "!@#$%&*"

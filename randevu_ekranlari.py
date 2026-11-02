@@ -1,4 +1,5 @@
 import requests
+from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QComboBox, QMessageBox, QDateTimeEdit, QDialog, 
                                QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
@@ -113,7 +114,9 @@ class RandevuOlusturFormu(QWidget):
     def odalari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
@@ -122,7 +125,9 @@ class RandevuOlusturFormu(QWidget):
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 for psi in cevap.json():
                     self.cmb_psikologlar.addItem(psi["ad_soyad"], psi["personel_id"])
@@ -191,12 +196,14 @@ class RandevuOlusturFormu(QWidget):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.post(
+            cevap = oturum_kontrollu_istek("POST",
                 f"{self.api_url}/api/randevular", 
                 json=payload, 
                 headers=headers, 
                 timeout=5
             )
+            if oturum_hatasi_mi(cevap):
+                return
             
             if cevap.status_code in (200, 201):
                 veri = cevap.json()
@@ -311,7 +318,9 @@ class RandevuDuzenleFormu(QWidget):
     def odalari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
@@ -320,7 +329,9 @@ class RandevuDuzenleFormu(QWidget):
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 for psi in cevap.json():
                     self.cmb_psikologlar.addItem(psi["ad_soyad"], psi["personel_id"])
@@ -388,8 +399,10 @@ class RandevuDuzenleFormu(QWidget):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.patch(f"{self.api_url}/api/randevular/{self.randevu_id}", 
+            cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/randevular/{self.randevu_id}",
                                   json=guncel_veriler, headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             
             if cevap.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Randevu başarıyla güncellendi!")
@@ -411,8 +424,10 @@ class RandevuDuzenleFormu(QWidget):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            yanit = requests.patch(f"{self.api_url}/api/randevular/{self.randevu_id}/iptal", 
+            yanit = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/randevular/{self.randevu_id}/iptal",
                                      headers=headers, timeout=5)
+            if oturum_hatasi_mi(yanit):
+                return
             
             if yanit.status_code == 200:
                 QMessageBox.information(self, "İptal Edildi", "Randevu başarıyla iptal edildi.")
@@ -459,7 +474,9 @@ class RandevuAnaEkrani(QWidget):
         # 1. Önce odaları çekip bir eşleştirme sözlüğü (dictionary) oluşturalım
         oda_sozlugu = {}
         try:
-            oda_cevap = requests.get(f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            oda_cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(oda_cevap):
+                return
             if oda_cevap.status_code == 200:
                 for oda in oda_cevap.json():
                     oda_sozlugu[oda["oda_id"]] = oda["oda_adi"]
@@ -468,7 +485,9 @@ class RandevuAnaEkrani(QWidget):
 
         # 2. Şimdi randevuları çekip tabloya yazalım
         try:
-            cevap = requests.get(f"{self.api_url}/api/randevular", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 self.randevular = cevap.json()
                 self.tablo.setRowCount(len(self.randevular))
@@ -525,7 +544,9 @@ class RandevuAnaEkrani(QWidget):
             
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/randevular", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 secili_randevu = next((r for r in cevap.json() if r["randevu_id"] == randevu_id), None)
                 if secili_randevu:
@@ -559,7 +580,9 @@ class RandevuAnaEkrani(QWidget):
         if onay == QMessageBox.Yes:
             headers = {"Authorization": f"Bearer {self.token}"}
             try:
-                cevap = requests.patch(f"{self.api_url}/api/randevular/{randevu_id}/iptal", headers=headers, timeout=5)
+                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/randevular/{randevu_id}/iptal", headers=headers, timeout=5)
+                if oturum_hatasi_mi(cevap):
+                    return
                 if cevap.status_code == 200:
                     QMessageBox.information(self, "Başarılı", "Randevu iptal edildi.")
                     self.verileri_cek()

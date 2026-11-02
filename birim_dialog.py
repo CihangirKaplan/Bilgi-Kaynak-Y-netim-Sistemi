@@ -1,4 +1,8 @@
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
@@ -94,7 +98,9 @@ class BirimYonetimDialog(QDialog):
         self.tablo.setRowCount(0)
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            res = requests.get(f"{self.api_url}/api/faaliyet-birimleri", headers=headers)
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/faaliyet-birimleri", headers=headers)
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 200:
                 birimler = res.json()
                 self.tablo.setRowCount(len(birimler))
@@ -114,7 +120,9 @@ class BirimYonetimDialog(QDialog):
             headers = {"Authorization": f"Bearer {self.token}"}
             payload = {"birim_adi": yeni_ad.strip()}
             try:
-                res = requests.post(f"{self.api_url}/api/faaliyet-birimleri", json=payload, headers=headers)
+                res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/faaliyet-birimleri", json=payload, headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
                 if res.status_code == 200:
                     QMessageBox.information(self, "Başarılı", "Yeni birim başarıyla eklendi!")
                     self.verileri_yukle()
@@ -140,7 +148,9 @@ class BirimYonetimDialog(QDialog):
             headers = {"Authorization": f"Bearer {self.token}"}
             payload = {"birim_adi": yeni_ad.strip()}
             try:
-                res = requests.put(f"{self.api_url}/api/faaliyet-birimleri/{birim_id}", json=payload, headers=headers)
+                res = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/faaliyet-birimleri/{birim_id}", json=payload, headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
                 if res.status_code == 200:
                     QMessageBox.information(self, "Başarılı", "Birim başarıyla güncellendi!")
                     self.verileri_yukle()
@@ -180,7 +190,9 @@ class BirimYonetimDialog(QDialog):
         if cevap == QMessageBox.Yes:
             headers = {"Authorization": f"Bearer {self.token}"}
             try:
-                res = requests.delete(f"{self.api_url}/api/faaliyet-birimleri/{birim_id}", headers=headers)
+                res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/faaliyet-birimleri/{birim_id}", headers=headers)
+                if oturum_hatasi_mi(res):
+                    return
                 if res.status_code == 200:
                     QMessageBox.information(self, "Başarılı", "Birim başarıyla silindi.")
                     self.verileri_yukle()

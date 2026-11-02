@@ -4,6 +4,11 @@ import time
 from datetime import datetime
 
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+    OturumSonaErdiHatasi,
+)
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
@@ -496,7 +501,7 @@ class DanismaMasasiEkrani(QWidget):
         )
 
     def _istek(self, method, yol):
-        cevap = requests.request(
+        cevap = oturum_kontrollu_istek(
             method,
             f"{self.api_url}{yol}",
             headers={
@@ -506,6 +511,11 @@ class DanismaMasasiEkrani(QWidget):
         )
 
         if not cevap.ok:
+            if oturum_hatasi_mi(cevap):
+                raise OturumSonaErdiHatasi(
+                    "Oturum sona erdi."
+                )
+
             try:
                 detay = cevap.json().get(
                     "detail",
@@ -691,6 +701,9 @@ class DanismaMasasiEkrani(QWidget):
             TypeError
         ) as hata:
 
+            if isinstance(hata, OturumSonaErdiHatasi):
+                return
+
             self._aktif = False
 
             self.lbl_sure.setText(
@@ -863,6 +876,9 @@ class DanismaMasasiEkrani(QWidget):
             TypeError
         ) as hata:
 
+            if isinstance(hata, OturumSonaErdiHatasi):
+                return
+
             self.lbl_gecmis.setText(
                 "Görev geçmişi alınamadı: "
                 f"{hata}"
@@ -938,6 +954,9 @@ class DanismaMasasiEkrani(QWidget):
             RuntimeError,
             ValueError
         ) as hata:
+            if isinstance(hata, OturumSonaErdiHatasi):
+                return
+
             QMessageBox.warning(
                 self,
                 "Görev Başlatılamadı",
@@ -1038,6 +1057,9 @@ class DanismaMasasiEkrani(QWidget):
             ValueError,
             KeyError
         ) as hata:
+
+            if isinstance(hata, OturumSonaErdiHatasi):
+                return
 
             QMessageBox.warning(
                 self,

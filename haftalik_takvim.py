@@ -1,5 +1,6 @@
 import sys
 import requests
+from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QCalendarWidget, 
@@ -183,7 +184,9 @@ class HaftalikTakvimEkrani(QWidget):
             api_adres = self.api_url if self.api_url else "http://127.0.0.1:8000"
             headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
             
-            cevap = requests.get(f"{api_adres}/api/odalar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{api_adres}/api/odalar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             
             if cevap.status_code == 200:
                 odalar = cevap.json()
@@ -255,7 +258,9 @@ class HaftalikTakvimEkrani(QWidget):
         
         try:
             # Tüm randevuları çek (İleride back-end'de direkt oda ID ile filtreleyen bir sorgu yazabilirsin)
-            cevap = requests.get(f"{api_adres}/api/randevular", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{api_adres}/api/randevular", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             
             if cevap.status_code == 200:
                 randevular = cevap.json()

@@ -1,4 +1,8 @@
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFrame
@@ -60,7 +64,9 @@ class KullaniciPersonelEkrani(QWidget):
         url = f"{self.api_url}/api/personel"
 
         try:
-            cevap = requests.get(url, headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", url, headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 personeller = cevap.json()
                 self.tablo.setRowCount(len(personeller))
@@ -122,7 +128,9 @@ class KullaniciPersonelEkrani(QWidget):
             url = f"{self.api_url}/api/kullanicilar/{kullanici_id}/durum-degistir"
             
             try:
-                res = requests.patch(url, headers=headers, timeout=5)
+                res = oturum_kontrollu_istek("PATCH", url, headers=headers, timeout=5)
+                if oturum_hatasi_mi(res):
+                    return
                 if res.status_code == 200:
                     yeni_durum_bilgisi = "Aktif" if res.json().get("yeni_durum") else "Pasif"
                     QMessageBox.information(self, "Başarılı", f"Kullanıcı başarıyla {yeni_durum_bilgisi} duruma getirildi.")
@@ -266,7 +274,9 @@ class KullaniciOlusturFormu(QDialog):
         headers = {"Authorization": f"Bearer {self.token}"}
 
         try:
-            cevap = requests.post(f"{self.api_url}/api/kullanicilar", json=veri, headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/kullanicilar", json=veri, headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             
             if cevap.status_code == 201:
                 sonuc = cevap.json()
@@ -386,7 +396,9 @@ class PersonelTanimlaFormu(QDialog):
         siradaki_sayi = 1
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/personel", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/personel", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 personeller = cevap.json()
                 # Bu role ait mevcut kodları bul
@@ -415,7 +427,9 @@ class PersonelTanimlaFormu(QDialog):
     def kullanicilari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = requests.get(f"{self.api_url}/api/kullanicilar/personel-olmayanlar", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/kullanicilar/personel-olmayanlar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 kullanicilar = cevap.json()
                 for k in kullanicilar:
@@ -439,7 +453,9 @@ class PersonelTanimlaFormu(QDialog):
         headers = {"Authorization": f"Bearer {self.token}"}
 
         try:
-            cevap = requests.post(f"{self.api_url}/api/personel", json=veri, headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/personel", json=veri, headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 201:
                 QMessageBox.information(self, "Başarılı", f"Kullanıcı başarıyla personel olarak atandı.\n\nSistem Kodu: {personel_kodu}")
                 self.accept()
@@ -543,7 +559,9 @@ class RolDegistirFormu(QDialog):
         url = f"{self.api_url}/api/kullanicilar/{self.kullanici_id}/rol"
 
         try:
-            cevap = requests.patch(url, json=veri, headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("PATCH", url, json=veri, headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Kullanıcının rolü başarıyla güncellendi.")
                 self.accept()

@@ -1,5 +1,6 @@
 import sys
 import requests
+from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QHBoxLayout, 
     QMessageBox, QApplication, QCheckBox, QLabel, QFrame
@@ -185,9 +186,13 @@ class OdaFormu(QWidget):
         
         try:
             if self.oda_id:
-                cevap = requests.patch(f"{self.api_url}/api/odalar/{self.oda_id}", json=oda_verisi, headers=headers, timeout=5)
+                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/odalar/{self.oda_id}", json=oda_verisi, headers=headers, timeout=5)
+                if oturum_hatasi_mi(cevap):
+                    return
             else:
-                cevap = requests.post(f"{self.api_url}/api/odalar", json=oda_verisi, headers=headers, timeout=5)
+                cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/odalar", json=oda_verisi, headers=headers, timeout=5)
+                if oturum_hatasi_mi(cevap):
+                    return
 
             if cevap.status_code in [200, 201]:
                 QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla kaydedildi!")
@@ -228,10 +233,14 @@ def odayi_kaydet(self):
             # Düzenleme mi yoksa yeni ekleme mi kontrolü
             if self.oda_id:
                 # ODA DÜZENLEME (PATCH)
-                cevap = requests.patch(f"{self.api_url}/api/odalar/{self.oda_id}", json=oda_verisi, headers=headers, timeout=5)
+                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/odalar/{self.oda_id}", json=oda_verisi, headers=headers, timeout=5)
+                if oturum_hatasi_mi(cevap):
+                    return
             else:
                 # YENİ ODA EKLEME (POST)
-                cevap = requests.post(f"{self.api_url}/api/odalar", json=oda_verisi, headers=headers, timeout=5)
+                cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/odalar", json=oda_verisi, headers=headers, timeout=5)
+                if oturum_hatasi_mi(cevap):
+                    return
 
             # 4. Sunucudan Gelen Cevabı İşle
             if cevap.status_code in [200, 201]:

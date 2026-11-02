@@ -5,6 +5,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 
 TABLO_STIL = """
 QTableWidget { background-color: white; color: #0A1F5C; border-radius: 8px; border: 1px solid #DCE7FF; }
@@ -110,7 +114,9 @@ class YeniRezervasyonFormu(QDialog):
             headers = {"Authorization": f"Bearer {self.token}"}
             
             # CİHAZLARI ÇEK
-            res_cihaz = requests.get(f"{self.api_url}/api/cihazlar", headers=headers)
+            res_cihaz = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers=headers)
+            if oturum_hatasi_mi(res_cihaz):
+                return
             if res_cihaz.status_code == 200:
                 cihazlar = res_cihaz.json()
                 
@@ -127,7 +133,9 @@ class YeniRezervasyonFormu(QDialog):
                 self.cmb_cihaz.addItem("Sunucudan cihazlar alınamadı", None)
 
             # ODALARI ÇEK
-            res_oda = requests.get(f"{self.api_url}/api/odalar", headers=headers)
+            res_oda = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers)
+            if oturum_hatasi_mi(res_oda):
+                return
             if res_oda.status_code == 200:
                 odalar = res_oda.json()
                 uygun_odalar = [o for o in odalar if o.get("aktif_mi")]
@@ -167,7 +175,9 @@ class YeniRezervasyonFormu(QDialog):
         }
 
         try:
-            res = requests.post(f"{self.api_url}/api/rezervasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/rezervasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(res):
+                return
             if res.status_code == 201:
                 basari = QMessageBox(self)
                 basari.setWindowTitle("Başarılı")
@@ -256,7 +266,9 @@ class RezervasyonYonetimEkrani(QWidget):
         self.tablo.setRowCount(0)
         try:
             # Backend'de henüz bu endpoint'i yazmadıysak 404 döner, şimdilik sadece try bloğunda
-            cevap = requests.get(f"{self.api_url}/api/rezervasyonlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/rezervasyonlar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 rezervasyonlar = cevap.json()
                 self.tablo.setRowCount(len(rezervasyonlar))
@@ -315,7 +327,9 @@ class RezervasyonYonetimEkrani(QWidget):
             # Eğer kullanıcı "Evet, İptal Et" butonuna basarsa (accept)
             if onay_kutusu.exec():
                 try:
-                    res = requests.patch(f"{self.api_url}/api/rezervasyonlar/{rezervasyon_id}/iptal", headers={"Authorization": f"Bearer {self.token}"})
+                    res = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/rezervasyonlar/{rezervasyon_id}/iptal", headers={"Authorization": f"Bearer {self.token}"})
+                    if oturum_hatasi_mi(res):
+                        return
                     if res.status_code == 200:
                         # İşlem başarılıysa ekranı yenile
                         self.verileri_yukle()

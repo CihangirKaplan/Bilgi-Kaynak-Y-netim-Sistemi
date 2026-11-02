@@ -20,3 +20,78 @@ def personel_listesini_getir(token):
     except requests.exceptions.ConnectionError:
         print("Sunucuya ulaşılamıyor. FastAPI'nin çalıştığından emin ol.")
         return []  # Sunucu kapalıysa boş liste dön
+
+from PySide6.QtCore import QObject, Signal
+
+
+class OturumOlaylari(QObject):
+    token_reddedildi = Signal(str, str)
+
+
+oturum_olaylari = OturumOlaylari()
+
+
+def oturum_kontrollu_istek(method, url, **kwargs):
+    """HTTP istegi gonderir ve token hatalarini bildirir."""
+
+    yanit = requests.request(method, url, **kwargs)
+
+    if yanit.status_code != 401:
+        return yanit
+
+    headers = kwargs.get("headers") or {}
+
+    yetki = next(
+        (
+            str(deger)
+            for anahtar, deger in headers.items()
+            if str(anahtar).lower() == "authorization"
+        ),
+        ""
+    )
+
+    if not yetki.lower().startswith("bearer "):
+        return yanit
+
+    token = yetki[7:].strip()
+
+    if not token:
+        return yanit
+
+    try:
+        detay = yanit.json().get("detail", "")
+    except (ValueError, TypeError, AttributeError):
+        detay = ""
+
+    token_hatalari = {
+        "Token süresi dolmuş.",
+        "Geçersiz token.",
+        "Kullanıcı bulunamadı.",
+    }
+
+    if isinstance(detay, str) and detay in token_hatalari:
+        yanit._tkys_oturum_reddedildi = True
+        oturum_olaylari.token_reddedildi.emit(
+            token,
+            "sure_doldu" if detay == "Token süresi dolmuş." else "gecersiz"
+        )
+
+    return yanit
+
+
+
+class OturumSonaErdiHatasi(RuntimeError):
+    """Merkezi sistemin yonettigi oturum hatasi."""
+
+
+def oturum_hatasi_mi(hata_veya_yanit):
+    """Merkezi sistemin isaretledigi 401 hatasini tanir."""
+
+    if isinstance(hata_veya_yanit, requests.RequestException):
+        yanit = getattr(hata_veya_yanit, "response", None)
+    else:
+        yanit = hata_veya_yanit
+
+    return bool(
+        getattr(yanit, "_tkys_oturum_reddedildi", False)
+    )

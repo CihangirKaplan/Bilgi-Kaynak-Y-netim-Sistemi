@@ -1,5 +1,9 @@
 import sys
 import requests
+from api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog, 
@@ -102,7 +106,9 @@ class ArizaBildirimFormu(QDialog):
         """Sadece 'Kullanılabilir' ve 'Rezerve' durumdaki cihazları listeler."""
         self.cmb_cihaz.clear()
         try:
-            cevap = requests.get(f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 aktif_cihaz_var_mi = False
                 for cihaz in cevap.json():
@@ -138,7 +144,9 @@ class ArizaBildirimFormu(QDialog):
         }
 
         try:
-            cevap = requests.post(f"{self.api_url}/api/arizalar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/arizalar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code in [200, 201]:
                 QMessageBox.information(self, "Başarılı", "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
                 self.accept()
@@ -184,7 +192,9 @@ class ArizaYonetimEkrani(QWidget):
         self.tablo.setRowCount(0)
         self.ariza_detaylari = {}
         try:
-            cevap = requests.get(f"{self.api_url}/api/arizalar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/arizalar", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 arizalar = cevap.json()
                 self.tablo.setRowCount(len(arizalar))
@@ -368,11 +378,13 @@ class ArizaDuzenleFormu(QDialog):
         }
 
         try:
-            cevap = requests.put(
+            cevap = oturum_kontrollu_istek("PUT",
                 f"{self.api_url}/api/arizalar/{self.ariza_verisi['ariza_id']}", 
                 json=veri, 
                 headers={"Authorization": f"Bearer {self.token}"}
             )
+            if oturum_hatasi_mi(cevap):
+                return
             if cevap.status_code == 200:
                 basari = QMessageBox(self)
                 basari.setWindowTitle("Başarılı")
