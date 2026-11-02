@@ -798,7 +798,7 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
         if conn is not None: conn.close()
 
 @app.get("/api/odalar")
-def odalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -874,7 +874,7 @@ def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OL
         if conn is not None: conn.close()
 
 @app.get("/api/psikologlar")
-def aktif_psikologlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -1627,7 +1627,7 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
 # ==========================================
 
 @app.get("/api/dashboard/ozet")
-def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1672,7 +1672,7 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/bugunku-randevular")
-def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -1705,7 +1705,7 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/bugunku-rezervasyonlar")
-def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1747,7 +1747,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(mevcut_kullanic
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/yaklasan-islemler")
-def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     import datetime
     conn = None
     cursor = None
