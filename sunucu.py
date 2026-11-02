@@ -1817,7 +1817,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
 # ==========================================
 
 @app.get("/api/faaliyetler")
-def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyetleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -1841,7 +1841,7 @@ def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if conn is not None: conn.close()
 
 @app.get("/api/faaliyet-birimleri")
-def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -1865,7 +1865,7 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
 
 # --- YENİ EKLENEN: ÖĞRENCİ LİSTESİNİ GETİRİR ---
 @app.get("/api/ogrenciler-liste")
-def ogrencileri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -1957,7 +1957,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
 
 # --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
 @app.get("/api/faaliyet-kayitlari")
-def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
