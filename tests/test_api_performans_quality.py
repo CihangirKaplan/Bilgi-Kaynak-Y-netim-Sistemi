@@ -27,6 +27,7 @@ def sahte_veritabani():
     def baglan(**kwargs):
         conn = MagicMock()
         conn.cursor.return_value.fetchall.return_value = []
+        conn.cursor.return_value.fetchone.return_value = (1,)  # izin_kontrol: izin var
         return conn
 
     try:
