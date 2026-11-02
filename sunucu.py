@@ -649,17 +649,12 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if conn is not None:
             conn.close()
 @app.get("/api/randevular")
-def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
-        rol = cursor.fetchone()
-        if rol is None or rol[0] not in ("PSIKOLOG", "ADMIN", "DANISMA_OGRENCISI"):
-            raise HTTPException(status_code=403, detail="Randevuları görüntüleme yetkiniz yok.")
-
         cursor.execute("SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum FROM randevular ORDER BY baslangic_zamani;")
         kayitlar = cursor.fetchall()
         return [{"randevu_id": kayit[0], "danisan_kod_id": kayit[1], "psikolog_id": kayit[2], "oda_id": kayit[3], "baslangic_zamani": kayit[4], "bitis_zamani": kayit[5], "durum": kayit[6]} for kayit in kayitlar]
@@ -755,17 +750,12 @@ def randevu_iptal_et(randevu_id: int, kullanici_id: int = Depends(izin_kontrol("
         if conn is not None: conn.close()
 
 @app.post("/api/danisan-kodlari", status_code=201)
-def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(mevcut_kullanici_id)):
+def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s AND k.aktif_mi = TRUE;", (kullanici_id,))
-        rol = cursor.fetchone()
-        if rol is None or rol[0] not in ("ADMIN", "PSIKOLOG", "DANISMA_OGRENCISI"):
-            raise HTTPException(status_code=403, detail="Danışan kodu oluşturma yetkiniz yok.")
-
         yeni_kod = otomatik_danisan_kodu_uret(cursor)
         cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi) VALUES (%s, %s, %s, TRUE) RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi;", (yeni_kod, ucretli_mi, istisna_turu))
         kayit = cursor.fetchone()

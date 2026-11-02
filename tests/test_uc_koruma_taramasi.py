@@ -19,8 +19,6 @@ ISTISNALAR = {
     ("POST", "/api/login"): "Giriş öncesi çağrılır; kimlik istenemez.",
     ("POST", "/api/sifre-degistir"): "İlk girişte şifre değiştirmek için yalnızca token yeterli olmalı.",
     ("GET", "/api/korumali-test"): "Token doğrulama deneme ucu; veri döndürmez.",
-    ("GET", "/api/randevular"): "Uç içinde rol adıyla (PSIKOLOG, ADMIN, DANISMA_OGRENCISI) kontrol edilir.",
-    ("POST", "/api/danisan-kodlari"): "Uç içinde rol adıyla (ADMIN, PSIKOLOG, DANISMA_OGRENCISI) kontrol edilir.",
 }
 
 
