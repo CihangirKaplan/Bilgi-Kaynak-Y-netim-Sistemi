@@ -1126,7 +1126,7 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
 # ==========================================
 
 @app.get("/api/arizalar")
-def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1178,7 +1178,7 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if conn is not None: conn.close()
 
 @app.post("/api/arizalar", status_code=201)
-def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1247,7 +1247,7 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_
         if conn is not None: conn.close()
 
 @app.put("/api/arizalar/{ariza_id}")
-def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1333,7 +1333,7 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
 # ==========================================
 
 @app.get("/api/bakimlar")
-def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1482,7 +1482,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("CIH
 # ==========================================
 
 @app.get("/api/kalibrasyonlar")
-def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
