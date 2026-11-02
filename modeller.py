@@ -307,3 +307,19 @@ class DanismaGorevDuzenleModeli(BaseModel):
 # ==========================================
 class FaaliyetBirimIslemModeli(BaseModel):
     birim_adi: str = Field(min_length=1, max_length=50)
+
+class HizliIzinGuncelleModel(BaseModel):
+    rol_id: int
+    izin_id: int
+    aktif_mi: bool
+
+class IzinDuzenleModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gorunen_ad: str = Field(min_length=1, max_length=100)
+    verilen_rol_idleri: list[int]
+ 
+ 
+class RolGorunenAdModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gorunen_ad: str = Field(min_length=1, max_length=100)
+    aktif_mi: bool = Field(default=True)
