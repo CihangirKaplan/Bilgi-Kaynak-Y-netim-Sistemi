@@ -628,6 +628,49 @@ def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET")))
         if conn:
             conn.close()
  
+@app.get("/api/roller/{rol_id}/yetki-ozeti")
+def rol_yetki_ozeti(rol_id: int, kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR"))):
+    """Bir rolün yapabildiği işlemlerin özeti (kullanıcı oluştururken 'bu rol neler yapabilir?').
+
+    Yalnızca o role AÇIK izinler döner. Kullanıcı oluşturabilen herkes görebilsin diye
+    rol yönetim izni (ROL_IZIN_YONET) değil KULLANICI_OLUSTUR istenir.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT rol_id, rol_adi, gorunen_ad FROM roller WHERE rol_id = %s;", (rol_id,))
+        rol = cursor.fetchone()
+        if rol is None:
+            raise HTTPException(status_code=404, detail="Rol bulunamadı.")
+        cursor.execute(
+            """
+            SELECT i.izin_adi, i.gorunen_ad
+            FROM rol_izinleri ri
+            JOIN izinler i ON i.izin_id = ri.izin_id
+            WHERE ri.rol_id = %s AND ri.izin_var = 1
+            ORDER BY i.izin_id ASC;
+            """,
+            (rol_id,),
+        )
+        return {
+            "rol_id": rol[0],
+            "rol_adi": rol[1],
+            "gorunen_ad": rol[2],
+            "izinler": [{"izin_adi": k[0], "gorunen_ad": k[1] or k[0]} for k in cursor.fetchall()],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Rol yetkileri alınamadı.")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.get("/api/rol-izin-matrisi")
 def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET"))):
     conn = None
