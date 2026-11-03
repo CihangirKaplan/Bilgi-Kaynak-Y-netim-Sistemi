@@ -81,6 +81,7 @@ def test_quality_create_basarili(
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.return_value = (501,)
+    cursor.fetchall.return_value = []  # çakışan rezervasyon yok
 
     with (
         patch(
@@ -172,6 +173,7 @@ def test_quality_create_audit_hatasinda_rollback(
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.return_value = (501,)
+    cursor.fetchall.return_value = []  # çakışan rezervasyon yok
 
     with (
         patch(

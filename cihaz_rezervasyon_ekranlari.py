@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -22,6 +23,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDateTime
 import requests
+
+REZERVASYON_CAKISMA_METINLERI = (
+    "Bu saat dolu",
+    "Cihaz seçtiğiniz saat aralığında başka bir iş için ayrılmış. İsterseniz çakışan "
+    "rezervasyonu iptal edip devam edebilirsiniz.",
+    "Rezervasyonu yeniden dene",
+)
 
 class YeniRezervasyonFormu(QDialog):
     """Yeni Cihaz Rezervasyonu Oluşturma Ekranı (VIP UX Sürümü)"""
@@ -175,8 +183,8 @@ class YeniRezervasyonFormu(QDialog):
         }
 
         try:
-            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/rezervasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            res = cakisma_cozumlu_istek(self, "POST", f"{self.api_url}/api/rezervasyonlar", veri, {"Authorization": f"Bearer {self.token}"}, *REZERVASYON_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
                 basari = QMessageBox(self)

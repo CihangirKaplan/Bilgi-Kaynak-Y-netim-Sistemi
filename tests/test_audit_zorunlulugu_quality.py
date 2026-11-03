@@ -80,6 +80,7 @@ def test_quality_audit_importerror_commit_engellenmeli(
     cursor = conn.cursor.return_value
 
     cursor.fetchone.return_value = (501,)
+    cursor.fetchall.return_value = []  # çakışan rezervasyon yok
 
     with (
         patch(
