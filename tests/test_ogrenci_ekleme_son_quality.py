@@ -16,7 +16,7 @@ from sunucu import app, mevcut_kullanici_id, ogrenci_ekle
 def ogrenci_verisi():
     return {
         "ad_soyad": "QA Test",
-        "ogrenci_numarasi": "23100011036",
+        "ogrenci_numarasi": "20240000001",
         "telefon": "05551234567",
         "tur": "GONULLU",
         "bolum": "",
