@@ -3498,7 +3498,7 @@ def danisma_raporlari(
 
 
 @app.post("/api/faaliyet-birimleri")
-def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -3534,7 +3534,7 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
 
 
 @app.put("/api/faaliyet-birimleri/{birim_id}")
-def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -3567,7 +3567,7 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
 
 
 @app.delete("/api/faaliyet-birimleri/{birim_id}")
-def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
     conn = None
     cursor = None
     try:
