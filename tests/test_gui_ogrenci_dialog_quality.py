@@ -58,7 +58,7 @@ def test_gui_ogrenci_numarasi_harf_iceremez(dialog):
 
 def test_gui_gecerli_ogrenci_kaydi(dialog):
     dialog.le_ad_soyad.setText("QA Test")
-    dialog.le_ogrenci_no.setText("23100011036")
+    dialog.le_ogrenci_no.setText("20240000001")
     dialog.le_telefon.setText("05551234567")
     dialog.cb_tur.setCurrentIndex(0)
 
@@ -77,7 +77,7 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
 
     assert args[0] == "POST"
     assert args[1] == "http://testserver/api/ogrenci-ekle"
-    assert kwargs["json"]["ogrenci_numarasi"] == "23100011036"
+    assert kwargs["json"]["ogrenci_numarasi"] == "20240000001"
     assert kwargs["json"]["tur"] == "GONULLU"
 
     assert kwargs["headers"]["Authorization"] == (
