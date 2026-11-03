@@ -9,7 +9,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import main_window as mw
+
+
+class _GecikmeliModul:
+    """main_window'u (PySide6) toplama aşamasında değil, ilk kullanımda içe aktarır.
+
+    CI'da modül düzeyinde içe aktarma, sunucu testlerinden önce Qt'yi yükleyip
+    segmentation fault'a yol açtı; diğer GUI testleri de aynı şekilde geç yüklüyor.
+    """
+
+    def __getattr__(self, ad):
+        import main_window
+        return getattr(main_window, ad)
+
+
+mw = _GecikmeliModul()
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +131,7 @@ def yanit(durum=200, veri=None, oturum_bitti=False):
 
 
 def al(p, **kwargs):
-    with patch.object(mw, "oturum_kontrollu_istek", **kwargs) as istek:
+    with patch("main_window.oturum_kontrollu_istek", **kwargs) as istek:
         mw.AnaPencere._yetkileri_sunucudan_al(p)
     return istek
 
