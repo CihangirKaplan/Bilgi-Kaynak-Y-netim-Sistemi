@@ -1,5 +1,5 @@
 from modeller import DanismaGorevOlusturModeli
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
@@ -49,6 +49,13 @@ from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenle
 load_dotenv()
 app = FastAPI()
 bearer_scheme = HTTPBearer()
+
+# Öğrenci listelerinde her öğrencinin türünü belirtmek için kullanılan etiketler.
+OGRENCI_TUR_ETIKETLERI = {
+    "GONULLU": "Gönüllü Öğrenci",
+    "DANISMA_MASASI": "Danışma Masası Öğrencisi",
+    "ASISTAN": "Asistan Öğrenci",
+}
 
 VT_AYARLARI = {
     "dbname": os.getenv("DB_NAME"),
@@ -297,6 +304,43 @@ def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int 
     except psycopg2.errors.UniqueViolation:
         if conn: conn.rollback()
         raise HTTPException(status_code=409, detail="Bu kullanıcı adı zaten kullanılıyor.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.get("/api/kullanicilar/musait-kullanici-adi")
+def musait_kullanici_adi(
+    temel: str = Query(..., min_length=1, max_length=90),
+    kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR"))
+):
+    """Verilen ad boşsa onu, doluysa sonuna sayı ekleyerek ilk boş adı döndürür.
+
+    Örn. 'cihangir.kaplan' doluysa 'cihangir.kaplan2', o da doluysa 'cihangir.kaplan3'.
+    Aynı isimli kişiler için kullanıcı adı çakışmasını önler.
+    """
+    temel = "".join(c for c in temel.lower() if c.isascii() and (c.isalnum() or c in "._-")).strip("._-")
+    if len(temel) < 3:
+        raise HTTPException(status_code=422, detail="Kullanıcı adı en az 3 karakter olmalıdır.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT lower(kullanici_adi) FROM kullanicilar WHERE starts_with(lower(kullanici_adi), %s);",
+            (temel,)
+        )
+        kullanilan = {satir[0] for satir in cursor.fetchall()}
+        onerilen, sayi = temel, 1
+        while onerilen in kullanilan:
+            sayi += 1
+            onerilen = f"{temel}{sayi}"
+        return {"kullanici_adi": onerilen}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -633,6 +677,7 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
 def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIMLA"))):
     conn = None
     cursor = None
+    asama = "personel"
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
@@ -644,10 +689,35 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         if not kullanici[0]:
             raise HTTPException(status_code=422, detail="Pasif kullanıcı için personel kaydı oluşturulamaz.")
 
+        # Danışma öğrencisi için aynı işlemde öğrenci kaydı da oluşturulur (Danışma Masası
+        # ve faaliyet listeleri bu kaydı kullanır). Diğer roller için öğrenci bilgisi kabul edilmez.
+        danisma_ogrencisi = kullanici[1] == "DANISMA_OGRENCISI"
+        ogrenci_bilgisi_var = any([yeni_personel.ad_soyad, yeni_personel.ogrenci_numarasi, yeni_personel.telefon])
+        if danisma_ogrencisi:
+            if not yeni_personel.ad_soyad or not yeni_personel.ogrenci_numarasi:
+                raise HTTPException(status_code=422, detail="Danışma öğrencisi için ad soyad ve öğrenci numarası zorunludur.")
+        elif ogrenci_bilgisi_var:
+            raise HTTPException(status_code=422, detail="Öğrenci bilgileri yalnızca danışma öğrencisi rolü için girilebilir.")
+
         cursor.execute("INSERT INTO personel (kullanici_id, personel_kodu) VALUES (%s, %s) RETURNING personel_id;", (yeni_personel.kullanici_id, yeni_personel.personel_kodu.strip()))
         personel_id = cursor.fetchone()[0]
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "CREATE", "personel", personel_id))
+
+        ogrenci_id = None
+        if danisma_ogrencisi:
+            cursor.execute("SELECT ogrenci_id FROM ogrenciler WHERE kullanici_id = %s;", (yeni_personel.kullanici_id,))
+            mevcut_ogrenci = cursor.fetchone()
+            if mevcut_ogrenci is not None:
+                ogrenci_id = mevcut_ogrenci[0]
+            else:
+                asama = "ogrenci"
+                cursor.execute(
+                    "INSERT INTO ogrenciler (kullanici_id, ad_soyad, ogrenci_numarasi, telefon, tur) VALUES (%s, %s, %s, %s, 'DANISMA_MASASI') RETURNING ogrenci_id;",
+                    (yeni_personel.kullanici_id, yeni_personel.ad_soyad, yeni_personel.ogrenci_numarasi, yeni_personel.telefon)
+                )
+                ogrenci_id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "CREATE", "ogrenciler", ogrenci_id))
         conn.commit()
 
         return {
@@ -655,10 +725,13 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
             "personel_id": personel_id,
             "kullanici_id": yeni_personel.kullanici_id,
             "personel_kodu": yeni_personel.personel_kodu.strip(),
-            "aktif_mi": True
+            "aktif_mi": True,
+            "ogrenci_id": ogrenci_id
         }
     except psycopg2.errors.UniqueViolation:
         if conn is not None: conn.rollback()
+        if asama == "ogrenci":
+            raise HTTPException(status_code=409, detail="Bu öğrenci numarası başka bir öğrenci kaydında kullanılıyor.")
         raise HTTPException(status_code=409, detail="Bu kullanıcıya ait personel kaydı veya personel kodu zaten mevcut.")
     except HTTPException:
         if conn is not None:
@@ -2095,12 +2168,17 @@ def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLA
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        # Sadece Ad Soyad ve Öğrenci Numarasını çek (Bolum ve sinif iptal edildi)
-        cursor.execute("SELECT ogrenci_id, ad_soyad, ogrenci_numarasi FROM ogrenciler WHERE aktif_mi = true;")
+        # Ad Soyad, Öğrenci Numarası ve türü çek. Tüm öğrenciler listelenir;
+        # her öğrencinin yanında türü (gönüllü, danışma masası, asistan) belirtilir.
+        cursor.execute("SELECT ogrenci_id, ad_soyad, ogrenci_numarasi, tur::text FROM ogrenciler WHERE aktif_mi = true;")
 
         liste = []
         for r in cursor.fetchall():
-            liste.append({"id": r[0], "metin": f"{r[1]} - [{r[2]}]"})
+            metin = f"{r[1]} - [{r[2]}]"
+            etiket = OGRENCI_TUR_ETIKETLERI.get(r[3])
+            if etiket:
+                metin += f" ({etiket})"
+            liste.append({"id": r[0], "metin": metin, "tur": r[3]})
         return liste
     finally:
         if cursor is not None: cursor.close()
@@ -2329,7 +2407,7 @@ def danisma_oturumu_baslat(
         if ogrenci is None:
             raise HTTPException(
                 status_code=403,
-                detail="Aktif danışma öğrencisi kaydınız bulunamadı."
+                detail="Hesabınız bir öğrenci kaydına bağlı değil. Lütfen yöneticinize başvurun."
             )
 
         ogrenci_id = ogrenci[0]
@@ -2444,7 +2522,7 @@ def danisma_oturumu_bitir(
         if ogrenci is None:
             raise HTTPException(
                 status_code=403,
-                detail="Aktif öğrenci kaydınız bulunamadı."
+                detail="Hesabınız bir öğrenci kaydına bağlı değil. Lütfen yöneticinize başvurun."
             )
 
         ogrenci_id = ogrenci[0]
@@ -2558,7 +2636,7 @@ def danisma_aktif_oturum(
         if ogrenci is None:
             raise HTTPException(
                 status_code=403,
-                detail="Aktif öğrenci kaydınız bulunamadı."
+                detail="Hesabınız bir öğrenci kaydına bağlı değil. Lütfen yöneticinize başvurun."
             )
 
         # Devam eden görevi sorgula
@@ -2644,7 +2722,7 @@ def danisma_oturum_gecmisi(
         if ogrenci is None:
             raise HTTPException(
                 status_code=403,
-                detail="Aktif öğrenci kaydınız bulunamadı."
+                detail="Hesabınız bir öğrenci kaydına bağlı değil. Lütfen yöneticinize başvurun."
             )
 
         cursor.execute("""
@@ -2895,7 +2973,7 @@ def danisma_yonetim_ogrencileri(
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT ogrenci_id, ad_soyad, ogrenci_numarasi
+            SELECT ogrenci_id, ad_soyad, ogrenci_numarasi, tur::text
             FROM ogrenciler
             WHERE aktif_mi = TRUE
             ORDER BY ad_soyad, ogrenci_numarasi;
@@ -2905,9 +2983,11 @@ def danisma_yonetim_ogrencileri(
             {
                 "ogrenci_id": ogrenci_id,
                 "ad_soyad": ad_soyad,
-                "ogrenci_numarasi": ogrenci_numarasi
+                "ogrenci_numarasi": ogrenci_numarasi,
+                "tur": tur,
+                "tur_etiketi": OGRENCI_TUR_ETIKETLERI.get(tur)
             }
-            for ogrenci_id, ad_soyad, ogrenci_numarasi
+            for ogrenci_id, ad_soyad, ogrenci_numarasi, tur
             in cursor.fetchall()
         ]
 

@@ -519,11 +519,13 @@ class DanismaMasasiYonetimi(QWidget):
 
         ogrenci_sec = QComboBox()
         for ogrenci in ogrenciler:
-            ogrenci_sec.addItem(
+            metin = (
                 f"{ogrenci['ad_soyad']} - "
-                f"{ogrenci['ogrenci_numarasi']}",
-                ogrenci["ogrenci_id"]
+                f"{ogrenci['ogrenci_numarasi']}"
             )
+            if ogrenci.get("tur_etiketi"):
+                metin += f" ({ogrenci['tur_etiketi']})"
+            ogrenci_sec.addItem(metin, ogrenci["ogrenci_id"])
 
         baslangic = QDateTimeEdit()
         baslangic.setCalendarPopup(True)
