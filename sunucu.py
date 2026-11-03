@@ -525,7 +525,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
  
  
 @app.get("/api/roller")
-def rolleri_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET"))):
     conn = None
     cursor = None
     try:
