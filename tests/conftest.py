@@ -3,6 +3,7 @@ TKYS QA-001 #186
 Gercek PostgreSQL entegrasyon testleri icin merkezi guvenlik kontrolu.
 """
 
+import gc
 import os
 
 import psycopg2
@@ -115,3 +116,21 @@ def postgresql_test_guvenligi(request, monkeypatch):
             raise
 
     monkeypatch.setattr(psycopg2, "connect", guvenli_connect)
+
+
+@pytest.fixture(autouse=True)
+def cop_toplama_ana_is_parcaciginda():
+    """Çöp toplamayı testin içinde kapatır, test bitince ana iş parçacığında çalıştırır.
+
+    PySide6'da döngüsel referanslı bir pencere/widget, çöp toplayıcı başka bir iş
+    parçacığında (ör. FastAPI TestClient) çalışınca Shiboken'ın
+    `runDeletionInMainThread` yolunda aralıklı "Segmentation fault" ile çöküyor
+    (CI'da exit 139). Bu yüzden Qt nesneleri yalnızca ana iş parçacığında toplanır.
+    """
+    gc.freeze()  # önceden yüklenmiş nesneler taranmaz; test başına toplama hızlı kalır
+    gc.disable()
+    try:
+        yield
+    finally:
+        gc.enable()
+        gc.collect()

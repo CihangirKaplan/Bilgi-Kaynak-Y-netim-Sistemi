@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView, QFrame
 )
 from PySide6.QtWidgets import (
-    QDialog, QLineEdit, QComboBox, QHBoxLayout, QLabel, 
-    QPushButton, QMessageBox
+    QDialog, QLineEdit, QComboBox, QHBoxLayout, QLabel,
+    QPushButton, QMessageBox, QScrollArea
 )
 from PySide6.QtCore import Qt, QRegularExpression, QTimer
 from PySide6.QtGui import QRegularExpressionValidator
@@ -188,6 +188,57 @@ ROL_KODLARI = {
     DANISMA_OGRENCISI: "OGR", "PROJE_ASISTANI": "AST", "ADMIN": "ADM",
 }
 
+# "Bu rol neler yapabilir?" özetinde izinler, kullanıcının tanıdığı başlıklar altında gösterilir.
+# (başlık, simge, izin adı önekleri). Eşleşmeyen izinler "Diğer" altında toplanır.
+IZIN_GRUPLARI = (
+    ("Randevu ve Takvim", "📅", ("RANDEVU_", "TAKVIM_")),
+    ("Odalar", "🚪", ("ODA_",)),
+    ("Cihazlar", "🔬", ("CIHAZ_", "BAKIM_", "KALIBRASYON_", "ARIZA_")),
+    ("Faaliyetler", "📋", ("FAALIYET_",)),
+    ("Danışma Masası", "🛎️", ("DANISMA_",)),
+    ("Kullanıcı ve Personel", "👥", ("KULLANICI_", "PERSONEL_")),
+    ("Rol ve Yetki Yönetimi", "🔐", ("ROL_", "IZIN_")),
+    ("Denetim", "🔎", ("AUDIT_",)),
+)
+GENIS_YETKILI_ROLLER = ("ADMIN", "MUDUR")
+
+
+def izinleri_grupla(izinler):
+    """[{'izin_adi', 'gorunen_ad'}] -> [(başlık, simge, [görünen adlar])]; boş gruplar atlanır."""
+    gruplar = {baslik: [] for baslik, _, _ in IZIN_GRUPLARI}
+    diger = []
+    for izin in izinler:
+        ad = izin.get("izin_adi", "")
+        gorunen = izin.get("gorunen_ad") or ad
+        for baslik, _, onekler in IZIN_GRUPLARI:
+            if ad.startswith(onekler):
+                gruplar[baslik].append(gorunen)
+                break
+        else:
+            diger.append(gorunen)
+    sonuc = [(b, simge, gruplar[b]) for b, simge, _ in IZIN_GRUPLARI if gruplar[b]]
+    if diger:
+        sonuc.append(("Diğer", "•", diger))
+    return sonuc
+
+
+def yetki_ozeti_getir(api_url, token, rol_id):
+    """Rolün yetki özetini sunucudan alır. Başarılıysa (veri, None), değilse (None, mesaj)."""
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        cevap = oturum_kontrollu_istek(
+            "GET", f"{api_url}/api/roller/{rol_id}/yetki-ozeti", headers=headers, timeout=5
+        )
+        if oturum_hatasi_mi(cevap):
+            return None, "Oturum süreniz doldu."
+        if cevap.status_code == 200:
+            return cevap.json(), None
+        if cevap.status_code == 403:
+            return None, "Rol yetkilerini görmek için yetkiniz yok."
+        return None, "Rol yetkileri şu an alınamadı."
+    except Exception:
+        return None, "Sunucuya ulaşılamadı; rol yetkileri gösterilemiyor."
+
 FORM_STIL = """
     QDialog { background-color: #F8FAFC; }
     QLabel { font-weight: bold; color: #1E293B; font-size: 13px; }
@@ -220,6 +271,21 @@ FORM_STIL = """
     QPushButton#btn_kaydet:disabled { background-color: #CBD5E1; color: #64748B; }
     QPushButton#btn_ata { background-color: #059669; color: white; border: none; }
     QPushButton#btn_ata:hover { background-color: #047857; }
+    QFrame#yetki_karti { background-color: white; border: 1px solid #E2E8F0; border-radius: 12px; }
+    QLabel#yetki_baslik { font-size: 14px; color: #0F172A; background: transparent; }
+    QLabel#yetki_rozet {
+        background-color: #DBEAFE; color: #1D4ED8; border-radius: 9px;
+        padding: 2px 10px; font-size: 11px;
+    }
+    QLabel#yetki_grup { color: #475569; font-size: 11px; padding-top: 6px; background: transparent; }
+    QLabel#yetki_liste { font-weight: normal; color: #334155; font-size: 12px; background: transparent; }
+    QLabel#yetki_bilgi { font-weight: normal; color: #64748B; font-size: 12px; background: transparent; }
+    QLabel#yetki_uyari {
+        background-color: #FEF3C7; color: #92400E; border-radius: 8px;
+        padding: 6px 10px; font-weight: normal; font-size: 12px;
+    }
+    QScrollArea#yetki_kaydirma { background: transparent; border: none; }
+    QWidget#yetki_icerik { background: transparent; }
 """
 
 
@@ -420,6 +486,108 @@ def ogrenci_bilgisi_oku(ad_soyad, numara, telefon):
     }
 
 
+class YetkiOzetiKarti(QFrame):
+    """Seçilen rolün neler yapabildiğini başlıklara ayrılmış, okunaklı bir kartta gösterir."""
+
+    BOS_METIN = "Bir rol seçtiğinizde, o rolün sistemde neler yapabileceği burada görünür."
+
+    def __init__(self, ebeveyn=None):
+        super().__init__(ebeveyn)
+        self.setObjectName("yetki_karti")
+        dis = QVBoxLayout(self)
+        dis.setContentsMargins(14, 12, 14, 12)
+        dis.setSpacing(8)
+
+        ust = QHBoxLayout()
+        self.lbl_baslik = QLabel()
+        self.lbl_baslik.setObjectName("yetki_baslik")
+        self.lbl_rozet = QLabel()
+        self.lbl_rozet.setObjectName("yetki_rozet")
+        ust.addWidget(self.lbl_baslik)
+        ust.addStretch()
+        ust.addWidget(self.lbl_rozet)
+        dis.addLayout(ust)
+
+        self.lbl_bilgi = QLabel()
+        self.lbl_bilgi.setObjectName("yetki_bilgi")
+        self.lbl_bilgi.setWordWrap(True)
+        dis.addWidget(self.lbl_bilgi)
+
+        self.lbl_uyari = QLabel("⚠ Geniş yetkili bir rol: yalnızca güvendiğiniz kişilere verin.")
+        self.lbl_uyari.setObjectName("yetki_uyari")
+        self.lbl_uyari.setWordWrap(True)
+        dis.addWidget(self.lbl_uyari)
+
+        self.kaydirma = QScrollArea()
+        self.kaydirma.setObjectName("yetki_kaydirma")
+        self.kaydirma.setWidgetResizable(True)
+        self.kaydirma.setMaximumHeight(230)
+        self.icerik = QWidget()
+        self.icerik.setObjectName("yetki_icerik")
+        self.icerik_lay = QVBoxLayout(self.icerik)
+        self.icerik_lay.setContentsMargins(0, 0, 4, 0)
+        self.icerik_lay.setSpacing(2)
+        self.kaydirma.setWidget(self.icerik)
+        dis.addWidget(self.kaydirma)
+        self.bos_goster()
+
+    def _icerigi_temizle(self):
+        while self.icerik_lay.count():
+            oge = self.icerik_lay.takeAt(0)
+            parca = oge.widget()
+            if parca is not None:
+                # Ebeveynsiz bırakılmaz: sahipsiz Qt nesnesini Python çöp toplayıcısı başka bir
+                # iş parçacığında silerse uygulama çöker. Gizle, Qt kendi ebeveyniyle silsin.
+                parca.hide()
+                parca.deleteLater()
+
+    def _durum(self, baslik="", rozet="", bilgi="", uyari=False, liste=False):
+        self.lbl_baslik.setText(baslik)
+        self.lbl_baslik.setVisible(bool(baslik))
+        self.lbl_rozet.setText(rozet)
+        self.lbl_rozet.setVisible(bool(rozet))
+        self.lbl_bilgi.setText(bilgi)
+        self.lbl_bilgi.setVisible(bool(bilgi))
+        self.lbl_uyari.setVisible(uyari)
+        self.kaydirma.setVisible(liste)
+        self._icerigi_temizle()
+
+    def bos_goster(self):
+        self._durum(bilgi=self.BOS_METIN)
+
+    def yukleniyor_goster(self):
+        self._durum(bilgi="Rol yetkileri yükleniyor...")
+
+    def hata_goster(self, mesaj):
+        self._durum(bilgi=f"ℹ {mesaj}")
+
+    def ozet_goster(self, veri):
+        izinler = veri.get("izinler", [])
+        rol_adi = veri.get("gorunen_ad") or veri.get("rol_adi") or "Rol"
+        if not izinler:
+            self._durum(baslik=rol_adi, rozet="0 yetki", bilgi="Bu rolün henüz açık bir yetkisi yok.")
+            return
+        self._durum(
+            baslik=rol_adi,
+            rozet=f"{len(izinler)} yetki",
+            bilgi="Bu rolle açılan hesap şunları yapabilir:",
+            uyari=veri.get("rol_adi") in GENIS_YETKILI_ROLLER,
+            liste=True,
+        )
+        for baslik, simge, adlar in izinleri_grupla(izinler):
+            grup = QLabel(f"{simge}  {baslik.upper()}")
+            grup.setObjectName("yetki_grup")
+            liste = QLabel("<br>".join(f"<span style='color:#059669'>✓</span>&nbsp; {a}" for a in adlar))
+            liste.setObjectName("yetki_liste")
+            liste.setTextFormat(Qt.RichText)
+            liste.setWordWrap(True)
+            self.icerik_lay.addWidget(grup)
+            self.icerik_lay.addWidget(liste)
+        self.icerik_lay.addStretch()
+        # Kısa listede boşluk kalmasın; uzunsa 230 pikselde kaydırılır.
+        self.kaydirma.setFixedHeight(min(self.icerik.sizeHint().height() + 6, 230))
+
+
 class KullaniciOlusturFormu(QDialog):
     """Kullanıcı oluşturma ve personel atamayı tek pencerede birleştirir.
 
@@ -436,8 +604,9 @@ class KullaniciOlusturFormu(QDialog):
         self.olusturulan_kullanici = None
         self.personel_atandi = False
         self.setWindowTitle("👤 Yeni Sistem Kullanıcısı Oluştur")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(460)
         self.setStyleSheet(FORM_STIL)
+        self._yetki_onbellek = {}
         self.arayuzu_kur()
         self.rol_degisti()
 
@@ -463,6 +632,10 @@ class KullaniciOlusturFormu(QDialog):
         self.combo_rol.setCurrentIndex(0)
         self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
         layout.addWidget(self.combo_rol)
+
+        # Seçilen rolün neler yapabildiğini gösterir.
+        self.yetki_karti = YetkiOzetiKarti()
+        layout.addWidget(self.yetki_karti)
 
         # Yalnızca "Danışma Öğrencisi" seçilince görünür.
         (self.ogrenci_kutusu, self.input_ad_soyad,
@@ -552,7 +725,23 @@ class KullaniciOlusturFormu(QDialog):
             self.input_kullanici_adi.setText(musait_kullanici_adi(self.api_url, self.token, temel))
         self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
 
+    def yetki_ozetini_guncelle(self):
+        rol_id = self.combo_rol.currentData()
+        if rol_id is None:
+            self.yetki_karti.bos_goster()
+            return
+        if rol_id not in self._yetki_onbellek:
+            self.yetki_karti.yukleniyor_goster()
+            veri, hata = yetki_ozeti_getir(self.api_url, self.token, rol_id)
+            if veri is None:
+                # Hata önbelleğe alınmaz: rol yeniden seçilince tekrar denenir.
+                self.yetki_karti.hata_goster(hata)
+                return
+            self._yetki_onbellek[rol_id] = veri
+        self.yetki_karti.ozet_goster(self._yetki_onbellek[rol_id])
+
     def rol_degisti(self, *_):
+        self.yetki_ozetini_guncelle()
         if self.secili_rol_adi() != DANISMA_OGRENCISI:
             self._netlestirme_zamanlayici.stop()
             self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
@@ -630,6 +819,7 @@ class KullaniciOlusturFormu(QDialog):
                 for parca in (self.input_kullanici_adi, self.combo_rol, self.input_ad_soyad,
                               self.input_ogrenci_no, self.input_telefon, self.btn_kaydet):
                     parca.setEnabled(False)
+                self.yetki_karti.setVisible(False)
                 self.sonuc_kutusu.setVisible(True)
                 self.adjustSize()
             elif cevap.status_code == 409:
