@@ -148,7 +148,6 @@ MENU = [
         dict(ikon="👥", ad="Kullanıcı & Personel", izin="Kullanıcı oluşturma",
              aciklama="Kullanıcı, personel ve rol atama işlemleri",
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
-                      ("🧑‍💼  Personel Tanımla", "Personel tanımlama"),
                       ("⏸  Aktiflik Düzenle", "Kullanıcı pasifleştirme"),
                       ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
@@ -921,8 +920,6 @@ class AnaPencere(QMainWindow):
                     btn.clicked.connect(self.yeni_bakim_ekrani_ac)
                 elif etiket == "＋  Kullanıcı Oluştur":
                     btn.clicked.connect(self.yeni_kullanici_formunu_ac)
-                elif "Personel Tanımla" in etiket:
-                    btn.clicked.connect(self.personel_tanimla_formunu_ac)
                 elif "Aktiflik Düzenle" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_durum_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif "Rol Ata / Değiştir" in etiket:
@@ -1211,18 +1208,11 @@ class AnaPencere(QMainWindow):
         from k_personel_ekranlari import KullaniciOlusturFormu
         
         self.kullanici_formu = KullaniciOlusturFormu(api_url=self.api_url, token=self.token, ebeveyn=self)
-        self.kullanici_formu.exec() # Formu ekranda üstte tutacak şekilde (Modal) açar
-    
-    def personel_tanimla_formunu_ac(self):
-        from k_personel_ekranlari import PersonelTanimlaFormu
-        
-        self.personel_formu = PersonelTanimlaFormu(api_url=self.api_url, token=self.token, ebeveyn=self)
-        
-        # Form başarılı şekilde kapanırsa arka plandaki listeyi yenile
-        if self.personel_formu.exec(): 
+        # Formu ekranda üstte tutacak şekilde (Modal) açar; personel atanıp kapanırsa listeyi yenile
+        if self.kullanici_formu.exec():
             if hasattr(self, 'aktif_personel_ekrani'):
                 self.aktif_personel_ekrani.verileri_cek()
-
+    
     def faaliyet_tablosunu_guncelle(self):
         if not hasattr(self, 'tablo_faaliyetler'):
             return

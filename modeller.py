@@ -51,6 +51,42 @@ class PersonelOlusturModeli(BaseModel):
         pattern=r"^\s*\S(?:.*\S)?\s*$"
     )
 
+    # Yalnızca danışma öğrencisi rolü için: aynı işlemde öğrenci kaydı da oluşturulur.
+    ad_soyad: Optional[str] = Field(default=None, max_length=100)
+    ogrenci_numarasi: Optional[str] = Field(default=None, max_length=15)
+    telefon: Optional[str] = Field(default=None, max_length=20)
+
+    @field_validator("ad_soyad", "ogrenci_numarasi", "telefon")
+    @classmethod
+    def bos_metni_none_yap(cls, deger):
+        if deger is None:
+            return None
+        return deger.strip() or None
+
+    @field_validator("ogrenci_numarasi")
+    @classmethod
+    def ogrenci_numarasi_kontrol(cls, deger):
+        if deger is not None and not (deger.isascii() and deger.isdigit()):
+            raise ValueError("Öğrenci numarası yalnızca rakamlardan oluşmalıdır.")
+        return deger
+
+    @field_validator("telefon")
+    @classmethod
+    def telefon_kontrol(cls, deger):
+        """Telefon 10 haneli yazılabilir (başına 0 gerekmez): '555 123 45 67'.
+
+        Boşluklar yok sayılır; kayıt her zaman 11 haneli '05551234567' biçiminde
+        saklanır (mevcut öğrenci kayıtlarıyla aynı).
+        """
+        if deger is None:
+            return None
+        rakamlar = deger.replace(" ", "")
+        if len(rakamlar) == 10 and not rakamlar.startswith("0"):
+            rakamlar = "0" + rakamlar
+        if not (rakamlar.isascii() and rakamlar.isdigit() and len(rakamlar) == 11 and rakamlar.startswith("0")):
+            raise ValueError("Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez (örn. 555 123 45 67).")
+        return rakamlar
+
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
     eski_parola: str

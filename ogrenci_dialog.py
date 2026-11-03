@@ -39,7 +39,7 @@ class OgrenciEkleDialog(QDialog):
 
         self.le_ogrenci_no = QLineEdit()
         self.le_ogrenci_no.setMaxLength(15)
-        self.le_ogrenci_no.setPlaceholderText("Örn: 23100011036")
+        self.le_ogrenci_no.setPlaceholderText("Öğrenci numarasını giriniz")
 
         self.cb_tur = QComboBox()
         self.cb_tur.addItem("Gönüllü Öğrenci", "GONULLU")

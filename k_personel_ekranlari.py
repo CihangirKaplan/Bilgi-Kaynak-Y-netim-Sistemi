@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QDialog, QLineEdit, QComboBox, QHBoxLayout, QLabel, 
     QPushButton, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRegularExpression, QTimer
+from PySide6.QtGui import QRegularExpressionValidator
 
 class KullaniciPersonelEkrani(QWidget):
     def __init__(self, api_url, token):
@@ -167,304 +168,511 @@ class KullaniciPersonelEkrani(QWidget):
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
 
-    def personel_tanimla_ac(self):
-        form = PersonelTanimlaFormu(self.api_url, self.token, self)
-        if form.exec() == QDialog.Accepted:
-            self.verileri_cek()
-
     def kullanici_olustur_ac(self):
         form = KullaniciOlusturFormu(self.api_url, self.token, self)
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
 
+# ======================================================================
+#  ORTAK YARDIMCILAR (kullanıcı oluşturma + personel atama)
+# ======================================================================
+DANISMA_OGRENCISI = "DANISMA_OGRENCISI"
+
+# Kullanıcı oluştur formundaki rol listesiyle aynı numaralar (roller tablosu).
+ROL_ID_ADLARI = {
+    1: "PSIKOLOG", 2: "MEMUR", 3: "MUDUR",
+    4: DANISMA_OGRENCISI, 5: "PROJE_ASISTANI", 6: "ADMIN",
+}
+ROL_KODLARI = {
+    "PSIKOLOG": "PSK", "MEMUR": "MEM", "MUDUR": "MUD",
+    DANISMA_OGRENCISI: "OGR", "PROJE_ASISTANI": "AST", "ADMIN": "ADM",
+}
+
+FORM_STIL = """
+    QDialog { background-color: #F8FAFC; }
+    QLabel { font-weight: bold; color: #1E293B; font-size: 13px; }
+    QLabel#sonuc_metni { font-weight: normal; color: #0F172A; }
+    QLabel#ulke_kodu {
+        background-color: #E2E8F0; color: #334155; border: 1px solid #CBD5E1;
+        border-radius: 8px; padding: 10px 12px; font-size: 13px; font-weight: bold;
+    }
+    QFrame#sonuc_kutusu { background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 10px; }
+    QComboBox, QLineEdit {
+        background-color: white;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        color: #0F172A;
+        font-size: 13px;
+    }
+    QComboBox::drop-down { border: none; width: 24px; }
+    QComboBox:focus, QLineEdit:focus { border: 1px solid #3B82F6; }
+    QLineEdit:read-only {
+        background-color: #F1F5F9;
+        color: #64748B;
+        border: 1px dashed #94A3B8;
+    }
+    QPushButton { border-radius: 8px; padding: 10px 15px; font-weight: bold; font-size: 13px; }
+    QPushButton#btn_iptal { background-color: white; border: 1px solid #CBD5E1; color: #475569; }
+    QPushButton#btn_iptal:hover { background-color: #F1F5F9; }
+    QPushButton#btn_kaydet { background-color: #2563EB; color: white; border: none; }
+    QPushButton#btn_kaydet:hover { background-color: #1D4ED8; }
+    QPushButton#btn_kaydet:disabled { background-color: #CBD5E1; color: #64748B; }
+    QPushButton#btn_ata { background-color: #059669; color: white; border: none; }
+    QPushButton#btn_ata:hover { background-color: #047857; }
+"""
+
+
+def personel_kodu_uret(api_url, token, rol_adi):
+    """Rol için sıradaki personel kodunu üretir (örn. PER-OGR-003)."""
+    rol_kodu = ROL_KODLARI.get(rol_adi, "SYS")
+    siradaki_sayi = 1
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        cevap = oturum_kontrollu_istek("GET", f"{api_url}/api/personel", headers=headers, timeout=5)
+        if cevap.status_code == 200 and not oturum_hatasi_mi(cevap):
+            onek = f"PER-{rol_kodu}-"
+            sayilar = []
+            for p in cevap.json():
+                kod = p.get("personel_kodu", "")
+                if kod.startswith(onek):
+                    try:
+                        sayilar.append(int(kod.split("-")[-1]))
+                    except ValueError:
+                        pass
+            if sayilar:
+                siradaki_sayi = max(sayilar) + 1
+    except Exception as e:
+        print("Otomatik numara hesaplanırken hata:", e)
+    return f"PER-{rol_kodu}-{siradaki_sayi:03d}"
+
+
+def sunucu_hata_mesaji(cevap, varsayilan):
+    try:
+        detay = cevap.json().get("detail")
+        if isinstance(detay, str) and detay:
+            return detay
+        if isinstance(detay, list):
+            # Doğrulama hataları (422): her birinin "msg" alanını okunur biçimde birleştir.
+            mesajlar = [
+                str(h.get("msg", "")).replace("Value error, ", "")
+                for h in detay if isinstance(h, dict) and h.get("msg")
+            ]
+            if mesajlar:
+                return "\n".join(mesajlar)
+    except Exception:
+        pass
+    return varsayilan
+
+
+def personel_ata(api_url, token, kullanici_id, personel_kodu, ogrenci=None):
+    """Kullanıcıyı personel olarak atar. Danışma öğrencisi için öğrenci bilgisi de gönderilir.
+
+    Dönüş: (basarili, mesaj). Oturum sona erdiyse merkezi sistem çıkışı yönetir: (None, "").
+    """
+    veri = {"kullanici_id": kullanici_id, "personel_kodu": personel_kodu}
+    if ogrenci:
+        veri.update({anahtar: deger for anahtar, deger in ogrenci.items() if deger})
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        cevap = oturum_kontrollu_istek("POST", f"{api_url}/api/personel", json=veri, headers=headers, timeout=5)
+    except Exception as e:
+        return False, f"Bağlantı hatası:\n{str(e)}"
+    if oturum_hatasi_mi(cevap):
+        return None, ""
+    if cevap.status_code == 201:
+        return True, f"Kullanıcı başarıyla personel olarak atandı.\n\nSistem Kodu: {personel_kodu}"
+    return False, sunucu_hata_mesaji(cevap, f"Sunucu hatası: Kod {cevap.status_code}")
+
+
+def ogrenci_alanlari_olustur():
+    """Danışma öğrencisi için ad soyad, öğrenci numarası ve telefon alanları."""
+    kutu = QWidget()
+    lay = QVBoxLayout(kutu)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(8)
+
+    lay.addWidget(QLabel("Ad Soyad:"))
+    ad_soyad = QLineEdit()
+    ad_soyad.setMaxLength(100)
+    ad_soyad.setPlaceholderText("Öğrencinin adı ve soyadı")
+    lay.addWidget(ad_soyad)
+
+    lay.addWidget(QLabel("Öğrenci Numarası:"))
+    numara = QLineEdit()
+    numara.setMaxLength(15)  # 'Öğrenci Ekle' formuyla aynı
+    numara.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9]*")))
+    numara.setPlaceholderText("Öğrenci numarasını giriniz")
+    lay.addWidget(numara)
+
+    lay.addWidget(QLabel("Telefon (isteğe bağlı):"))
+    telefon_satiri = QHBoxLayout()
+    telefon_satiri.setSpacing(8)
+    ulke_kodu = QLabel("+90")
+    ulke_kodu.setObjectName("ulke_kodu")
+    ulke_kodu.setAlignment(Qt.AlignCenter)
+    telefon_satiri.addWidget(ulke_kodu)
+    telefon = QLineEdit()
+    telefon.setMaxLength(15)  # "(555) 123 45 67" en uzun biçimdir
+    telefon.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9 ()]*")))
+    telefon.setPlaceholderText("(555) 123 45 67")
+    # Yazarken biçimlendirir: 5551234567 -> (555) 123 45 67
+    telefon.textEdited.connect(lambda metin, alan=telefon: telefonu_bicimle_alanda(alan, metin))
+    telefon_satiri.addWidget(telefon, 1)
+    lay.addLayout(telefon_satiri)
+
+    kutu.setVisible(False)
+    return kutu, ad_soyad, numara, telefon
+
+
+def telefon_rakamlari(metin):
+    return "".join(c for c in metin if c.isascii() and c.isdigit())
+
+
+def telefon_bicimle(metin):
+    """Yazılan rakamları telefon biçimine sokar: '5551234567' -> '(555) 123 45 67'.
+
+    Başa 0 yazmak gerekmez; yazılırsa yok sayılır. Kapanış parantezi ve boşluklar yalnızca
+    sonraki rakam yazılınca eklenir; böylece geri silerken imleç biçime takılmaz.
+    """
+    rakamlar = telefon_rakamlari(metin)
+    if rakamlar.startswith("0"):
+        rakamlar = rakamlar[1:]
+    rakamlar = rakamlar[:10]
+    if not rakamlar:
+        return ""
+    sonuc = "(" + rakamlar[:3]
+    if len(rakamlar) > 3:
+        sonuc += ") " + rakamlar[3:6]
+    if len(rakamlar) > 6:
+        sonuc += " " + rakamlar[6:8]
+    if len(rakamlar) > 8:
+        sonuc += " " + rakamlar[8:10]
+    return sonuc
+
+
+def telefon_normalle(metin):
+    """Sunucuya gidecek biçim: 10 haneli numaranın başına 0 eklenir ('05551234567')."""
+    rakamlar = telefon_rakamlari(metin)
+    if len(rakamlar) == 10 and not rakamlar.startswith("0"):
+        return "0" + rakamlar
+    return rakamlar
+
+
+def telefonu_bicimle_alanda(alan, metin):
+    alan.setText(telefon_bicimle(metin))
+
+
+def ogrenci_bilgisi_dogrula(ogrenci):
+    """Öğrenci alanlarını denetler (kurallar 'Öğrenci Ekle' formuyla aynıdır).
+
+    Dönüş: hata mesajı ya da None (geçerliyse).
+    """
+    if not ogrenci["ad_soyad"] or not ogrenci["ogrenci_numarasi"]:
+        return "Danışma öğrencisi için ad soyad ve öğrenci numarası zorunludur."
+    numara = ogrenci["ogrenci_numarasi"]
+    if not (numara.isascii() and numara.isdigit()):
+        return "Öğrenci numarası sadece rakamlardan oluşmalıdır."
+    if len(numara) > 15:
+        return "Öğrenci numarası en fazla 15 haneli olabilir."
+    telefon = ogrenci["telefon"]  # ogrenci_bilgisi_oku() zaten normalleştirir
+    if telefon and not (len(telefon) == 11 and telefon.startswith("0")):
+        return "Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez.\n(Örn: 555 123 45 67)"
+    return None
+
+
+_TR_HARITA = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+
+
+def kullanici_adi_oner(ad_soyad):
+    """Ad soyaddan kullanıcı adı önerir: 'Veli Kaya' -> 'veli.kaya'."""
+    metin = ad_soyad.translate(_TR_HARITA).lower()
+    metin = "".join(c if (c.isascii() and c.isalnum()) else " " for c in metin)
+    return ".".join(metin.split())
+
+
+def musait_kullanici_adi(api_url, token, temel):
+    """Sunucudan ilk boş kullanıcı adını ister ('ali.veli' doluysa 'ali.veli2').
+
+    Sunucuya ulaşılamazsa verilen adı olduğu gibi döndürür.
+    """
+    if not temel:
+        return temel
+    try:
+        cevap = oturum_kontrollu_istek(
+            "GET", f"{api_url}/api/kullanicilar/musait-kullanici-adi",
+            params={"temel": temel},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+        if cevap.status_code == 200 and not oturum_hatasi_mi(cevap):
+            return cevap.json().get("kullanici_adi") or temel
+    except Exception as e:
+        print("Kullanıcı adı önerisi alınamadı:", e)
+    return temel
+
+
+def ogrenci_bilgisi_oku(ad_soyad, numara, telefon):
+    return {
+        "ad_soyad": ad_soyad.text().strip(),
+        "ogrenci_numarasi": numara.text().strip(),
+        "telefon": telefon_normalle(telefon.text()),
+    }
+
+
 class KullaniciOlusturFormu(QDialog):
+    """Kullanıcı oluşturma ve personel atamayı tek pencerede birleştirir.
+
+    1) Kullanıcı adı ve rol seçilir (Danışma Öğrencisi ise ad soyad / numara / telefon da girilir),
+       "Kullanıcıyı Oluştur" ile hesap açılır.
+    2) Aynı pencerede "Personel Olarak Ata" düğmesi çıkar; hesap personel olarak atanır.
+       Danışma öğrencisi için öğrenci kaydı da bu adımda oluşur.
+    """
+
     def __init__(self, api_url, token, ebeveyn=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
         self.token = token
+        self.olusturulan_kullanici = None
+        self.personel_atandi = False
         self.setWindowTitle("👤 Yeni Sistem Kullanıcısı Oluştur")
-        self.setFixedSize(400, 260) 
-        
-        # Modern CSS Tasarımı
-        self.setStyleSheet("""
-            QDialog { background-color: #F8FAFC; }
-            QLabel { font-weight: bold; color: #1E293B; font-size: 13px; }
-            QComboBox, QLineEdit {
-                background-color: white;
-                border: 1px solid #CBD5E1;
-                border-radius: 8px;
-                padding: 10px 12px;
-                color: #0F172A;
-                font-size: 13px;
-            }
-            QComboBox::drop-down { border: none; width: 24px; }
-            QComboBox:focus, QLineEdit:focus { border: 1px solid #3B82F6; }
-            QPushButton { border-radius: 8px; padding: 10px 15px; font-weight: bold; font-size: 13px; }
-            QPushButton#btn_iptal { background-color: white; border: 1px solid #CBD5E1; color: #475569; }
-            QPushButton#btn_iptal:hover { background-color: #F1F5F9; }
-            QPushButton#btn_kaydet { background-color: #2563EB; color: white; border: none; }
-            QPushButton#btn_kaydet:hover { background-color: #1D4ED8; }
-        """)
+        self.setMinimumWidth(420)
+        self.setStyleSheet(FORM_STIL)
         self.arayuzu_kur()
+        self.rol_degisti()
 
     def arayuzu_kur(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(12)
         layout.setContentsMargins(20, 25, 20, 20)
 
-        # Kullanıcı Adı Girdisi
-        layout.addWidget(QLabel("Kullanıcı Adı:"))
-        self.input_kullanici_adi = QLineEdit()
-        self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
-        layout.addWidget(self.input_kullanici_adi)
-
-        # Rol Seçimi
         layout.addWidget(QLabel("Sistem Rolü:"))
         self.combo_rol = QComboBox()
         self.combo_rol.addItem("— Rol seçiniz —", None)
         self.combo_rol.setCursor(Qt.PointingHandCursor)
-        
         roller = [
             ("Psikolog", 1),
             ("Memur", 2),
             ("Müdür (Yönetici)", 3),
             ("Danışma Öğrencisi", 4),
             ("Proje Asistanı", 5),
-            ("Sistem Admin", 6)
+            ("Sistem Admin", 6),
         ]
         for ad, rol_id in roller:
             self.combo_rol.addItem(ad, rol_id)
-            
         self.combo_rol.setCurrentIndex(0)
+        self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
         layout.addWidget(self.combo_rol)
 
-        layout.addStretch()
+        # Yalnızca "Danışma Öğrencisi" seçilince görünür.
+        (self.ogrenci_kutusu, self.input_ad_soyad,
+         self.input_ogrenci_no, self.input_telefon) = ogrenci_alanlari_olustur()
+        layout.addWidget(self.ogrenci_kutusu)
 
-        # Butonlar
+        # Kullanıcı adı en altta: danışma öğrencisinde ad soyaddan otomatik önerilir
+        # (elle değiştirilebilir); böylece aynı isim iki kez yazılmaz.
+        layout.addWidget(QLabel("Kullanıcı Adı:"))
+        self.input_kullanici_adi = QLineEdit()
+        self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
+        layout.addWidget(self.input_kullanici_adi)
+        self.kullanici_adi_elle_degisti = False
+        self._son_kontrol_edilen_ad = None
+        # Ad soyad yazılırken kısa bir bekleme sonrası sunucuya "bu ad boş mu?" diye sorulur.
+        self._netlestirme_zamanlayici = QTimer(self)
+        self._netlestirme_zamanlayici.setSingleShot(True)
+        self._netlestirme_zamanlayici.setInterval(400)
+        self._netlestirme_zamanlayici.timeout.connect(self._kullanici_adini_netlestir)
+        self.input_kullanici_adi.textEdited.connect(self._kullanici_adi_elle_yazildi)
+        self.input_ad_soyad.textChanged.connect(self._kullanici_adi_oner)
+        self.input_ad_soyad.editingFinished.connect(self._kullanici_adini_netlestir)
+
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
-        
         self.btn_iptal = QPushButton("İptal")
         self.btn_iptal.setObjectName("btn_iptal")
         self.btn_iptal.setCursor(Qt.PointingHandCursor)
         self.btn_iptal.clicked.connect(self.reject)
-        
         self.btn_kaydet = QPushButton("Kullanıcıyı Oluştur")
         self.btn_kaydet.setObjectName("btn_kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-
         buton_layout.addWidget(self.btn_iptal)
         buton_layout.addWidget(self.btn_kaydet)
         layout.addLayout(buton_layout)
 
-    def kaydet(self):
-        kullanici_adi = self.input_kullanici_adi.text().strip()
-        rol_id = self.combo_rol.currentData()
+        # Hesap oluşturulduktan sonra görünür.
+        self.sonuc_kutusu = QFrame()
+        self.sonuc_kutusu.setObjectName("sonuc_kutusu")
+        sonuc_lay = QVBoxLayout(self.sonuc_kutusu)
+        sonuc_lay.setContentsMargins(14, 12, 14, 12)
+        sonuc_lay.setSpacing(10)
+        self.lbl_sonuc = QLabel()
+        self.lbl_sonuc.setObjectName("sonuc_metni")
+        self.lbl_sonuc.setWordWrap(True)
+        self.lbl_sonuc.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        sonuc_lay.addWidget(self.lbl_sonuc)
+        self.btn_personel_ata = QPushButton("Personel Olarak Ata")
+        self.btn_personel_ata.setObjectName("btn_ata")
+        self.btn_personel_ata.setCursor(Qt.PointingHandCursor)
+        self.btn_personel_ata.clicked.connect(self.personel_ata_tiklandi)
+        sonuc_lay.addWidget(self.btn_personel_ata)
+        self.sonuc_kutusu.setVisible(False)
+        layout.addWidget(self.sonuc_kutusu)
 
-        if not kullanici_adi:
-            QMessageBox.warning(self, "Uyarı", "Kullanıcı adı boş bırakılamaz.")
+    def secili_rol_adi(self):
+        return ROL_ID_ADLARI.get(self.combo_rol.currentData())
+
+    def _kullanici_adi_elle_yazildi(self, _metin):
+        self.kullanici_adi_elle_degisti = True
+
+    def _kullanici_adi_oner(self, ad_soyad):
+        """Ad soyad değişince kullanıcı adı alanını boşaltır ve sunucu kontrolünü başlatır.
+
+        Dolu bir ad hiç gösterilmez: alan, sunucu "bu ad boş" diyene kadar boş bekler.
+        """
+        if self.kullanici_adi_elle_degisti or self.secili_rol_adi() != DANISMA_OGRENCISI:
             return
+        self._son_kontrol_edilen_ad = None
+        self.input_kullanici_adi.clear()
+        if kullanici_adi_oner(ad_soyad):
+            self.input_kullanici_adi.setPlaceholderText("Kullanıcı adı kontrol ediliyor...")
+            self._netlestirme_zamanlayici.start()
+        else:
+            self._netlestirme_zamanlayici.stop()
+            self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
 
+    def _kullanici_adini_netlestir(self):
+        """Önerilen kullanıcı adının boş olduğunu sunucudan doğrulayıp alana yazar."""
+        self._netlestirme_zamanlayici.stop()
+        if self.kullanici_adi_elle_degisti or self.secili_rol_adi() != DANISMA_OGRENCISI:
+            return
+        temel = kullanici_adi_oner(self.input_ad_soyad.text())
+        if temel and temel != self._son_kontrol_edilen_ad:
+            self._son_kontrol_edilen_ad = temel
+            self.input_kullanici_adi.setText(musait_kullanici_adi(self.api_url, self.token, temel))
+        self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
+
+    def rol_degisti(self, *_):
+        if self.secili_rol_adi() != DANISMA_OGRENCISI:
+            self._netlestirme_zamanlayici.stop()
+            self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
+        goster = self.olusturulan_kullanici is None and self.secili_rol_adi() == DANISMA_OGRENCISI
+        self.ogrenci_kutusu.setVisible(goster)
+        self.adjustSize()
+
+    def kaydet(self):
+        rol_id = self.combo_rol.currentData()
         if rol_id is None:
             QMessageBox.warning(self, "Uyarı", "Lütfen bir rol seçiniz.")
             return
 
-        veri = {"kullanici_adi": kullanici_adi, "rol_id": rol_id}
+        danisma_ogrencisi = self.secili_rol_adi() == DANISMA_OGRENCISI
+        otomatik_ad = danisma_ogrencisi and not self.kullanici_adi_elle_degisti
+        if danisma_ogrencisi:
+            ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
+            hata = ogrenci_bilgisi_dogrula(ogrenci)
+            if hata:
+                QMessageBox.warning(self, "Uyarı", hata)
+                return
+
+        if otomatik_ad:
+            # Ad soyaddan türetilir ve oluşturmadan hemen önce son kez sunucuda doğrulanır
+            # (araya giren kayıt olmasın, dolu ad gönderilmesin).
+            self._netlestirme_zamanlayici.stop()
+            kullanici_adi = musait_kullanici_adi(
+                self.api_url, self.token, kullanici_adi_oner(self.input_ad_soyad.text())
+            )
+            self.input_kullanici_adi.setText(kullanici_adi)
+        else:
+            kullanici_adi = self.input_kullanici_adi.text().strip()
+        if not kullanici_adi:
+            QMessageBox.warning(self, "Uyarı", "Kullanıcı adı boş bırakılamaz.")
+            return
+
         headers = {"Authorization": f"Bearer {self.token}"}
 
         try:
-            cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/kullanicilar", json=veri, headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek(
+                "POST", f"{self.api_url}/api/kullanicilar",
+                json={"kullanici_adi": kullanici_adi, "rol_id": rol_id}, headers=headers, timeout=5,
+            )
             if oturum_hatasi_mi(cevap):
                 return
-            
+            if cevap.status_code == 409 and otomatik_ad:
+                # Aynı anda başka biri aynı adı aldıysa bir sonraki boş ad ile yeniden dene.
+                kullanici_adi = musait_kullanici_adi(self.api_url, self.token, kullanici_adi)
+                self.input_kullanici_adi.setText(kullanici_adi)
+                cevap = oturum_kontrollu_istek(
+                    "POST", f"{self.api_url}/api/kullanicilar",
+                    json={"kullanici_adi": kullanici_adi, "rol_id": rol_id}, headers=headers, timeout=5,
+                )
+                if oturum_hatasi_mi(cevap):
+                    return
+
             if cevap.status_code == 201:
                 sonuc = cevap.json()
                 gecici_parola = sonuc.get("gecici_parola", "HATA")
-                
-                mesaj = (f"Kullanıcı hesabı başarıyla oluşturuldu!\n\n"
-                         f"👤 Kullanıcı Adı: {kullanici_adi}\n"
-                         f"🔑 Geçici Parola: {gecici_parola}\n\n"
-                         f"Lütfen bu parolayı kopyalayıp kullanıcıya iletin. "
-                         f"Kullanıcı ilk girişinde şifresini değiştirmek zorunda kalacaktır.")
-                
-                QMessageBox.information(self, "Kayıt Başarılı", mesaj)
-                self.accept()
-            
+                self.olusturulan_kullanici = {
+                    "kullanici_id": sonuc.get("kullanici_id"),
+                    "kullanici_adi": kullanici_adi,
+                    "rol_id": rol_id,
+                }
+                self.lbl_sonuc.setText(
+                    "✔ Kullanıcı hesabı oluşturuldu.\n\n"
+                    f"👤 Kullanıcı Adı: {kullanici_adi}\n"
+                    f"🔑 Geçici Parola: {gecici_parola}\n\n"
+                    "Parolayı kullanıcıya iletin; ilk girişte değiştirmesi gerekir.\n"
+                    "Giriş yapabilmesi için aşağıdan personel olarak atayın."
+                )
+                # Kaydırmalı metin kesilmesin: yüksekliği mevcut genişliğe göre ayır.
+                kullanilabilir = max(self.width() - 40 - 28, 300)
+                self.lbl_sonuc.setMinimumHeight(self.lbl_sonuc.heightForWidth(kullanilabilir))
+                for parca in (self.input_kullanici_adi, self.combo_rol, self.input_ad_soyad,
+                              self.input_ogrenci_no, self.input_telefon, self.btn_kaydet):
+                    parca.setEnabled(False)
+                self.sonuc_kutusu.setVisible(True)
+                self.adjustSize()
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Hata", "Bu kullanıcı adı zaten kullanılıyor. Lütfen farklı bir isim seçin.")
             else:
-                QMessageBox.critical(self, "Hata", f"Sunucu hatası: Kod {cevap.status_code}")
-                
+                QMessageBox.critical(self, "Hata", sunucu_hata_mesaji(cevap, f"Sunucu hatası: Kod {cevap.status_code}"))
+
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
-class PersonelTanimlaFormu(QDialog):
-    def __init__(self, api_url, token, ebeveyn=None):
-        super().__init__(ebeveyn)
-        self.api_url = api_url
-        self.token = token
-        self.setWindowTitle("🧑‍💼 Personel Tanımla")
-        self.setFixedSize(400, 260)
-        
-        # Modern CSS Tasarımı
-        self.setStyleSheet("""
-            QDialog { background-color: #F8FAFC; }
-            QLabel { font-weight: bold; color: #1E293B; font-size: 13px; }
-            QComboBox, QLineEdit {
-                background-color: white;
-                border: 1px solid #CBD5E1;
-                border-radius: 8px;
-                padding: 10px 12px;
-                color: #0F172A;
-                font-size: 13px;
-            }
-            QComboBox::drop-down { border: none; width: 24px; }
-            QComboBox:focus, QLineEdit:focus { border: 1px solid #3B82F6; }
-            QLineEdit:read-only {
-                background-color: #F1F5F9;
-                color: #64748B;
-                border: 1px dashed #94A3B8;
-            }
-            QPushButton { border-radius: 8px; padding: 10px 15px; font-weight: bold; font-size: 13px; }
-            QPushButton#btn_iptal { background-color: white; border: 1px solid #CBD5E1; color: #475569; }
-            QPushButton#btn_iptal:hover { background-color: #F1F5F9; }
-            QPushButton#btn_kaydet { background-color: #2563EB; color: white; border: none; }
-            QPushButton#btn_kaydet:hover { background-color: #1D4ED8; }
-        """)
-        
-        self.arayuzu_kur()
-        self.kullanicilari_yukle()
-
-    def arayuzu_kur(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 25, 20, 20)
-
-        layout.addWidget(QLabel("Personel Yapılacak Kullanıcı:"))
-        self.combo_kullanici = QComboBox()
-        self.combo_kullanici.addItem("— Bekleyen Kullanıcı Seçiniz —", None)
-        self.combo_kullanici.setCursor(Qt.PointingHandCursor)
-        
-        # Seçim değiştiğinde otomatik kod üretme fonksiyonunu tetikler
-        self.combo_kullanici.currentIndexChanged.connect(self.kodu_otomatik_olustur)
-        layout.addWidget(self.combo_kullanici)
-
-        layout.addWidget(QLabel("Personel Kodu (Sistem Tarafından Atanır):"))
-        self.input_personel_kodu = QLineEdit()
-        self.input_personel_kodu.setReadOnly(True)
-        self.input_personel_kodu.setPlaceholderText("Kullanıcı seçildiğinde otomatik atanacak")
-        layout.addWidget(self.input_personel_kodu)
-
-        layout.addStretch()
-
-        buton_layout = QHBoxLayout()
-        buton_layout.setSpacing(10)
-        
-        self.btn_iptal = QPushButton("İptal")
-        self.btn_iptal.setObjectName("btn_iptal")
-        self.btn_iptal.setCursor(Qt.PointingHandCursor)
-        self.btn_iptal.clicked.connect(self.reject)
-        
-        self.btn_kaydet = QPushButton("Personel Olarak Ata")
-        self.btn_kaydet.setObjectName("btn_kaydet")
-        self.btn_kaydet.setCursor(Qt.PointingHandCursor)
-        self.btn_kaydet.clicked.connect(self.kaydet)
-
-        buton_layout.addWidget(self.btn_iptal)
-        buton_layout.addWidget(self.btn_kaydet)
-        layout.addLayout(buton_layout)
-
-    def kodu_otomatik_olustur(self):
-        kullanici_id = self.combo_kullanici.currentData()
-        metin = self.combo_kullanici.currentText().upper()
-        
-        if not kullanici_id:
-            self.input_personel_kodu.clear()
+    def personel_ata_tiklandi(self):
+        if self.olusturulan_kullanici is None:
             return
-            
-        # 1. Rol kodunu belirle
-        rol_kodu = "SYS"
-        if "PSİKOLOG" in metin or "PSIKOLOG" in metin: rol_kodu = "PSK"
-        elif "MEMUR" in metin: rol_kodu = "MEM"
-        elif "MÜDÜR" in metin or "MUDUR" in metin: rol_kodu = "MUD"
-        elif "ASİSTAN" in metin or "ASISTAN" in metin: rol_kodu = "AST"
-        elif "ÖĞRENCİ" in metin or "OGRENCI" in metin: rol_kodu = "OGR"
-        elif "ADMIN" in metin: rol_kodu = "ADM"
-        
-        # 2. Sunucudan mevcut personelleri çekip son sayıyı bul
-        siradaki_sayi = 1
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/personel", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
-                return
-            if cevap.status_code == 200:
-                personeller = cevap.json()
-                # Bu role ait mevcut kodları bul
-                mevcut_sayilar = []
-                aranan_baslangic = f"PER-{rol_kodu}-"
-                
-                for p in personeller:
-                    kod = p.get("personel_kodu", "")
-                    if kod.startswith(aranan_baslangic):
-                        try:
-                            # PER-PSK-001 şeklindeki kodun son 3 hanesini sayıya çevir
-                            num = int(kod.split("-")[-1])
-                            mevcut_sayilar.append(num)
-                        except:
-                            pass
-                
-                if mevcut_sayilar:
-                    siradaki_sayi = max(mevcut_sayilar) + 1
-        except Exception as e:
-            print("Otomatik numara hesaplanırken hata:", e)
-            
-        # 3. Yeni kodu 3 haneli (001, 002) formatında kutuya yazdır
-        yeni_kod = f"PER-{rol_kodu}-{siradaki_sayi:03d}"
-        self.input_personel_kodu.setText(yeni_kod)
-
-    def kullanicilari_yukle(self):
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/kullanicilar/personel-olmayanlar", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
-                return
-            if cevap.status_code == 200:
-                kullanicilar = cevap.json()
-                for k in kullanicilar:
-                    metin = f"{k['kullanici_adi']} ({k['rol_adi']})"
-                    self.combo_kullanici.addItem(metin, k["kullanici_id"])
-        except Exception as e:
-            print(f"Kullanıcılar yüklenemedi: {e}")
-
-    def kaydet(self):
-        kullanici_id = self.combo_kullanici.currentData()
-        personel_kodu = self.input_personel_kodu.text().strip()
-
-        if kullanici_id is None:
-            QMessageBox.warning(self, "Uyarı", "Lütfen listeden bir kullanıcı seçiniz.")
+        rol_adi = ROL_ID_ADLARI.get(self.olusturulan_kullanici["rol_id"])
+        kod = personel_kodu_uret(self.api_url, self.token, rol_adi)
+        ogrenci = None
+        if rol_adi == DANISMA_OGRENCISI:
+            ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
+        basarili, mesaj = personel_ata(
+            self.api_url, self.token, self.olusturulan_kullanici["kullanici_id"], kod, ogrenci
+        )
+        if basarili is None:  # oturum sona erdi; çıkışı merkezi sistem yönetir
             return
-        if not personel_kodu:
-            QMessageBox.warning(self, "Uyarı", "Personel kodu otomatik üretilemedi, lütfen tekrar deneyin.")
-            return
+        if basarili:
+            self.personel_atandi = True
+            QMessageBox.information(self, "Başarılı", mesaj)
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Hata", mesaj)
 
-        veri = {"kullanici_id": kullanici_id, "personel_kodu": personel_kodu}
-        headers = {"Authorization": f"Bearer {self.token}"}
-
-        try:
-            cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/personel", json=veri, headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
+    def reject(self):
+        """Hesap açıldı ama personel atanmadıysa kapatmadan önce uyarır."""
+        if self.olusturulan_kullanici is not None and not self.personel_atandi:
+            yanit = QMessageBox.question(
+                self, "Personel atanmadı",
+                "Bu kullanıcı personel olarak atanmadı ve giriş yapamaz.\n\n"
+                "Yine de kapatmak istiyor musunuz?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if yanit != QMessageBox.Yes:
                 return
-            if cevap.status_code == 201:
-                QMessageBox.information(self, "Başarılı", f"Kullanıcı başarıyla personel olarak atandı.\n\nSistem Kodu: {personel_kodu}")
-                self.accept()
-            elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Hata", "Bu personel kodu zaten kullanılıyor.")
-            else:
-                QMessageBox.critical(self, "Hata", f"Sunucu hatası: {cevap.text}")
-        except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+        super().reject()
+
 
 class RolDegistirFormu(QDialog):
     def __init__(self, api_url, token, kullanici_id, kullanici_adi, mevcut_rol, ebeveyn=None):
