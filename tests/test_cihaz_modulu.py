@@ -189,8 +189,8 @@ def test_rezervasyon_olmayan_cihaz_404():
 
 def test_rezervasyon_cakisan_saat_409():
     conn, cursor = sahte_baglanti()
-    # cihaz uygun, aynı saatte aktif rezervasyon var
-    cursor.fetchone.side_effect = [("Kullanima_Hazir",), (1,)]
+    # cihaz uygun, planlı bakım/kalibrasyon yok, aynı saatte aktif rezervasyon var
+    cursor.fetchone.side_effect = [("Kullanima_Hazir",), None, (1,)]
 
     with patch("sunucu.psycopg2.connect", return_value=conn):
         with pytest.raises(HTTPException) as hata:
@@ -202,8 +202,8 @@ def test_rezervasyon_cakisan_saat_409():
 
 def test_rezervasyon_basarili():
     conn, cursor = sahte_baglanti()
-    # cihaz uygun, çakışma yok, personel kaydı var, yeni rezervasyon_id
-    cursor.fetchone.side_effect = [("Kullanima_Hazir",), None, (5,), (42,)]
+    # cihaz uygun, planlı bakım/kalibrasyon yok, çakışma yok, personel kaydı var, yeni rezervasyon_id
+    cursor.fetchone.side_effect = [("Kullanima_Hazir",), None, None, (5,), (42,)]
 
     with patch("sunucu.psycopg2.connect", return_value=conn):
         sonuc = cihaz_rezervasyonu_yap(rezervasyon_modeli(), kullanici_id=3)

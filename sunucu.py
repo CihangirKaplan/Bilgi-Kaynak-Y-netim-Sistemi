@@ -1433,6 +1433,40 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if cihaz[0] not in ["Kullanima_Hazir", "Rezerve"]:
                 raise HTTPException(status_code=403, detail=f"Cihaz şu anda {cihaz[0]} durumunda olduğu için rezerve edilemez!")
 
+            # Bakım/kalibrasyon kaydı cihaz durumunu değiştirmediğinden, seçilen saat aralığı
+            # planlı bir bakım veya kalibrasyonla kesişiyorsa da rezervasyon reddedilir.
+            # Bakım/kalibrasyon günleri başlangıç ve bitiş dahil tam gün sayılır.
+            cursor.execute(
+                """
+                SELECT tur, baslangic, bitis FROM (
+                    SELECT 'Bakım' AS tur,
+                           COALESCE(bakim_baslangic_tarihi, bakim_tarihi::date) AS baslangic,
+                           COALESCE(bakim_bitis_tarihi, bakim_tarihi::date) AS bitis
+                    FROM cihaz_bakimlari
+                    WHERE cihaz_id = %s
+                    UNION ALL
+                    SELECT 'Kalibrasyon', kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi
+                    FROM cihaz_kalibrasyonlari
+                    WHERE cihaz_id = %s
+                ) planlar
+                WHERE baslangic IS NOT NULL AND bitis IS NOT NULL
+                  AND baslangic < %s AND bitis + 1 > %s
+                ORDER BY baslangic
+                LIMIT 1;
+                """,
+                (rez.cihaz_id, rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani),
+            )
+            plan = cursor.fetchone()
+            if plan is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Cihaz {plan[1].strftime('%d.%m.%Y')} - {plan[2].strftime('%d.%m.%Y')} "
+                        f"tarihleri arasında {plan[0].lower()} planında olduğu için "
+                        "seçilen saat aralığında rezerve edilemez."
+                    ),
+                )
+
             cursor.execute("SELECT 1 FROM cihaz_rezervasyonlari WHERE cihaz_id = %s AND iptal_edildi_mi = FALSE AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani))
             if cursor.fetchone():
                 raise HTTPException(status_code=409, detail="Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş.")
