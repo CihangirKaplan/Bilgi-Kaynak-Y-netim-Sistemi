@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QLineEdit, QComboBox,
     QCheckBox, QDateEdit, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QFrame,
+    QHeaderView, QAbstractItemView, QFrame, QDialog,
     QMenu, QWidgetAction,
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle
 )
@@ -23,6 +23,26 @@ OLAY_ADLARI = {
     "CANCEL": "İptal",
     "ROLE_CHANGE": "Rol Değişikliği",
     "DEVICE_STATUS_CHANGE": "Cihaz Durum Değişikliği",
+}
+
+HEDEF_TABLO_ADLARI = {
+    "kullanicilar": "Kullanıcı",
+    "personel": "Personel",
+    "ogrenciler": "Öğrenci",
+    "roller": "Rol",
+    "izinler": "İzin",
+    "randevular": "Randevu",
+    "odalar": "Oda",
+    "cihazlar": "Cihaz",
+    "cihaz_rezervasyonlari": "Cihaz Rezervasyonu",
+    "cihaz_bakim": "Cihaz Bakımı",
+    "cihaz_ariza": "Cihaz Arızası",
+    "cihaz_kalibrasyon": "Cihaz Kalibrasyonu",
+    "danisan_kodlari": "Danışan Kodu",
+    "danisma_masasi_oturumlari": "Danışma Oturumu",
+    "ogrenci_faaliyet_takip": "Öğrenci Faaliyeti",
+    "projeler": "Proje",
+    "deneyler": "Deney",
 }
 
 OLAY_RENKLERI = {
@@ -357,7 +377,19 @@ class AuditKayitlariEkrani(QWidget):
             }
         """)
 
-        ana = QVBoxLayout(self)
+        from PySide6.QtWidgets import QScrollArea, QSizePolicy
+        dis = QVBoxLayout(self)
+        dis.setContentsMargins(0, 0, 0, 0)
+        dis.setSpacing(0)
+        kaydirma = QScrollArea(self)
+        kaydirma.setWidgetResizable(True)
+        kaydirma.setFrameShape(QFrame.NoFrame)
+        kaydirma.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        kaydirma.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        govde = QWidget()
+        ana = QVBoxLayout(govde)
+        kaydirma.setWidget(govde)
+        dis.addWidget(kaydirma, 1)
         ana.setContentsMargins(22, 16, 22, 19)
         ana.setSpacing(11)
 
@@ -483,11 +515,12 @@ class AuditKayitlariEkrani(QWidget):
 
         # Salt okunur kayıt tablosu
         self.tablo = QTableWidget()
-        self.tablo.setColumnCount(7)
+        self.tablo.setMinimumHeight(300)
+        self.tablo.setColumnCount(5)
         self.tablo.setHorizontalHeaderLabels([
-            "Kayıt ID", "Tarih / Saat", "Kullanıcı",
-            "İşlem Türü", "Hedef Tablo", "Hedef Kayıt ID",
-            "Kullanıcı ID"
+            "Tarih / Saat", "İşlemi Yapan",
+            "İşlem Türü", "İlgili Kayıt Türü",
+            "Detay"
         ])
 
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -496,37 +529,22 @@ class AuditKayitlariEkrani(QWidget):
         self.tablo.verticalHeader().setVisible(False)
 
         baslik = self.tablo.horizontalHeader()
-        baslik.setSectionResizeMode(QHeaderView.ResizeToContents)
-        baslik.setSectionResizeMode(2, QHeaderView.Stretch)
-        baslik.setSectionResizeMode(4, QHeaderView.Stretch)
         baslik.setSectionResizeMode(0, QHeaderView.Fixed)
-        baslik.setSectionResizeMode(5, QHeaderView.Fixed)
-        baslik.setSectionResizeMode(6, QHeaderView.Fixed)
+        baslik.setSectionResizeMode(1, QHeaderView.Stretch)
+        baslik.setSectionResizeMode(2, QHeaderView.Stretch)
+        baslik.setSectionResizeMode(3, QHeaderView.Stretch)
+        baslik.setSectionResizeMode(4, QHeaderView.Fixed)
 
-        self.tablo.setColumnWidth(0, 80)
-        self.tablo.setColumnWidth(5, 115)
-        self.tablo.setColumnWidth(6, 100)
+        self.tablo.setColumnWidth(0, 175)
+        self.tablo.setColumnWidth(4, 115)
 
         self.tablo.setShowGrid(True)
         self.tablo.verticalHeader().setDefaultSectionSize(42)
         self.tablo.horizontalHeader().setFixedHeight(46)
+
         self.tablo.setItemDelegateForColumn(
-            3, IslemEtiketiDelegate(self.tablo)
+            2, IslemEtiketiDelegate(self.tablo)
         )
-
-        self.tablo.setColumnWidth(0, 82)
-        self.tablo.setColumnWidth(5, 125)
-        self.tablo.setColumnWidth(6, 98)
-
-        self.tablo.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Fixed
-        )
-        self.tablo.setColumnWidth(1, 185)
-
-        self.tablo.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.Fixed
-        )
-        self.tablo.setColumnWidth(3, 210)
 
         tablo_kart = QFrame()
         tablo_kart.setObjectName("tabloKart")
@@ -594,10 +612,89 @@ class AuditKayitlariEkrani(QWidget):
         self.onceki_btn.setMinimumWidth(120)
         self.sonraki_btn.setMinimumWidth(120)
 
-        tablo_duzen.addSpacing(6)
-        tablo_duzen.addLayout(alt)
+        # Sayfalama bolumu kaydirilan alanin disinda kalir.
+        alt_kapsayici = QWidget(self)
+        alt.setContentsMargins(22, 18, 22, 4)
+        alt_kapsayici.setLayout(alt)
+        alt_kapsayici.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        dis.addWidget(alt_kapsayici)
 
         self.sayfalama_guncelle()
+
+    def _audit_detayini_goster(self, kayit, tarih):
+        pencere = QDialog(self)
+        pencere.setWindowTitle("Denetim Kaydı Detayları")
+        pencere.setObjectName("auditDetayPenceresi")
+        pencere.setStyleSheet(
+            "QDialog#auditDetayPenceresi { background-color: #FFFFFF; }"
+        )
+        pencere.setMinimumWidth(450)
+
+        duzen = QVBoxLayout(pencere)
+        duzen.setContentsMargins(24, 22, 24, 20)
+        duzen.setSpacing(16)
+
+        baslik = QLabel("Denetim Kaydı Detayları")
+        baslik.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #102D59;"
+        )
+        duzen.addWidget(baslik)
+
+        bilgiler = [
+            ("Kayıt ID", kayit.get("denetim_id")),
+            ("Tarih / Saat", tarih),
+            ("İşlemi Yapan", kayit.get("kullanici_adi")),
+            ("Kullanıcı ID", kayit.get("kullanici_id")),
+            ("İşlem Türü", OLAY_ADLARI.get(
+                kayit.get("olay_turu"),
+                kayit.get("olay_turu")
+            )),
+            ("Hedef Tablo", kayit.get("hedef_tablo")),
+            ("Hedef Kayıt ID", kayit.get("hedef_kayit_id")),
+        ]
+
+        if (
+            kayit.get("hedef_tablo") == "kullanicilar"
+            and kayit.get("hedef_kayit_id") is not None
+        ):
+            bilgiler.insert(-1, (
+                "İşlem Yapılan Kullanıcı",
+                kayit.get("hedef_kullanici_adi")
+                or "Bulunamadı (kayıt silinmiş olabilir)"
+            ))
+
+        izgara = QGridLayout()
+        izgara.setHorizontalSpacing(20)
+        izgara.setVerticalSpacing(12)
+
+        for sira, (alan, deger) in enumerate(bilgiler):
+            ad = QLabel(alan + ":")
+            ad.setStyleSheet(
+                "font-weight: bold; color: #31517D;"
+            )
+
+            deger_yazisi = QLabel(
+                "—" if deger is None else str(deger)
+            )
+            deger_yazisi.setTextFormat(Qt.PlainText)
+            deger_yazisi.setWordWrap(True)
+            deger_yazisi.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+
+            izgara.addWidget(ad, sira, 0)
+            izgara.addWidget(deger_yazisi, sira, 1)
+
+        izgara.setColumnStretch(1, 1)
+        duzen.addLayout(izgara)
+
+        kapat = QPushButton("Kapat")
+        kapat.setCursor(Qt.PointingHandCursor)
+        kapat.setMinimumWidth(100)
+        kapat.clicked.connect(pencere.accept)
+
+        duzen.addWidget(kapat, alignment=Qt.AlignRight)
+        pencere.exec()
 
     def _donem_degisti(self, *_):
         secim = self.donem_secimi.currentText()
@@ -731,29 +828,61 @@ class AuditKayitlariEkrani(QWidget):
                 except ValueError:
                     tarih = tarih.replace("T", " ")[:19]
 
+            hedef = kayit.get("hedef_tablo")
+
             alanlar = [
-                kayit.get("denetim_id"),
                 tarih,
                 kayit.get("kullanici_adi"),
                 OLAY_ADLARI.get(
                     kayit.get("olay_turu"),
                     kayit.get("olay_turu")
                 ),
-                kayit.get("hedef_tablo"),
-                kayit.get("hedef_kayit_id"),
-                kayit.get("kullanici_id")
+                HEDEF_TABLO_ADLARI.get(hedef, hedef),
             ]
 
             for sutun_no, deger in enumerate(alanlar):
                 metin = "—" if deger is None else str(deger)
                 hucre = QTableWidgetItem(metin)
 
-                if sutun_no == 3:
+                if sutun_no == 2:
                     hucre.setData(
                         Qt.UserRole, kayit.get("olay_turu")
                     )
 
                 self.tablo.setItem(satir_no, sutun_no, hucre)
+
+            hucre_alani = QWidget()
+            hucre_duzen = QHBoxLayout(hucre_alani)
+            hucre_duzen.setContentsMargins(5, 3, 5, 3)
+
+            detay_btn = QPushButton("Görüntüle")
+            detay_btn.setFixedSize(92, 30)
+            detay_btn.setCursor(Qt.PointingHandCursor)
+            detay_btn.setStyleSheet("""
+                QPushButton {
+                    background: #E9F1FF;
+                    color: #2457A2;
+                    border: none;
+                    border-radius: 7px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: #D4E5FF;
+                }
+            """)
+
+            detay_btn.clicked.connect(
+                lambda _checked=False, k=dict(kayit), t=tarih:
+                    self._audit_detayini_goster(k, t)
+            )
+
+            hucre_duzen.addStretch()
+            hucre_duzen.addWidget(detay_btn)
+            hucre_duzen.addStretch()
+
+            self.tablo.setCellWidget(
+                satir_no, 4, hucre_alani
+            )
 
         ilk = self.offset + 1 if kayitlar else 0
         son = self.offset + len(kayitlar)

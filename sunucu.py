@@ -3978,7 +3978,13 @@ def audit_kayitlarini_getir(
                 d.olay_turu::text,
                 d.hedef_tablo,
                 d.hedef_kayit_id,
-                d.olusturulma_tarihi
+                d.olusturulma_tarihi,
+                (
+                    SELECT hedef.kullanici_adi
+                    FROM kullanicilar hedef
+                    WHERE d.hedef_tablo = 'kullanicilar'
+                      AND hedef.kullanici_id = d.hedef_kayit_id
+                ) AS hedef_kullanici_adi
             {from_sql}
             {where_sql}
             ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
@@ -3997,6 +4003,7 @@ def audit_kayitlarini_getir(
                 "olay_turu": satir[3],
                 "hedef_tablo": satir[4],
                 "hedef_kayit_id": satir[5],
+                "hedef_kullanici_adi": satir[7] if len(satir) > 7 else None,
                 "olusturulma_tarihi": (
                     satir[6].isoformat() if satir[6] else None
                 )
