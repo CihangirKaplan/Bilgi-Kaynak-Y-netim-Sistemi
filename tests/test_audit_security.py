@@ -160,7 +160,7 @@ def test_ariza_guncelleme_durum_degisikligi_audit():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         (10,),                  # Arızaya bağlı cihaz
-        ("Arizali",)            # Cihazın eski durumu
+        ("Arizali", False)      # Cihazın eski durumu, başka açık arızası yok
     ]
 
     ariza = ArizaGuncelleModeli(
@@ -189,7 +189,7 @@ def test_ariza_guncelleme_audit_hatasinda_rollback():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         (10,),
-        ("Arizali",)
+        ("Arizali", False)
     ]
 
     def sorgu_calistir(sql, params=None):
