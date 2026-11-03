@@ -154,19 +154,29 @@ def giris_yap(giris: GirisModeli):
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if kullanici[6] is not None and kullanici[6] > datetime.now():
-            raise HTTPException(status_code=429, detail="Çok fazla hatalı giriş denemesi. Lütfen daha sonra tekrar deneyin.")
+            kalan_saniye = max(1, int((kullanici[6] - datetime.now()).total_seconds()) + 1)
+            raise HTTPException(
+                status_code=429,
+                detail="Hesap geçici olarak kilitli.",
+                headers={"Retry-After": str(kalan_saniye)},
+            )
 
         if not parola_dogrula(giris.parola, kullanici[2]):
             yeni_basarisiz_giris_sayisi = kullanici[5] + 1
             if yeni_basarisiz_giris_sayisi >= 5:
-                kilit_bitis_zamani = datetime.now() + timedelta(minutes=15)
+                kilit_saniye = 900 if yeni_basarisiz_giris_sayisi >= 10 else 60
+                kilit_bitis_zamani = datetime.now() + timedelta(seconds=kilit_saniye)
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s, kilit_bitis_zamani = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kilit_bitis_zamani, kullanici[0]))
             else:
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kullanici[0]))
             conn.commit()
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             if yeni_basarisiz_giris_sayisi >= 5:
-                raise HTTPException(status_code=429, detail="Çok fazla hatalı giriş denemesi. Hesap 15 dakika kilitlendi.")
+                raise HTTPException(
+                    status_code=429,
+                    detail="Çok fazla hatalı giriş denemesi. Hesap geçici olarak kilitlendi.",
+                    headers={"Retry-After": str(kilit_saniye)},
+                )
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
 
         cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = 0, kilit_bitis_zamani = NULL WHERE kullanici_id = %s;", (kullanici[0],))
@@ -338,7 +348,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -614,7 +624,7 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -656,7 +666,7 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Personel oluşturulurken veritabanı hatası oluştu: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -776,7 +786,36 @@ def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEV
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+def randevu_deadlock_yeniden_dene(fonksiyon):
+    """QA-001 #186: Randevu deadlock durumunda sinirli yeniden deneme."""
+    from functools import wraps
+    import time
+
+    @wraps(fonksiyon)
+    def sarmalayici(*args, **kwargs):
+        maksimum_deneme = 3
+
+        for deneme in range(maksimum_deneme):
+            try:
+                return fonksiyon(*args, **kwargs)
+
+            except DeadlockDetected:
+                if deneme == maksimum_deneme - 1:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "Randevu işlemi eşzamanlı yoğunluk nedeniyle "
+                            "tamamlanamadı. Lütfen tekrar deneyin."
+                        )
+                    )
+
+                time.sleep(0.1 * (deneme + 1))
+
+    return sarmalayici
+
+
 @app.post("/api/randevular", status_code=201)
+@randevu_deadlock_yeniden_dene
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
@@ -823,6 +862,10 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
             status_code=409,
             detail="Seçilen psikolog veya oda bu saatlerde dolu."
         )
+    except DeadlockDetected:
+        if conn is not None:
+            conn.rollback()
+        raise
     except HTTPException:
         if conn is not None:
             conn.rollback()
@@ -840,17 +883,12 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if conn is not None:
             conn.close()
 @app.get("/api/randevular")
-def randevulari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
-        rol = cursor.fetchone()
-        if rol is None or rol[0] not in ("PSIKOLOG", "ADMIN", "DANISMA_OGRENCISI"):
-            raise HTTPException(status_code=403, detail="Randevuları görüntüleme yetkiniz yok.")
-
         cursor.execute("SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum FROM randevular ORDER BY baslangic_zamani;")
         kayitlar = cursor.fetchall()
         return [{"randevu_id": kayit[0], "danisan_kod_id": kayit[1], "psikolog_id": kayit[2], "oda_id": kayit[3], "baslangic_zamani": kayit[4], "bitis_zamani": kayit[5], "durum": kayit[6]} for kayit in kayitlar]
@@ -946,17 +984,12 @@ def randevu_iptal_et(randevu_id: int, kullanici_id: int = Depends(izin_kontrol("
         if conn is not None: conn.close()
 
 @app.post("/api/danisan-kodlari", status_code=201)
-def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(mevcut_kullanici_id)):
+def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s AND k.aktif_mi = TRUE;", (kullanici_id,))
-        rol = cursor.fetchone()
-        if rol is None or rol[0] not in ("ADMIN", "PSIKOLOG", "DANISMA_OGRENCISI"):
-            raise HTTPException(status_code=403, detail="Danışan kodu oluşturma yetkiniz yok.")
-
         yeni_kod = otomatik_danisan_kodu_uret(cursor)
         cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi) VALUES (%s, %s, %s, TRUE) RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi;", (yeni_kod, ucretli_mi, istisna_turu))
         kayit = cursor.fetchone()
@@ -989,7 +1022,7 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
         if conn is not None: conn.close()
 
 @app.get("/api/odalar")
-def odalari_listele():
+def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -1065,7 +1098,7 @@ def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OL
         if conn is not None: conn.close()
 
 @app.get("/api/psikologlar")
-def aktif_psikologlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -1277,12 +1310,23 @@ def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kont
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s RETURNING rezervasyon_id;", (rezervasyon_id,))
+        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s AND iptal_edildi_mi = FALSE RETURNING rezervasyon_id;", (rezervasyon_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Rezervasyon bulunamadı veya yetkiniz yok.")
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CANCEL", kullanici_id=kullanici_id, hedef_tablo="cihaz_rezervasyonlari", hedef_kayit_id=rezervasyon_id)
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CANCEL",
+            kullanici_id=kullanici_id,
+            hedef_tablo="cihaz_rezervasyonlari",
+            hedef_kayit_id=rezervasyon_id,
+            mevcut_cursor=cursor
+        )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Rezervasyon iptal edildi."}
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1306,7 +1350,7 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
 # ==========================================
 
 @app.get("/api/arizalar")
-def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1352,13 +1396,13 @@ def arizalari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return sonuc
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 @app.post("/api/arizalar", status_code=201)
-def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1427,7 +1471,7 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(mevcut_
         if conn is not None: conn.close()
 
 @app.put("/api/arizalar/{ariza_id}")
-def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1513,7 +1557,7 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
 # ==========================================
 
 @app.get("/api/bakimlar")
-def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1549,7 +1593,7 @@ def bakimlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             for k in kayitlar
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1580,17 +1624,14 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         ))
         bakim_id = cursor.fetchone()[0]
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1615,13 +1656,17 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         degerler = list(degisiklikler.values())
 
         cursor.execute(f"UPDATE cihaz_bakimlari SET {alanlar} WHERE bakim_id = %s;", (*degerler, bakim_id))
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id)
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_bakimlari", hedef_kayit_id=bakim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Bakım kaydı başarıyla güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1661,7 +1706,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("CIH
 # ==========================================
 
 @app.get("/api/kalibrasyonlar")
-def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1694,7 +1739,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(mevcut_kullanici_id)):
             for k in kayitlar
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1725,17 +1770,14 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         ))
         kalibrasyon_id = cursor.fetchone()[0]
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon başarıyla eklendi.", "kalibrasyon_id": kalibrasyon_id}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1760,13 +1802,17 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
         degerler = list(degisiklikler.values())
 
         cursor.execute(f"UPDATE cihaz_kalibrasyonlari SET {alanlar} WHERE kalibrasyon_id = %s;", (*degerler, kalibrasyon_id))
-        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id)
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id, hedef_tablo="cihaz_kalibrasyonlari", hedef_kayit_id=kalibrasyon_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili"}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1805,7 +1851,7 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
 # ==========================================
 
 @app.get("/api/dashboard/ozet")
-def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1844,13 +1890,13 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
         return ozet
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dashboard veri çekme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/bugunku-randevular")
-def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
     conn = None
     cursor = None
     try:
@@ -1883,7 +1929,7 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(mevcut_kullanici_id
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/bugunku-rezervasyonlar")
-def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
     cursor = None
     try:
@@ -1925,7 +1971,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(mevcut_kullanic
         if conn is not None: conn.close()
 
 @app.get("/api/dashboard/yaklasan-islemler")
-def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     import datetime
     conn = None
     cursor = None
@@ -1985,7 +2031,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
 
     except Exception as e:
         print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1995,7 +2041,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
 # ==========================================
 
 @app.get("/api/faaliyetler")
-def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyetleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -2013,13 +2059,13 @@ def faaliyetleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return faaliyetler
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 @app.get("/api/faaliyet-birimleri")
-def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -2036,14 +2082,14 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
             })
         return birimler
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 # --- YENİ EKLENEN: ÖĞRENCİ LİSTESİNİ GETİRİR ---
 @app.get("/api/ogrenciler-liste")
-def ogrencileri_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -2082,23 +2128,20 @@ def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(iz
 
         # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
 # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Öğrenci faaliyeti başarıyla sisteme işlendi."}
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 @app.post("/api/ogrenci-ekle")
-def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullanici_id)):
+def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -2112,6 +2155,17 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullan
         """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur))
 
         yeni_id = cursor.fetchone()[0]
+
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=yetkili_id,
+            hedef_tablo="ogrenciler",
+            hedef_kayit_id=yeni_id,
+            mevcut_cursor=cursor
+        )
+
         conn.commit()
         return {"durum": "basarili", "mesaj": "Öğrenci başarıyla sisteme eklendi.", "ogrenci_id": yeni_id}
 
@@ -2120,14 +2174,14 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(mevcut_kullan
         raise HTTPException(status_code=400, detail="Bu öğrenci numarası sistemde zaten kayıtlı!")
     except Exception as e:
         if conn: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veritabanı hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
 # --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
 @app.get("/api/faaliyet-kayitlari")
-def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
     cursor = None
     try:
@@ -2167,7 +2221,7 @@ def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(mevcut_kullanici_id))
         return kayitlar
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Veri çekme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -2192,17 +2246,18 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
         """, (kayit.ogrenci_id, kayit.faaliyet_id, kayit.birim_id, kayit.miktar, takip_id))
 
         # Audit log (Denetim kaydı)
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -2225,17 +2280,18 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
         cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
 
         # Audit log (Denetim kaydı) - Kim sildi bilelim
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3382,11 +3438,8 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         yeni_id = cursor.fetchone()[0]
 
         # Audit Log (Denetim Kaydı)
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
@@ -3394,7 +3447,7 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Ekleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3418,11 +3471,8 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
             (kayit.birim_adi.strip().upper(), birim_id)
         )
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
@@ -3430,7 +3480,7 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Güncelleme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3450,11 +3500,8 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
 
         cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
 
-        try:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id)
-        except ImportError:
-            pass
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
@@ -3462,7 +3509,7 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         raise
     except Exception as e:
         if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3558,9 +3605,380 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
         if conn is not None:
             conn.rollback()
         raise HTTPException(status_code=500, detail="İzin güncellenirken bir hata oluştu.")
+# =========================================================
+# AUDIT KAYITLARI — SALT OKUNUR
+# =========================================================
+
+from fastapi import Query
+
+
+@app.get("/api/audit-kayitlari")
+def audit_kayitlarini_getir(
+    kullanici: str | None = Query(None, max_length=100),
+    olay_turu: list[str] | None = Query(None),
+    baslangic_tarihi: date | None = None,
+    bitis_tarihi: date | None = None,
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    kullanici_id: int = Depends(
+        izin_kontrol("AUDIT_KAYITLARI_INCELE")
+    )
+):
+    if (
+        baslangic_tarihi is not None
+        and bitis_tarihi is not None
+        and baslangic_tarihi > bitis_tarihi
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Başlangıç tarihi bitiş tarihinden sonra olamaz."
+        )
+
+    if olay_turu:
+        gecerli_olaylar = {
+            "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE"
+        }
+        if (
+            len(olay_turu) > len(gecerli_olaylar)
+            or not set(olay_turu).issubset(gecerli_olaylar)
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Geçersiz işlem türü seçildi."
+            )
+
+    kosullar = []
+    parametreler = []
+
+    if kullanici:
+        kosullar.append("k.kullanici_adi ILIKE %s")
+        parametreler.append(f"%{kullanici}%")
+
+    if olay_turu:
+        kosullar.append("d.olay_turu::text = ANY(%s)")
+        parametreler.append(olay_turu)
+
+    if baslangic_tarihi:
+        kosullar.append("d.olusturulma_tarihi >= %s")
+        parametreler.append(baslangic_tarihi)
+
+    if bitis_tarihi:
+        kosullar.append(
+            "d.olusturulma_tarihi < (%s::date + INTERVAL '1 day')"
+        )
+        parametreler.append(bitis_tarihi)
+
+    where_sql = (
+        "WHERE " + " AND ".join(kosullar)
+        if kosullar else ""
+    )
+
+    from_sql = """
+        FROM denetim_kayitlari d
+        LEFT JOIN kullanicilar k
+            ON k.kullanici_id = d.kullanici_id
+    """
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f"""
+            SELECT
+                COUNT(*),
+                COUNT(*) FILTER (
+                    WHERE d.olay_turu::text = 'LOGIN_FAILED'
+                ),
+                COUNT(*) FILTER (
+                    WHERE d.olay_turu::text IN (
+                        'CREATE', 'UPDATE', 'ROLE_CHANGE'
+                    )
+                ),
+                COUNT(*) FILTER (
+                    WHERE d.olusturulma_tarihi >= CURRENT_DATE
+                      AND d.olusturulma_tarihi <
+                          CURRENT_DATE + INTERVAL '1 day'
+                )
+            {from_sql}
+            {where_sql}
+            """,
+            tuple(parametreler)
+        )
+
+        toplam, basarisiz, islemler, bugun = cursor.fetchone()
+
+        cursor.execute(
+            f"""
+            SELECT
+                d.denetim_id,
+                d.kullanici_id,
+                k.kullanici_adi,
+                d.olay_turu::text,
+                d.hedef_tablo,
+                d.hedef_kayit_id,
+                d.olusturulma_tarihi
+            {from_sql}
+            {where_sql}
+            ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(parametreler) + (limit, offset)
+        )
+
+        kayitlar = []
+
+        for satir in cursor.fetchall():
+            kayitlar.append({
+                "denetim_id": satir[0],
+                "kullanici_id": satir[1],
+                "kullanici_adi": satir[2] or "Bilinmeyen kullanıcı",
+                "olay_turu": satir[3],
+                "hedef_tablo": satir[4],
+                "hedef_kayit_id": satir[5],
+                "olusturulma_tarihi": (
+                    satir[6].isoformat() if satir[6] else None
+                )
+            })
+
+        return {
+            "ozet": {
+                "toplam_kayit": toplam,
+                "basarisiz_giris": basarisiz,
+                "kullanici_islemleri": islemler,
+                "bugunku_islemler": bugun
+            },
+            "kayitlar": kayitlar,
+            "limit": limit,
+            "offset": offset
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Denetim kayıtları alınamadı."
+        )
+
     finally:
         if cursor is not None:
             cursor.close()
         if conn is not None:
             conn.close()
- 
+
+
+# ==========================================
+# CİHAZ RAPORLARI (DASH-003)
+# ==========================================
+def _tarih_metni(deger):
+    return deger.isoformat() if deger is not None and hasattr(deger, "isoformat") else None
+
+
+@app.get("/api/cihaz-raporlari")
+def cihaz_raporlari(
+    baslangic_tarihi: date | None = None,
+    bitis_tarihi: date | None = None,
+    cihaz_id: int | None = None,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))
+):
+    """Bakım, kalibrasyon ve arıza kayıtlarını tarih/cihaz filtresiyle listeler (salt okunur)."""
+    if (
+        baslangic_tarihi is not None
+        and bitis_tarihi is not None
+        and bitis_tarihi < baslangic_tarihi
+    ):
+        raise HTTPException(status_code=422, detail="Bitiş tarihi başlangıç tarihinden önce olamaz.")
+
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+
+    def kosul_olustur(tarih_sutunu, ek_tarih_sutunu=None):
+        """Tarih sütunu seçilen aralıktaysa kayıt dahil edilir; ek sütun verilirse
+        onun aralıkta olması da yeterlidir (örn. arıza: bildirim VEYA çözüm tarihi)."""
+        kosullar = []
+        parametreler = []
+
+        def aralik(sutun):
+            parcalar = []
+            if baslangic_tarihi is not None:
+                parcalar.append(f"{sutun} >= %s")
+                parametreler.append(baslangic_tarihi)
+            if bitis_tarihi is not None:
+                parcalar.append(f"{sutun} < (%s::date + INTERVAL '1 day')")
+                parametreler.append(bitis_tarihi)
+            return "(" + " AND ".join(parcalar) + ")" if parcalar else None
+
+        if baslangic_tarihi is not None or bitis_tarihi is not None:
+            secenekler = [aralik(tarih_sutunu)]
+            if ek_tarih_sutunu:
+                secenekler.append(aralik(ek_tarih_sutunu))
+            kosullar.append("(" + " OR ".join(secenekler) + ")")
+        if cihaz_id is not None:
+            kosullar.append("t.cihaz_id = %s")
+            parametreler.append(cihaz_id)
+        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
+        return where, parametreler
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        where, parametreler = kosul_olustur("t.bakim_tarihi")
+        cursor.execute(f"""
+            SELECT t.bakim_id, c.envanter_kodu, c.cihaz_adi, t.bakim_yapan_kisi,
+                   t.yapilan_islem, t.maliyet, t.bakim_tarihi, t.sonraki_bakim_tarihi,
+                   t.cihaz_id, t.bakim_baslangic_tarihi, t.bakim_bitis_tarihi
+            FROM cihaz_bakimlari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.bakim_tarihi DESC;
+        """, parametreler)
+        bakimlar = [
+            {
+                "bakim_id": k[0],
+                "cihaz_id": k[8],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "bakim_yapan_kisi": k[3],
+                "yapilan_islem": k[4],
+                "maliyet": float(k[5]) if k[5] is not None else 0.0,
+                "bakim_tarihi": _tarih_metni(k[6]),
+                "sonraki_bakim_tarihi": _tarih_metni(k[7]),
+                # Eski kayıtlarda başlangıç/bitiş boşsa bakım tarihi kullanılır.
+                "bakim_baslangic_tarihi": _tarih_metni(k[9] or k[6]),
+                "bakim_bitis_tarihi": _tarih_metni(k[10] or k[6]),
+            }
+            for k in cursor.fetchall()
+        ]
+
+        where, parametreler = kosul_olustur("t.islem_tarihi")
+        cursor.execute(f"""
+            SELECT t.kalibrasyon_id, c.envanter_kodu, c.cihaz_adi, t.kalibrasyon_yapan_kurum,
+                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi, t.cihaz_id
+            FROM cihaz_kalibrasyonlari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.islem_tarihi DESC;
+        """, parametreler)
+        kalibrasyonlar = [
+            {
+                "kalibrasyon_id": k[0],
+                "cihaz_id": k[7],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "kalibrasyon_yapan_kurum": k[3],
+                "sertifika_no": k[4],
+                "islem_tarihi": _tarih_metni(k[5]),
+                "gecerlilik_tarihi": _tarih_metni(k[6]),
+            }
+            for k in cursor.fetchall()
+        ]
+
+        where, parametreler = kosul_olustur("t.bildirim_tarihi", "t.cozum_tarihi")
+        cursor.execute(f"""
+            SELECT t.ariza_id, c.envanter_kodu, c.cihaz_adi, t.bildiren_personel,
+                   t.ariza_aciklamasi, t.bildirim_tarihi, t.cozum_tarihi, t.cozuldu_mu,
+                   t.cihaz_id
+            FROM cihaz_arizalari t
+            JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
+            {where}
+            ORDER BY t.bildirim_tarihi DESC;
+        """, parametreler)
+        arizalar = [
+            {
+                "ariza_id": k[0],
+                "cihaz_id": k[8],
+                "cihaz": f"{k[1]} - {k[2]}",
+                "bildiren_personel": k[3],
+                "ariza_aciklamasi": k[4],
+                "bildirim_tarihi": _tarih_metni(k[5]),
+                "cozum_tarihi": _tarih_metni(k[6]),
+                "durum": "Çözüldü" if k[7] else "Açık",
+            }
+            for k in cursor.fetchall()
+        ]
+
+        # Cihazların güncel durumu (tarih filtresinden bağımsız; yalnızca cihaz filtresi uygulanır).
+        if cihaz_id is not None:
+            cursor.execute(
+                "SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, durum "
+                "FROM cihazlar WHERE cihaz_id = %s ORDER BY envanter_kodu;",
+                [cihaz_id],
+            )
+        else:
+            cursor.execute(
+                "SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, durum "
+                "FROM cihazlar ORDER BY envanter_kodu;"
+            )
+        cihazlar = [
+            {
+                "cihaz_id": k[0],
+                "envanter_kodu": k[1],
+                "cihaz_adi": k[2],
+                "marka_model": k[3],
+                "durum": k[4],
+            }
+            for k in cursor.fetchall()
+        ]
+
+        # Kalibrasyon geçerliliği ve planlı bakım "bugünkü durum"dur; tarih filtresinden bağımsızdır.
+        cihaz_kosulu = "WHERE t.cihaz_id = %s" if cihaz_id is not None else ""
+        cihaz_parametresi = [cihaz_id] if cihaz_id is not None else []
+
+        cursor.execute(f"""
+            SELECT DISTINCT ON (t.cihaz_id)
+                   t.cihaz_id, t.kalibrasyon_yapan_kurum, t.sertifika_no,
+                   t.islem_tarihi, t.gecerlilik_tarihi
+            FROM cihaz_kalibrasyonlari t
+            {cihaz_kosulu}
+            ORDER BY t.cihaz_id, t.gecerlilik_tarihi DESC NULLS LAST, t.islem_tarihi DESC;
+        """, cihaz_parametresi)
+        son_kalibrasyonlar = {
+            k[0]: {
+                "kalibrasyon_yapan_kurum": k[1],
+                "sertifika_no": k[2],
+                "islem_tarihi": _tarih_metni(k[3]),
+                "gecerlilik_tarihi": _tarih_metni(k[4]),
+            }
+            for k in cursor.fetchall()
+        }
+
+        planli_kosul = "WHERE t.sonraki_bakim_tarihi IS NOT NULL" + (
+            " AND t.cihaz_id = %s" if cihaz_id is not None else ""
+        )
+        cursor.execute(f"""
+            SELECT DISTINCT ON (t.cihaz_id) t.cihaz_id, t.sonraki_bakim_tarihi
+            FROM cihaz_bakimlari t
+            {planli_kosul}
+            ORDER BY t.cihaz_id, t.bakim_tarihi DESC, t.bakim_id DESC;
+        """, cihaz_parametresi)
+        sonraki_bakimlar = {k[0]: _tarih_metni(k[1]) for k in cursor.fetchall()}
+
+        for cihaz in cihazlar:
+            cihaz["son_kalibrasyon"] = son_kalibrasyonlar.get(cihaz["cihaz_id"])
+            cihaz["sonraki_bakim_tarihi"] = sonraki_bakimlar.get(cihaz["cihaz_id"])
+
+        return {
+            "ozet": {
+                "bakim_sayisi": len(bakimlar),
+                "toplam_bakim_maliyeti": round(sum(b["maliyet"] for b in bakimlar), 2),
+                "kalibrasyon_sayisi": len(kalibrasyonlar),
+                "ariza_sayisi": len(arizalar),
+                "acik_ariza_sayisi": sum(1 for a in arizalar if a["durum"] == "Açık"),
+            },
+            "bakimlar": bakimlar,
+            "kalibrasyonlar": kalibrasyonlar,
+            "arizalar": arizalar,
+            "cihazlar": cihazlar,
+        }
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()

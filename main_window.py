@@ -49,6 +49,7 @@ IZIN_LISTESI = [
     ("Cihaz rezervasyonu yapma",             "Cihaz Yönetimi",    "HEHHEE"),
     ("Cihaz ekleme",                         "Cihaz Yönetimi",    "HEEHHE"),
     ("Cihaz takip kontrol listesini yönetme","Cihaz Yönetimi",    "HEEHHE"),
+    ("Cihaz raporlarını görüntüleme",        "Cihaz Yönetimi",    "HEEHHE"),
 
     ("Bakım kayıtlarını yönetme",            "Kayıt & Bakım",     "HEEHHE"),
     ("Kalibrasyon kayıtlarını yönetme",      "Kayıt & Bakım",     "HEEHHE"),
@@ -129,6 +130,8 @@ MENU = [
         dict(ikon="⚠️", ad="Arıza Kayıtları", izin="Arıza kayıtlarını yönetme",
              aciklama="Arıza bildirimi ve takibi",
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
+        dict(ikon="📈", ad="Cihaz Raporları", izin="Cihaz raporlarını görüntüleme",
+             aciklama="Bakım, kalibrasyon ve arıza raporları", aksiyon=[]),
 
     ]),
     ("YÖNETİM & DENETİM", [
@@ -239,9 +242,12 @@ def kart_olustur():
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()
 
-    def __init__(self, aktif_rol="admin", kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
+    def __init__(self, aktif_rol=None, kullanici_adi="", rol_onizleme=False, token="", kullanici_id=1):
         super().__init__()
-        self.aktif_rol = aktif_rol.lower() if aktif_rol.lower() in ROLLER else "admin"
+        if not isinstance(aktif_rol, str) or aktif_rol.lower() not in ROLLER:
+            raise ValueError("Geçersiz kullanıcı rolü.")
+
+        self.aktif_rol = aktif_rol.lower()
         self.kullanici_adi = kullanici_adi
         self.rol_onizleme = rol_onizleme
 
@@ -779,6 +785,15 @@ class AnaPencere(QMainWindow):
             )
             lay.addWidget(self.danisma_ekrani, 1)
 
+        elif oge["ad"] == "Audit Kayıtları":
+            from audit_kayitlari_ekrani import AuditKayitlariEkrani
+
+            self.audit_ekrani = AuditKayitlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.audit_ekrani, 1)
+
         elif oge["ad"] == "Danışma Masası Yönetimi":
             from danisma_masasi_yonetimi import DanismaMasasiYonetimi
 
@@ -832,6 +847,16 @@ class AnaPencere(QMainWindow):
                 yetkili_mi=ariza_yetkisi
             )
             lay.addWidget(self.aktif_ariza_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Raporları":
+            from cihaz_raporlari_ekrani import CihazRaporlariEkrani
+
+            self.aktif_cihaz_rapor_ekrani = CihazRaporlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_cihaz_rapor_ekrani, 1)
+
 
         # =========================================================
         # CİHAZ BAKIM KAYITLARI (MNT-002) YÖNLENDİRMESİ

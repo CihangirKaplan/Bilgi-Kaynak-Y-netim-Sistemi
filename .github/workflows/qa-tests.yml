@@ -1,0 +1,84 @@
+name: TKYS QA Tests
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  qa-tests:
+    name: Python 3.13 - QA Tests
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    env:
+      DB_NAME: crkys_alembic_test
+      PG_DUMP_PATH: ""
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python 3.13 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Sistem kutuphanelerini kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0
+
+      - name: Python bagimliliklarini kur
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest-cov==7.1.0
+
+      - name: Python dosyalarini kontrol et
+        run: |
+          python -m compileall -q \
+            sunucu.py \
+            guvenlik.py \
+            denetim.py \
+            tests
+
+      - name: Test icin gecici JWT anahtari olustur
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Guvenli QA testlerini calistir
+        run: |
+          python -m pytest tests/ -q --tb=short \
+            --ignore=tests/test_transaction_quality.py \
+            --ignore=tests/test_randevu_transaction_quality.py \
+            --ignore=tests/test_randevu_eszamanlilik_quality.py \
+            --ignore=tests/test_audit_postgresql_quality.py \
+            --ignore=tests/test_api_audit_rollback_quality.py \
+            -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
+            --cov=sunucu \
+            --cov=guvenlik \
+            --cov=denetim \
+            --cov-branch \
+            --cov-report=term \
+            --cov-report=xml:coverage.xml
+
+      - name: Coverage raporunu kaydet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tkys-qa-coverage
+          path: coverage.xml
+          if-no-files-found: ignore

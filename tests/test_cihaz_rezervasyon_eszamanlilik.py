@@ -59,143 +59,221 @@ from sunucu import app, VT_AYARLARI
 
 
 def test_gercek_eszamanli_cihaz_rezervasyonu():
-    # Yanlışlıkla ana veritabanında çalışmasını engelle.
-    assert VT_AYARLARI["dbname"] == "crkys_alembic_test", (
-        "Bu test yalnızca crkys_alembic_test üzerinde çalıştırılabilir."
-    )
+    """Ayni cihaza eszamanli iki rezervasyondan yalnizca biri basarili olmali."""
 
-    # Test cihazının gerçekten mevcut olduğunu doğrula.
-    with psycopg2.connect(**VT_AYARLARI) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT cihaz_id FROM cihazlar WHERE envanter_kodu = %s;",
-                ("TEST-ISSUE-115",),
-            )
-            kayit = cursor.fetchone()
-
-    assert kayit is not None, "Test cihazı bulunamadı."
-    cihaz_id = kayit[0]
-    # Test kullanıcısını sabit ID yerine kullanıcı adıyla bul.
-    with psycopg2.connect(**VT_AYARLARI) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT kullanici_id
-                FROM kullanicilar
-                WHERE kullanici_adi = %s;
-                """,
-                ("test_issue_115",)
-            )
-            kullanici_kaydi = cursor.fetchone()
-
-    assert kullanici_kaydi is not None, (
-        "Test kullanıcısı bulunamadı: test_issue_115"
-    )
-    test_kullanici_id = kullanici_kaydi[0]
-    # Test için benzersiz bir zaman aralığı kullan.
+    from contextlib import closing
     from datetime import datetime, timedelta, timezone
+    from uuid import uuid4
 
-    baslangic = datetime.now(timezone.utc).replace(
-        tzinfo=None, microsecond=0
-    ) + timedelta(days=30)
-    bitis = baslangic + timedelta(hours=1)
+    etiket = uuid4().hex[:12]
 
-    # Mevcut test rezervasyonlarıyla çakışma ihtimalini azaltmak
-    # için önceden uygunluk kontrolü yap.
-    with psycopg2.connect(**VT_AYARLARI) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT COUNT(*)
-                FROM cihaz_rezervasyonlari
-                WHERE cihaz_id = %s
-                  AND iptal_edildi_mi = FALSE
-                  AND baslangic_zamani < %s
-                  AND bitis_zamani > %s;
-                """,
-                (cihaz_id, bitis, baslangic),
-            )
-            assert cursor.fetchone()[0] == 0
+    rol_adi = f"QA001_{etiket}"
+    kullanici_adi = f"qa001_{etiket}"
+    envanter_kodu = f"QA001-{etiket}"
 
-    # Endpoint'in mevcut izin bağımlılığını bul.
-    route = next(
-        route for route in app.routes
-        if getattr(route, "path", None) == "/api/rezervasyonlar"
-        and "POST" in route.methods
-    )
-    izin_bagimliligi = route.dependant.dependencies[0].call
-
-    # Test süresince yetkili kullanıcıyı taklit et.
-    app.dependency_overrides[izin_bagimliligi] = lambda: test_kullanici_id
-
-    istek = {
-        "cihaz_id": cihaz_id,
-        "kullanilacak_oda_id": None,
-        "baslangic_zamani": baslangic.isoformat(),
-        "bitis_zamani": bitis.isoformat(),
-        "proje_turu": "Test",
-        "proje_adi_aciklamasi": "Issue 115 eszamanlilik testi",
-    }
-
-    bariyer = Barrier(2)
-
-    def rezervasyon_gonder():
-        bariyer.wait(timeout=10)
-        with TestClient(app) as client:
-            return client.post("/api/rezervasyonlar", json=istek)
+    rol_id = None
+    kullanici_id = None
+    personel_id = None
+    cihaz_id = None
+    izin_bagimliligi = None
+    kayitlar_hazir = False
 
     try:
-        # Audit kaydı ayrı bağlantı kullandığından testte taklit ediyoruz.
-        with patch("sunucu.denetim_kaydi_olustur"):
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                futures = [
-                    executor.submit(rezervasyon_gonder)
-                    for _ in range(2)
-                ]
-                yanitlar = [future.result(timeout=30) for future in futures]
+        # 1. Yalnizca bu teste ait gecici kayitlari olustur.
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+            with conn:
+                with conn.cursor() as cursor:
 
-        durum_kodlari = sorted(yanit.status_code for yanit in yanitlar)
+                    cursor.execute(
+                        """
+                        INSERT INTO roller (rol_adi)
+                        VALUES (%s)
+                        RETURNING rol_id;
+                        """,
+                        (rol_adi,),
+                    )
+                    rol_id = cursor.fetchone()[0]
 
-        assert durum_kodlari == [201, 409], (
-            f"Beklenmeyen durum kodları: {durum_kodlari}"
+                    cursor.execute(
+                        """
+                        INSERT INTO kullanicilar
+                            (kullanici_adi, parola_hash, rol_id)
+                        VALUES (%s, %s, %s)
+                        RETURNING kullanici_id;
+                        """,
+                        (
+                            kullanici_adi,
+                            "qa001-gecici-test-kaydi",
+                            rol_id,
+                        ),
+                    )
+                    kullanici_id = cursor.fetchone()[0]
+
+                    cursor.execute(
+                        """
+                        INSERT INTO personel
+                            (kullanici_id, personel_kodu)
+                        VALUES (%s, %s)
+                        RETURNING personel_id;
+                        """,
+                        (kullanici_id, envanter_kodu),
+                    )
+                    personel_id = cursor.fetchone()[0]
+
+                    cursor.execute(
+                        """
+                        INSERT INTO cihazlar
+                            (envanter_kodu, cihaz_adi)
+                        VALUES (%s, %s)
+                        RETURNING cihaz_id;
+                        """,
+                        (envanter_kodu, "QA001 Gecici Test Cihazi"),
+                    )
+                    cihaz_id = cursor.fetchone()[0]
+
+        kayitlar_hazir = True
+
+        # 2. Test icin zaman araligi olustur.
+        baslangic = (
+            datetime.now(timezone.utc)
+            .replace(tzinfo=None, microsecond=0)
+            + timedelta(days=30)
+        )
+        bitis = baslangic + timedelta(hours=1)
+
+        # 3. Mevcut endpoint'in yetki bagimliligini kullan.
+        route = next(
+            route for route in app.routes
+            if getattr(route, "path", None) == "/api/rezervasyonlar"
+            and "POST" in route.methods
         )
 
-        with psycopg2.connect(**VT_AYARLARI) as conn:
+        izin_bagimliligi = route.dependant.dependencies[0].call
+
+        app.dependency_overrides[izin_bagimliligi] = lambda: kullanici_id
+
+        istek = {
+            "cihaz_id": cihaz_id,
+            "kullanilacak_oda_id": None,
+            "baslangic_zamani": baslangic.isoformat(),
+            "bitis_zamani": bitis.isoformat(),
+            "proje_turu": "Test",
+            "proje_adi_aciklamasi": f"QA001-{etiket}",
+        }
+
+        # 4. Ayni anda iki rezervasyon istegi gonder.
+        bariyer = Barrier(2)
+
+        def rezervasyon_gonder():
+            bariyer.wait(timeout=10)
+
+            with TestClient(app) as client:
+                return client.post(
+                    "/api/rezervasyonlar",
+                    json=istek,
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(rezervasyon_gonder)
+                for _ in range(2)
+            ]
+
+            yanitlar = [
+                future.result(timeout=30)
+                for future in futures
+            ]
+
+        # 5. Bir rezervasyon basarili, digeri cakisma olmali.
+        durum_kodlari = sorted(
+            yanit.status_code for yanit in yanitlar
+        )
+
+        assert durum_kodlari == [201, 409], (
+            f"Beklenmeyen durum kodlari: {durum_kodlari}"
+        )
+
+        # 6. Veritabaninda yalnizca bir rezervasyon olmali.
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
                     SELECT COUNT(*)
                     FROM cihaz_rezervasyonlari
                     WHERE cihaz_id = %s
-                      AND baslangic_zamani = %s
-                      AND bitis_zamani = %s
                       AND iptal_edildi_mi = FALSE;
                     """,
-                    (cihaz_id, baslangic, bitis),
+                    (cihaz_id,),
                 )
+
                 assert cursor.fetchone()[0] == 1
 
     finally:
-        app.dependency_overrides.pop(izin_bagimliligi, None)
+        # Yetki bagimliligini eski haline getir.
+        if izin_bagimliligi is not None:
+            app.dependency_overrides.pop(
+                izin_bagimliligi,
+                None,
+            )
 
-        # Yalnızca bu testin oluşturduğu rezervasyonu temizle.
-        with psycopg2.connect(**VT_AYARLARI) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    DELETE FROM cihaz_rezervasyonlari
-                    WHERE cihaz_id = %s
-                      AND baslangic_zamani = %s
-                      AND bitis_zamani = %s
-                      AND proje_adi_aciklamasi = %s;
-                    """,
-                    (
-                        cihaz_id,
-                        baslangic,
-                        bitis,
-                        "Issue 115 eszamanlilik testi",
-                    ),
-                )
+        # 7. Yalnizca bu testin olusturdugu kayitlari temizle.
+        if kayitlar_hazir:
+            with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+                with conn:
+                    with conn.cursor() as cursor:
+
+                        cursor.execute(
+                            """
+                            DELETE FROM denetim_kayitlari
+                            WHERE kullanici_id = %s;
+                            """,
+                            (kullanici_id,),
+                        )
+
+                        cursor.execute(
+                            """
+                            DELETE FROM cihaz_rezervasyonlari
+                            WHERE cihaz_id = %s;
+                            """,
+                            (cihaz_id,),
+                        )
+
+                        cursor.execute(
+                            """
+                            DELETE FROM personel
+                            WHERE personel_id = %s
+                              AND kullanici_id = %s;
+                            """,
+                            (personel_id, kullanici_id),
+                        )
+
+                        cursor.execute(
+                            """
+                            DELETE FROM kullanicilar
+                            WHERE kullanici_id = %s
+                              AND kullanici_adi = %s;
+                            """,
+                            (kullanici_id, kullanici_adi),
+                        )
+
+                        cursor.execute(
+                            """
+                            DELETE FROM cihazlar
+                            WHERE cihaz_id = %s
+                              AND envanter_kodu = %s;
+                            """,
+                            (cihaz_id, envanter_kodu),
+                        )
+
+                        cursor.execute(
+                            """
+                            DELETE FROM roller
+                            WHERE rol_id = %s
+                              AND rol_adi = %s;
+                            """,
+                            (rol_id, rol_adi),
+                        )
+
 
 def test_deadlock_sonrasi_yeniden_deneme():
     from psycopg2.errors import DeadlockDetected

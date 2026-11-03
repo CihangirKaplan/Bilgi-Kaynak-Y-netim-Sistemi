@@ -1,7 +1,10 @@
+import os
 import psycopg2
-# Kendi güvenlik fonksiyonlarımızı import ediyoruz
+from dotenv import load_dotenv# Kendi güvenlik fonksiyonlarımızı import ediyoruz
 from guvenlik import parola_hashle 
 import sys # sys kütüphanesi eklendi
+
+load_dotenv()
 
 # GÜVENLİK KİLİDİ (Madde 6)
 onay = input("DİKKAT: Bu script test verilerini ezecek ve şifreleri sıfırlayacaktır. SADECE GELİŞTİRME ortamında çalıştırınız. Devam etmek istiyor musunuz? (evet/hayir): ")
@@ -9,12 +12,15 @@ if onay.lower() != "evet":
     print("İşlem iptal edildi.")
     sys.exit()
 
-# 1. YEREL (LOCALHOST) VERİTABANI BAĞLANTI AYARLARI
-DB_HOST = "localhost"  
-DB_NAME = "crkys"
-DB_USER = "postgres"
-DB_PASS = "1234" 
-DB_PORT = "5432"
+# 1. VERİTABANI BAĞLANTI AYARLARI (.env dosyasından okunur; şifre koda yazılmaz)
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASSWORD")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+if not (DB_NAME and DB_USER and DB_PASS):
+    sys.exit(".env dosyasında DB_NAME, DB_USER ve DB_PASSWORD tanımlı olmalı (bkz. .env.example).")
 
 try:
     # Veritabanına bağlanıyoruz

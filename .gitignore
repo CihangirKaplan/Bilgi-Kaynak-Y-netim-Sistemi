@@ -10,3 +10,9 @@ __pycache__/
 backups/
 *.dump
 *.backup
+
+# Quality testing coverage results
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

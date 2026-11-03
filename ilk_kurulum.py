@@ -9,7 +9,7 @@ load_dotenv()
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_NAME = os.getenv("DB_NAME", "crkys")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASSWORD", "123")
+DB_PASS = os.getenv("DB_PASSWORD")  # varsayılan şifre yok; .env içinde tanımlı olmalı
 DB_PORT = os.getenv("DB_PORT", "5432")
 
 # Takım arkadaşları için toplu test kullanıcıları listesi
@@ -25,6 +25,10 @@ TEST_KULLANICILARI = [
     {"k_adi": "asistan", "sifre": "Asistan.123", "rol": "PROJE_ASISTANI", "p_kodu": "PER-AST-001"}
 ]
 def ilk_kurulumu_yap():
+    if not DB_PASS:
+        print("❌ .env dosyasında DB_PASSWORD tanımlı değil (bkz. .env.example). Kurulum yapılmadı.")
+        return
+
     conn = None
     cursor = None
     try:
