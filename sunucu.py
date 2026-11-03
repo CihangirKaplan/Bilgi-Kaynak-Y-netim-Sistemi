@@ -1557,6 +1557,27 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
 # ARIZA YÖNETİMİ MODÜLÜ (EFSANE YER)
 # ==========================================
 
+# Arıza açılınca cihazın "Arızalı" olabileceği durumlar. Bakımda, kalibrasyonda veya kullanım
+# dışı bir cihazın durumu arıza kaydıyla ezilmez (arıza kaydı yine de tutulur).
+ARIZA_ILE_ARIZALI_OLABILEN_DURUMLAR = ("Kullanima_Hazir", "Rezerve", "Kullanimda", "Arizali")
+
+
+def arizadan_sonra_cihaz_durumu(eski_durum, cozuldu_mu, baska_acik_ariza_var):
+    """Arıza kaydı açıldığında/çözüldüğünde cihazın yeni durumunu belirler.
+
+    - Çözüldü: cihaz yalnızca "Arızalı" durumdaysa ve başka açık arızası yoksa "Kullanıma Hazır" olur.
+      Başka açık arıza varsa ya da cihaz bakımda/kalibrasyonda/kullanım dışıysa durumu korunur.
+    - Açık: cihaz "Arızalı" olur; ancak bakımda/kalibrasyonda/kullanım dışı cihazın durumu değişmez.
+    """
+    if cozuldu_mu:
+        if eski_durum == "Arizali" and not baska_acik_ariza_var:
+            return "Kullanima_Hazir"
+        return eski_durum
+    if eski_durum in ARIZA_ILE_ARIZALI_OLABILEN_DURUMLAR:
+        return "Arizali"
+    return eski_durum
+
+
 @app.get("/api/arizalar")
 def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
@@ -1638,8 +1659,10 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_ko
         """, (ariza.cihaz_id, bildiren_kisi, tam_aciklama))
         ariza_id = cursor.fetchone()[0]
 
-        # 5. Cihazın durumunu 'Arizali' (veritabanı formatında) olarak güncelle!
-        cursor.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s;", (ariza.cihaz_id,))
+        # 5. Cihazı 'Arizali' yap; bakımda/kalibrasyonda/kullanım dışı cihazın durumu korunur.
+        yeni_durum = arizadan_sonra_cihaz_durumu(cihaz[0], False, True)
+        if yeni_durum != cihaz[0]:
+            cursor.execute("UPDATE cihazlar SET durum = %s WHERE cihaz_id = %s;", (yeni_durum, ariza.cihaz_id))
         # 6. Denetim (Audit) logları
         # Arıza oluşturma kaydını aynı transaction içinde tut.
         denetim_kaydi_olustur(
@@ -1652,7 +1675,7 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_ko
         )
 
         # Cihazın durumu gerçekten değiştiyse ayrıca kaydet.
-        if cihaz[0] != "Arizali":
+        if yeni_durum != cihaz[0]:
             denetim_kaydi_olustur(
                 VT_AYARLARI,
                 olay_turu="DEVICE_STATUS_CHANGE",
@@ -1662,7 +1685,11 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_ko
                 mevcut_cursor=cursor
             )
         conn.commit()
-        return {"durum": "basarili", "mesaj": "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi.", "ariza_id": ariza_id}
+        if yeni_durum == "Arizali":
+            mesaj = "Arıza bildirimi alındı ve cihaz arızalı konuma çekildi."
+        else:
+            mesaj = f"Arıza bildirimi alındı. Cihaz '{cihaz[0]}' durumunda olduğu için cihaz durumu değiştirilmedi."
+        return {"durum": "basarili", "mesaj": mesaj, "ariza_id": ariza_id}
     except HTTPException:
         if conn is not None:
             conn.rollback()
@@ -1706,18 +1733,25 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
             WHERE ariza_id = %s;
         """, (tam_aciklama, ariza.cozuldu_mu, ariza_id))
 
-        # Cihazın mevcut durumunu oku ve satırı kilitle.
+        # Cihazın mevcut durumunu oku, satırı kilitle ve cihazın BAŞKA açık arızası var mı bak.
         cursor.execute(
-            "SELECT durum FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;",
-            (cihaz_id,)
+            """
+            SELECT durum,
+                   EXISTS (SELECT 1 FROM cihaz_arizalari
+                           WHERE cihaz_id = %s AND cozuldu_mu = FALSE AND ariza_id <> %s)
+            FROM cihazlar WHERE cihaz_id = %s FOR UPDATE;
+            """,
+            (cihaz_id, ariza_id, cihaz_id)
         )
         cihaz_kaydi = cursor.fetchone()
 
         if cihaz_kaydi is None:
             raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
 
-        eski_cihaz_durum = cihaz_kaydi[0]
-        yeni_cihaz_durum = "Kullanima_Hazir" if ariza.cozuldu_mu else "Arizali"
+        eski_cihaz_durum, baska_acik_ariza_var = cihaz_kaydi
+        yeni_cihaz_durum = arizadan_sonra_cihaz_durumu(
+            eski_cihaz_durum, ariza.cozuldu_mu, baska_acik_ariza_var
+        )
 
         # Arıza güncellemesini audit'e kaydet.
         denetim_kaydi_olustur(
