@@ -29,7 +29,10 @@ from modeller import (
     KalibrasyonOlusturModeli,
     KalibrasyonGuncelleModeli,
     BakimOlusturModeli,
-    BakimGuncelleModeli
+    BakimGuncelleModeli,
+    HizliIzinGuncelleModel,
+    IzinDuzenleModeli,
+    RolGorunenAdModeli
 )
 from guvenlik import (
     parola_hashle,
@@ -41,7 +44,7 @@ from guvenlik import (
 from denetim import denetim_kaydi_olustur
 from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
 import psycopg2.errors
-from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli
+from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
 load_dotenv()
 app = FastAPI()
@@ -349,6 +352,237 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+@app.post("/api/roller", status_code=201)
+def rol_olustur(rol: RolModeli, kullanici_id: int = Depends(izin_kontrol("ROL_OLUSTUR"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+ 
+        gorunen_ad = rol.rol_adi.strip()
+        if not gorunen_ad:
+            raise HTTPException(status_code=422, detail="Rol adı boş olamaz.")
+ 
+        # Teknik ad: büyük harfe çevrilir. Yazılan ad olduğu gibi görünen ad olarak da saklanır.
+        rol_adi_upper = gorunen_ad.upper()
+ 
+        cursor.execute("SELECT 1 FROM roller WHERE rol_adi = %s;", (rol_adi_upper,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Bu rol zaten sistemde mevcut.")
+ 
+        cursor.execute(
+            "INSERT INTO roller (rol_adi, gorunen_ad) VALUES (%s, %s) RETURNING rol_id;",
+            (rol_adi_upper, gorunen_ad),
+        )
+        yeni_id = cursor.fetchone()[0]
+ 
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="CREATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="roller",
+            hedef_kayit_id=yeni_id,
+            mevcut_cursor=cursor,
+        )
+        conn.commit()
+        return {
+            "durum": "basarili",
+            "mesaj": "Rol başarıyla oluşturuldu.",
+            "rol_id": yeni_id,
+            "rol_adi": rol_adi_upper,
+            "gorunen_ad": gorunen_ad,
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Rol oluşturulurken bir hata oluştu.")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+ 
+ 
+# Giriş ekranı ve sunucu kontrolleri bu rollerin teknik adlarına bağlıdır.
+# (Modül düzeyinde tanımlanmalıdır; bir fonksiyonun içine yazılmaz.)
+SISTEM_ROLLERI = {"ADMIN", "PSIKOLOG", "MEMUR", "MUDUR", "DANISMA_OGRENCISI", "PROJE_ASISTANI"}
+ 
+ 
+@app.put("/api/roller/{rol_id}")
+def rol_guncelle(rol_id: int, veri: RolGorunenAdModeli, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE"))):
+    """Rolün görünür adını ve aktiflik durumunu günceller."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+ 
+        # 1. Rolün teknik adını (rol_adi) çekip satırı kilitliyoruz
+        cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s FOR UPDATE;", (rol_id,))
+        kayit = cursor.fetchone()
+        
+        if kayit is None:
+            raise HTTPException(status_code=404, detail="Güncellenecek rol bulunamadı.")
+ 
+        # 2. GÜVENLİK KİLİDİ: Admin rolü asla değiştirilemez veya pasife alınamaz!
+        if kayit[0] == "ADMIN":
+            raise HTTPException(status_code=403, detail="SİSTEM UYARISI: ADMIN rolü düzenlenemez ve pasife alınamaz.")
+ 
+        # 3. Güncelleme işlemi
+        cursor.execute(
+            "UPDATE roller SET gorunen_ad = %s, aktif_mi = %s WHERE rol_id = %s;",
+            (veri.gorunen_ad.strip(), veri.aktif_mi, rol_id),
+        )
+
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="roller",
+            hedef_kayit_id=rol_id,
+            mevcut_cursor=cursor,
+        )
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Rol güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Rol güncellenirken bir hata oluştu.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+ 
+@app.delete("/api/roller/{rol_id}")
+def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+ 
+        cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s FOR UPDATE;", (rol_id,))
+        rol = cursor.fetchone()
+        if rol is None:
+            raise HTTPException(status_code=404, detail="Silinecek rol bulunamadı.")
+ 
+        if rol[0] in SISTEM_ROLLERI:
+            raise HTTPException(status_code=403, detail="Sistem rolleri silinemez.")
+ 
+        cursor.execute("SELECT COUNT(*) FROM kullanicilar WHERE rol_id = %s;", (rol_id,))
+        kullanici_sayisi = cursor.fetchone()[0]
+        if kullanici_sayisi > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Bu role atanmış {kullanici_sayisi} kullanıcı var. Önce kullanıcıların rolünü değiştirin.",
+            )
+ 
+        # Yalnızca gerçekten verilmiş izinler sayılır (izin_var = 1).
+        cursor.execute("SELECT COUNT(*) FROM rol_izinleri WHERE rol_id = %s AND izin_var = 1;", (rol_id,))
+        izin_sayisi = cursor.fetchone()[0]
+        if izin_sayisi > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Bu role ait {izin_sayisi} izin var. Silmek için önce izinleri kaldırın.",
+            )
+ 
+        cursor.execute("DELETE FROM rol_izinleri WHERE rol_id = %s;", (rol_id,))
+        cursor.execute("DELETE FROM roller WHERE rol_id = %s;", (rol_id,))
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="DELETE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="roller",
+            hedef_kayit_id=rol_id,
+            mevcut_cursor=cursor,
+        )
+        conn.commit()
+        return {"durum": "basarili", "mesaj": f"'{rol[0]}' rolü silindi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Rol silinirken bir hata oluştu.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+ 
+ 
+@app.get("/api/roller")
+def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT rol_id, rol_adi, gorunen_ad, aktif_mi FROM roller ORDER BY rol_id ASC;")
+        return [
+            {"rol_id": k[0], "rol_adi": k[1], "gorunen_ad": k[2], "aktif_mi": k[3]}
+            for k in cursor.fetchall()
+        ]
+    except Exception:
+        raise HTTPException(status_code=500, detail="Roller alınamadı.")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+ 
+@app.get("/api/rol-izin-matrisi")
+def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # 1. Tüm Rolleri Çek
+        cursor.execute("SELECT rol_id, rol_adi, gorunen_ad, aktif_mi FROM roller ORDER BY rol_id ASC")
+        roller = [{"rol_id": r[0], "rol_adi": r[1], "gorunen_ad": r[2], "aktif_mi": r[3]} for r in cursor.fetchall()]
+        
+        # 2. Tüm İzinleri (Faaliyetleri/Yetkileri) Çek
+        cursor.execute("SELECT izin_id, izin_adi, gorunen_ad FROM izinler ORDER BY izin_id ASC")
+        izinler = [{"izin_id": i[0], "izin_adi": i[1], "gorunen_ad": i[2]} for i in cursor.fetchall()]
+        
+        # 3. Rol-İzin Eşleşmelerini Çek
+        cursor.execute("SELECT rol_id, izin_id FROM rol_izinleri WHERE izin_var = 1")
+        eslesmeler = cursor.fetchall()
+        
+        # Hangi rolün hangi izinleri olduğunu bir sözlükte topla (rol_id: [izin_id1, izin_id2...])
+        rol_izin_map = {}
+        for r_id, i_id in eslesmeler:
+            if r_id not in rol_izin_map:
+                rol_izin_map[r_id] = []
+            rol_izin_map[r_id].append(i_id)
+            
+        return {
+            "roller": roller,
+            "izinler": izinler,
+            "rol_izin_map": rol_izin_map
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
 
 @app.patch("/api/kullanicilar/{kullanici_id}/durum-degistir")
 def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
@@ -3281,6 +3515,96 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         if conn is not None: conn.close()
 
 
+# --- 1. YENİ İZİN EKLEME (POST) ---
+@app.post("/api/izinler", status_code=201)
+def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO izinler (izin_adi) VALUES (%s) RETURNING izin_id",
+            (izin_verisi.get("izin_adi"),)
+        )
+        yeni_id = cursor.fetchone()[0]
+        conn.commit()
+        return {"mesaj": "İzin başarıyla eklendi", "izin_id": yeni_id}
+    except Exception as e:
+        print(f"!!! KRİTİK VERİTABANI HATASI: {e} !!!") # <--- BU SATIRI EKLE
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# --- 2. İZİN VE ROL İLİŞKİLERİNİ GÜNCELLEME (PUT) ---
+
+@app.put("/api/izinler/{izin_id}")
+def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depends(izin_kontrol("IZIN_DUZENLE"))):
+    """Bir iznin GÖRÜNEN ADINI ve hangi rollere verildiğini günceller.
+ 
+    Teknik ad (izin_adi) değiştirilmez: izin_kontrol("...") bu adla çalışır.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+ 
+        cursor.execute("SELECT izin_id FROM izinler WHERE izin_id = %s FOR UPDATE;", (izin_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="İzin bulunamadı.")
+ 
+        cursor.execute("SELECT rol_id, rol_adi FROM roller;")
+        roller = {r[0]: r[1] for r in cursor.fetchall()}
+ 
+        secilenler = set(veri.verilen_rol_idleri)
+        if not secilenler.issubset(roller.keys()):
+            raise HTTPException(status_code=422, detail="Geçersiz rol seçildi.")
+ 
+        # ADMIN rolünden izin kaldırılamaz (sistemden kilitlenmeyi önler).
+        admin_idleri = [rid for rid, ad in roller.items() if ad == "ADMIN"]
+        if any(rid not in secilenler for rid in admin_idleri):
+            raise HTTPException(status_code=422, detail="ADMIN rolünden izin kaldırılamaz.")
+ 
+        cursor.execute(
+            "UPDATE izinler SET gorunen_ad = %s WHERE izin_id = %s;",
+            (veri.gorunen_ad.strip(), izin_id),
+        )
+ 
+        for rid in roller:
+            deger = 1 if rid in secilenler else 0
+            cursor.execute(
+                "UPDATE rol_izinleri SET izin_var = %s WHERE rol_id = %s AND izin_id = %s;",
+                (deger, rid, izin_id),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "INSERT INTO rol_izinleri (rol_id, izin_id, izin_var) VALUES (%s, %s, %s);",
+                    (rid, izin_id, deger),
+                )
+ 
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="izinler",
+            hedef_kayit_id=izin_id,
+            mevcut_cursor=cursor,
+        )
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "İzin güncellendi."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="İzin güncellenirken bir hata oluştu.")
 # =========================================================
 # AUDIT KAYITLARI — SALT OKUNUR
 # =========================================================

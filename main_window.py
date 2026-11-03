@@ -29,6 +29,8 @@ from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
 from dashboard_ekrani import DashboardEkrani
 from k_personel_ekranlari import KullaniciPersonelEkrani
 from faaliyet_dialog import FaaliyetEkleDialog
+from sayfalar_rol_izin import RolIzinSayfasi
+from rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -72,8 +74,6 @@ IZIN_LISTESI = [
     ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
     ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
     ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
-
-    ("Yeni izin tanımlama",                  "Sistem Yönetimi",   "HHHHHE"),
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
     ("Rol-izin yönetme",                     "Sistem Yönetimi",   "HHHHHE"),
     ("Rol oluşturma",                        "Sistem Yönetimi",   "HHHHHE"),
@@ -117,6 +117,7 @@ MENU = [
              aciklama="Faaliyet kayıtlarının düzenlenmesi",
              aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
                       ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
+                      ("🏢  Faaliyet Birimleri", "Faaliyet birimlerini yönetme"),
                       ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
@@ -163,9 +164,7 @@ MENU = [
              aciklama="Rol, izin ve faaliyet birimi yönetimi",
              aksiyon=[("＋  Rol Oluştur", "Rol oluşturma"),
                       ("✎  Rol Düzenle", "Rol düzenleme"),
-                      ("＋  Yeni İzin Tanımla", "Yeni izin tanımlama"),
-                      ("✎  İzin Düzenle", "İzin düzenleme"),
-                      ("🏢  Faaliyet Birimleri", "Faaliyet birimlerini yönetme")]),
+                      ("✎  İzin Düzenle", "İzin düzenleme")]),
     ]),
 ]
 
@@ -935,8 +934,14 @@ class AnaPencere(QMainWindow):
                 elif "Faaliyet Sil" in etiket:
                     btn.clicked.connect(self.faaliyet_sil_tetikle)
                     btn.setStyleSheet("background-color: #E74C3C; color: white; font-weight: bold; border-radius: 4px;") # Kan kırmızı tehlike butonu
+                elif "Rol Oluştur" in etiket:
+                    btn.clicked.connect(self.rol_olustur_ac)
+                elif "Rol Düzenle" in etiket:
+                    btn.clicked.connect(self.rol_duzenle_diyalog_ac)
                 elif "Faaliyet Birimleri" in etiket:
                     btn.clicked.connect(self.faaliyet_birimleri_ekrani_ac)
+                elif "İzin Düzenle" in etiket:
+                    btn.clicked.connect(self.izin_duzenle_tetikle)
 
                 ab.addWidget(btn)
             ab.addStretch()
@@ -1125,6 +1130,10 @@ class AnaPencere(QMainWindow):
             self.faaliyet_tablosunu_guncelle()
 
             lay.addWidget(ik, 1)
+
+        elif oge["ad"] == "Rol & İzin Yönetimi":
+            self.rol_izin_sayfasi = RolIzinSayfasi(token=self.token, api_url=self.api_url)
+            lay.addWidget(self.rol_izin_sayfasi, 1)
 
         else:
             ik = kart_olustur()
@@ -1387,6 +1396,80 @@ class AnaPencere(QMainWindow):
         from birim_dialog import BirimYonetimDialog
         dialog = BirimYonetimDialog(self.api_url, self.token, self)
         dialog.exec()
+
+    def rol_olustur_ac(self):
+        dialog = RolOlusturDialog(self.api_url, self.token, self)
+        if dialog.exec():
+            # Yeni rol eklendi, matris sayfasını yenile
+            if hasattr(self, 'rol_izin_sayfasi'):
+                self.rol_izin_sayfasi.verileri_yukle()
+    
+    def rol_duzenle_diyalog_ac(self):
+        # Sayfanın ve verilerin yüklü olup olmadığını kontrol et
+        if not hasattr(self, 'rol_izin_sayfasi') or not hasattr(self.rol_izin_sayfasi, 'roller'):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen önce 'Rol & İzin Yönetimi' sekmesini açın.")
+            return
+            
+        from rol_izin_diyaloglari import RolDuzenleDialog
+        dialog = RolDuzenleDialog(
+            self.api_url, 
+            self.token, 
+            self.rol_izin_sayfasi.roller, 
+            self.rol_izin_sayfasi.rol_izin_map, 
+            self
+        )
+        
+        if dialog.exec():
+            self.rol_izin_sayfasi.verileri_yukle()
+
+    def izin_duzenle_tetikle(self):
+        izin_id = self.rol_izin_sayfasi.secili_izin_id()
+        if not izin_id:
+            QMessageBox.warning(self, "Uyarı", "Lütfen düzenlemek istediğiniz izni listeden seçin.")
+            return
+            
+        dialog = IzinDuzenleDialog(
+            api_url=self.api_url, 
+            token=self.token, 
+            izin_id=izin_id, 
+            roller=self.rol_izin_sayfasi.roller, 
+            matris_verisi=self.rol_izin_sayfasi.matris_verisi, 
+            ebeveyn=self
+        )
+        if dialog.exec():
+            self.rol_izin_sayfasi.verileri_yukle()
+
+    def rolleri_getir(self):
+        if not hasattr(self, 'rol_tablosu'):
+            return
+
+        import requests
+        from PySide6.QtWidgets import QTableWidgetItem
+        from PySide6.QtCore import Qt
+
+        self.rol_tablosu.setRowCount(0) # Önce tabloyu temizle
+        headers = {"Authorization": f"Bearer {self.token}"}
+        
+        try:
+            # Backend API endpoint'inin /api/roller olduğunu varsayıyoruz
+            cevap = requests.get(f"{self.api_url}/api/roller", headers=headers, timeout=5)
+            if cevap.status_code == 200:
+                roller = cevap.json()
+                self.rol_tablosu.setRowCount(len(roller))
+
+                for satir, rol_verisi in enumerate(roller):
+                    item_id = QTableWidgetItem(str(rol_verisi.get("rol_id", "")))
+                    item_ad = QTableWidgetItem(str(rol_verisi.get("rol_adi", "")))
+
+                    item_id.setTextAlignment(Qt.AlignCenter)
+                    item_ad.setTextAlignment(Qt.AlignCenter)
+
+                    self.rol_tablosu.setItem(satir, 0, item_id)
+                    self.rol_tablosu.setItem(satir, 1, item_ad)
+        except Exception as e:
+            print("Rol verileri çekilirken hata oluştu:", e)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
