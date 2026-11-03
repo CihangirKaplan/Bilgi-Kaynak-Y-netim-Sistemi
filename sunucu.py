@@ -136,6 +136,46 @@ def izin_kontrol(izin_adi: str):
 def korumali_test(kullanici_id: int = Depends(mevcut_kullanici_id)):
     return {"durum": "basarili", "mesaj": "Token geçerli.", "kullanici_id": kullanici_id}
 
+@app.get("/api/yetkilerim")
+def yetkilerim(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    """Giriş yapan kullanıcının rolünü ve o role açık olan izinleri döndürür.
+
+    İstemci menüsü bu yanıta göre çizilir; böylece menü ile sunucunun gerçekte uyguladığı
+    yetkiler (rol_izinleri tablosu) her zaman aynıdır. Kullanıcı yalnızca kendi rolünün
+    izinlerini görür, ayrıca bir izin gerektirmez.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.rol_adi, i.izin_adi
+            FROM kullanicilar k
+            JOIN roller r ON r.rol_id = k.rol_id
+            LEFT JOIN rol_izinleri ri ON ri.rol_id = k.rol_id AND ri.izin_var = 1
+            LEFT JOIN izinler i ON i.izin_id = ri.izin_id
+            WHERE k.kullanici_id = %s
+            ORDER BY i.izin_adi;
+            """,
+            (kullanici_id,)
+        )
+        satirlar = cursor.fetchall()
+        if not satirlar:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+        return {
+            "rol_adi": satirlar[0][0],
+            "izinler": [satir[1] for satir in satirlar if satir[1] is not None],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 @app.post("/api/login")
 def giris_yap(giris: GirisModeli):
     conn = None

@@ -83,8 +83,82 @@ IZIN_LISTESI = [
 
 IZIN = {ad: (kat, kod) for ad, kat, kod in IZIN_LISTESI}
 
+# Ekrandaki izin adı -> sunucunun gerçekte istediği izin kod(lar)ı (rol_izinleri tablosu).
+# Menü, kullanıcının sunucudan aldığı izinlere (/api/yetkilerim) göre çizilir; bu tablo ekran
+# adlarını sunucudaki kodlara çevirir. Birden fazla kod varsa hepsi gerekir.
+# Karşılık, sunucunun uçlarda GERÇEKTE kontrol ettiği koddur (menü, tıklayınca 403 verecek
+# bir düğmeyi göstermesin diye): örn. bakım ve kalibrasyon uçları CIHAZ_ENVANTER_YONET ister.
+IZIN_KODLARI = {
+    "Randevu oluşturma": ("RANDEVU_OLUSTUR",),
+    "Randevu düzenleme": ("RANDEVU_DUZENLE",),
+    "Randevu iptal etme": ("RANDEVU_IPTAL",),
+    "Randevu takvimini görüntüleme": ("TAKVIM_GORUNTULE",),
+    "Oda kullanım durumunu görüntüleme": ("ODA_DURUMU_GORUNTULE",),
+    "Oda yönetimi": ("ODA_EKLE", "ODA_DUZENLE"),
+    "Cihaz uygunluğunu görüntüleme": ("CIHAZ_UYGUNLUK_GORUNTULE",),
+    "Cihaz envanterini yönetme": ("CIHAZ_ENVANTER_YONET",),
+    "Cihaz rezervasyonu yapma": ("CIHAZ_REZERVASYON",),
+    "Cihaz ekleme": ("CIHAZ_EKLE",),
+    "Cihaz takip kontrol listesini yönetme": ("CIHAZ_TAKIP_KONTROL_LISTESI",),
+    "Cihaz raporlarını görüntüleme": ("CIHAZ_ENVANTER_YONET",),
+    "Bakım kayıtlarını yönetme": ("CIHAZ_ENVANTER_YONET",),
+    "Kalibrasyon kayıtlarını yönetme": ("CIHAZ_ENVANTER_YONET",),
+    "Arıza kayıtlarını yönetme": ("ARIZA_KAYITLARI_YONET",),
+    "Faaliyet kayıtlarını düzenleme": ("FAALIYET_KAYITLARI_DUZENLE",),
+    "Kullanıcı oluşturma": ("KULLANICI_OLUSTUR",),
+    "Personel tanımlama": ("PERSONEL_TANIMLA",),
+    "Kullanıcı pasifleştirme": ("KULLANICI_PASIFLESTIR",),
+    "Rol atama/değiştirme": ("ROL_ATAMA_DEGISTIRME",),
+    "Audit kayıtlarını inceleme": ("AUDIT_KAYITLARI_INCELE",),
+    "Danışma masası oturumunu yönetme": ("DANISMA_OTURUMU_YONET",),
+    "Danışma masası yönetimi": ("DANISMA_OTURUMU_YONETIM",),
+    "Danışma masası raporlarını görüntüleme": ("DANISMA_OTURUMU_GORUNTULE",),
+    "İzin düzenleme": ("IZIN_DUZENLE",),
+    "Rol-izin yönetme": ("ROL_IZIN_YONET",),
+    "Rol oluşturma": ("ROL_OLUSTUR",),
+    "Rol düzenleme": ("ROL_DUZENLE",),
+    # İSTİSNA: bu düğme Faaliyet Kayıtları sayfasında durur ve yalnızca Admin içindir; bu amaçla
+    # tanımlı izne (FAALIYET_BIRIMI_DUZENLE, yalnızca Admin'de) eşleştirilir. Sunucudaki faaliyet
+    # birimi yazma uçları şu an daha geniş olan FAALIYET_KAYITLARI_DUZENLE'yi istiyor (Memur, Müdür
+    # ve Proje Asistanı da sahip); bu ayrı bir yetki tutarsızlığıdır. O koda eşleştirilseydi
+    # düğme bu rollere de görünürdü.
+    "Faaliyet birimlerini yönetme": ("FAALIYET_BIRIMI_DUZENLE",),
+}
+
+# Kişisel paneller: izin olsa bile yalnızca belirtilen roller için gösterilir. Danışma Masası
+# öğrenci paneli kişiseldir (kullanıcının kendi öğrenci kaydına bağlı vardiya); veritabanında
+# Admin bütün izinlere sahip olsa da Admin'in öğrenci kaydı olmadığından bu panel ona gösterilmez.
+IZIN_SADECE_ROL = {
+    "Danışma masası oturumunu yönetme": {"ogrenci"},
+}
+
+# Giriş sonrası sunucudan alınan izinler (rol -> izin kodları). Alınamazsa o rol için boş kalır
+# ve yukarıdaki elle yazılmış tabloya (IZIN_LISTESI) dönülür.
+_SUNUCU_YETKILERI = {}
+
+
+def yetkileri_ayarla(rol, kodlar):
+    """Sunucudan alınan izin kodlarını kaydeder."""
+    _SUNUCU_YETKILERI[rol] = frozenset(kodlar)
+
+
+def yetkileri_temizle(rol):
+    """Bu rol için sunucu yetkilerini siler (elle yazılmış tabloya dönülür)."""
+    _SUNUCU_YETKILERI.pop(rol, None)
+
+
 def izin_var(rol, izin_adi):
-    return IZIN[izin_adi][1][ROLLER.index(rol)] == "E"
+    """Rolün bu izne sahip olup olmadığı. Bilinmeyen izin adı 'yok' sayılır (çökmez)."""
+    if izin_adi not in IZIN:
+        return False
+    kodlar = _SUNUCU_YETKILERI.get(rol)
+    if kodlar is None:
+        # Sunucu yetkileri alınamadı (örn. eski sunucu): elle yazılmış tabloya dön.
+        return IZIN[izin_adi][1][ROLLER.index(rol)] == "E"
+    sadece = IZIN_SADECE_ROL.get(izin_adi)
+    if sadece is not None and rol not in sadece:
+        return False
+    return all(kod in kodlar for kod in IZIN_KODLARI[izin_adi])
 
 # ======================================================================
 #  2. MENÜ TANIMI
@@ -263,6 +337,9 @@ class AnaPencere(QMainWindow):
         self.api_url = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
         self.token = token
         self.kullanici_id = kullanici_id
+
+        # Menü, sunucunun gerçekte uyguladığı yetkilere göre çizilir.
+        self._yetkileri_sunucudan_al()
 
         # JWT bitiş zamanını takip et
         self._token_bitis_zamani = self._token_bitisini_oku()
@@ -556,6 +633,31 @@ class AnaPencere(QMainWindow):
         )
 
         self.oturum_kapat()
+
+    def _yetkileri_sunucudan_al(self):
+        """Giriş yapan kullanıcının izinlerini sunucudan alır (menü bu izinlere göre çizilir).
+
+        Alınamazsa (rol önizlemesi, token yok, eski sunucu, bağlantı sorunu) elle yazılmış
+        yetki tablosuna dönülür; uygulama açılmaya devam eder.
+        """
+        rol = self.aktif_rol
+        yetkileri_temizle(rol)
+        if not self.token or self.rol_onizleme:
+            return
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/yetkilerim",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                izinler = cevap.json().get("izinler")
+                if isinstance(izinler, list):
+                    yetkileri_ayarla(rol, izinler)
+                    return
+        except Exception as e:
+            print("Yetkiler sunucudan alınamadı, yerel tablo kullanılacak:", e)
 
     def _token_bitisini_oku(self):
         """JWT bitiş zamanını zamanlayıcı için okur."""
