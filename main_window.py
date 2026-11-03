@@ -250,6 +250,83 @@ def kart_olustur():
 # ======================================================================
 #  4. ANA PENCERE
 # ======================================================================
+
+# TKYS_DASHBOARD_KOMPAKT_V1
+def _tkys_dashboard_kompakt(sayfa):
+    """Ana kontrol panelindeki karsilama alanini sadelestirir."""
+    import unicodedata
+    from PySide6.QtWidgets import QLabel
+
+    if sayfa is None or not hasattr(sayfa, "findChildren"):
+        return sayfa
+
+    def normal(metin):
+        metin = unicodedata.normalize("NFKD", str(metin))
+        return "".join(
+            h for h in metin
+            if not unicodedata.combining(h)
+        ).casefold()
+
+    etiketler = sayfa.findChildren(QLabel)
+
+    baslik = next(
+        (
+            e for e in etiketler
+            if "hos geldiniz" in normal(e.text())
+        ),
+        None
+    )
+
+    rol = next(
+        (
+            e for e in etiketler
+            if "aktif rol" in normal(e.text())
+        ),
+        None
+    )
+
+    if baslik is None or rol is None:
+        return sayfa
+
+    panel = baslik.parentWidget()
+
+    while panel is not None and panel is not sayfa:
+        if panel.isAncestorOf(rol):
+            break
+        panel = panel.parentWidget()
+    else:
+        return sayfa
+
+    for etiket in panel.findChildren(QLabel):
+        if etiket is not baslik:
+            etiket.hide()
+
+    rozet = rol
+
+    while (
+        rozet.parentWidget() is not None
+        and rozet.parentWidget() is not panel
+    ):
+        rozet = rozet.parentWidget()
+
+    rozet.hide()
+
+    baslik.setStyleSheet(
+        baslik.styleSheet()
+        + "; font-size: 22px; font-weight: 700;"
+    )
+
+    yerlesim = panel.layout()
+
+    if yerlesim is not None:
+        yerlesim.setContentsMargins(24, 8, 24, 8)
+        yerlesim.setSpacing(0)
+
+    panel.setFixedHeight(80)
+
+    return sayfa
+
+
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()
 
@@ -295,6 +372,229 @@ class AnaPencere(QMainWindow):
         self.master_stack = QStackedWidget()
         self.setCentralWidget(self.master_stack)
 
+        # Tum ekranlarda gorunen ust gezinme cubugu
+        from PySide6.QtWidgets import QToolBar, QSizePolicy
+
+        self.gezinme_cubugu = QToolBar("Gezinme", self)
+        self.gezinme_cubugu.setMovable(False)
+        self.gezinme_cubugu.setFloatable(False)
+        self.gezinme_cubugu.setStyleSheet("""
+            QToolBar {
+                background: white;
+                border: none;
+                border-bottom: 1px solid #DCE5F2;
+                padding: 6px 16px;
+                spacing: 10px;
+            }
+        """)
+
+        self.addToolBar(Qt.TopToolBarArea, self.gezinme_cubugu)
+
+        bosluk = QWidget()
+        bosluk.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Preferred
+        )
+        self.btn_menu = QPushButton("☰")
+        self.btn_menu.setCursor(Qt.PointingHandCursor)
+        self.btn_menu.setToolTip("Sol menüyü daralt / genişlet")
+        self.btn_menu.clicked.connect(self._sol_menu_degistir)
+        self.gezinme_cubugu.addWidget(self.btn_menu)
+
+        self.ust_baslik = QLabel("TKYS")
+        self.gezinme_cubugu.addWidget(self.ust_baslik)
+
+        self.gezinme_cubugu.addWidget(bosluk)
+
+
+        self.btn_bildirim = QPushButton("")
+        self.btn_bildirim.setToolTip("Tüm Bildirimler")
+        self.btn_bildirim.setCursor(Qt.PointingHandCursor)
+        self.btn_bildirim.setStyleSheet("""
+            QPushButton {
+                background: #EAF0FA;
+                color: #0A1F5C;
+                border: none;
+                border-radius: 8px;
+                padding: 9px 15px;
+                font-size: 13px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: #DCE7FA;
+            }
+        """)
+        self.btn_bildirim.clicked.connect(self._bildirim_menusunu_ac)
+        self.gezinme_cubugu.addWidget(self.btn_bildirim)
+
+        self.btn_ana_sayfa = QPushButton("🏠  Ana Sayfa")
+        self.btn_ana_sayfa.setCursor(Qt.PointingHandCursor)
+        self.btn_ana_sayfa.setToolTip("Ana kontrol paneline dön")
+        self.btn_ana_sayfa.setStyleSheet("""
+            QPushButton {
+                background: #EAF0FA;
+                color: #0A1F5C;
+                border: none;
+                border-radius: 8px;
+                padding: 9px 15px;
+                font-size: 13px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: #DCE7FA;
+            }
+        """)
+
+        self.btn_ana_sayfa.clicked.connect(self.ana_ekrana_don)
+        self.gezinme_cubugu.addWidget(self.btn_ana_sayfa)
+
+        self.gezinme_cubugu.setFixedHeight(60)
+        self.gezinme_cubugu.setStyleSheet("""
+            QToolBar {
+                background: #082B66;
+                border: none;
+                border-bottom: 2px solid #426BA5;
+                padding: 6px 16px;
+                spacing: 10px;
+            }
+        """)
+
+        # TKYS_UST_CERCEVESIZ_V1
+        # TKYS_UST_ZEMINSIZ_V1
+        ust_buton_stili = """
+QPushButton {
+    background: transparent;
+    color: white;
+    border: none;
+    border-radius: 9px;
+    padding: 0px 12px;
+    font-size: 13px;
+    font-weight: 700;
+}
+QPushButton:hover {
+    background: #30568A;
+}
+QPushButton:pressed {
+    background: #193864;
+}
+"""
+
+        self.btn_menu.setStyleSheet(
+            ust_buton_stili + """
+            QPushButton {
+                font-family: Arial;
+                font-size: 23px;
+                font-weight: 600;
+                padding: 0px;
+            }
+            """
+        )
+        self.btn_menu.setFixedSize(46, 40)
+        self.btn_menu.setText("☰")
+        self.btn_bildirim.setStyleSheet(ust_buton_stili)
+        # TKYS_UST_UCLU_KUTU_DOLU_ZIL_V1
+        self.btn_ana_sayfa.setStyleSheet("""
+            QPushButton {
+                background: #244574;
+                color: white;
+                border: 1px solid #385A87;
+                border-radius: 9px;
+                padding: 0px 12px;
+            }
+            QPushButton:hover {
+                background: #30568A;
+            }
+        """)
+        self.btn_ana_sayfa.setText("")
+
+        from PySide6.QtCore import QSize
+        from tkys_ust_ikonlar import ust_ikonu, ust_pixmap
+
+        self.btn_bildirim.setIcon(ust_ikonu("bell_outline"))
+        self.btn_bildirim.setIconSize(QSize(20, 20))
+
+        self.btn_ana_sayfa.setIcon(ust_ikonu("home"))
+        self.btn_ana_sayfa.setIconSize(QSize(20, 20))
+
+        self.ust_baslik.setStyleSheet(
+            "color: white; font-size: 17px; "
+            "font-weight: 800; padding-left: 12px;"
+        )
+
+        self.lbl_ust_kullanici = QLabel()
+        self.lbl_ust_kullanici.setStyleSheet("""
+QLabel {
+    color: white;
+    background: #244574;
+    border: 1px solid #3A5A85;
+    border-radius: 9px;
+    padding: 0px 12px;
+    font-size: 13px;
+    font-weight: 700;
+}
+""")
+        # UST_PANEL_ESIT_BOYUT_V1
+        self.btn_bildirim.setFixedHeight(40)
+        self.btn_ana_sayfa.setFixedHeight(40)
+        self.lbl_ust_kullanici.setFixedHeight(40)
+
+        self.btn_bildirim.setMinimumWidth(56)
+        self.btn_ana_sayfa.setFixedWidth(52)
+        self.lbl_ust_kullanici.setMinimumWidth(112)
+        self.lbl_ust_kullanici.setAlignment(Qt.AlignCenter)
+
+        self.ust_kullanici_kutusu = QFrame()
+        self.ust_kullanici_kutusu.setObjectName("ustKullaniciKutusu")
+        self.ust_kullanici_kutusu.setFixedHeight(40)
+        self.ust_kullanici_kutusu.setMinimumWidth(124)
+
+        self.ust_kullanici_kutusu.setStyleSheet("""
+            QFrame#ustKullaniciKutusu {
+                background: #244574;
+                border: 1px solid #385A87;
+                border-radius: 9px;
+            }
+        """)
+
+        self.ust_kullanici_layout = QHBoxLayout(
+            self.ust_kullanici_kutusu
+        )
+        self.ust_kullanici_layout.setContentsMargins(12, 0, 14, 0)
+        self.ust_kullanici_layout.setSpacing(5)
+        self.lbl_ust_kullanici.setAlignment(
+            Qt.AlignLeft | Qt.AlignVCenter
+        )
+
+        self.lbl_ust_kullanici_ikon = QLabel()
+        self.lbl_ust_kullanici_ikon.setPixmap(
+            ust_pixmap("user", 20)
+        )
+        self.lbl_ust_kullanici_ikon.setFixedSize(20, 20)
+        self.lbl_ust_kullanici_ikon.setStyleSheet(
+            "background: transparent; border: none;"
+        )
+
+        self.lbl_ust_kullanici.setStyleSheet("""
+            color: white;
+            background: transparent;
+            border: none;
+            padding: 0px;
+            font-size: 13px;
+            font-weight: 700;
+        """)
+        self.lbl_ust_kullanici.setMinimumWidth(0)
+
+        self.ust_kullanici_layout.addWidget(
+            self.lbl_ust_kullanici_ikon
+        )
+        self.ust_kullanici_layout.addWidget(
+            self.lbl_ust_kullanici
+        )
+
+        self.gezinme_cubugu.addWidget(
+            self.ust_kullanici_kutusu
+        )
+
         # INDEX 0: Normal Dashboard (Sol Menü + Sağ İçerik)
         ana_widget = QWidget()
         self.master_stack.addWidget(ana_widget)
@@ -323,6 +623,8 @@ class AnaPencere(QMainWindow):
 
         # ---------------- SOL MENÜ ----------------
         sidebar = QWidget()
+        self.sidebar = sidebar
+        self._sol_menu_dar = False
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(280)
         sb = QVBoxLayout(sidebar)
@@ -330,6 +632,7 @@ class AnaPencere(QMainWindow):
         sb.setSpacing(6)
 
         logo = QFrame()
+        self.logo_karti = logo
         logo.setObjectName("logo")
         ll = QVBoxLayout(logo)
         ll.setContentsMargins(18, 14, 18, 14)
@@ -354,6 +657,7 @@ class AnaPencere(QMainWindow):
         sb.addWidget(self.nav_scroll, 1)
 
         rol_kart = QFrame()
+        self.rol_karti = rol_kart
         rol_kart.setObjectName("rolKart")
         rk = QVBoxLayout(rol_kart)
         rk.setContentsMargins(14, 12, 14, 12)
@@ -370,6 +674,7 @@ class AnaPencere(QMainWindow):
         sb.addWidget(rol_kart)
 
         btn_cikis = QPushButton("⏻   Oturumu Kapat")
+        self.btn_cikis = btn_cikis
         btn_cikis.setObjectName("cikis")
         btn_cikis.setCursor(Qt.PointingHandCursor)
         btn_cikis.clicked.connect(self.oturum_kapat)
@@ -414,9 +719,252 @@ class AnaPencere(QMainWindow):
         self.sayfa_bilgi = []
         self.rol_uygula(self.aktif_rol)
 
+        self._bildirim_timer = QTimer(self)
+        self._bildirim_timer.setInterval(60000)
+        self._bildirim_timer.timeout.connect(self._bildirimleri_yenile)
+        self._bildirim_timer.start()
+
+        QTimer.singleShot(0, self._bildirimleri_yenile)
+        if self.rol_onizleme:
+            self.combo_rol.currentIndexChanged.connect(
+                lambda _: QTimer.singleShot(
+                    0, self._bildirimleri_yenile
+                )
+            )
+
+
     # ------------------------------------------------------------------
+
+    def _bildirimleri_yenile(self):
+        """Yalnizca erisilebilir bildirimleri yukler."""
+        if getattr(self, "_oturum_kapatiliyor", False):
+            return
+
+        self._bildirimler = []
+        self._bildirim_sayisi = 0
+        self._bildirim_hata = False
+
+        def getir(yol):
+            try:
+                yanit = oturum_kontrollu_istek(
+                    "GET",
+                    f"{self.api_url}{yol}",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    timeout=5
+                )
+
+                if oturum_hatasi_mi(yanit):
+                    self._bildirim_hata = True
+                    return None
+
+                if yanit.status_code == 403:
+                    return None
+
+                yanit.raise_for_status()
+                return yanit.json()
+
+            except (requests.RequestException, ValueError):
+                self._bildirim_hata = True
+                return None
+
+        if "Cihaz Envanteri" in self.nav_btnler:
+            ozet = getir("/api/dashboard/ozet")
+
+            if isinstance(ozet, dict):
+                ariza = int(ozet.get("acik_ariza_sayisi", 0) or 0)
+
+                if ariza > 0:
+                    hedef = (
+                        "Arıza Kayıtları"
+                        if "Arıza Kayıtları" in self.nav_btnler
+                        else "Cihaz Envanteri"
+                    )
+                    self._bildirimler.append((
+                        "Cihaz Uyarıları",
+                        f"⚠️ {ariza} açık arıza kaydı çözüm bekliyor.",
+                        hedef
+                    ))
+                    self._bildirim_sayisi += 1
+
+            islemler = getir("/api/dashboard/yaklasan-islemler")
+
+            if isinstance(islemler, list):
+                for islem in islemler:
+                    gun = islem.get("kalan_gun")
+
+                    if not isinstance(gun, (int, float)) or gun > 15:
+                        continue
+
+                    metin = (
+                        f"🔧 {islem.get('cihaz_adi', 'Cihaz')} — "
+                        f"{islem.get('islem_turu', 'İşlem')} "
+                        f"({gun} gün)"
+                    )
+
+                    self._bildirimler.append((
+                        "Cihaz Uyarıları", metin, "Cihaz Envanteri"
+                    ))
+                    self._bildirim_sayisi += 1
+
+        if "Danışma Masası Yönetimi" in self.nav_btnler:
+            veri = getir("/api/danisma/yonetim/onay-bildirimleri")
+
+            if isinstance(veri, dict):
+                toplam = int(veri.get("toplam", 0) or 0)
+                oturumlar = veri.get("oturumlar", [])
+
+                self._bildirim_sayisi += toplam
+
+                for oturum in oturumlar:
+                    self._bildirimler.append((
+                        "Danışma Masası",
+                        f"📋 {oturum.get('ad_soyad', 'Öğrenci')} "
+                        f"— Görev onayı bekliyor",
+                        "Danışma Masası Yönetimi"
+                    ))
+
+                if toplam > len(oturumlar):
+                    self._bildirimler.append((
+                        "Danışma Masası",
+                        f"… ve {toplam - len(oturumlar)} bekleyen görev daha",
+                        "Danışma Masası Yönetimi"
+                    ))
+
+        sayi = self._bildirim_sayisi
+
+        if self._bildirim_hata:
+            self.btn_bildirim.setText(
+                f"{sayi} !" if sayi else "!"
+            )
+        else:
+            self.btn_bildirim.setText(
+                str(sayi) if sayi else ""
+            )
+
+        # TKYS_BILDIRIM_VURGU_V2
+        if self._bildirim_hata:
+            arka_plan = "#80511E"
+            cerceve = "#E6A64A"
+            hover = "#956028"
+
+        elif self._bildirim_sayisi > 0:
+            arka_plan = "#244574"
+            cerceve = "#648DBB"
+            hover = "#315D96"
+
+        else:
+            arka_plan = "#244574"
+            cerceve = "#3A5A85"
+            hover = "#30568A"
+
+        self.btn_bildirim.setStyleSheet(f"""
+            QPushButton {{
+                background: {arka_plan};
+                color: white;
+                border: 1px solid {cerceve};
+                border-radius: 9px;
+                padding: 0px 12px;
+                font-size: 13px;
+                font-weight: 700;
+            }}
+
+            QPushButton:hover {{
+                background: {hover};
+            }}
+        """)
+
+        # TKYS_DINAMIK_ZIL_V1
+        from tkys_ust_ikonlar import ust_ikonu
+
+        ikon_adi = (
+            "bell" if self._bildirim_sayisi > 0
+            else "bell_outline"
+        )
+
+        self.btn_bildirim.setIcon(ust_ikonu(ikon_adi))
+
+    def _bildirimden_sayfaya_git(self, sayfa_adi):
+        """Bildirimin ilgili oldugu mevcut modulu acar."""
+        btn = self.nav_btnler.get(sayfa_adi)
+
+        if btn is None:
+            return
+
+        for idx, (ad, _) in enumerate(self.sayfa_bilgi):
+            if ad == sayfa_adi:
+                self.sayfa_ac(idx)
+                btn.setChecked(True)
+                return
+
+    def _bildirim_menusunu_ac(self):
+        """Modern merkezi bildirim panelini acar."""
+        from bildirim_paneli import BildirimPaneli
+
+        onceki = getattr(self, "_bildirim_popup", None)
+
+        if onceki is not None and onceki.isVisible():
+            onceki.close()
+            return
+
+        self._bildirimleri_yenile()
+
+        if getattr(self, "_oturum_kapatiliyor", False):
+            return
+
+        panel = BildirimPaneli(
+            bildirimler=self._bildirimler,
+            toplam=self._bildirim_sayisi,
+            hata=self._bildirim_hata,
+            sayfa_ac=self._bildirimden_sayfaya_git,
+            parent=self
+        )
+
+        self._bildirim_popup = panel
+
+        ekran = self.screen().availableGeometry()
+
+        sag = self.mapToGlobal(self.rect().topRight()).x() - 14
+        x = max(
+            ekran.left() + 8,
+            min(sag - panel.width(), ekran.right() - panel.width() - 8)
+        )
+
+        alt = self.gezinme_cubugu.mapToGlobal(
+            self.gezinme_cubugu.rect().bottomLeft()
+        ).y()
+
+        y = max(
+            ekran.top() + 8,
+            min(alt + 4, ekran.bottom() - panel.height() - 8)
+        )
+
+        panel.move(x, y)
+        panel.show()
+
+
+
+    def _sol_menu_degistir(self):
+        """Sol menuyu daraltir veya genisletir."""
+        self._sol_menu_dar = not self._sol_menu_dar
+        self._sol_menu_gorunumunu_uygula()
+
+    def _sol_menu_gorunumunu_uygula(self):
+        sidebar = getattr(self, "_sidebar_elegant", None)
+        if sidebar is not None:
+            sidebar.refresh()
+
     def rol_uygula(self, rol):
+        from tkys_logo_widget import sol_panel_logosu_kur
+        sol_panel_logosu_kur(self)
+        old_sidebar = getattr(self, "_sidebar_elegant", None)
+        if old_sidebar is not None:
+            if old_sidebar.popup is not None:
+                old_sidebar.popup.close()
+            old_sidebar.deleteLater()
+            self._sidebar_elegant = None
         self.aktif_rol = rol
+        kullanici = self.kullanici_adi or ROL_BILGI[rol]["ad"]
+        self.lbl_ust_kullanici.setText(str(kullanici))
         info = ROL_BILGI[rol]
         self.setWindowTitle(f"TKYS — Travma Kaynak Yönetim Sistemi  [{info['ad'].upper()} OTURUMU]")
         if self.kullanici_adi:
@@ -458,6 +1006,8 @@ class AnaPencere(QMainWindow):
                 self.sayfa_bilgi.append((oge["ad"], oge.get("aciklama", info["aciklama"])))
 
                 btn = QPushButton(f"{oge['ikon']}   {oge['ad']}")
+                btn.setProperty("tkys_ikon", oge["ikon"])
+                btn.setToolTip(oge["ad"])
                 btn.setObjectName("nav")
                 btn.setCheckable(True)
                 btn.setCursor(Qt.PointingHandCursor)
@@ -468,14 +1018,16 @@ class AnaPencere(QMainWindow):
                 if ilk_btn is None:
                     ilk_btn = btn
         self.nav_layout.addStretch()
+        from tkys_sidebar_refined import ElegantSidebar
+        self._sidebar_elegant = ElegantSidebar(self)  # TKYS_ELEGANT_MENU_2026
+        self._sol_menu_gorunumunu_uygula()
 
         if ilk_btn:
             ilk_btn.setChecked(True)
             self.sayfa_ac(0)
 
         aktif = sum(1 for a in IZIN if izin_var(rol, a))
-        self.statusBar().showMessage(
-            f"Sistem Çevrim İçi  |  Güvenlik Denetimi: Başarılı  |  Aktif Oturum: {info['ad']}  |  Yetki: {aktif}/{len(IZIN)}")
+        self.statusBar().hide()
 
     def _api_token_reddedildi(self, token, neden):
         """Yalnizca aktif oturumun token hatasini isler."""
@@ -835,7 +1387,7 @@ class AnaPencere(QMainWindow):
 
         # Bu satırlar if bloğunun DIŞINDA olmalı.
         lay.addStretch()
-        return self.kaydirmali(govde)
+        return _tkys_dashboard_kompakt(self.kaydirmali(govde))
 
     # ---------------- EKRANLAR: BUTONLARIN DİNAMİK EKLENDİĞİ YER ----------------
     def sayfa_modul(self, oge):
@@ -866,6 +1418,17 @@ class AnaPencere(QMainWindow):
         mt.addWidget(m2)
 
         yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
+
+        if oge["ad"] == "Danışma Masası Yönetimi":
+            danisma_islemleri = [
+                ("Görev Onaylama", "Danışma masası yönetimi"),
+                ("Görev Düzenleme", "Danışma masası yönetimi"),
+            ]
+            yetkili.extend(
+                a for a in danisma_islemleri
+                if izin_var(rol, a[1])
+            )
+
         if yetkili:
             rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
             rozet.setObjectName("rozetYetki")
