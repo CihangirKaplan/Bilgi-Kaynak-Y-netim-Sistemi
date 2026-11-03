@@ -12,10 +12,11 @@ def test_cihaz_rezervasyon_cakismasi_http_409():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
-    # Cihaz uygun, mevcut rezervasyon görünmüyor,
+    # Cihaz uygun, planlı bakım/kalibrasyon yok, mevcut rezervasyon görünmüyor,
     # kullanıcıya ait personel kaydı bulunuyor.
     mock_cursor.fetchone.side_effect = [
         ("Kullanima_Hazir",),
+        None,
         None,
         (1,),
     ]
@@ -285,8 +286,10 @@ def test_deadlock_sonrasi_yeniden_deneme():
     mock_cursor.fetchone.side_effect = [
         ("Kullanima_Hazir",),
         None,
+        None,
         (1,),
         ("Kullanima_Hazir",),
+        None,
         None,
         (1,),
         (42,),
