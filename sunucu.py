@@ -1469,7 +1469,25 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
 
             cursor.execute("SELECT 1 FROM cihaz_rezervasyonlari WHERE cihaz_id = %s AND iptal_edildi_mi = FALSE AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani))
             if cursor.fetchone():
-                raise HTTPException(status_code=409, detail="Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş.")
+                cursor.execute(
+                    """
+                    SELECT r.rezervasyon_id, r.baslangic_zamani, r.bitis_zamani, COALESCE(k.kullanici_adi, '-')
+                    FROM cihaz_rezervasyonlari r
+                    LEFT JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
+                    LEFT JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+                    WHERE r.cihaz_id = %s AND r.iptal_edildi_mi = FALSE
+                      AND r.baslangic_zamani < %s AND r.bitis_zamani > %s
+                    ORDER BY r.baslangic_zamani;
+                    """,
+                    (rez.cihaz_id, rez.bitis_zamani, rez.baslangic_zamani),
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail=rezervasyon_cakisma_detayi(
+                        "Cihaz seçilen saat aralığında zaten başka bir iş için rezerve edilmiş.",
+                        cursor.fetchall(),
+                    ),
+                )
 
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
             pers = cursor.fetchone()
@@ -1746,6 +1764,62 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
 # BAKIM YÖNETİMİ MODÜLÜ (MNT-001, MNT-002)
 # ==========================================
 
+# ==========================================
+# REZERVASYON ÇAKIŞMASI (bakım/kalibrasyon ve yeni rezervasyon)
+# ==========================================
+REZERVASYON_CAKISMA_KODU = "REZERVASYON_CAKISMASI"
+
+
+def rezervasyon_cakisma_detayi(mesaj, kayitlar):
+    """409 yanıtı gövdesi: istemci çakışan rezervasyonları tek tek gösterip iptal ettirebilsin."""
+    return {
+        "kod": REZERVASYON_CAKISMA_KODU,
+        "mesaj": mesaj,
+        "rezervasyonlar": [
+            {
+                "rezervasyon_id": k[0],
+                "baslangic": k[1].isoformat(),
+                "bitis": k[2].isoformat(),
+                "rezerve_eden": k[3],
+            }
+            for k in kayitlar
+        ],
+    }
+
+
+def cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis):
+    """Bakım/kalibrasyon tarih aralığıyla (başlangıç ve bitiş günü dahil) kesişen, henüz bitmemiş
+    aktif cihaz rezervasyonu varsa 409 + rezervasyon listesi döner.
+
+    Rezervasyonları sunucu kendiliğinden iptal etmez; istemci her birini kullanıcıya gösterir,
+    kullanıcı tek tek iptal eder (iptal ucu denetim kaydı yazar) ve işlemi yeniden dener.
+    Geçmişte kalmış rezervasyonlar çakışma sayılmaz.
+    """
+    cursor.execute(
+        """
+        SELECT r.rezervasyon_id, r.baslangic_zamani, r.bitis_zamani, COALESCE(k.kullanici_adi, '-')
+        FROM cihaz_rezervasyonlari r
+        LEFT JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
+        LEFT JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+        WHERE r.cihaz_id = %s
+          AND COALESCE(r.iptal_edildi_mi, FALSE) = FALSE
+          AND r.bitis_zamani > NOW()
+          AND r.baslangic_zamani < (%s::date + 1)
+          AND r.bitis_zamani > %s::date
+        ORDER BY r.baslangic_zamani;
+        """,
+        (cihaz_id, bitis, baslangic),
+    )
+    kayitlar = cursor.fetchall()
+    if kayitlar:
+        raise HTTPException(
+            status_code=409,
+            detail=rezervasyon_cakisma_detayi(
+                f"Bu tarihlerde cihaz için {len(kayitlar)} aktif rezervasyon var.", kayitlar
+            ),
+        )
+
+
 @app.get("/api/bakimlar")
 def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     conn = None
@@ -1796,6 +1870,10 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
+        cakisan_rezervasyonlari_denetle(
+            cursor, bakim.cihaz_id, bakim.bakim_baslangic_tarihi, bakim.bakim_bitis_tarihi
+        )
+
         cursor.execute("""
             INSERT INTO cihaz_bakimlari (
                 cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
@@ -1819,6 +1897,9 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
 
         conn.commit()
         return {"durum": "basarili", "bakim_id": bakim_id}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -1841,6 +1922,23 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
         if not degisiklikler:
             raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
+
+        # Tarih aralığı değiştiyse, yeni aralıkla kesişen rezervasyonlar kullanıcıya gösterilir.
+        if "bakim_baslangic_tarihi" in degisiklikler or "bakim_bitis_tarihi" in degisiklikler:
+            cursor.execute(
+                """
+                SELECT cihaz_id, COALESCE(bakim_baslangic_tarihi, bakim_tarihi::date),
+                       COALESCE(bakim_bitis_tarihi, bakim_tarihi::date)
+                FROM cihaz_bakimlari WHERE bakim_id = %s;
+                """,
+                (bakim_id,),
+            )
+            cihaz_id, mevcut_bas, mevcut_bit = cursor.fetchone()
+            baslangic = degisiklikler.get("bakim_baslangic_tarihi") or mevcut_bas
+            bitis = degisiklikler.get("bakim_bitis_tarihi") or mevcut_bit
+            # Yalnızca tarih aralığı gerçekten değiştiyse kontrol edilir (not/maliyet düzenlemesinde değil).
+            if baslangic is not None and bitis is not None and (baslangic, bitis) != (mevcut_bas, mevcut_bit):
+                cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis)
 
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())
@@ -1943,6 +2041,10 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
+        cakisan_rezervasyonlari_denetle(
+            cursor, kalib.cihaz_id, kalib.kalibrasyon_baslangic_tarihi, kalib.kalibrasyon_bitis_tarihi
+        )
+
         # INSERT sorgusuna ve VALUES kısmına yeni sütunlar eklendi
         cursor.execute("""
             INSERT INTO cihaz_kalibrasyonlari (
@@ -1965,6 +2067,9 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon başarıyla eklendi.", "kalibrasyon_id": kalibrasyon_id}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -1987,6 +2092,21 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
         if not degisiklikler:
             raise HTTPException(status_code=422, detail="Değişiklik yok.")
+
+        # Tarih aralığı değiştiyse, yeni aralıkla kesişen rezervasyonlar kullanıcıya gösterilir.
+        if "kalibrasyon_baslangic_tarihi" in degisiklikler or "kalibrasyon_bitis_tarihi" in degisiklikler:
+            cursor.execute(
+                """
+                SELECT cihaz_id, kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi
+                FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s;
+                """,
+                (kalibrasyon_id,),
+            )
+            cihaz_id, mevcut_bas, mevcut_bit = cursor.fetchone()
+            baslangic = degisiklikler.get("kalibrasyon_baslangic_tarihi") or mevcut_bas
+            bitis = degisiklikler.get("kalibrasyon_bitis_tarihi") or mevcut_bit
+            if baslangic is not None and bitis is not None and (baslangic, bitis) != (mevcut_bas, mevcut_bit):
+                cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis)
 
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())

@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -12,6 +13,13 @@ from api_yoneticisi import (
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
                             yenile_butonu_olustur, bos_mesaj_olustur)
+
+KALIBRASYON_CAKISMA_METINLERI = (
+    "Bu tarihlerde rezervasyon var",
+    "Cihaz bu tarihlerde kalibrasyonda olacağı için aşağıdaki rezervasyonlarla çakışıyor. "
+    "Kalibrasyonu kaydetmek için gerekli olanları iptal edebilirsiniz.",
+    "Kalibrasyonu kaydet",
+)
 
 class YeniKalibrasyonFormu(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -85,8 +93,8 @@ class YeniKalibrasyonFormu(QDialog):
             return
 
         try:
-            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/kalibrasyonlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            res = cakisma_cozumlu_istek(self, "POST", f"{self.api_url}/api/kalibrasyonlar", veri, {"Authorization": f"Bearer {self.token}"}, *KALIBRASYON_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
                 QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla eklendi.")
@@ -159,8 +167,8 @@ class KalibrasyonDuzenleFormu(QDialog):
             return
 
         try:
-            res = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/kalibrasyonlar/{self.k_veri['kalibrasyon_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            res = cakisma_cozumlu_istek(self, "PUT", f"{self.api_url}/api/kalibrasyonlar/{self.k_veri['kalibrasyon_id']}", veri, {"Authorization": f"Bearer {self.token}"}, *KALIBRASYON_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla güncellendi.")

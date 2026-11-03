@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -12,6 +13,13 @@ from api_yoneticisi import (
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
                             yenile_butonu_olustur, bos_mesaj_olustur)
+
+BAKIM_CAKISMA_METINLERI = (
+    "Bu tarihlerde rezervasyon var",
+    "Cihaz bu tarihlerde bakımda olacağı için aşağıdaki rezervasyonlarla çakışıyor. "
+    "Bakımı kaydetmek için gerekli olanları iptal edebilirsiniz.",
+    "Bakımı kaydet",
+)
 
 class YeniBakimFormu(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -106,8 +114,8 @@ class YeniBakimFormu(QDialog):
             return
 
         try:
-            res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/bakimlar", json=veri, headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            res = cakisma_cozumlu_istek(self, "POST", f"{self.api_url}/api/bakimlar", veri, {"Authorization": f"Bearer {self.token}"}, *BAKIM_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
                 QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
@@ -206,8 +214,8 @@ class BakimDuzenleFormu(QDialog):
             return
 
         try:
-            res = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/bakimlar/{self.bakim_verisi['bakim_id']}", json=veri, headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            res = cakisma_cozumlu_istek(self, "PUT", f"{self.api_url}/api/bakimlar/{self.bakim_verisi['bakim_id']}", veri, {"Authorization": f"Bearer {self.token}"}, *BAKIM_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
