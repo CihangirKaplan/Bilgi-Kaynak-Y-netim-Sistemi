@@ -2904,6 +2904,66 @@ def danisma_oturum_gecmisi(
 # DANIŞMA MASASI YÖNETİMİ
 # ==========================================
 
+
+@app.get("/api/danisma/yonetim/onay-bildirimleri")
+def danisma_onay_bildirimleri(
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    """Tamamlanmis ve onay bekleyen danisma masasi gorevleri."""
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM danisma_masasi_oturumlari
+            WHERE bitis_zamani IS NOT NULL
+              AND COALESCE(onaylandi_mi, FALSE) = FALSE;
+        """)
+
+        toplam = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT
+                d.oturum_id,
+                o.ad_soyad,
+                d.bitis_zamani
+            FROM danisma_masasi_oturumlari d
+            JOIN ogrenciler o
+                ON d.ogrenci_id = o.ogrenci_id
+            WHERE d.bitis_zamani IS NOT NULL
+              AND COALESCE(d.onaylandi_mi, FALSE) = FALSE
+            ORDER BY d.bitis_zamani DESC
+            LIMIT 10;
+        """)
+
+        kayitlar = cursor.fetchall()
+
+        return {
+            "toplam": toplam,
+            "oturumlar": [
+                {
+                    "oturum_id": kayit[0],
+                    "ad_soyad": kayit[1],
+                    "bitis_zamani": kayit[2].isoformat()
+                }
+                for kayit in kayitlar
+            ]
+        }
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
 @app.get("/api/danisma/yonetim/oturumlar")
 def danisma_yonetim_oturumlari(
     kullanici_id: int = Depends(
