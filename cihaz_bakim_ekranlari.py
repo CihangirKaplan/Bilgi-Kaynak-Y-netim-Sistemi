@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate
 import requests
 from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
+from tekrar_uyari_alanlari import TekrarUyariAlanlari
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -61,6 +62,10 @@ class YeniBakimFormu(QDialog):
         form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
         form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim)
 
+        # Tekrar aralığı seçilince sonraki tarih kendiliğinden hesaplanır; uyarı süresi zil/dashboard içindir.
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım", varsayilan_ay=6)
+        self.tekrar.satirlari_ekle(form_layout)
+
         layout.addLayout(form_layout)
 
         btn_kaydet = QPushButton("Kaydet")
@@ -106,7 +111,8 @@ class YeniBakimFormu(QDialog):
             "maliyet": maliyet,
             "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
-            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd")
+            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
@@ -176,6 +182,11 @@ class BakimDuzenleFormu(QDialog):
         form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
         form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim)
 
+        # Kayıtlı tarih korunur ("Elle gireceğim"); aralık seçilirse bitişe göre yeniden hesaplanır.
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım",
+                                          uyari_suresi=bakim_verisi.get("uyari_suresi_gun", 30))
+        self.tekrar.satirlari_ekle(form_layout)
+
         layout.addLayout(form_layout)
 
         btn_kaydet = QPushButton("Değişiklikleri Kaydet")
@@ -206,7 +217,8 @@ class BakimDuzenleFormu(QDialog):
             "maliyet": maliyet,
             "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
-            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd")
+            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
