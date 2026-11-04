@@ -38,7 +38,7 @@ def test_varsayilan_secim_sonraki_tarihi_bitisten_hesaplar(qt_app):
     bitis, sonraki, t = alanlar(ay=6)
     assert t.secili_ay() == 6
     assert sonraki.date() == QDate(2026, 9, 10)
-    assert sonraki.isHidden()                              # tarih kutusu yalnızca 'Tarih seç'te açılır
+    assert not sonraki.isEnabled()                         # ay düğmesinde tarih kilitli, yerinde görünür
     assert "10.09.2026" in t.lbl_sonuc.text() and "6 ay" in t.lbl_sonuc.text()
     bitis.setDate(QDate(2026, 4, 30))                      # bitiş değişince sonraki de kayar
     assert sonraki.date() == QDate(2026, 10, 30)
@@ -56,16 +56,16 @@ def test_dugme_secilince_hesaplanir(qt_app):
 def test_tarih_sec_kutuyu_acar_ve_tarih_ezilmez(qt_app):
     bitis, sonraki, t = alanlar(ay=6)
     t.butonlar[None].click()                               # "Tarih seç"
-    assert not sonraki.isHidden() and t.secili_ay() is None
+    assert sonraki.isEnabled() and t.secili_ay() is None
     sonraki.setDate(QDate(2026, 12, 1))
     bitis.setDate(QDate(2026, 5, 5))                       # artık otomatik hesap yok
     assert sonraki.date() == QDate(2026, 12, 1)
-    assert t.lbl_sonuc.text() == ""
+    assert "kutudan seçin" in t.lbl_sonuc.text()
 
 
 def test_kayitli_tarih_korunur_ve_uyari_dolar(qt_app):
     bitis, sonraki, t = alanlar(ay=None, uyari=45)
-    assert t.secili_ay() is None and not sonraki.isHidden()
+    assert t.secili_ay() is None and sonraki.isEnabled()
     assert sonraki.date() == QDate(2026, 9, 10)
     assert t.uyari_suresi() == 45                          # listede olmayan değer de gösterilir
     bitis.setDate(QDate(2026, 4, 1))
