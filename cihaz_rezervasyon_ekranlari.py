@@ -31,6 +31,24 @@ REZERVASYON_CAKISMA_METINLERI = (
     "Rezervasyonu yeniden dene",
 )
 
+
+def varsayilan_rezervasyon_zamanlari(simdi=None):
+    simdi = simdi if simdi is not None else QDateTime.currentDateTime()
+
+    dakika = simdi.time().hour() * 60 + simdi.time().minute()
+    sonraki = max(8 * 60, (dakika // 30 + 1) * 30)
+
+    # Son uygun baslangic 17:30; bitis 18:30 olabilir.
+    if sonraki > 17 * 60 + 30:
+        return simdi.date().addDays(1), "08:00", "09:00"
+
+    baslangic = f"{sonraki // 60:02d}:{sonraki % 60:02d}"
+    bitis_dakika = sonraki + 60
+    bitis = f"{bitis_dakika // 60:02d}:{bitis_dakika % 60:02d}"
+
+    return simdi.date(), baslangic, bitis
+
+
 class YeniRezervasyonFormu(QDialog):
     """Yeni Cihaz Rezervasyonu Oluşturma Ekranı (VIP UX Sürümü)"""
     def __init__(self, api_url, token, parent=None):
@@ -59,6 +77,10 @@ class YeniRezervasyonFormu(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(15) # Satırlar arasına nefes alacak boşluk ekledik
 
+        varsayilan_tarih, baslangic_saati, bitis_saati = (
+            varsayilan_rezervasyon_zamanlari()
+        )
+
         # 1. Cihaz Seçimi
         self.cmb_cihaz = QComboBox()
         
@@ -70,21 +92,23 @@ class YeniRezervasyonFormu(QDialog):
 
         # 3. Başlangıç Zamanı (Takvim + Saat Kutusu Yanyana)
         layout_baslangic = QHBoxLayout()
-        self.dt_baslangic_tarih = QDateEdit(QDate.currentDate())
+        self.dt_baslangic_tarih = QDateEdit(varsayilan_tarih)
+        self.dt_baslangic_tarih.setMinimumDate(QDate.currentDate())
         self.dt_baslangic_tarih.setCalendarPopup(True) # Efsanevi Takvim Pop-up'ı
         self.cmb_baslangic_saat = QComboBox()
         self.cmb_baslangic_saat.addItems(saatler)
-        self.cmb_baslangic_saat.setCurrentText("09:00")
+        self.cmb_baslangic_saat.setCurrentText(baslangic_saati)
         layout_baslangic.addWidget(self.dt_baslangic_tarih, stretch=2)
         layout_baslangic.addWidget(self.cmb_baslangic_saat, stretch=1)
 
         # 4. Bitiş Zamanı (Takvim + Saat Kutusu Yanyana)
         layout_bitis = QHBoxLayout()
-        self.dt_bitis_tarih = QDateEdit(QDate.currentDate())
+        self.dt_bitis_tarih = QDateEdit(varsayilan_tarih)
+        self.dt_bitis_tarih.setMinimumDate(QDate.currentDate())
         self.dt_bitis_tarih.setCalendarPopup(True)
         self.cmb_bitis_saat = QComboBox()
         self.cmb_bitis_saat.addItems(saatler)
-        self.cmb_bitis_saat.setCurrentText("10:00")
+        self.cmb_bitis_saat.setCurrentText(bitis_saati)
         layout_bitis.addWidget(self.dt_bitis_tarih, stretch=2)
         layout_bitis.addWidget(self.cmb_bitis_saat, stretch=1)
 
@@ -172,6 +196,27 @@ class YeniRezervasyonFormu(QDialog):
         bit_tarih = self.dt_bitis_tarih.date().toString("yyyy-MM-dd")
         bit_saat = self.cmb_bitis_saat.currentText()
         bit_iso = f"{bit_tarih}T{bit_saat}:00"
+
+        bas_dt = QDateTime.fromString(
+            f"{bas_tarih} {bas_saat}", "yyyy-MM-dd HH:mm"
+        )
+        bit_dt = QDateTime.fromString(
+            f"{bit_tarih} {bit_saat}", "yyyy-MM-dd HH:mm"
+        )
+
+        if bas_dt <= QDateTime.currentDateTime():
+            QMessageBox.warning(
+                self, "Geçersiz Tarih",
+                "Rezervasyon başlangıç zamanı geçmişte olamaz."
+            )
+            return
+
+        if bit_dt <= bas_dt:
+            QMessageBox.warning(
+                self, "Geçersiz Tarih",
+                "Bitiş zamanı başlangıçtan sonra olmalıdır."
+            )
+            return
 
         veri = {
             "cihaz_id": cihaz_id,

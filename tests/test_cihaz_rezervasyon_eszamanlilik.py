@@ -9,6 +9,14 @@ from sunucu import cihaz_rezervasyonu_yap
 
 
 def test_cihaz_rezervasyon_cakismasi_http_409():
+
+    from datetime import datetime, timedelta
+
+    baslangic = (datetime.now() + timedelta(days=7)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
+    bitis = baslangic + timedelta(hours=1)
+
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
@@ -31,8 +39,8 @@ def test_cihaz_rezervasyon_cakismasi_http_409():
     rezervasyon = RezervasyonOlusturModeli(
         cihaz_id=1,
         kullanilacak_oda_id=None,
-        baslangic_zamani="2026-10-22T10:00:00",
-        bitis_zamani="2026-10-22T11:00:00",
+        baslangic_zamani=baslangic,
+        bitis_zamani=bitis,
         proje_turu="Test",
         proje_adi_aciklamasi="Issue 115 HTTP 409 testi",
     )
@@ -277,6 +285,14 @@ def test_gercek_eszamanli_cihaz_rezervasyonu():
 
 
 def test_deadlock_sonrasi_yeniden_deneme():
+
+    from datetime import datetime, timedelta
+
+    baslangic = (datetime.now() + timedelta(days=7)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
+    bitis = baslangic + timedelta(hours=1)
+
     from psycopg2.errors import DeadlockDetected
 
     mock_conn = MagicMock()
@@ -306,8 +322,8 @@ def test_deadlock_sonrasi_yeniden_deneme():
     rezervasyon = RezervasyonOlusturModeli(
         cihaz_id=1,
         kullanilacak_oda_id=None,
-        baslangic_zamani="2026-10-22T10:00:00",
-        bitis_zamani="2026-10-22T11:00:00",
+        baslangic_zamani=baslangic,
+        bitis_zamani=bitis,
         proje_turu="Test",
         proje_adi_aciklamasi="Deadlock yeniden deneme testi",
     )
