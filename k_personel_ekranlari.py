@@ -183,10 +183,6 @@ ROL_ID_ADLARI = {
     1: "PSIKOLOG", 2: "MEMUR", 3: "MUDUR",
     4: DANISMA_OGRENCISI, 5: "PROJE_ASISTANI", 6: "ADMIN",
 }
-ROL_KODLARI = {
-    "PSIKOLOG": "PSK", "MEMUR": "MEM", "MUDUR": "MUD",
-    DANISMA_OGRENCISI: "OGR", "PROJE_ASISTANI": "AST", "ADMIN": "ADM",
-}
 
 # "Bu rol neler yapabilir?" özetinde izinler, kullanıcının tanıdığı başlıklar altında gösterilir.
 # (başlık, simge, izin adı önekleri). Eşleşmeyen izinler "Diğer" altında toplanır.
@@ -292,28 +288,6 @@ FORM_STIL = """
 """
 
 
-def personel_kodu_uret(api_url, token, rol_adi):
-    """Rol için sıradaki personel kodunu üretir (örn. PER-OGR-003)."""
-    rol_kodu = ROL_KODLARI.get(rol_adi, "SYS")
-    siradaki_sayi = 1
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        cevap = oturum_kontrollu_istek("GET", f"{api_url}/api/personel", headers=headers, timeout=5)
-        if cevap.status_code == 200 and not oturum_hatasi_mi(cevap):
-            onek = f"PER-{rol_kodu}-"
-            sayilar = []
-            for p in cevap.json():
-                kod = p.get("personel_kodu", "")
-                if kod.startswith(onek):
-                    try:
-                        sayilar.append(int(kod.split("-")[-1]))
-                    except ValueError:
-                        pass
-            if sayilar:
-                siradaki_sayi = max(sayilar) + 1
-    except Exception as e:
-        print("Otomatik numara hesaplanırken hata:", e)
-    return f"PER-{rol_kodu}-{siradaki_sayi:03d}"
 
 
 def sunucu_hata_mesaji(cevap, varsayilan):
@@ -334,24 +308,6 @@ def sunucu_hata_mesaji(cevap, varsayilan):
     return varsayilan
 
 
-def personel_ata(api_url, token, kullanici_id, personel_kodu, ogrenci=None):
-    """Kullanıcıyı personel olarak atar. Danışma öğrencisi için öğrenci bilgisi de gönderilir.
-
-    Dönüş: (basarili, mesaj). Oturum sona erdiyse merkezi sistem çıkışı yönetir: (None, "").
-    """
-    veri = {"kullanici_id": kullanici_id, "personel_kodu": personel_kodu}
-    if ogrenci:
-        veri.update({anahtar: deger for anahtar, deger in ogrenci.items() if deger})
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        cevap = oturum_kontrollu_istek("POST", f"{api_url}/api/personel", json=veri, headers=headers, timeout=5)
-    except Exception as e:
-        return False, f"Bağlantı hatası:\n{str(e)}"
-    if oturum_hatasi_mi(cevap):
-        return None, ""
-    if cevap.status_code == 201:
-        return True, f"Kullanıcı başarıyla personel olarak atandı.\n\nSistem Kodu: {personel_kodu}"
-    return False, sunucu_hata_mesaji(cevap, f"Sunucu hatası: Kod {cevap.status_code}")
 
 
 def ogrenci_alanlari_olustur():
@@ -619,7 +575,6 @@ class KullaniciOlusturFormu(QDialog):
         self.api_url = api_url
         self.token = token
         self.olusturulan_kullanici = None
-        self.personel_atandi = False
         self.setWindowTitle("👤 Yeni Sistem Kullanıcısı Oluştur")
         self.setMinimumWidth(460)
         self.setStyleSheet(FORM_STIL)
@@ -706,11 +661,6 @@ class KullaniciOlusturFormu(QDialog):
         self.lbl_sonuc.setWordWrap(True)
         self.lbl_sonuc.setTextInteractionFlags(Qt.TextSelectableByMouse)
         sonuc_lay.addWidget(self.lbl_sonuc)
-        self.btn_personel_ata = QPushButton("Personel Olarak Ata")
-        self.btn_personel_ata.setObjectName("btn_ata")
-        self.btn_personel_ata.setCursor(Qt.PointingHandCursor)
-        self.btn_personel_ata.clicked.connect(self.personel_ata_tiklandi)
-        sonuc_lay.addWidget(self.btn_personel_ata)
         self.sonuc_kutusu.setVisible(False)
         layout.addWidget(self.sonuc_kutusu)
 
@@ -807,26 +757,48 @@ class KullaniciOlusturFormu(QDialog):
 
         headers = {"Authorization": f"Bearer {self.token}"}
 
+        istek_verisi = {
+            "kullanici_adi": kullanici_adi,
+            "rol_id": rol_id,
+        }
+        if danisma_ogrencisi:
+            istek_verisi.update(ogrenci)
+
         try:
             cevap = oturum_kontrollu_istek(
                 "POST", f"{self.api_url}/api/kullanicilar",
-                json={"kullanici_adi": kullanici_adi, "rol_id": rol_id}, headers=headers, timeout=5,
+                json=istek_verisi, headers=headers, timeout=5,
             )
             if oturum_hatasi_mi(cevap):
                 return
-            if cevap.status_code == 409 and otomatik_ad:
+            if (
+                cevap.status_code == 409
+                and otomatik_ad
+                and sunucu_hata_mesaji(cevap, "") == "Bu kullanıcı adı zaten kullanılıyor."
+            ):
                 # Aynı anda başka biri aynı adı aldıysa bir sonraki boş ad ile yeniden dene.
                 kullanici_adi = musait_kullanici_adi(self.api_url, self.token, kullanici_adi)
                 self.input_kullanici_adi.setText(kullanici_adi)
+                istek_verisi["kullanici_adi"] = kullanici_adi
                 cevap = oturum_kontrollu_istek(
                     "POST", f"{self.api_url}/api/kullanicilar",
-                    json={"kullanici_adi": kullanici_adi, "rol_id": rol_id}, headers=headers, timeout=5,
+                    json=istek_verisi, headers=headers, timeout=5,
                 )
                 if oturum_hatasi_mi(cevap):
                     return
 
             if cevap.status_code == 201:
                 sonuc = cevap.json()
+                personel_kodu = sonuc.get("personel_kodu")
+
+                if not personel_kodu:
+                    QMessageBox.critical(
+                        self,
+                        "Eksik Sunucu Yanıtı",
+                        "Sunucu personel kodu döndürmedi. "
+                        "Kayıt durumunu kontrol edin.",
+                    )
+                    return
                 gecici_parola = sonuc.get("gecici_parola", "HATA")
                 self.olusturulan_kullanici = {
                     "kullanici_id": sonuc.get("kullanici_id"),
@@ -834,11 +806,12 @@ class KullaniciOlusturFormu(QDialog):
                     "rol_id": rol_id,
                 }
                 self.lbl_sonuc.setText(
-                    "✔ Kullanıcı hesabı oluşturuldu.\n\n"
+                    "✔ Kullanıcı ve personel başarıyla oluşturuldu.\n\n"
                     f"👤 Kullanıcı Adı: {kullanici_adi}\n"
-                    f"🔑 Geçici Parola: {gecici_parola}\n\n"
-                    "Parolayı kullanıcıya iletin; ilk girişte değiştirmesi gerekir.\n"
-                    "Giriş yapabilmesi için aşağıdan personel olarak atayın."
+                    f"🔑 Geçici Parola: {gecici_parola}\n"
+                    f"🏷 Personel Kodu: {personel_kodu}\n\n"
+                    "Parolayı kullanıcıya iletin; ilk girişte "
+                    "değiştirmesi gerekir."
                 )
                 # Kaydırmalı metin kesilmesin: yüksekliği mevcut genişliğe göre ayır.
                 kullanilabilir = max(self.width() - 40 - 28, 300)
@@ -850,45 +823,19 @@ class KullaniciOlusturFormu(QDialog):
                 self.sonuc_kutusu.setVisible(True)
                 self.adjustSize()
             elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Hata", "Bu kullanıcı adı zaten kullanılıyor. Lütfen farklı bir isim seçin.")
+                QMessageBox.warning(
+                    self,
+                    "Hata",
+                    sunucu_hata_mesaji(
+                        cevap,
+                        "Bu kayıt zaten mevcut. Bilgileri kontrol edin.",
+                    ),
+                )
             else:
                 QMessageBox.critical(self, "Hata", sunucu_hata_mesaji(cevap, f"Sunucu hatası: Kod {cevap.status_code}"))
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
-
-    def personel_ata_tiklandi(self):
-        if self.olusturulan_kullanici is None:
-            return
-        rol_adi = ROL_ID_ADLARI.get(self.olusturulan_kullanici["rol_id"])
-        kod = personel_kodu_uret(self.api_url, self.token, rol_adi)
-        ogrenci = None
-        if rol_adi == DANISMA_OGRENCISI:
-            ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
-        basarili, mesaj = personel_ata(
-            self.api_url, self.token, self.olusturulan_kullanici["kullanici_id"], kod, ogrenci
-        )
-        if basarili is None:  # oturum sona erdi; çıkışı merkezi sistem yönetir
-            return
-        if basarili:
-            self.personel_atandi = True
-            QMessageBox.information(self, "Başarılı", mesaj)
-            self.accept()
-        else:
-            QMessageBox.warning(self, "Hata", mesaj)
-
-    def reject(self):
-        """Hesap açıldı ama personel atanmadıysa kapatmadan önce uyarır."""
-        if self.olusturulan_kullanici is not None and not self.personel_atandi:
-            yanit = QMessageBox.question(
-                self, "Personel atanmadı",
-                "Bu kullanıcı personel olarak atanmadı ve giriş yapamaz.\n\n"
-                "Yine de kapatmak istiyor musunuz?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            )
-            if yanit != QMessageBox.Yes:
-                return
-        super().reject()
 
 
 class RolDegistirFormu(QDialog):

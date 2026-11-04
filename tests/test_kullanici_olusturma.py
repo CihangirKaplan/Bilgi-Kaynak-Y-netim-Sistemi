@@ -56,7 +56,11 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
         (1,),             # Rol atama yetkisi var
         ("PSIKOLOG",),    # Yeni kullanıcının rolü
         (25,),            # Oluşturulan kullanıcının ID'si
+        (15,),            # Oluşturulan personelin ID'si
     ]
+
+    # Henüz bu role ait personel kodu bulunmuyor.
+    mock_cursor.fetchall.return_value = []
 
     yeni_kullanici = KullaniciOlusturModeli(
         kullanici_adi="test_psikolog",
@@ -77,6 +81,20 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
     assert sonuc["kullanici_id"] == 25
     assert sonuc["gecici_parola"] == "TestGecici123!"
     assert sonuc["ilk_giris_mi"] is True
+    assert sonuc["personel_id"] == 15
+    assert sonuc["personel_kodu"] == "PER-PSK-001"
+
+    # Kullanıcıyla birlikte personel de oluşturulmalı.
+    assert any(
+        "INSERT INTO personel" in cagri.args[0]
+        for cagri in mock_cursor.execute.call_args_list
+    )
+
+    # Kullanıcı ve personel için Audit kayıtları oluşturulmalı.
+    assert sum(
+        "INSERT INTO denetim_kayitlari" in cagri.args[0]
+        for cagri in mock_cursor.execute.call_args_list
+    ) >= 2
 
     # Geçici şifre hash fonksiyonuna gönderilmeli
     mock_hash.assert_called_once_with("TestGecici123!")

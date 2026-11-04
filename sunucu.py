@@ -303,42 +303,236 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
 # ADM MODÜLÜ (Kullanıcı, Rol ve Personel)
 # ==========================================
 
+
 @app.post("/api/kullanicilar", status_code=201)
-def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR"))):
+def kullanici_olustur(
+    yeni_kullanici: KullaniciOlusturModeli,
+    kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR")),
+):
+    import re
+
     conn = None
     cursor = None
+    asama = "kullanici"
+
+    rol_kodlari = {
+        "PSIKOLOG": "PSK",
+        "MEMUR": "MEM",
+        "MUDUR": "MUD",
+        "DANISMA_OGRENCISI": "OGR",
+        "PROJE_ASISTANI": "AST",
+        "ADMIN": "ADM",
+    }
+
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
-        yapan = cursor.fetchone()
-
+        # İşlemi yapan kişinin rolünü öğren.
         cursor.execute(
             """
-            SELECT 1 FROM kullanicilar k JOIN rol_izinleri ri ON k.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id
-            WHERE k.kullanici_id = %s AND i.izin_adi = 'ROL_ATAMA_DEGISTIRME' AND ri.izin_var = 1;
-            """, (kullanici_id,)
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON k.rol_id = r.rol_id
+            WHERE k.kullanici_id = %s;
+            """,
+            (kullanici_id,),
         )
+        yapan = cursor.fetchone()
+
+        # Birleşik oluşturma için iki yetki de gerekli.
+        # Mevcut rol atama izni korunur.
+        cursor.execute(
+            """
+            SELECT 1
+            FROM kullanicilar k
+            WHERE k.kullanici_id = %s
+              AND EXISTS (
+                  SELECT 1
+                  FROM rol_izinleri ri
+                  JOIN izinler i ON i.izin_id = ri.izin_id
+                  WHERE ri.rol_id = k.rol_id
+                    AND i.izin_adi = 'ROL_ATAMA_DEGISTIRME'
+                    AND ri.izin_var = 1
+              )
+              AND EXISTS (
+                  SELECT 1
+                  FROM rol_izinleri ri
+                  JOIN izinler i ON i.izin_id = ri.izin_id
+                  WHERE ri.rol_id = k.rol_id
+                    AND i.izin_adi = 'PERSONEL_TANIMLA'
+                    AND ri.izin_var = 1
+              );
+            """,
+            (kullanici_id,),
+        )
+
         if cursor.fetchone() is None:
-            raise HTTPException(status_code=403, detail="Rol atama yetkiniz bulunmuyor.")
+            raise HTTPException(
+                status_code=403,
+                detail="Kullanıcı oluşturma için gerekli yetkileriniz bulunmuyor.",
+            )
 
-        cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s;", (yeni_kullanici.rol_id,))
+        cursor.execute(
+            "SELECT rol_adi FROM roller WHERE rol_id = %s;",
+            (yeni_kullanici.rol_id,),
+        )
         hedef_rol = cursor.fetchone()
-        if hedef_rol is None:
-            raise HTTPException(status_code=422, detail="Geçersiz rol seçildi.")
 
-        if hedef_rol[0] == "ADMIN" and (yapan is None or yapan[0] != "ADMIN"):
-            raise HTTPException(status_code=403, detail="ADMIN rolünü atama yetkiniz bulunmuyor.")
+        if hedef_rol is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Geçersiz rol seçildi.",
+            )
+
+        rol_adi = hedef_rol[0]
+
+        if rol_adi == "ADMIN" and (
+            yapan is None or yapan[0] != "ADMIN"
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="ADMIN rolünü atama yetkiniz bulunmuyor.",
+            )
+
+        danisma_ogrencisi = rol_adi == "DANISMA_OGRENCISI"
+
+        ogrenci_bilgisi_var = any([
+            yeni_kullanici.ad_soyad,
+            yeni_kullanici.ogrenci_numarasi,
+            yeni_kullanici.telefon,
+        ])
+
+        if danisma_ogrencisi:
+            if (
+                not yeni_kullanici.ad_soyad
+                or not yeni_kullanici.ogrenci_numarasi
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Danışma öğrencisi için ad soyad ve öğrenci numarası zorunludur.",
+                )
+        elif ogrenci_bilgisi_var:
+            raise HTTPException(
+                status_code=422,
+                detail="Öğrenci bilgileri yalnızca danışma öğrencisi rolü için girilebilir.",
+            )
 
         gecici_parola = gecici_parola_uret()
         parola_hash = parola_hashle(gecici_parola)
 
+        # Kullanıcı kaydı.
         cursor.execute(
-            "INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi) VALUES (%s, %s, %s, TRUE, TRUE) RETURNING kullanici_id;",
-            (yeni_kullanici.kullanici_adi, parola_hash, yeni_kullanici.rol_id)
+            """
+            INSERT INTO kullanicilar
+                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi)
+            VALUES (%s, %s, %s, TRUE, TRUE)
+            RETURNING kullanici_id;
+            """,
+            (
+                yeni_kullanici.kullanici_adi,
+                parola_hash,
+                yeni_kullanici.rol_id,
+            ),
         )
         yeni_id = cursor.fetchone()[0]
+
+        # Personel kodu yalnızca backend'de üretilir.
+        # Aynı kod öneki için eşzamanlı işlemler sıraya alınır.
+        rol_kodu = rol_kodlari.get(rol_adi, "SYS")
+        onek = f"PER-{rol_kodu}-"
+
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s));",
+            (f"TKYS_PERSONEL_KODU_{rol_kodu}",),
+        )
+
+        cursor.execute(
+            """
+            SELECT personel_kodu
+            FROM personel
+            WHERE personel_kodu LIKE %s;
+            """,
+            (onek + "%",),
+        )
+
+        numaralar = []
+
+        for kayit in cursor.fetchall():
+            kod = kayit[0]
+
+            if not isinstance(kod, str):
+                continue
+
+            eslesme = re.fullmatch(
+                re.escape(onek) + r"([0-9]+)",
+                kod,
+            )
+
+            if eslesme:
+                numaralar.append(int(eslesme.group(1)))
+
+        siradaki = max(numaralar, default=0) + 1
+        personel_kodu = f"{onek}{siradaki:03d}"
+
+        # Personel kaydı.
+        asama = "personel"
+
+        cursor.execute(
+            """
+            INSERT INTO personel (kullanici_id, personel_kodu)
+            VALUES (%s, %s)
+            RETURNING personel_id;
+            """,
+            (yeni_id, personel_kodu),
+        )
+        personel_id = cursor.fetchone()[0]
+
+        # Kullanıcı ve personel Audit kayıtları.
+        for tablo, kayit_id in (
+            ("kullanicilar", yeni_id),
+            ("personel", personel_id),
+        ):
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari
+                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (kullanici_id, "CREATE", tablo, kayit_id),
+            )
+
+        ogrenci_id = None
+
+        if danisma_ogrencisi:
+            asama = "ogrenci"
+
+            cursor.execute(
+                """
+                INSERT INTO ogrenciler
+                    (kullanici_id, ad_soyad, ogrenci_numarasi, telefon, tur)
+                VALUES (%s, %s, %s, %s, 'DANISMA_MASASI')
+                RETURNING ogrenci_id;
+                """,
+                (
+                    yeni_id,
+                    yeni_kullanici.ad_soyad,
+                    yeni_kullanici.ogrenci_numarasi,
+                    yeni_kullanici.telefon,
+                ),
+            )
+            ogrenci_id = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari
+                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (kullanici_id, "CREATE", "ogrenciler", ogrenci_id),
+            )
+
+        # Her şey başarılıysa tek commit.
         conn.commit()
 
         return {
@@ -346,14 +540,44 @@ def kullanici_olustur(yeni_kullanici: KullaniciOlusturModeli, kullanici_id: int 
             "kullanici_id": yeni_id,
             "kullanici_adi": yeni_kullanici.kullanici_adi,
             "gecici_parola": gecici_parola,
-            "ilk_giris_mi": True
+            "ilk_giris_mi": True,
+            "personel_id": personel_id,
+            "personel_kodu": personel_kodu,
+            "ogrenci_id": ogrenci_id,
         }
+
     except psycopg2.errors.UniqueViolation:
-        if conn: conn.rollback()
-        raise HTTPException(status_code=409, detail="Bu kullanıcı adı zaten kullanılıyor.")
+        if conn is not None:
+            conn.rollback()
+
+        if asama == "ogrenci":
+            mesaj = "Bu öğrenci numarası zaten kullanılıyor."
+        elif asama == "personel":
+            mesaj = "Personel kodu veya personel kaydı zaten mevcut."
+        else:
+            mesaj = "Bu kullanıcı adı zaten kullanılıyor."
+
+        raise HTTPException(status_code=409, detail=mesaj)
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Kullanıcı oluşturulurken beklenmeyen bir hata oluştu.",
+        )
+
     finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 
 @app.get("/api/kullanicilar/musait-kullanici-adi")
 def musait_kullanici_adi(

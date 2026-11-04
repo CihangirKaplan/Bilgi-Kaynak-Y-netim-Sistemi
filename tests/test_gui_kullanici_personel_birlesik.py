@@ -13,8 +13,6 @@ from k_personel_ekranlari import (
     kullanici_adi_oner,
     musait_kullanici_adi,
     ogrenci_bilgisi_dogrula,
-    personel_ata,
-    personel_kodu_uret,
     telefon_bicimle,
     telefon_normalle,
 )
@@ -52,6 +50,21 @@ def sunucu_yok(monkeypatch):
     monkeypatch.setattr(modul.requests, "get", MagicMock(side_effect=OSError("sunucu yok")))
 
 
+
+@pytest.fixture(autouse=True)
+def beklenmeyen_modal_pencereleri_engelle(monkeypatch):
+    """Test sırasında beklenmeyen QMessageBox çağrıları takılmak yerine hata versin."""
+
+    def hata(*args, **kwargs):
+        mesaj = args[2] if len(args) > 2 else str(args)
+        raise AssertionError(
+            f"Beklenmeyen mesaj penceresi: {mesaj}"
+        )
+
+    for isim in ("critical", "warning", "information", "question"):
+        monkeypatch.setattr(QMessageBox, isim, hata)
+
+
 @pytest.fixture
 def form(qt_app):
     pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
@@ -64,39 +77,12 @@ def rol_sec(form, rol_id):
 
 
 # ---------------------------------------------------------------- yardımcılar
-def test_personel_kodu_rolun_sonraki_numarasini_uretir():
-    kayitlar = [
-        {"personel_kodu": "PER-OGR-001"},
-        {"personel_kodu": "PER-OGR-004"},
-        {"personel_kodu": "PER-PSK-009"},
-        {"personel_kodu": "BOZUK-KOD"},
-    ]
-    with patch.object(modul.requests, "get", return_value=cevap(200, kayitlar)):
-        assert personel_kodu_uret("http://x", "t", "DANISMA_OGRENCISI") == "PER-OGR-005"
-        assert personel_kodu_uret("http://x", "t", "MEMUR") == "PER-MEM-001"
 
 
-def test_personel_kodu_sunucuya_ulasilamazsa_ilk_numaradan_baslar():
-    with patch.object(modul.requests, "get", side_effect=OSError("kapalı")):
-        assert personel_kodu_uret("http://x", "t", "PSIKOLOG") == "PER-PSK-001"
 
 
-def test_personel_ata_ogrenci_bilgisini_gonderir_bos_alanlari_atar():
-    with patch.object(modul.requests, "post", return_value=cevap(201)) as post:
-        ok, _ = personel_ata("http://x", "t", 8, "PER-OGR-001",
-                             {"ad_soyad": "Veli Kaya", "ogrenci_numarasi": "2021002", "telefon": ""})
-    assert ok
-    assert post.call_args.kwargs["json"] == {
-        "kullanici_id": 8, "personel_kodu": "PER-OGR-001",
-        "ad_soyad": "Veli Kaya", "ogrenci_numarasi": "2021002",
-    }
 
 
-def test_personel_ata_sunucu_mesajini_dondurur():
-    with patch.object(modul.requests, "post",
-                      return_value=cevap(409, {"detail": "Bu öğrenci numarası başka bir öğrenci kaydında kullanılıyor."})):
-        ok, mesaj = personel_ata("http://x", "t", 8, "PER-OGR-001", None)
-    assert not ok and "öğrenci numarası" in mesaj
 
 
 # ------------------------------------------------------------- birleşik pencere
@@ -117,92 +103,129 @@ def test_danisma_ogrencisi_ad_ve_numarasiz_olusturulamaz(form):
     uyari.assert_called_once()
 
 
-def test_olusturunca_personel_ata_bolumu_acilir_ve_form_kilitlenir(form):
+
+def test_kullanici_ve_personel_tek_istekte_olusturulur(form):
     form.input_kullanici_adi.setText("doktor_x")
     rol_sec(form, 1)
-    assert form.sonuc_kutusu.isHidden()
-    with patch.object(modul.requests, "post",
-                      return_value=cevap(201, {"kullanici_id": 30, "gecici_parola": "Abc123!x"})):
+
+    yanit = cevap(201, {
+        "kullanici_id": 30,
+        "personel_id": 15,
+        "personel_kodu": "PER-PSK-001",
+        "gecici_parola": "Abc123!x",
+    })
+
+    with patch.object(modul.requests, "post", return_value=yanit) as post:
         form.kaydet()
+
+    post.assert_called_once()
+    assert post.call_args.args[0].endswith("/api/kullanicilar")
+    assert post.call_args.kwargs["json"] == {
+        "kullanici_adi": "doktor_x",
+        "rol_id": 1,
+    }
+
     assert not form.sonuc_kutusu.isHidden()
     assert "Abc123!x" in form.lbl_sonuc.text()
+    assert "PER-PSK-001" in form.lbl_sonuc.text()
     assert not form.btn_kaydet.isEnabled()
     assert not form.input_kullanici_adi.isEnabled()
     assert form.olusturulan_kullanici["kullanici_id"] == 30
+
+    # Artık ikinci personel atama butonu yok.
+    assert not hasattr(form, "btn_personel_ata")
 
 
 def test_ayni_kullanici_adi_409_pencereyi_kilitlemez(form):
     form.input_kullanici_adi.setText("var_olan")
     rol_sec(form, 1)
-    with patch.object(modul.requests, "post", return_value=cevap(409)), \
-            patch.object(QMessageBox, "warning") as uyari:
+
+    with (
+        patch.object(modul.requests, "post", return_value=cevap(409, {"detail": "Bu kullanıcı adı zaten kullanılıyor."})),
+        patch.object(QMessageBox, "warning") as uyari,
+    ):
         form.kaydet()
+
     uyari.assert_called_once()
-    assert form.btn_kaydet.isEnabled() and form.sonuc_kutusu.isHidden()
+    assert form.btn_kaydet.isEnabled()
+    assert form.sonuc_kutusu.isHidden()
 
 
-def test_personel_ata_danisma_ogrencisi_icin_ogrenci_bilgisini_yollar(form):
-    form.input_kullanici_adi.setText("ogr_yeni")
+def test_danisma_ogrencisi_tek_istekte_kaydedilir(form):
     rol_sec(form, 4)
     form.input_ad_soyad.setText("Veli Kaya")
     form.input_ogrenci_no.setText("2021002")
     form.input_telefon.setText("05551112233")
-    with patch.object(modul.requests, "post",
-                      return_value=cevap(201, {"kullanici_id": 31, "gecici_parola": "Pw"})):
+    form.input_kullanici_adi.setText("ogr_yeni")
+
+    yanit = cevap(201, {
+        "kullanici_id": 31,
+        "personel_id": 16,
+        "ogrenci_id": 18,
+        "personel_kodu": "PER-OGR-001",
+        "gecici_parola": "Pw",
+    })
+
+    with patch.object(modul.requests, "post", return_value=yanit) as post:
         form.kaydet()
 
-    atamalar = []
+    post.assert_called_once()
+    assert post.call_args.args[0].endswith("/api/kullanicilar")
 
-    def post(url, **kwargs):
-        atamalar.append((url, kwargs["json"]))
-        return cevap(201)
+    veri = post.call_args.kwargs["json"]
 
-    with patch.object(modul.requests, "get", return_value=cevap(200, [])), \
-            patch.object(modul.requests, "post", side_effect=post), \
-            patch.object(QMessageBox, "information"):
-        form.personel_ata_tiklandi()
+    assert veri["rol_id"] == 4
+    assert veri["ad_soyad"] == "Veli Kaya"
+    assert veri["ogrenci_numarasi"] == "2021002"
+    assert veri["telefon"] == "05551112233"
+    assert "PER-OGR-001" in form.lbl_sonuc.text()
 
-    assert form.personel_atandi and form.result() == QDialog.Accepted
-    url, govde = atamalar[0]
-    assert url.endswith("/api/personel")
-    assert govde == {
-        "kullanici_id": 31, "personel_kodu": "PER-OGR-001",
-        "ad_soyad": "Veli Kaya", "ogrenci_numarasi": "2021002", "telefon": "05551112233",
+
+def test_diger_rollerde_ogrenci_bilgisi_gonderilmez(form):
+    rol_sec(form, 2)
+    form.input_kullanici_adi.setText("memur_yeni")
+
+    yanit = cevap(201, {
+        "kullanici_id": 32,
+        "personel_id": 17,
+        "personel_kodu": "PER-MEM-001",
+        "gecici_parola": "Pw",
+    })
+
+    with patch.object(modul.requests, "post", return_value=yanit) as post:
+        form.kaydet()
+
+    post.assert_called_once()
+    assert post.call_args.kwargs["json"] == {
+        "kullanici_adi": "memur_yeni",
+        "rol_id": 2,
     }
 
 
-def test_personel_ata_diger_rollerde_ogrenci_bilgisi_gondermez(form):
-    form.input_kullanici_adi.setText("memur_yeni")
-    rol_sec(form, 2)
-    with patch.object(modul.requests, "post", return_value=cevap(201, {"kullanici_id": 32, "gecici_parola": "Pw"})):
-        form.kaydet()
-    atamalar = []
-    with patch.object(modul.requests, "get", return_value=cevap(200, [])), \
-            patch.object(modul.requests, "post", side_effect=lambda u, **k: (atamalar.append(k["json"]), cevap(201))[1]), \
-            patch.object(QMessageBox, "information"):
-        form.personel_ata_tiklandi()
-    assert atamalar[0] == {"kullanici_id": 32, "personel_kodu": "PER-MEM-001"}
-
-
-def test_personel_atanmadan_kapatirken_uyarir_ve_hayirda_kapatmaz(form):
-    form.input_kullanici_adi.setText("doktor_y")
+def test_basarili_olusturmadan_sonra_kapatirken_uyari_yok(form):
     rol_sec(form, 1)
-    with patch.object(modul.requests, "post", return_value=cevap(201, {"kullanici_id": 33, "gecici_parola": "Pw"})):
+    form.input_kullanici_adi.setText("doktor_y")
+
+    yanit = cevap(201, {
+        "kullanici_id": 33,
+        "personel_id": 19,
+        "personel_kodu": "PER-PSK-002",
+        "gecici_parola": "Pw",
+    })
+
+    with patch.object(modul.requests, "post", return_value=yanit):
         form.kaydet()
-    kapandi = []
-    form.rejected.connect(lambda: kapandi.append(True))
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru:
+
+    with patch.object(QMessageBox, "question") as soru:
         form.reject()
-    soru.assert_called_once()
-    assert kapandi == []
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
-        form.reject()
-    assert kapandi == [True]
+
+    soru.assert_not_called()
 
 
 def test_hesap_olusturulmadan_kapatirken_uyari_yok(form):
     with patch.object(QMessageBox, "question") as soru:
         form.reject()
+
     soru.assert_not_called()
 
 
@@ -322,21 +345,38 @@ def test_telefon_alani_yalnizca_rakam_bosluk_ve_parantez_kabul_eder(form):
 
 def test_telefon_basinda_0_olmadan_yazilan_numara_sunucuya_0li_gider(form):
     from PySide6.QtTest import QTest
+
     form.input_kullanici_adi.setText("ogr_yeni")
     rol_sec(form, 4)
     form.input_ad_soyad.setText("Veli Kaya")
     form.input_ogrenci_no.setText("2021002")
+
     QTest.keyClicks(form.input_telefon, "5551234567")
-    with patch.object(modul.requests, "post",
-                      return_value=cevap(201, {"kullanici_id": 40, "gecici_parola": "Pw"})):
+
+    yanit = cevap(201, {
+        "kullanici_id": 40,
+        "personel_id": 20,
+        "personel_kodu": "PER-OGR-001",
+        "ogrenci_id": 10,
+        "gecici_parola": "Pw",
+    })
+
+    with patch.object(modul.requests, "post", return_value=yanit) as post:
         form.kaydet()
-    atamalar = []
-    with patch.object(modul.requests, "get", return_value=cevap(200, [])), \
-            patch.object(modul.requests, "post",
-                         side_effect=lambda u, **k: (atamalar.append(k["json"]), cevap(201))[1]), \
-            patch.object(QMessageBox, "information"):
-        form.personel_ata_tiklandi()
-    assert atamalar[0]["telefon"] == "05551234567"
+
+    # Kullanıcı ve personel için yalnızca tek API isteği yapılmalı.
+    post.assert_called_once()
+
+    url = post.call_args.args[0]
+    veri = post.call_args.kwargs["json"]
+
+    assert url.endswith("/api/kullanicilar")
+    assert veri["telefon"] == "05551234567"
+    assert veri["ad_soyad"] == "Veli Kaya"
+    assert veri["ogrenci_numarasi"] == "2021002"
+
+    assert "PER-OGR-001" in form.lbl_sonuc.text()
+
 
 
 # ----------------------------------------------------- kullanıcı adı önerisi
@@ -432,18 +472,24 @@ def test_olusturmadan_once_kullanici_adi_son_kez_dogrulanir(form):
 
     def post(url, **kwargs):
         gonderilen.append(kwargs["json"])
-        return cevap(201, {"kullanici_id": 50, "gecici_parola": "Pw"})
+        return cevap(201, {"kullanici_id": 50, "personel_id": 150, "personel_kodu": "PER-TEST-001", "gecici_parola": "Pw"})
 
     with patch.object(modul.requests, "get", return_value=cevap(200, {"kullanici_adi": "cihangir.kaplan3"})), \
             patch.object(modul.requests, "post", side_effect=post):
         form.kaydet()
-    assert gonderilen == [{"kullanici_adi": "cihangir.kaplan3", "rol_id": 4}]
+    assert gonderilen == [{
+        "kullanici_adi": "cihangir.kaplan3",
+        "rol_id": 4,
+        "ad_soyad": "Cihangir Kaplan",
+        "ogrenci_numarasi": "2021002",
+        "telefon": "",
+    }]
     assert form.input_kullanici_adi.text() == "cihangir.kaplan3"
 
 
 def test_olusturma_sirasinda_ad_alinirsa_bir_kez_yeniden_denenir(form):
     hazirla_danisma(form)
-    yanitlar = [cevap(409), cevap(201, {"kullanici_id": 51, "gecici_parola": "Pw"})]
+    yanitlar = [cevap(409, {"detail": "Bu kullanıcı adı zaten kullanılıyor."}), cevap(201, {"kullanici_id": 51, "personel_id": 151, "personel_kodu": "PER-TEST-001", "gecici_parola": "Pw"})]
     gonderilen = []
     oneriler = iter(["cihangir.kaplan", "cihangir.kaplan2"])
 
@@ -476,7 +522,7 @@ def test_diger_rollerde_kullanici_adi_icin_sunucuya_sorulmaz(form):
     rol_sec(form, 2)
     with patch.object(modul.requests, "get") as get, \
             patch.object(modul.requests, "post",
-                         return_value=cevap(201, {"kullanici_id": 52, "gecici_parola": "Pw"})):
+                         return_value=cevap(201, {"kullanici_id": 52, "personel_id": 152, "personel_kodu": "PER-TEST-001", "gecici_parola": "Pw"})):
         form.kaydet()
     get.assert_not_called()
 
@@ -488,9 +534,6 @@ def oturum_bitti_yaniti():
     return r
 
 
-def test_personel_ata_oturum_bittiyse_none_doner(form):
-    with patch.object(modul.requests, "post", return_value=oturum_bitti_yaniti()):
-        assert personel_ata("http://x", "t", 8, "PER-OGR-001", None) == (None, "")
 
 
 def test_hesap_olustururken_oturum_biterse_form_degismez_ve_uyari_cikmaz(form):
@@ -504,19 +547,39 @@ def test_hesap_olustururken_oturum_biterse_form_degismez_ve_uyari_cikmaz(form):
     assert form.olusturulan_kullanici is None and form.btn_kaydet.isEnabled()
 
 
-def test_personel_atarken_oturum_biterse_pencere_acik_kalir_ve_uyari_cikmaz(form):
+def test_personel_kodu_eksikse_basarili_gosterilmez(form):
+    """Eksik başarılı API yanıtı kullanıcıya başarı olarak gösterilmemeli."""
+
     form.input_kullanici_adi.setText("doktor_w")
     rol_sec(form, 1)
-    with patch.object(modul.requests, "post",
-                      return_value=cevap(201, {"kullanici_id": 60, "gecici_parola": "Pw"})):
+
+    eksik_yanit = cevap(201, {
+        "kullanici_id": 60,
+        "gecici_parola": "Pw",
+    })
+
+    with (
+        patch.object(
+            modul.requests, "post", return_value=eksik_yanit
+        ) as post,
+        patch.object(QMessageBox, "critical") as hata,
+    ):
         form.kaydet()
-    with patch.object(modul.requests, "get", return_value=cevap(200, [])), \
-            patch.object(modul.requests, "post", return_value=oturum_bitti_yaniti()), \
-            patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "information") as bilgi:
-        form.personel_ata_tiklandi()
-    uyari.assert_not_called()
-    bilgi.assert_not_called()
-    assert not form.personel_atandi
+
+    # Tek API isteği yapılmış olmalı.
+    post.assert_called_once()
+    assert post.call_args.args[0].endswith("/api/kullanicilar")
+
+    # Personel kodu yoksa başarı ekranına geçilmemeli.
+    hata.assert_called_once()
+    assert "personel kodu" in str(
+        hata.call_args.args[2]
+    ).lower()
+
+    assert form.sonuc_kutusu.isHidden()
+    assert form.btn_kaydet.isEnabled()
+    assert form.olusturulan_kullanici is None
+
 
 
 def test_bos_kullanici_adi_sorgusunda_oturum_biterse_yerel_oneri_kalir():
@@ -565,9 +628,54 @@ def test_olustur_hemen_basilirsa_bos_kullanici_adi_uyarisi_cikmaz_ad_turetilir(f
     with patch.object(modul.requests, "get", return_value=cevap(200, {"kullanici_adi": "cihangir.kaplan2"})), \
             patch.object(modul.requests, "post",
                          side_effect=lambda u, **k: (gonderilen.append(k["json"]),
-                                                     cevap(201, {"kullanici_id": 70, "gecici_parola": "Pw"}))[1]), \
+                                                     cevap(201, {"kullanici_id": 70, "personel_id": 170, "personel_kodu": "PER-TEST-001", "gecici_parola": "Pw"}))[1]), \
             patch.object(QMessageBox, "warning") as uyari:
         form.kaydet()
     uyari.assert_not_called()
-    assert gonderilen == [{"kullanici_adi": "cihangir.kaplan2", "rol_id": 4}]
+    assert gonderilen == [{
+        "kullanici_adi": "cihangir.kaplan2",
+        "rol_id": 4,
+        "ad_soyad": "Cihangir Kaplan",
+        "ogrenci_numarasi": "2021002",
+        "telefon": "",
+    }]
     assert not form._netlestirme_zamanlayici.isActive()
+
+
+
+def test_ogrenci_numarasi_cakismasinda_yeniden_istek_gonderilmez(form):
+    """Ogrenci numarasi cakisirsa kullanici adi degistirilip tekrar denenmez."""
+    hazirla_danisma(form)
+
+    with (
+        patch.object(
+            modul.requests,
+            "get",
+            return_value=cevap(
+                200, {"kullanici_adi": "cihangir.kaplan"}
+            ),
+        ),
+        patch.object(
+            modul.requests,
+            "post",
+            return_value=cevap(
+                409,
+                {"detail": "Bu öğrenci numarası zaten kullanılıyor."},
+            ),
+        ) as post,
+        patch.object(QMessageBox, "warning") as uyari,
+    ):
+        form.kaydet()
+
+    # Ogrenci numarasi hatasinda ikinci POST gonderilmemeli.
+    post.assert_called_once()
+
+    # Kullaniciya gercek hata nedeni gosterilmeli.
+    uyari.assert_called_once()
+    assert "öğrenci numarası" in str(
+        uyari.call_args.args[2]
+    ).lower()
+
+    # Basarisiz islem sonrasi form kilitlenmemeli.
+    assert form.olusturulan_kullanici is None
+    assert form.btn_kaydet.isEnabled()
