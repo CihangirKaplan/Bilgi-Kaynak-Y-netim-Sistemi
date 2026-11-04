@@ -114,6 +114,17 @@ def islem_butonlari(duzenle_fn, sil_fn):
     return kap
 
 
+def tek_islem_butonu(fn, simge="✎", ipucu="Düzenle", renk="#B45309", arka="#FEF3C7", hover="#FDE68A"):
+    """Satır sonu için tek ikon butonu (ör. sadece düzenle)."""
+    kap = QWidget()
+    lay = QHBoxLayout(kap)
+    lay.setContentsMargins(6, 4, 6, 4)
+    lay.addStretch()
+    lay.addWidget(_ikon_buton(simge, ipucu, renk, arka, hover, fn))
+    lay.addStretch()
+    return kap
+
+
 def sil_onayi(parent, baslik, mesaj):
     """Silmeden önce onay ister. Evet denirse True döner."""
     kutu = QMessageBox(parent)

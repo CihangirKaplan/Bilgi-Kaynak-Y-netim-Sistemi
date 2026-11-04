@@ -1,21 +1,36 @@
-import sys
-import requests
-from api_yoneticisi import (
-    oturum_kontrollu_istek,
-    oturum_hatasi_mi,
-)
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTableWidget, QTableWidgetItem, QHeaderView, QDialog, 
-    QLineEdit, QComboBox, QMessageBox, QFormLayout
-)
-from PySide6.QtCore import Qt
+"""Cihaz envanteri: liste ekranı, 'Cihaz ekle / durum güncelle' formu ve düzenleme listesi.
 
-TABLO_STIL = """
-QTableWidget { background-color: white; color: #0A1F5C; border-radius: 8px; border: 1px solid #DCE7FF; }
-QTableWidget::item { color: #0A1F5C; }
-QHeaderView::section { background-color: #0A1F5C; color: white; padding: 8px; font-weight: bold; }
+Görünüm, bakım/kalibrasyon/arıza ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QComboBox, QDialog, QFormLayout, QFrame, QHeaderView, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QVBoxLayout, QWidget,
+)
+
+from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
+                            sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
+
+# Sunucu cihaz durumunu veritabanı değeriyle verir; ekranda okunaklı Türkçe adı gösterilir.
+# veritabanı değeri -> (görünen ad, yazı rengi, arka plan)
+DURUMLAR = {
+    "Kullanima_Hazir": ("Kullanıma Hazır", "#166534", "#DCFCE7"),
+    "Rezerve": ("Rezerve", "#1D4ED8", "#DBEAFE"),
+    "Kullanimda": ("Kullanımda", "#0E7490", "#CFFAFE"),
+    "Bakimda": ("Bakımda", "#854D0E", "#FEF3C7"),
+    "Kalibrasyonda": ("Kalibrasyonda", "#6D28D9", "#EDE9FE"),
+    "Arizali": ("Arızalı", "#991B1B", "#FEE2E2"),
+    "Kullanim_Disi": ("Kullanım Dışı", "#475569", "#E2E8F0"),
+}
+BILGI_KUTUSU_STILI = ("background: #FEF3C7; color: #854D0E; border: 1px solid #FDE68A; border-radius: 10px; "
+                      "padding: 10px 12px; font-size: 12px; font-weight: 700;")
+
+
+def durum_hapi(durum):
+    ad, renk, arka = DURUMLAR.get(durum, (str(durum or "-"), "#6B7280", "#F3F4F6"))
+    return hap(ad, renk, arka)
+
 
 class CihazIslemFormu(QDialog):
     """Cihaz Ekleme ve Düzenleme İşlemleri İçin Ortak Form"""
@@ -28,11 +43,12 @@ class CihazIslemFormu(QDialog):
         
         baslik = "Yeni Cihaz Ekle" if islem_turu == "EKLE" else "Cihaz Durumunu Güncelle"
         self.setWindowTitle(f"TKYS — {baslik}")
-        self.setMinimumWidth(400)
-        self.setStyleSheet("* { font-family: 'Segoe UI', Arial; font-size: 13px; }")
+        self.setMinimumWidth(440)
+        self.setStyleSheet(FORM_STIL)
 
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
+        form_layout.setSpacing(15)
         
         self.txt_envanter = QLineEdit()
         self.txt_ad = QLineEdit()
@@ -40,8 +56,8 @@ class CihazIslemFormu(QDialog):
         self.txt_seri = QLineEdit()
         
         self.cmb_durum = QComboBox()
-        durumlar = ["Kullanılabilir", "Rezerve", "Bakımda", "Arızalı", "Kalibrasyonda", "Kullanım Dışı"]
-        self.cmb_durum.addItems(durumlar)
+        for db_degeri, (ad, _renk, _arka) in DURUMLAR.items():
+            self.cmb_durum.addItem(ad, db_degeri)         # gösterilen ad + sunucunun anladığı değer
 
         self.cmb_oda = QComboBox()
         self.cmb_oda.addItem("Oda Seçiniz (Opsiyonel)", None)
@@ -54,21 +70,17 @@ class CihazIslemFormu(QDialog):
         form_layout.addRow("Zimmetli Oda:", self.cmb_oda)
         
         if islem_turu == "GUNCELLE":
-            self.txt_envanter.setReadOnly(True)
-            self.txt_envanter.setStyleSheet("background-color: #F0F0F0; color: #777;")
+            self.txt_envanter.setReadOnly(True)                  # gri görünüm FORM_STIL'den gelir
             form_layout.addRow("Durum (*):", self.cmb_durum)
             self.formu_doldur()
         
         layout.addLayout(form_layout)
         
-        btn_layout = QHBoxLayout()
-        self.btn_kaydet = QPushButton("💾 Kaydet")
-        self.btn_kaydet.setStyleSheet("background-color: #27AE60; color: white; padding: 8px; border-radius: 4px; font-weight: bold;")
+        self.btn_kaydet = QPushButton("Kaydet")
+        self.btn_kaydet.setObjectName("kaydet")
+        self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_kaydet)
-        
-        layout.addLayout(btn_layout)
+        layout.addWidget(self.btn_kaydet)
 
     def odalari_yukle(self):
         try:
@@ -87,31 +99,23 @@ class CihazIslemFormu(QDialog):
         self.txt_ad.setText(self.cihaz_veri.get("cihaz_adi", ""))
         self.txt_marka.setText(self.cihaz_veri.get("marka_model", ""))
         self.txt_seri.setText(self.cihaz_veri.get("seri_no", ""))
-        self.cmb_durum.setCurrentText(self.cihaz_veri.get("durum", "Kullanılabilir"))
+        oda_indeks = self.cmb_oda.findData(self.cihaz_veri.get("zimmetli_oda_id"))
+        if oda_indeks >= 0:
+            self.cmb_oda.setCurrentIndex(oda_indeks)
+        indeks = self.cmb_durum.findData(self.cihaz_veri.get("durum"))
+        if indeks >= 0:                                    # bilinmeyen değerde ilk seçeneğe sessizce düşme
+            self.cmb_durum.setCurrentIndex(indeks)
 
     def kaydet(self):
         if not self.txt_envanter.text().strip() or not self.txt_ad.text().strip():
             QMessageBox.warning(self, "Hata", "Envanter kodu ve cihaz adı zorunludur!")
             return
 
-# Ekranda gösterilen Türkçe durumları, veritabanının anladığı formata çeviren sözlük
-        durum_cevirici = {
-            "Kullanılabilir": "Kullanima_Hazir",
-            "Rezerve": "Rezerve",
-            "Bakımda": "Bakimda",
-            "Arızalı": "Arizali",
-            "Kalibrasyonda": "Kalibrasyonda",
-            "Kullanım Dışı": "Kullanim_Disi"
-        }
-        
-        # Ekrandaki kelimeyi alıp, sözlükten karşılığını buluyoruz. 
-        # (Bulamazsa varsayılan olarak Kullanima_Hazir yollar)
-        ekrandaki_durum = self.cmb_durum.currentText()
-        db_durumu = durum_cevirici.get(ekrandaki_durum, "Kullanima_Hazir")
+        db_durumu = self.cmb_durum.currentData() or "Kullanima_Hazir"
 
         veri = {
             "envanter_kodu": self.txt_envanter.text().strip(),
-            "cihaz_adi": self.txt_ad.text().strip(  ),
+            "cihaz_adi": self.txt_ad.text().strip(),
             "marka_model": self.txt_marka.text().strip() or None,
             "seri_no": self.txt_seri.text().strip() or None,
             "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
@@ -150,22 +154,46 @@ class CihazYonetimEkrani(QWidget):
         self.api_url = api_url
         self.token = token
         self.yetkili_mi = yetkili_mi
-        
+        self.arayuzu_olustur()
+
+    def arayuzu_olustur(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.tablo = QTableWidget()
-        self.tablo.setColumnCount(6)
-        self.tablo.setHorizontalHeaderLabels(["ID", "Envanter Kodu", "Cihaz Adı", "Marka/Model", "Seri No", "Durum"])
-        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tablo.setStyleSheet(TABLO_STIL)
-        self.tablo.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tablo.setSelectionBehavior(QTableWidget.SelectRows)
-                    
-        layout.addWidget(self.tablo)
-        
-        # (Eskiden burada olan alt bilgi yazısını tamamen sildik çünkü artık yukarıda harika bir kutumuz var)
-        
+        layout.setSpacing(16)
+
+        self.arama = QLineEdit()
+        self.arama.setPlaceholderText("🔍  Envanter kodu, cihaz veya marka ara...")
+        self.arama.textChanged.connect(self.filtrele)
+
+        self.cip_toplam = sayi_cipi("0 cihaz")
+        self.cip_hazir = sayi_cipi("0 kullanıma hazır", "#166534", "#DCFCE7")
+        self.cip_bakimda = sayi_cipi("0 bakım/kalibrasyon", "#854D0E", "#FEF3C7")
+        self.cip_arizali = sayi_cipi("0 arızalı", "#991B1B", "#FEE2E2")
+
+        layout.addWidget(sayfa_basligi(
+            "Cihaz Envanteri", "Kayıtlı cihazlar ve anlık durumları",
+            self.arama, yenile_butonu_olustur(self.verileri_yukle),
+            [self.cip_toplam, self.cip_hazir, self.cip_bakimda, self.cip_arizali]))
+
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"])
+        kb = self.tablo.horizontalHeader()
+        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(1, QHeaderView.Stretch)
+        kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(4, 160)
+
+        self.bos_mesaj = bos_mesaj_olustur("Henüz cihaz kaydı yok.")
+
+        kart = QFrame()
+        kart.setObjectName("kart")
+        kl = QVBoxLayout(kart)
+        kl.setContentsMargins(8, 8, 8, 8)
+        kl.addWidget(self.tablo)
+        kl.addWidget(self.bos_mesaj)
+        layout.addWidget(kart, 1)
+
         self.verileri_yukle()
 
     def verileri_yukle(self):
@@ -174,28 +202,48 @@ class CihazYonetimEkrani(QWidget):
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
             if oturum_hatasi_mi(cevap):
                 return
-            if cevap.status_code == 200:
-                cihazlar = cevap.json()
-                self.tablo.setRowCount(len(cihazlar))
-                for satir, cihaz in enumerate(cihazlar):
-                    self.tablo.setItem(satir, 0, QTableWidgetItem(str(cihaz["cihaz_id"])))
-                    self.tablo.setItem(satir, 1, QTableWidgetItem(cihaz["envanter_kodu"]))
-                    self.tablo.setItem(satir, 2, QTableWidgetItem(cihaz["cihaz_adi"]))
-                    self.tablo.setItem(satir, 3, QTableWidgetItem(cihaz.get("marka_model") or "-"))
-                    self.tablo.setItem(satir, 4, QTableWidgetItem(cihaz.get("seri_no") or "-"))
-                    
-                    durum_hucre = QTableWidgetItem(cihaz["durum"])
-                    if cihaz["durum"] == "Arızalı":
-                        durum_hucre.setForeground(Qt.red)
-                    elif cihaz["durum"] == "Kullanılabilir":
-                        durum_hucre.setForeground(Qt.darkGreen)
-                    elif cihaz["durum"] == "Bakımda":
-                        durum_hucre.setForeground(Qt.darkYellow)
-                    durum_hucre.setFont(durum_hucre.font())
-                    
-                    self.tablo.setItem(satir, 5, durum_hucre)
+            cevap.raise_for_status()
+            cihazlar = cevap.json()
         except Exception as e:
-            pass
+            print(f"Cihaz listesi yükleme hatası: {e}")
+            self.bos_mesaj.setText("Cihazlar yüklenemedi. Sunucu bağlantısını kontrol edin.")
+            self.bos_mesaj.show()
+            self.tablo.hide()
+            return
+
+        hazir = bakimda = arizali = 0
+        self.tablo.setRowCount(len(cihazlar))
+        for satir, cihaz in enumerate(cihazlar):
+            durum = cihaz.get("durum")
+            hazir += durum == "Kullanima_Hazir"
+            bakimda += durum in ("Bakimda", "Kalibrasyonda")
+            arizali += durum == "Arizali"
+
+            kod_item = metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True)
+            kod_item.setData(Qt.UserRole, cihaz.get("cihaz_id"))
+            self.tablo.setItem(satir, 0, kod_item)
+            self.tablo.setItem(satir, 1, metin_item(str(cihaz.get("cihaz_adi") or "")))
+            self.tablo.setItem(satir, 2, metin_item(cihaz.get("marka_model") or "-"))
+            self.tablo.setItem(satir, 3, metin_item(cihaz.get("seri_no") or "-"))
+            self.tablo.setCellWidget(satir, 4, durum_hapi(durum))
+
+        self.cip_toplam.setText(f"{len(cihazlar)} cihaz")
+        self.cip_hazir.setText(f"{hazir} kullanıma hazır")
+        self.cip_bakimda.setText(f"{bakimda} bakım/kalibrasyon")
+        self.cip_arizali.setText(f"{arizali} arızalı")
+        self.bos_mesaj.setText("Henüz cihaz kaydı yok.")
+        self.bos_mesaj.setVisible(not cihazlar)
+        self.tablo.setVisible(bool(cihazlar))
+        self.filtrele(self.arama.text())
+
+    def filtrele(self, metin):
+        """Envanter kodu, cihaz adı, marka ve seri no sütunlarında arama yapar."""
+        aranan = metin.strip().lower()
+        for satir in range(self.tablo.rowCount()):
+            icerik = " ".join(
+                (self.tablo.item(satir, k).text() if self.tablo.item(satir, k) else "")
+                for k in (0, 1, 2, 3)).lower()
+            self.tablo.setRowHidden(satir, aranan not in icerik)
 
     def yeni_cihaz_ekle(self):
         form = CihazIslemFormu(self.api_url, self.token, islem_turu="EKLE")
@@ -208,31 +256,35 @@ class CihazYonetimEkrani(QWidget):
         # Kullanıcı düzenleme penceresini kapattığında, ana ekrandaki tabloyu da yenile:
         self.verileri_yukle()
 
+
 class CihazDuzenlemeListesi(QDialog):
-    """Kullanıcının cihazları listeden görüp 'Düzenle' butonuna basarak düzenlediği özel pencere"""
+    """Kullanıcının cihazları listeden görüp ✎ butonuyla düzenlediği pencere"""
     def __init__(self, api_url, token, parent=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
-        self.setWindowTitle("TKYS — Envanter Düzenleme Listesi")
-        self.setMinimumSize(700, 450)
-        self.setStyleSheet("* { font-family: 'Segoe UI', Arial; font-size: 13px; }")
+        self.setWindowTitle("TKYS — Envanter Düzenleme")
+        self.setMinimumSize(720, 480)
+        self.setStyleSheet(FORM_STIL)
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
 
-        lbl = QLabel("✏️ <b>Düzenlemek istediğiniz cihazın sağ tarafındaki 'Düzenle' butonuna tıklayın.</b>")
-        lbl.setStyleSheet("background-color: #FFF3CD; color: #856404; padding: 10px; border-radius: 5px; border: 1px solid #FFEEBA;")
+        lbl = QLabel("Düzenlemek istediğiniz cihazın sağındaki ✎ butonuna tıklayın.")
+        lbl.setStyleSheet(BILGI_KUTUSU_STILI)
+        lbl.setWordWrap(True)
         layout.addWidget(lbl)
 
-        self.tablo = QTableWidget()
-        self.tablo.setColumnCount(5)
-        self.tablo.setHorizontalHeaderLabels(["ID", "Envanter Kodu", "Cihaz Adı", "Durum", "İşlem"])
-        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tablo.setStyleSheet(TABLO_STIL)
-        self.tablo.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tablo.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "DURUM", "İŞLEM"])
+        kb = self.tablo.horizontalHeader()
+        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(1, QHeaderView.Stretch)
+        kb.setSectionResizeMode(2, QHeaderView.Fixed)
+        kb.setSectionResizeMode(3, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(2, 160)
+        self.tablo.setColumnWidth(3, 90)
+        layout.addWidget(self.tablo, 1)
 
-        layout.addWidget(self.tablo)
         self.verileri_yukle()
 
     def verileri_yukle(self):
@@ -241,34 +293,21 @@ class CihazDuzenlemeListesi(QDialog):
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
             if oturum_hatasi_mi(cevap):
                 return
-            if cevap.status_code == 200:
-                cihazlar = cevap.json()
-                self.tablo.setRowCount(len(cihazlar))
-                for satir, cihaz in enumerate(cihazlar):
-                    self.tablo.setItem(satir, 0, QTableWidgetItem(str(cihaz["cihaz_id"])))
-                    self.tablo.setItem(satir, 1, QTableWidgetItem(cihaz["envanter_kodu"]))
-                    self.tablo.setItem(satir, 2, QTableWidgetItem(cihaz["cihaz_adi"]))
-                    self.tablo.setItem(satir, 3, QTableWidgetItem(cihaz["durum"]))
-
-                    # Her satırın sonuna Özel "Düzenle" Butonu Ekleme
-                    btn_duzenle = QPushButton("✎ Düzenle")
-                    btn_duzenle.setStyleSheet("background-color: #F39C12; color: white; border-radius: 4px; padding: 5px; font-weight: bold;")
-                    btn_duzenle.setCursor(Qt.PointingHandCursor)
-                    
-                    # Tıklanınca formu açacak bağlantı
-                    btn_duzenle.clicked.connect(lambda checked=False, c=cihaz: self.cihazi_duzenle(c))
-
-                    hucre_widget = QWidget()
-                    hucre_layout = QHBoxLayout(hucre_widget)
-                    hucre_layout.setContentsMargins(4, 4, 4, 4)
-                    hucre_layout.addWidget(btn_duzenle)
-                    hucre_layout.setAlignment(Qt.AlignCenter)
-                    
-                    self.tablo.setCellWidget(satir, 4, hucre_widget)
+            cevap.raise_for_status()
+            cihazlar = cevap.json()
         except Exception as e:
-            pass
+            print(f"Düzenleme listesi yükleme hatası: {e}")
+            return
+
+        self.tablo.setRowCount(len(cihazlar))
+        for satir, cihaz in enumerate(cihazlar):
+            self.tablo.setItem(satir, 0, metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True))
+            self.tablo.setItem(satir, 1, metin_item(str(cihaz.get("cihaz_adi") or "")))
+            self.tablo.setCellWidget(satir, 2, durum_hapi(cihaz.get("durum")))
+            self.tablo.setCellWidget(satir, 3, tek_islem_butonu(
+                lambda _=False, c=cihaz: self.cihazi_duzenle(c), "✎", "Düzenle"))
 
     def cihazi_duzenle(self, cihaz):
         form = CihazIslemFormu(self.api_url, self.token, islem_turu="GUNCELLE", cihaz_veri=cihaz)
         if form.exec():
-            self.verileri_yukle() # Pencere içindeki listeyi yenile
+            self.verileri_yukle()  # Pencere içindeki listeyi yenile
