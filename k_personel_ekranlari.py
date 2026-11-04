@@ -668,6 +668,10 @@ class KullaniciOlusturFormu(QDialog):
         layout.addWidget(self.input_kullanici_adi)
         self.kullanici_adi_elle_degisti = False
         self._son_kontrol_edilen_ad = None
+        # Pencere boyutunu, içerik yerleştikten sonra bir kez daha içeriğe göre ayarlar.
+        self._boyut_zamanlayici = QTimer(self)
+        self._boyut_zamanlayici.setSingleShot(True)
+        self._boyut_zamanlayici.timeout.connect(self.adjustSize)
         # Ad soyad yazılırken kısa bir bekleme sonrası sunucuya "bu ad boş mu?" diye sorulur.
         self._netlestirme_zamanlayici = QTimer(self)
         self._netlestirme_zamanlayici.setSingleShot(True)
@@ -768,7 +772,9 @@ class KullaniciOlusturFormu(QDialog):
         self.adjustSize()
         # Yetki kartının içeriği yeni eklendi; yerleşim olay döngüsünde tamamlanınca pencere,
         # ekran ölçeğinden bağımsız olarak son boyuna getirilir (liste kesilmesin).
-        QTimer.singleShot(0, self.adjustSize)
+        # Zamanlayıcı pencerenin çocuğudur: pencere kapanıp silinirse bekleyen çağrı da iptal olur
+        # (QTimer.singleShot ile silinmiş pencerenin yöntemi çağrılıp hata penceresi çıkabiliyordu).
+        self._boyut_zamanlayici.start(0)
 
     def kaydet(self):
         rol_id = self.combo_rol.currentData()
