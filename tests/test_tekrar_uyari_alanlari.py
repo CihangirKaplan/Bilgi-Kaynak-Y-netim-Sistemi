@@ -24,46 +24,50 @@ def cevap(durum, veri=None):
     return r
 
 
+def uyari_sec(t, gun):
+    t.cmb_uyari.setCurrentIndex(t.cmb_uyari.findData(gun))
+
+
 def alanlar(ay=None, uyari=30, bitis=QDate(2026, 3, 10), sonraki=QDate(2026, 9, 10)):
     dt_bitis, dt_sonraki = QDateEdit(bitis), QDateEdit(sonraki)
     return dt_bitis, dt_sonraki, TekrarUyariAlanlari(dt_bitis, dt_sonraki, "Sonraki bakım",
                                                      uyari_suresi=uyari, varsayilan_ay=ay)
 
 
-def test_varsayilan_aralik_sonraki_tarihi_bitisten_hesaplar(qt_app):
+def test_varsayilan_secim_sonraki_tarihi_bitisten_hesaplar(qt_app):
     bitis, sonraki, t = alanlar(ay=6)
-    assert t.cmb_tekrar.currentText() == "6 ay"
+    assert t.secili_ay() == 6
     assert sonraki.date() == QDate(2026, 9, 10)
+    assert sonraki.isHidden()                              # tarih kutusu yalnızca 'Tarih seç'te açılır
+    assert "10.09.2026" in t.lbl_sonuc.text() and "6 ay" in t.lbl_sonuc.text()
     bitis.setDate(QDate(2026, 4, 30))                      # bitiş değişince sonraki de kayar
     assert sonraki.date() == QDate(2026, 10, 30)
 
 
-def test_aralik_secilince_hesaplanir(qt_app):
+def test_dugme_secilince_hesaplanir(qt_app):
     bitis, sonraki, t = alanlar()
-    t.cmb_tekrar.setCurrentIndex(5)                        # "2 yıl"
-    t.cmb_tekrar.activated.emit(5)
-    assert sonraki.date() == QDate(2028, 3, 10)
+    t.butonlar[12].click()                                 # "1 yıl"
+    assert sonraki.date() == QDate(2027, 3, 10)
+    assert "1 yıl" in t.lbl_sonuc.text()
+    t.butonlar[3].click()
+    assert sonraki.date() == QDate(2026, 6, 10)
 
 
-def test_tarih_elle_degisince_elle_gireceginiz_secilir_ve_ezilmez(qt_app):
+def test_tarih_sec_kutuyu_acar_ve_tarih_ezilmez(qt_app):
     bitis, sonraki, t = alanlar(ay=6)
-    sonraki.userDateChanged.emit(QDate(2026, 12, 1))       # kullanıcı düzenledi
-    assert t.cmb_tekrar.currentIndex() == 0
+    t.butonlar[None].click()                               # "Tarih seç"
+    assert not sonraki.isHidden() and t.secili_ay() is None
     sonraki.setDate(QDate(2026, 12, 1))
     bitis.setDate(QDate(2026, 5, 5))                       # artık otomatik hesap yok
     assert sonraki.date() == QDate(2026, 12, 1)
-
-
-def test_programatik_hesap_combo_u_elle_e_dondurmez(qt_app):
-    bitis, sonraki, t = alanlar(ay=3)
-    bitis.setDate(QDate(2026, 6, 1))
-    assert t.cmb_tekrar.currentText() == "3 ay"
+    assert t.lbl_sonuc.text() == ""
 
 
 def test_kayitli_tarih_korunur_ve_uyari_dolar(qt_app):
     bitis, sonraki, t = alanlar(ay=None, uyari=45)
+    assert t.secili_ay() is None and not sonraki.isHidden()
     assert sonraki.date() == QDate(2026, 9, 10)
-    assert t.uyari_suresi() == 45
+    assert t.uyari_suresi() == 45                          # listede olmayan değer de gösterilir
     bitis.setDate(QDate(2026, 4, 1))
     assert sonraki.date() == QDate(2026, 9, 10)
 
@@ -74,11 +78,11 @@ def test_ozet_metinleri(qt_app):
     sonraki.setDate(QDate(bugun.year - 1, 1, 1))
     assert "geçmişte" in t.lbl_ozet.text()
     sonraki.setDate(QDate.currentDate().addDays(100))
-    assert "30 gün kala" in t.lbl_ozet.text() and "bildirim düşer" in t.lbl_ozet.text()
+    assert "(30 gün kala)" in t.lbl_ozet.text() and "bildirim düşer" in t.lbl_ozet.text()
     sonraki.setDate(QDate.currentDate().addDays(10))
     assert "bildirim şimdiden görünür" in t.lbl_ozet.text()
-    t.spin_uyari.setValue(0)
-    assert "geldiği gün" in t.lbl_ozet.text()
+    uyari_sec(t, 0)
+    assert "günü bildirim düşer" in t.lbl_ozet.text()
 
 
 def test_satirlar_forma_eklenir(qt_app):
@@ -86,6 +90,7 @@ def test_satirlar_forma_eklenir(qt_app):
     form = QFormLayout()
     t.satirlari_ekle(form)
     assert form.rowCount() == 3
+    assert t.sonraki.parentWidget() is not None and len(t.butonlar) == 4
 
 
 # ------------------------------------------------------------------ formlar
@@ -111,20 +116,20 @@ def yukleme(modul, sinif, ek, doldur):
 def test_yeni_bakim_formu_varsayilan_6_ay_ve_payload(qt_app):
     modul = cihaz_bakim_ekranlari
     form = formu_ac(modul, "YeniBakimFormu")
-    assert form.tekrar.cmb_tekrar.currentText() == "6 ay"
+    assert form.tekrar.secili_ay() == 6
     assert form.dt_sonraki_bakim.date() == form.dt_bitis.date().addMonths(6)
     form.close()
-    veri = yukleme(modul, "YeniBakimFormu", (), lambda f: f.tekrar.spin_uyari.setValue(12))
-    assert veri["uyari_suresi_gun"] == 12
+    veri = yukleme(modul, "YeniBakimFormu", (), lambda f: uyari_sec(f.tekrar, 15))
+    assert veri["uyari_suresi_gun"] == 15
 
 
 def test_yeni_kalibrasyon_formu_varsayilan_1_yil_ve_payload(qt_app):
     modul = cihaz_kalibrasyon_ekranlari
     form = formu_ac(modul, "YeniKalibrasyonFormu")
-    assert form.tekrar.cmb_tekrar.currentText() == "1 yıl"
+    assert form.tekrar.secili_ay() == 12
     assert form.dt_gecerlilik.date() == form.dt_bitis.date().addMonths(12)
     form.close()
-    veri = yukleme(modul, "YeniKalibrasyonFormu", (), lambda f: f.tekrar.spin_uyari.setValue(60))
+    veri = yukleme(modul, "YeniKalibrasyonFormu", (), lambda f: uyari_sec(f.tekrar, 60))
     assert veri["uyari_suresi_gun"] == 60
 
 
@@ -135,10 +140,10 @@ def test_bakim_duzenle_formu_kayitli_degerleri_korur(qt_app):
              "uyari_suresi_gun": 45}
     form = formu_ac(modul, "BakimDuzenleFormu", kayit)
     assert form.dt_sonraki_bakim.date() == QDate(2026, 10, 15)
-    assert form.tekrar.cmb_tekrar.currentIndex() == 0
+    assert form.tekrar.secili_ay() is None
     assert form.tekrar.uyari_suresi() == 45
     form.close()
-    veri = yukleme(modul, "BakimDuzenleFormu", (kayit,), lambda f: f.tekrar.spin_uyari.setValue(7))
+    veri = yukleme(modul, "BakimDuzenleFormu", (kayit,), lambda f: uyari_sec(f.tekrar, 7))
     assert veri["uyari_suresi_gun"] == 7 and veri["sonraki_bakim_tarihi"] == "2026-10-15"
 
 

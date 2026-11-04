@@ -57,12 +57,11 @@ class YeniKalibrasyonFormu(QDialog):
         form.addRow("Sertifika No (*):", self.txt_sertifika)
         form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
         form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
-        form.addRow("Geçerlilik Tarihi (*):", self.dt_gecerlilik)
 
         # Tekrar aralığı seçilince geçerlilik tarihi bitişe göre hesaplanır; uyarı süresi zil/dashboard içindir.
-        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Kalibrasyon geçerliliği sona erer",
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Geçerlilik",
                                           varsayilan_ay=12)
-        self.tekrar.satirlari_ekle(form)
+        self.tekrar.satirlari_ekle(form, "Geçerlilik sonu:")
         layout.addLayout(form)
 
         self.btn_kaydet = QPushButton("Kaydet")
@@ -151,11 +150,10 @@ class KalibrasyonDuzenleFormu(QDialog):
         form.addRow("Sertifika No (*):", self.txt_sertifika)
         form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
         form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
-        form.addRow("Geçerlilik (*):", self.dt_gecerlilik)
 
-        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Kalibrasyon geçerliliği sona erer",
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Geçerlilik",
                                           uyari_suresi=veri.get("uyari_suresi_gun", 30))
-        self.tekrar.satirlari_ekle(form)
+        self.tekrar.satirlari_ekle(form, "Geçerlilik sonu:")
         layout.addLayout(form)
 
         btn = QPushButton("Değişiklikleri Kaydet")
