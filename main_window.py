@@ -885,8 +885,16 @@ QLabel {
                         f"({zaman})"
                     )
 
+                    # Bildirim kendi sayfasını açar (Bakım Kayıtları / Kalibrasyon); kullanıcının
+                    # o sayfaya yetkisi yoksa Cihaz Envanteri'ne yönlenir.
+                    tur = islem.get("islem_turu")
+                    hedef = "Bakım Kayıtları" if tur == "Bakım" else (
+                        "Kalibrasyon" if tur == "Kalibrasyon" else "Cihaz Envanteri")
+                    if hedef not in self.nav_btnler:
+                        hedef = "Cihaz Envanteri"
+
                     self._bildirimler.append((
-                        "Cihaz Uyarıları", metin, "Cihaz Envanteri"
+                        "Cihaz Uyarıları", metin, hedef
                     ))
                     self._bildirim_sayisi += 1
 
