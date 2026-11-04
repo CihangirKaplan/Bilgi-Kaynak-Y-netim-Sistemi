@@ -75,6 +75,7 @@ def test_kilitli_hesap_dogru_parolayla_bile_giremez():
     with (
         patch("sunucu.psycopg2.connect", return_value=conn),
         patch("sunucu.parola_dogrula") as parola_kontrol,
+        patch("sunucu.denetim_kaydi_olustur") as audit,
     ):
         with pytest.raises(HTTPException) as hata:
             giris_yap(
@@ -87,6 +88,9 @@ def test_kilitli_hesap_dogru_parolayla_bile_giremez():
     assert hata.value.status_code == 429
     parola_kontrol.assert_not_called()
     conn.commit.assert_not_called()
+
+    audit.assert_called_once()
+    assert audit.call_args.kwargs["olay_turu"] == "LOGIN_FAILED"
 
 
 def test_gecerli_token_kullanici_id_doner():
@@ -201,3 +205,52 @@ def test_onuncu_hatali_giris_on_bes_dakika_kilitler():
     kalan = guncellemeler[0].args[1][1] - datetime.now()
     assert timedelta(seconds=899) < kalan <= timedelta(seconds=900)
     conn.commit.assert_called_once()
+
+
+def test_kilitli_hesap_giris_denemesini_audite_yazar():
+    """
+    QA-001:
+    Kilitli hesaba yapilan giris denemesi
+    LOGIN_FAILED olarak denetlenmelidir.
+    """
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+
+    cursor.fetchone.return_value = sahte_kullanici(
+        hata_sayisi=5,
+        kilit_bitis=datetime.now() + timedelta(minutes=10),
+    )
+
+    with (
+        patch("sunucu.psycopg2.connect", return_value=conn),
+        patch("sunucu.denetim_kaydi_olustur") as audit,
+        patch("sunucu.parola_dogrula") as parola_kontrol,
+        patch("sunucu.access_token_olustur") as token,
+    ):
+        with pytest.raises(HTTPException) as hata:
+            giris_yap(
+                GirisModeli(
+                    kullanici_adi="test_psikolog",
+                    parola="test_parola",
+                )
+            )
+
+    assert hata.value.status_code == 429
+
+    # Kilitli hesapta parola kontrol edilmemeli.
+    parola_kontrol.assert_not_called()
+
+    # Kullaniciya token uretilmemeli.
+    token.assert_not_called()
+
+    # Kilit ve basarisiz giris sayaci degismemeli.
+    conn.commit.assert_not_called()
+
+    # Kilitli hesaba giris denemesi kaydedilmeli.
+    audit.assert_called_once()
+
+    assert audit.call_args.kwargs["olay_turu"] == "LOGIN_FAILED"
+    assert audit.call_args.kwargs["kullanici_id"] == 5
+
+    cursor.close.assert_called_once()
+    conn.close.assert_called_once()

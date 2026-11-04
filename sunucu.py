@@ -203,6 +203,13 @@ def giris_yap(giris: GirisModeli):
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if kullanici[6] is not None and kullanici[6] > datetime.now():
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="LOGIN_FAILED",
+                kullanici_id=kullanici[0],
+                hedef_tablo="kullanicilar",
+                hedef_kayit_id=kullanici[0],
+            )
             kalan_saniye = max(1, int((kullanici[6] - datetime.now()).total_seconds()) + 1)
             raise HTTPException(
                 status_code=429,
