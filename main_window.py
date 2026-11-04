@@ -1544,7 +1544,7 @@ QLabel {
         lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
-        if yetkili and oge["ad"] != "Danışma Masası":
+        if yetkili and oge["ad"] not in ("Danışma Masası", "Danışma Masası Yönetimi"):
             ab = QHBoxLayout()
             ab.setSpacing(12)
             for etiket, izin_kodu in yetkili:

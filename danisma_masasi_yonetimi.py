@@ -26,6 +26,107 @@ from PySide6.QtWidgets import (
 )
 
 
+
+def _gorev_formunu_stille(pencere, form, baslik, aciklama):
+    from PySide6.QtWidgets import QFormLayout
+
+    pencere.setObjectName("danismaGorevDialog")
+    pencere.setMinimumWidth(570)
+
+    pencere.setStyleSheet("""
+        QDialog#danismaGorevDialog {
+            background-color: #FFFFFF;
+        }
+
+        QDialog#danismaGorevDialog QLabel {
+            color: #16294B;
+            background: transparent;
+            font-size: 13px;
+        }
+
+        QLabel#gorevDialogBaslik {
+            color: #082B66;
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        QLabel#gorevDialogAciklama {
+            color: #7184A2;
+            font-size: 12px;
+            padding-bottom: 8px;
+        }
+
+        QLabel#gorevOgrenci {
+            background-color: #F1F6FF;
+            color: #173B70;
+            border: 1px solid #D7E5FA;
+            border-radius: 8px;
+            padding: 11px 12px;
+            font-weight: 700;
+        }
+
+        QDialog#danismaGorevDialog QComboBox,
+        QDialog#danismaGorevDialog QDateTimeEdit {
+            background-color: #FFFFFF;
+            color: #16294B;
+            border: 1px solid #CCD9ED;
+            border-radius: 8px;
+            padding: 7px 12px;
+            min-height: 28px;
+            font-size: 13px;
+        }
+
+        QDialog#danismaGorevDialog QComboBox:focus,
+        QDialog#danismaGorevDialog QDateTimeEdit:focus {
+            border: 1px solid #1769EF;
+            background-color: #F8FBFF;
+        }
+
+        QPushButton#danismaKaydet {
+            background-color: #0966EF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 20px;
+            font-weight: 700;
+        }
+
+        QPushButton#danismaKaydet:hover {
+            background-color: #0754C7;
+        }
+
+        QPushButton#danismaIptal {
+            background-color: #EDF3FC;
+            color: #234B80;
+            border: 1px solid #D7E3F4;
+            border-radius: 8px;
+            padding: 9px 20px;
+            font-weight: 700;
+        }
+
+        QPushButton#danismaIptal:hover {
+            background-color: #DFEAF9;
+        }
+    """)
+
+    form.setContentsMargins(28, 26, 28, 26)
+    form.setHorizontalSpacing(18)
+    form.setVerticalSpacing(15)
+    form.setFieldGrowthPolicy(
+        QFormLayout.AllNonFixedFieldsGrow
+    )
+    form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+    ust_baslik = QLabel(baslik)
+    ust_baslik.setObjectName("gorevDialogBaslik")
+    form.addRow(ust_baslik)
+
+    alt_yazi = QLabel(aciklama)
+    alt_yazi.setObjectName("gorevDialogAciklama")
+    alt_yazi.setWordWrap(True)
+    form.addRow(alt_yazi)
+
+
 class DanismaMasasiYonetimi(QWidget):
     NAVY = "#16294B"
     BLUE = "#285CE6"
@@ -516,6 +617,11 @@ class DanismaMasasiYonetimi(QWidget):
         pencere.setMinimumWidth(440)
 
         form = QFormLayout(pencere)
+        _gorev_formunu_stille(
+            pencere, form,
+            "Yeni Danışma Masası Görevi",
+            "Öğrenci için yeni görev kaydı oluşturun."
+        )
 
         ogrenci_sec = QComboBox()
         for ogrenci in ogrenciler:
@@ -548,6 +654,16 @@ class DanismaMasasiYonetimi(QWidget):
         )
         butonlar.button(QDialogButtonBox.Save).setText("Kaydet")
         butonlar.button(QDialogButtonBox.Cancel).setText("İptal")
+
+        kaydet_btn = butonlar.button(QDialogButtonBox.Save)
+        iptal_btn = butonlar.button(QDialogButtonBox.Cancel)
+
+        kaydet_btn.setObjectName("danismaKaydet")
+        iptal_btn.setObjectName("danismaIptal")
+
+        for btn in (kaydet_btn, iptal_btn):
+            btn.setMinimumSize(105, 38)
+            btn.setCursor(Qt.PointingHandCursor)
 
         form.addRow(butonlar)
 
@@ -647,14 +763,18 @@ class DanismaMasasiYonetimi(QWidget):
         pencere.setMinimumWidth(480)
 
         form = QFormLayout(pencere)
+        _gorev_formunu_stille(
+            pencere, form,
+            "Danışma Masası Görevini Düzenle",
+            "Seçilen görevin başlangıç ve bitiş zamanını güncelleyin."
+        )
 
         ogrenci = QLabel(
             f"{oturum.get('ad_soyad', '')} - "
             f"{oturum.get('ogrenci_numarasi', '')}"
         )
-        ogrenci.setStyleSheet(
-            "font-weight: bold; color: #16294B;"
-        )
+        ogrenci.setObjectName("gorevOgrenci")
+        ogrenci.setWordWrap(True)
 
         baslangic = QDateTimeEdit()
         baslangic.setCalendarPopup(True)
@@ -688,6 +808,16 @@ class DanismaMasasiYonetimi(QWidget):
 
         butonlar.button(QDialogButtonBox.Save).setText("Kaydet")
         butonlar.button(QDialogButtonBox.Cancel).setText("İptal")
+
+        kaydet_btn = butonlar.button(QDialogButtonBox.Save)
+        iptal_btn = butonlar.button(QDialogButtonBox.Cancel)
+
+        kaydet_btn.setObjectName("danismaKaydet")
+        iptal_btn.setObjectName("danismaIptal")
+
+        for btn in (kaydet_btn, iptal_btn):
+            btn.setMinimumSize(105, 38)
+            btn.setCursor(Qt.PointingHandCursor)
 
         form.addRow(butonlar)
 
