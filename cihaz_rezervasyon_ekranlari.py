@@ -289,12 +289,14 @@ class RezervasyonYonetimEkrani(QWidget):
                     durum_hucre = QTableWidgetItem(rez.get("durum", "Aktif"))
                     if rez.get("durum") == "İptal Edildi":
                         durum_hucre.setForeground(Qt.red)
+                    elif rez.get("durum") == "Tamamlandı":
+                        durum_hucre.setForeground(Qt.gray)
                     else:
                         durum_hucre.setForeground(Qt.darkGreen)
                     self.tablo.setItem(satir, 4, durum_hucre)
 
                     # Eğer iptal edilmemişse ve kullanıcının yetkisi varsa İptal butonu koy
-                    if rez.get("durum") != "İptal Edildi" and self.yetkili_mi:
+                    if rez.get("durum") == "Aktif" and self.yetkili_mi:
                         btn_iptal = QPushButton("❌ İptal Et")
                         # Butonu daha esnek, fontu biraz daha okunur ve yatayda ortalanmış yaptık
                         btn_iptal.setStyleSheet("""

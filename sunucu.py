@@ -1541,6 +1541,23 @@ def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kont
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+def rezervasyon_gorunen_durumu(iptal_edildi_mi, bitis_zamani, simdi=None):
+    """Rezervasyonun gorunen durumunu hesaplar; veritabanini degistirmez."""
+    if iptal_edildi_mi:
+        return "İptal Edildi"
+
+    if bitis_zamani is None:
+        return "Aktif"
+
+    if simdi is None:
+        simdi = datetime.now(bitis_zamani.tzinfo)
+
+    if bitis_zamani <= simdi:
+        return "Tamamlandı"
+
+    return "Aktif"
+
+
 @app.get("/api/rezervasyonlar")
 def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     conn = None
@@ -1550,7 +1567,7 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
         cursor = conn.cursor()
         cursor.execute("SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi FROM cihaz_rezervasyonlari r JOIN cihazlar c ON r.cihaz_id = c.cihaz_id ORDER BY r.baslangic_zamani DESC;")
         kayitlar = cursor.fetchall()
-        return [{"rezervasyon_id": k[0], "cihaz_id": f"{k[1]} - {k[2]}", "baslangic_zamani": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]), "bitis_zamani": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]), "durum": "İptal Edildi" if k[5] else "Aktif"} for k in kayitlar]
+        return [{"rezervasyon_id": k[0], "cihaz_id": f"{k[1]} - {k[2]}", "baslangic_zamani": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]), "bitis_zamani": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]), "durum": rezervasyon_gorunen_durumu(k[5], k[4])} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
