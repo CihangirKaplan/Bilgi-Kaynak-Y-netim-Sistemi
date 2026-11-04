@@ -1380,6 +1380,35 @@ QLabel {
             except Exception as e:
                 QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
+    # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
+    # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
+    SAYFA_YENILEME = {
+        "Cihaz Envanteri": ("aktif_cihaz_ekrani", "verileri_yukle"),
+        "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
+        "Cihaz Rezervasyonu": ("aktif_rezervasyon_ekrani", "verileri_yukle"),
+        "Arıza Kayıtları": ("aktif_ariza_ekrani", "verileri_yukle"),
+        "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
+    }
+    SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
+
+    def _sayfayi_yenile(self, ad):
+        hedef = self.SAYFA_YENILEME.get(ad)
+        if not hedef:
+            return
+        ekran = getattr(self, hedef[0], None)
+        yontem = getattr(ekran, hedef[1], None) if ekran is not None else None
+        if yontem is None:
+            return
+        simdi = time.monotonic()
+        son = self.__dict__.setdefault("_sayfa_son_yenileme", {})
+        if simdi - son.get(ad, -1e9) < self.SAYFA_YENILEME_ARALIGI:
+            return
+        son[ad] = simdi
+        try:
+            yontem()
+        except Exception as e:
+            print(f"Sayfa yenileme hatası ({ad}):", e)
+
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
 
@@ -1389,6 +1418,7 @@ QLabel {
         else:
             self.master_stack.setCurrentIndex(0)
             self.stack.setCurrentIndex(idx)
+        self._sayfayi_yenile(ad)
 
     def ana_ekrana_don(self):
         self.master_stack.setCurrentIndex(0)
