@@ -120,6 +120,7 @@ class DashboardEkrani(QWidget):
                 ("BUGÜNKÜ REZERVASYON", "rezervasyon", "📌", "#6D28D9", "#EDE9FE"),
                 ("KULLANILABİLİR CİHAZ", "aktif_cihaz", "✅", "#15803D", "#DCFCE7"),
                 ("BAKIMDAKİ CİHAZ", "bakimdaki_cihaz", "🛠️", "#B45309", "#FEF3C7"),
+                ("KALİBRASYONDAKİ CİHAZ", "kalibrasyondaki_cihaz", "📏", "#0E7490", "#CFFAFE"),
                 ("ARIZALI CİHAZ", "arizali_cihaz", "⚠️", "#B91C1C", "#FEE2E2"),
             ]
         self.kart_grid = QGridLayout()
@@ -129,7 +130,7 @@ class DashboardEkrani(QWidget):
             kart, lbl_deger, lbl_alt = self._kart(baslik, ikon, renk, zemin)
             self.kartlar[anahtar] = (lbl_deger, lbl_alt)
             self.kart_widgetleri.append(kart)
-        self._kartlari_diz(5)
+        self._kartlari_diz(self._kolon_sayisi(0))
         ana.addLayout(self.kart_grid)
 
         # ---- 3. RANDEVULAR  |  CİHAZ REZERVASYONLARI ----
@@ -173,6 +174,12 @@ class DashboardEkrani(QWidget):
         self.zamanlayici.timeout.connect(self.yenile)
         self.zamanlayici.start(60_000)
     # ------------------------------------------------------------------
+    def _kolon_sayisi(self, genislik):
+        """Geniş pencerede kartların hepsi tek sırada, dar pencerede 3 sütunda durur."""
+        kart_sayisi = len(self.kart_widgetleri)
+        genis_esik = 1450 if kart_sayisi <= 5 else 1750
+        return min(kart_sayisi, 6) if genislik >= genis_esik else 3
+
     def _kartlari_diz(self, kolon):
         for i, kart in enumerate(self.kart_widgetleri):
             self.kart_grid.addWidget(kart, i // kolon, i % kolon)
@@ -183,10 +190,10 @@ class DashboardEkrani(QWidget):
         """Dar pencerede kartlar 3 sütuna, paneller alt alta geçer."""
         super().resizeEvent(olay)
         genislik = self.width()
-        kolon = 5 if genislik >= 1450 else 3
+        kolon = self._kolon_sayisi(genislik)
         if getattr(self, "_kolon", None) != kolon:
             self._kolon = kolon
-            for c in range(5):
+            for c in range(6):
                 self.kart_grid.setColumnStretch(c, 0)
             self._kartlari_diz(kolon)
         if self.cihaz_ozeti:
@@ -290,10 +297,11 @@ class DashboardEkrani(QWidget):
         except Exception as e:
             print("Özet yükleme hatası:", e)
             return
-        for anahtar in ("aktif_cihaz", "bakimdaki_cihaz", "arizali_cihaz"):
+        for anahtar in ("aktif_cihaz", "bakimdaki_cihaz", "kalibrasyondaki_cihaz", "arizali_cihaz"):
             self.kartlar[anahtar][0].setText(str(self.ozet.get(anahtar, 0)))
         self.kartlar["aktif_cihaz"][1].setText(f"Toplam {self.ozet.get('toplam_cihaz', 0)} cihaz içinde")
         self.kartlar["bakimdaki_cihaz"][1].setText("Geçici olarak kullanılamaz")
+        self.kartlar["kalibrasyondaki_cihaz"][1].setText("Kalibrasyon bitene kadar kullanılamaz")
         self.kartlar["arizali_cihaz"][1].setText(f"{self.ozet.get('acik_ariza_sayisi', 0)} açık arıza kaydı")
 
     def _randevulari_yukle(self):

@@ -297,6 +297,7 @@ class DashboardOzetModeli(BaseModel):
     aktif_cihaz: int
     arizali_cihaz: int
     bakimdaki_cihaz: int
+    kalibrasyondaki_cihaz: int = 0
     acik_ariza_sayisi: int
     bugunku_randevu_sayisi: int
 
