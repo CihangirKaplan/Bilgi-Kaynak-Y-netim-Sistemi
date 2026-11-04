@@ -12,7 +12,7 @@ from api_yoneticisi import (
     oturum_hatasi_mi,
 )
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
-                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
+                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
 
 BAKIM_CAKISMA_METINLERI = (
@@ -265,7 +265,7 @@ class BakimYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
-                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "İŞLEM"])
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "HATIRLATMA", "İŞLEM"])
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -273,9 +273,10 @@ class BakimYonetimEkrani(QWidget):
         kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(5, QHeaderView.Fixed)
-        kb.setSectionResizeMode(6, QHeaderView.Fixed)
+        kb.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(7, QHeaderView.Fixed)
         self.tablo.setColumnWidth(5, 230)
-        self.tablo.setColumnWidth(6, 110)
+        self.tablo.setColumnWidth(7, 110)
 
         self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
 
@@ -327,14 +328,18 @@ class BakimYonetimEkrani(QWidget):
 
             sonraki = b.get("sonraki_bakim_tarihi")
             if sonraki and sonraki != "Belirtilmedi":
-                widget, durum = kalan_gun_hapi(sonraki)
+                widget, durum = kalan_gun_hapi(sonraki, b.get("uyari_suresi_gun", 30))
                 yaklasan += durum == "yaklasiyor"
                 gecmis += durum == "gecmis"
             else:
                 widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
             self.tablo.setCellWidget(i, 5, widget)
 
-            self.tablo.setCellWidget(i, 6, islem_butonlari(
+            # Sonraki bakım planlanmadıysa hatırlatma da anlamsızdır
+            hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
+            self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
+
+            self.tablo.setCellWidget(i, 7, islem_butonlari(
                 lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
                 lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
 

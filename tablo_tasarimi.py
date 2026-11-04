@@ -158,8 +158,9 @@ def tarih_goster(deger):
         return metin
 
 
-def kalan_gun_hapi(deger):
-    """Bir bitiş/son tarih için renkli hap döner: gecikmiş kırmızı, 30 gün içinde sarı, ötesi yeşil.
+def kalan_gun_hapi(deger, uyari_gun=30):
+    """Bir bitiş/son tarih için renkli hap döner: gecikmiş kırmızı, uyarı süresi (varsayılan 30 gün) içinde
+    sarı, ötesi yeşil. Kayıt kendi uyarı süresini taşıyorsa o verilmelidir (zil ve dashboard ile aynı kural).
 
     Dönen değer: (widget, durum) — durum 'gecmis' | 'yaklasiyor' | 'iyi' | 'yok'
     """
@@ -171,10 +172,19 @@ def kalan_gun_hapi(deger):
     tarih = hedef.strftime("%d.%m.%Y")
     if kalan < 0:
         return hap(f"{tarih}  ·  {-kalan} gün gecikti", "#991B1B", "#FEE2E2"), "gecmis"
-    if kalan <= 30:
+    if kalan <= uyari_gun:
         yazi = "bugün" if kalan == 0 else f"{kalan} gün kaldı"
         return hap(f"{tarih}  ·  {yazi}", "#854D0E", "#FEF3C7"), "yaklasiyor"
     return hap(f"{tarih}  ·  {kalan} gün", "#166534", "#DCFCE7"), "iyi"
+
+
+def hatirlatma_metni(gun):
+    """Kayıttaki uyarı süresini listede okunur yazıya çevirir (bildirim kaç gün kala düşer)."""
+    try:
+        gun = int(gun)
+    except (TypeError, ValueError):
+        return "-"
+    return "Geldiği gün" if gun == 0 else f"{gun} gün önce"
 
 
 def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler):

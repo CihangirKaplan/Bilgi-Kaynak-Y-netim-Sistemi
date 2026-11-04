@@ -12,7 +12,7 @@ from api_yoneticisi import (
     oturum_hatasi_mi,
 )
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
-                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi,
+                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
 
 KALIBRASYON_CAKISMA_METINLERI = (
@@ -216,16 +216,17 @@ class KalibrasyonYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "KURUM", "SERTİFİKA NO", "KALİBRASYON TARİHİ",
-                                    "GEÇERLİLİK", "İŞLEM"])
+                                    "GEÇERLİLİK", "HATIRLATMA", "İŞLEM"])
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
         kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(4, QHeaderView.Fixed)
-        kb.setSectionResizeMode(5, QHeaderView.Fixed)
+        kb.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(6, QHeaderView.Fixed)
         self.tablo.setColumnWidth(4, 230)
-        self.tablo.setColumnWidth(5, 110)
+        self.tablo.setColumnWidth(6, 110)
 
         self.bos_mesaj = bos_mesaj_olustur("Henüz kalibrasyon kaydı yok.")
 
@@ -269,12 +270,13 @@ class KalibrasyonYonetimEkrani(QWidget):
             self.tablo.setItem(i, 2, metin_item(k.get("sertifika_no", ""), ortala=True))
             self.tablo.setItem(i, 3, metin_item(tarih_metni, ortala=True))
 
-            widget, durum = kalan_gun_hapi(k.get("gecerlilik_tarihi"))
+            widget, durum = kalan_gun_hapi(k.get("gecerlilik_tarihi"), k.get("uyari_suresi_gun", 30))
             yaklasan += durum == "yaklasiyor"
             gecmis += durum == "gecmis"
             self.tablo.setCellWidget(i, 4, widget)
+            self.tablo.setItem(i, 5, metin_item(hatirlatma_metni(k.get("uyari_suresi_gun")), ortala=True))
 
-            self.tablo.setCellWidget(i, 5, islem_butonlari(
+            self.tablo.setCellWidget(i, 6, islem_butonlari(
                 lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
                 lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
 
