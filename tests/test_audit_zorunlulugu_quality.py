@@ -32,6 +32,7 @@ def bakim_modeli():
         bakim_baslangic_tarihi=date(2026, 10, 27),
         bakim_bitis_tarihi=date(2026, 10, 27),
         sonraki_bakim_tarihi=date(2027, 10, 27),
+        uyari_suresi_gun=60,
     )
 
 
@@ -43,6 +44,7 @@ def kalibrasyon_modeli():
         sertifika_no="QA001-TEST",
         kalibrasyon_baslangic_tarihi=date(2026, 10, 27),
         kalibrasyon_bitis_tarihi=date(2026, 10, 27),
+        uyari_suresi_gun=60,
     )
 
 

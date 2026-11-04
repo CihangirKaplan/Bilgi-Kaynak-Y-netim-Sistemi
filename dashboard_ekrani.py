@@ -158,9 +158,9 @@ class DashboardEkrani(QWidget):
         # ---- 4. YAKLAŞAN BAKIM / KALİBRASYON ----
         if cihaz_ozeti:
             self.tablo_islem = _tablo_olustur(["CİHAZ", "İŞLEM", "SON TARİH", "KALAN SÜRE"])
-            self.lbl_islem_bos = QLabel("Önümüzdeki 60 gün içinde bakım veya kalibrasyon yok.")
+            self.lbl_islem_bos = QLabel("Uyarı süresi içine giren bakım veya kalibrasyon yok.")
             ana.addWidget(self._panel("Yaklaşan Bakım ve Kalibrasyonlar",
-                                      "🛠️  önümüzdeki 60 gün", self.tablo_islem, self.lbl_islem_bos))
+                                      "🛠️  uyarı süresi içinde", self.tablo_islem, self.lbl_islem_bos))
 
         self.tarih_panelleri = [(panel_randevu, "📅")]
         if cihaz_ozeti:
@@ -357,7 +357,7 @@ class DashboardEkrani(QWidget):
         except Exception as e:
             print("Yaklaşan işlemler yükleme hatası:", e)
             self.islemler = []
-        self.lbl_islem_bos.setText("Önümüzdeki 60 gün içinde bakım veya kalibrasyon yok.")
+        self.lbl_islem_bos.setText("Uyarı süresi içine giren bakım veya kalibrasyon yok.")
         self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(self.islemler))
         for i, islem in enumerate(self.islemler):
             kritik = islem["kalan_gun"] <= 5
@@ -383,9 +383,7 @@ class DashboardEkrani(QWidget):
         if acik_ariza:
             satirlar.append(("⚠️", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2"))
         for islem in self.islemler:
-            gun = islem["kalan_gun"]
-            if gun > 15:
-                break  # liste kalan güne göre sıralı
+            gun = islem["kalan_gun"]   # liste zaten kayıt başına uyarı süresine göre süzülmüş ve sıralı
             zaman = "bugün" if gun == 0 else f"{gun} gün içinde"
             kritik = gun <= 5
             satirlar.append((
