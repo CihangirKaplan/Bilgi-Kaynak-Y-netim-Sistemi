@@ -261,3 +261,71 @@ def test_dashboard_yazilari_artik_sabit_60_gunden_bahsetmez():
     kaynak = Path("dashboard_ekrani.py").read_text(encoding="utf-8")
     assert "60 gün" not in kaynak
     assert "uyarı süresi" in kaynak
+
+
+# ------------------------------------------------- zil bildirimi kendi sayfasını açar
+def _zil_hedefleri(nav):
+    import main_window as mw
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+
+    def istek(yontem, url, **kwargs):
+        yanit = MagicMock()
+        yanit._tkys_oturum_reddedildi = False
+        yanit.status_code = 200
+        yanit.json.return_value = (
+            {"acik_ariza_sayisi": 1} if url.endswith("/ozet") else
+            [{"cihaz_adi": "A", "islem_turu": "Bakım", "kalan_gun": 3},
+             {"cihaz_adi": "B", "islem_turu": "Kalibrasyon", "kalan_gun": -2}]
+        )
+        return yanit
+
+    ana = MagicMock()
+    ana._oturum_kapatiliyor = False
+    ana.api_url, ana.token = "http://x", "T"
+    ana.nav_btnler = {ad: object() for ad in nav}
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=istek):
+        mw.AnaPencere._bildirimleri_yenile(ana)
+    return {m.split("—")[0].strip(" 🔧🔴⚠️"): h for _, m, h in ana._bildirimler}
+
+
+def test_zil_bakim_ve_kalibrasyon_bildirimi_kendi_sayfasina_gider():
+    hedefler = _zil_hedefleri(["Cihaz Envanteri", "Arıza Kayıtları", "Bakım Kayıtları", "Kalibrasyon"])
+    assert hedefler["A"] == "Bakım Kayıtları" and hedefler["B"] == "Kalibrasyon"
+    assert hedefler["1 açık arıza kaydı çözüm bekliyor."] == "Arıza Kayıtları"
+
+
+def test_zil_sayfaya_yetkisi_yoksa_cihaz_envanterine_duser():
+    hedefler = _zil_hedefleri(["Cihaz Envanteri", "Bakım Kayıtları"])      # Kalibrasyon ve Arıza sayfası yok
+    assert hedefler["A"] == "Bakım Kayıtları" and hedefler["B"] == "Cihaz Envanteri"
+    assert hedefler["1 açık arıza kaydı çözüm bekliyor."] == "Cihaz Envanteri"
+
+
+def test_zil_satirina_tiklaninca_hedef_sayfa_acilir():
+    from PySide6.QtWidgets import QApplication, QPushButton
+    from bildirim_paneli import BildirimPaneli
+    QApplication.instance() or QApplication([])
+    acilan = []
+    panel = BildirimPaneli(
+        bildirimler=[("Cihaz Uyarıları", "A (3 gün kaldı)", "Bakım Kayıtları"),
+                     ("Cihaz Uyarıları", "B (2 gün gecikti)", "Kalibrasyon")],
+        toplam=2, hata=False, sayfa_ac=acilan.append)
+    satirlar = [b for b in panel.findChildren(QPushButton) if b.objectName() == "bildirimSatiri"]
+    satirlar[0].click()
+    satirlar[1].click()
+    assert acilan == ["Bakım Kayıtları", "Kalibrasyon"]
+    panel.deleteLater()
+
+
+def test_bildirimden_sayfaya_git_dogru_sayfayi_acar_ve_menuyu_isaretler():
+    import main_window as mw
+    ana = MagicMock()
+    ana.sayfa_bilgi = [("Ana Kontrol Paneli", ""), ("Bakım Kayıtları", ""), ("Kalibrasyon", "")]
+    ana.nav_btnler = {"Kalibrasyon": MagicMock(), "Bakım Kayıtları": MagicMock()}
+    mw.AnaPencere._bildirimden_sayfaya_git(ana, "Kalibrasyon")
+    ana.sayfa_ac.assert_called_once_with(2)
+    ana.nav_btnler["Kalibrasyon"].setChecked.assert_called_once_with(True)
+    ana.nav_btnler["Bakım Kayıtları"].setChecked.assert_not_called()
+    ana.sayfa_ac.reset_mock()
+    mw.AnaPencere._bildirimden_sayfaya_git(ana, "Olmayan Sayfa")           # bilinmeyen hedefte sessizce çıkar
+    ana.sayfa_ac.assert_not_called()
