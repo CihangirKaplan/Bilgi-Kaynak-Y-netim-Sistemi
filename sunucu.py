@@ -2204,11 +2204,35 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
 
         ozet = {
             "toplam_cihaz": 0, "aktif_cihaz": 0, "arizali_cihaz": 0,
-            "bakimdaki_cihaz": 0, "acik_ariza_sayisi": 0, "bugunku_randevu_sayisi": 0
+            "bakimdaki_cihaz": 0, "kalibrasyondaki_cihaz": 0,
+            "acik_ariza_sayisi": 0, "bugunku_randevu_sayisi": 0
         }
 
         # 1. Cihaz İstatistiklerini Çek
-        cursor.execute("SELECT durum, COUNT(*) FROM cihazlar GROUP BY durum;")
+        # Bakım/kalibrasyon kaydı cihaz durumunu kendiliğinden değiştirmediğinden, bugün planlı bir
+        # bakım ya da kalibrasyon aralığında olan cihaz da "bakımda"/"kalibrasyonda" sayılır.
+        # Öncelik: arızalı/kullanım dışı > bakımda > kalibrasyonda.
+        cursor.execute("""
+            SELECT CASE
+                       WHEN c.durum IN ('Arizali', 'Kullanim_Disi') THEN c.durum
+                       WHEN c.durum = 'Bakimda' OR EXISTS (
+                           SELECT 1 FROM cihaz_bakimlari b
+                           WHERE b.cihaz_id = c.cihaz_id
+                             AND COALESCE(b.bakim_baslangic_tarihi, b.bakim_tarihi::date) <= CURRENT_DATE
+                             AND COALESCE(b.bakim_bitis_tarihi, b.bakim_tarihi::date) >= CURRENT_DATE
+                       ) THEN 'Bakimda'
+                       WHEN c.durum = 'Kalibrasyonda' OR EXISTS (
+                           SELECT 1 FROM cihaz_kalibrasyonlari k
+                           WHERE k.cihaz_id = c.cihaz_id
+                             AND k.kalibrasyon_baslangic_tarihi <= CURRENT_DATE
+                             AND k.kalibrasyon_bitis_tarihi >= CURRENT_DATE
+                       ) THEN 'Kalibrasyonda'
+                       ELSE c.durum
+                   END AS etkin_durum,
+                   COUNT(*)
+            FROM cihazlar c
+            GROUP BY 1;
+        """)
         cihaz_durumlari = cursor.fetchall()
         for durum, sayi in cihaz_durumlari:
             ozet["toplam_cihaz"] += sayi
@@ -2218,6 +2242,8 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
                 ozet["arizali_cihaz"] = sayi
             elif durum == "Bakimda":
                 ozet["bakimdaki_cihaz"] = sayi
+            elif durum == "Kalibrasyonda":
+                ozet["kalibrasyondaki_cihaz"] = sayi
 
         # 2. Açık Arızaları Çek (cozuldu_mu sütunu FALSE olanlar)
         # Eğer tabloda cozuldu_mu yok durum varsa: WHERE durum != 'Çözüldü' şeklinde de olabilir, biz genel halini yazalım.
