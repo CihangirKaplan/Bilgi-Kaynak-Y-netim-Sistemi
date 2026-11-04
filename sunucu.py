@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta, date
 from modeller import (
+    BakimPlaniGuncelleModeli,
+    BakimPlaniOlusturModeli,
     FaaliyetBirimIslemModeli,
     GirisModeli,
     RolDegistirModeli,
@@ -2193,6 +2195,196 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODÜLÜ (DASH-001)
 # ==========================================
+
+# ==========================================
+# BAKIM / KALİBRASYON PLANLARI (müdür konfigürasyonu)
+# ==========================================
+def bakim_plani_durumu(kalan_gun, uyari_suresi_gun, aktif_mi):
+    if not aktif_mi:
+        return "Pasif"
+    if kalan_gun < 0:
+        return "Gecikmiş"
+    if kalan_gun <= uyari_suresi_gun:
+        return "Yaklaşıyor"
+    return "Planlı"
+
+
+@app.get("/api/bakim-planlari")
+def bakim_planlarini_listele(
+    cihaz_id: int | None = None,
+    aktif_mi: bool | None = None,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET")),
+):
+    """Cihazların tekrarlayan bakım/kalibrasyon planları (en yakın tarih önce)."""
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        kosullar, parametreler = [], []
+        if cihaz_id is not None:
+            kosullar.append("p.cihaz_id = %s")
+            parametreler.append(cihaz_id)
+        if aktif_mi is not None:
+            kosullar.append("COALESCE(p.aktif_mi, TRUE) = %s")
+            parametreler.append(aktif_mi)
+        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
+        cursor.execute(
+            f"""
+            SELECT p.plan_id, p.cihaz_id, c.envanter_kodu, c.cihaz_adi, p.gorev_turu, p.periyot_gun,
+                   COALESCE(p.uyari_suresi_gun, 0), p.sonraki_gorev_tarihi,
+                   (p.sonraki_gorev_tarihi - CURRENT_DATE), COALESCE(p.aktif_mi, TRUE)
+            FROM cihaz_bakim_planlari p
+            JOIN cihazlar c ON c.cihaz_id = p.cihaz_id
+            {where}
+            ORDER BY p.sonraki_gorev_tarihi, p.plan_id;
+            """,
+            parametreler,
+        )
+        return [
+            {
+                "plan_id": k[0], "cihaz_id": k[1], "envanter_kodu": k[2], "cihaz_adi": k[3],
+                "gorev_turu": k[4], "periyot_gun": k[5], "uyari_suresi_gun": k[6],
+                "sonraki_gorev_tarihi": k[7].isoformat(), "kalan_gun": k[8], "aktif_mi": k[9],
+                "durum": bakim_plani_durumu(k[8], k[6], k[9]),
+            }
+            for k in cursor.fetchall()
+        ]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Bakım planları alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+def _ayni_planli_aktif_kayit_var_mi(cursor, cihaz_id, gorev_turu, haric_plan_id=None):
+    cursor.execute(
+        """
+        SELECT 1 FROM cihaz_bakim_planlari
+        WHERE cihaz_id = %s AND LOWER(gorev_turu) = LOWER(%s) AND COALESCE(aktif_mi, TRUE) = TRUE
+          AND (%s::int IS NULL OR plan_id <> %s::int)
+        LIMIT 1;
+        """,
+        (cihaz_id, gorev_turu, haric_plan_id, haric_plan_id),
+    )
+    return cursor.fetchone() is not None
+
+
+@app.post("/api/bakim-planlari", status_code=201)
+def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM cihazlar WHERE cihaz_id = %s;", (plan.cihaz_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+        if _ayni_planli_aktif_kayit_var_mi(cursor, plan.cihaz_id, plan.gorev_turu):
+            raise HTTPException(status_code=409, detail="Bu cihaz için aynı türde aktif bir plan zaten var.")
+        sonraki = plan.sonraki_gorev_tarihi or (date.today() + timedelta(days=plan.periyot_gun))
+        cursor.execute(
+            """
+            INSERT INTO cihaz_bakim_planlari (cihaz_id, gorev_turu, periyot_gun, uyari_suresi_gun, sonraki_gorev_tarihi, aktif_mi)
+            VALUES (%s, %s, %s, %s, %s, TRUE) RETURNING plan_id;
+            """,
+            (plan.cihaz_id, plan.gorev_turu, plan.periyot_gun, plan.uyari_suresi_gun, sonraki),
+        )
+        plan_id = cursor.fetchone()[0]
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan eklendi.", "plan_id": plan_id,
+                "sonraki_gorev_tarihi": sonraki.isoformat()}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.put("/api/bakim-planlari/{plan_id}")
+def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
+                         kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    degisiklikler = guncelleme.model_dump(exclude_unset=True)
+    if not degisiklikler:
+        raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
+    if any(deger is None for deger in degisiklikler.values()):
+        raise HTTPException(status_code=422, detail="Alanlar boş bırakılamaz.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT cihaz_id, gorev_turu, periyot_gun, COALESCE(uyari_suresi_gun, 0), COALESCE(aktif_mi, TRUE)
+            FROM cihaz_bakim_planlari WHERE plan_id = %s FOR UPDATE;
+            """,
+            (plan_id,),
+        )
+        mevcut = cursor.fetchone()
+        if mevcut is None:
+            raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+        cihaz_id, tur, periyot, uyari, aktif = mevcut
+        tur = degisiklikler.get("gorev_turu", tur)
+        periyot = degisiklikler.get("periyot_gun", periyot)
+        uyari = degisiklikler.get("uyari_suresi_gun", uyari)
+        aktif = degisiklikler.get("aktif_mi", aktif)
+        if uyari > periyot:
+            raise HTTPException(status_code=422, detail="Uyarı süresi periyottan uzun olamaz.")
+        if aktif and _ayni_planli_aktif_kayit_var_mi(cursor, cihaz_id, tur, plan_id):
+            raise HTTPException(status_code=409, detail="Bu cihaz için aynı türde aktif bir plan zaten var.")
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        cursor.execute(f"UPDATE cihaz_bakim_planlari SET {alanlar} WHERE plan_id = %s;",
+                       (*degisiklikler.values(), plan_id))
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan güncellendi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.delete("/api/bakim-planlari/{plan_id}")
+def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cihaz_bakim_planlari WHERE plan_id = %s RETURNING plan_id;", (plan_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="DELETE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan silindi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 @app.get("/api/dashboard/ozet")
 def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
