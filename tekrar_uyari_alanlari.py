@@ -2,7 +2,8 @@
 
 Kullanıcıya tek soru sorulur: "Sonraki bakım ne zaman?"
   [ 3 ay ] [ 6 ay ] [ 1 yıl ] [ Tarih seç ]   -> seçilen düğmenin sonucu hemen yazı olarak görünür
-  Tarih kutusu yalnızca "Tarih seç"te açılır (düzenleme formunda kayıtlı tarih bu şekilde gösterilir).
+  Tarih kutusu hep görünür; ay düğmelerinde kilitli (hesaplanan tarihi gösterir), "Tarih seç"te açılır.
+  Hiçbir şey gizlenmediği için düğmeye basınca pencere düzeni kaymaz.
 Altında "Hatırlatma" listesi (tarihe kaç gün kala bildirim düşsün) ve tek cümlelik özet bulunur.
 """
 import datetime
@@ -31,7 +32,7 @@ VARSAYILAN_UYARI_GUN = 30
 
 DUGME_STILI = (
     "QPushButton { background: white; color: #1E3A8A; border: 1px solid #C7D9FB; border-radius: 10px; "
-    "padding: 8px 6px; font-size: 12px; font-weight: 600; } "
+    "padding: 6px 6px; min-height: 22px; font-size: 12px; font-weight: 600; } "
     "QPushButton:hover { background: #EEF4FF; } "
     "QPushButton:checked { background: #2563EB; color: white; border: 1px solid #2563EB; }"
 )
@@ -58,6 +59,7 @@ class TekrarUyariAlanlari(QObject):
             dugme = QPushButton(ad)
             dugme.setCheckable(True)
             dugme.setAutoDefault(False)
+            dugme.setMinimumHeight(36)
             dugme.setStyleSheet(DUGME_STILI)
             self.grup.addButton(dugme)
             self.butonlar[ay] = dugme
@@ -124,7 +126,7 @@ class TekrarUyariAlanlari(QObject):
 
     def _secim_degisti(self, *_):
         ay = self.secili_ay()
-        self.sonraki.setHidden(ay is not None)                 # tarih kutusu yalnızca 'Tarih seç'te
+        self.sonraki.setEnabled(ay is None)                    # kutu hep görünür; yalnızca 'Tarih seç'te açık
         if ay:
             self.sonraki.setDate(self.bitis.date().addMonths(ay))
         self.ozeti_guncelle()
@@ -139,7 +141,7 @@ class TekrarUyariAlanlari(QObject):
         if ay:
             self.lbl_sonuc.setText(f"→ {sonraki:%d.%m.%Y}  (bitişten {self._ay_yazisi(ay)} sonra)")
         else:
-            self.lbl_sonuc.setText("")                         # tarih kutusu zaten görünüyor
+            self.lbl_sonuc.setText("↑ Tarihi yukarıdaki kutudan seçin")
         uyari = self.uyari_suresi()
         bugun = datetime.date.today()
         baslangic = sonraki - datetime.timedelta(days=uyari)

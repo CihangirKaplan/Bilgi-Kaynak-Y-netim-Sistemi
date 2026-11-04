@@ -29,7 +29,7 @@ class YeniBakimFormu(QDialog):
         self.token = token
 
         self.setWindowTitle("Yeni Bakım Kaydı")
-        self.setMinimumSize(450, 500)
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
 
         self.setStyleSheet(FORM_STIL)
 
@@ -140,7 +140,7 @@ class BakimDuzenleFormu(QDialog):
         self.bakim_verisi = bakim_verisi
 
         self.setWindowTitle("Bakım Kaydını Düzenle")
-        self.setMinimumSize(450, 520)
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
 
         self.setStyleSheet(FORM_STIL)
 

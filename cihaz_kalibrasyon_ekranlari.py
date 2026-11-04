@@ -29,7 +29,7 @@ class YeniKalibrasyonFormu(QDialog):
         self.token = token
 
         self.setWindowTitle("Yeni Kalibrasyon Kaydı")
-        self.setMinimumSize(450, 420)
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
 
         self.setStyleSheet(FORM_STIL)
 
@@ -120,7 +120,7 @@ class KalibrasyonDuzenleFormu(QDialog):
         self.k_veri = veri
 
         self.setWindowTitle("Kalibrasyon Kaydını Düzenle")
-        self.setMinimumSize(450, 420)
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
 
         self.setStyleSheet(FORM_STIL)
 
