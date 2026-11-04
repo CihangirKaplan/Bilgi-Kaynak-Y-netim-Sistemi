@@ -105,7 +105,12 @@ def cevap(durum, veri=None):
     return r
 
 
-@pytest.mark.parametrize("durum, beklenen", [(403, "yetkiniz yok"), (500, "alınamadı")])
+@pytest.mark.parametrize("durum, beklenen", [
+    (403, "yetkiniz yok"),
+    (404, "yeniden başlatın"),            # sunucu eski sürümde: uç yok
+    (500, "sunucu yanıtı: 500"),
+    (422, "sunucu yanıtı: 422"),
+])
 def test_istemci_hata_durumlarinda_anlasilir_mesaj_verir(monkeypatch, durum, beklenen):
     monkeypatch.setattr(modul, "oturum_kontrollu_istek", lambda *a, **k: cevap(durum))
     veri, mesaj = yetki_ozeti_getir("http://x", "t", 1)
@@ -225,3 +230,69 @@ def test_rol_secimi_kaldirilinca_bos_metne_donulur(form):
         rol_sec(form, 2)
     form.combo_rol.setCurrentIndex(0)
     assert form.yetki_karti.lbl_bilgi.text() == form.yetki_karti.BOS_METIN
+
+
+# ------------------------------------------------- liste gerçekten görünüyor mu (yükseklik)
+@pytest.fixture
+def gorunen_form(qt_app):
+    pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
+    pencere.show()
+    qt_app.processEvents()
+    yield pencere
+    pencere.close()
+    pencere.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    gc.collect()
+
+
+def rol_sec_ve_bekle(qt_app, form, izin_adlari, rol_id=5):
+    with patch.object(modul, "yetki_ozeti_getir", return_value=(ozet("PROJE_ASISTANI", izin_adlari), None)):
+        rol_sec(form, rol_id)
+    for _ in range(3):                           # yerleşim ve pencere boyutlandırması tamamlansın
+        qt_app.processEvents()
+
+
+KISA_LISTE = ["RANDEVU_OLUSTUR", "TAKVIM_GORUNTULE", "ODA_DURUMU_GORUNTULE",
+              "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"]
+
+
+def test_yetki_listesi_gorunur_yukseklikte_cikar_ve_kesilmez(qt_app, gorunen_form):
+    """Eskiden liste, yükseklik henüz yerleşmemiş etiketlerden hesaplandığı için ~0 piksel çıkıyor ve
+    kullanıcı yalnızca 'N yetki' rozetini görüyordu."""
+    rol_sec_ve_bekle(qt_app, gorunen_form, KISA_LISTE)
+    kart = gorunen_form.yetki_karti
+    kaydirma = kart.kaydirma
+    assert kaydirma.isVisibleTo(gorunen_form)
+    gereken = sum(p.sizeHint().height() for p in kart.icerik.findChildren(type(kart.lbl_bilgi)) if p.parent() is kart.icerik)
+    assert kaydirma.height() >= 100
+    assert kaydirma.height() >= gereken                 # kısa liste kaydırmaya gerek kalmadan sığar
+    assert kaydirma.verticalScrollBar().maximum() == 0
+    # Her etiket kaydırma alanının içinde ve ölçüsü sıfır değil
+    for etiket in kart.icerik.findChildren(type(kart.lbl_bilgi)):
+        assert etiket.height() > 0
+        assert etiket.geometry().bottom() <= kart.icerik.height()
+
+
+def test_pencere_icerige_gore_buyur_ve_kart_pencerenin_icinde_kalir(qt_app, gorunen_form):
+    onceki = gorunen_form.height()
+    rol_sec_ve_bekle(qt_app, gorunen_form, KISA_LISTE)
+    assert gorunen_form.height() > onceki               # liste için pencere büyüdü
+    kart = gorunen_form.yetki_karti
+    assert kart.geometry().bottom() <= gorunen_form.height()
+    assert gorunen_form.btn_kaydet.geometry().bottom() <= gorunen_form.height()
+    assert gorunen_form.width() >= 460
+
+
+def test_cok_uzun_liste_sinirli_yukseklikte_kaydirilir(qt_app, gorunen_form):
+    uzun = [f"IZIN_{i}" for i in range(40)]
+    rol_sec_ve_bekle(qt_app, gorunen_form, uzun)
+    kaydirma = gorunen_form.yetki_karti.kaydirma
+    assert kaydirma.height() == 230
+    assert kaydirma.verticalScrollBar().maximum() > 0   # taşan kısım kaydırılabilir
+
+
+def test_rol_degisince_pencere_ve_liste_boyutu_yeniden_hesaplanir(qt_app, gorunen_form):
+    rol_sec_ve_bekle(qt_app, gorunen_form, KISA_LISTE)
+    uzun_yukseklik = gorunen_form.yetki_karti.kaydirma.height()
+    rol_sec_ve_bekle(qt_app, gorunen_form, ["ODA_EKLE"], rol_id=2)
+    assert gorunen_form.yetki_karti.kaydirma.height() < uzun_yukseklik

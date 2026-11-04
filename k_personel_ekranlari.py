@@ -235,7 +235,10 @@ def yetki_ozeti_getir(api_url, token, rol_id):
             return cevap.json(), None
         if cevap.status_code == 403:
             return None, "Rol yetkilerini görmek için yetkiniz yok."
-        return None, "Rol yetkileri şu an alınamadı."
+        if cevap.status_code == 404:
+            return None, ("Sunucu bu özelliği tanımıyor (404). Sunucuyu güncelleyip "
+                          "yeniden başlatın, sonra tekrar deneyin.")
+        return None, f"Rol yetkileri şu an alınamadı (sunucu yanıtı: {cevap.status_code})."
     except Exception:
         return None, "Sunucuya ulaşılamadı; rol yetkileri gösterilemiyor."
 
@@ -521,6 +524,7 @@ class YetkiOzetiKarti(QFrame):
         self.kaydirma = QScrollArea()
         self.kaydirma.setObjectName("yetki_kaydirma")
         self.kaydirma.setWidgetResizable(True)
+        self.kaydirma.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.kaydirma.setMaximumHeight(230)
         self.icerik = QWidget()
         self.icerik.setObjectName("yetki_icerik")
@@ -574,18 +578,31 @@ class YetkiOzetiKarti(QFrame):
             uyari=veri.get("rol_adi") in GENIS_YETKILI_ROLLER,
             liste=True,
         )
+        parcalar = []
         for baslik, simge, adlar in izinleri_grupla(izinler):
             grup = QLabel(f"{simge}  {baslik.upper()}")
             grup.setObjectName("yetki_grup")
             liste = QLabel("<br>".join(f"<span style='color:#059669'>✓</span>&nbsp; {a}" for a in adlar))
             liste.setObjectName("yetki_liste")
             liste.setTextFormat(Qt.RichText)
-            liste.setWordWrap(True)
+            # Satır sonu zaten <br> ile verilir; kelime kaydırma kapalı olunca etiketin yüksekliği
+            # kesin hesaplanır (kaydırmalı etiketlerde sizeHint güvenilmez, liste kesilirdi).
+            liste.setWordWrap(False)
             self.icerik_lay.addWidget(grup)
             self.icerik_lay.addWidget(liste)
+            parcalar += [grup, liste]
         self.icerik_lay.addStretch()
-        # Kısa listede boşluk kalmasın; uzunsa 230 pikselde kaydırılır.
-        self.kaydirma.setFixedHeight(min(self.icerik.sizeHint().height() + 6, 230))
+        # Kısa listede boşluk kalmasın; uzunsa 230 pikselde kaydırılır. Yükseklik, her etiketin
+        # kendi ölçüsünden hesaplanır (yerleşim henüz yapılmadan sizeHint 0'a yakın çıkabilir).
+        self.kaydirma.setFixedHeight(self._liste_yuksekligi(parcalar))
+
+    def _liste_yuksekligi(self, parcalar):
+        toplam = 0
+        for parca in parcalar:
+            parca.ensurePolished()
+            toplam += parca.sizeHint().height()
+        toplam += self.icerik_lay.spacing() * max(len(parcalar) - 1, 0)
+        return max(min(toplam + 8, 230), 60)
 
 
 class KullaniciOlusturFormu(QDialog):
@@ -635,6 +652,7 @@ class KullaniciOlusturFormu(QDialog):
 
         # Seçilen rolün neler yapabildiğini gösterir.
         self.yetki_karti = YetkiOzetiKarti()
+        self.yetki_karti.setMinimumWidth(420)   # SetFixedSize, pencere genişliğini içerikten alır
         layout.addWidget(self.yetki_karti)
 
         # Yalnızca "Danışma Öğrencisi" seçilince görünür.
@@ -748,6 +766,9 @@ class KullaniciOlusturFormu(QDialog):
         goster = self.olusturulan_kullanici is None and self.secili_rol_adi() == DANISMA_OGRENCISI
         self.ogrenci_kutusu.setVisible(goster)
         self.adjustSize()
+        # Yetki kartının içeriği yeni eklendi; yerleşim olay döngüsünde tamamlanınca pencere,
+        # ekran ölçeğinden bağımsız olarak son boyuna getirilir (liste kesilmesin).
+        QTimer.singleShot(0, self.adjustSize)
 
     def kaydet(self):
         rol_id = self.combo_rol.currentData()
