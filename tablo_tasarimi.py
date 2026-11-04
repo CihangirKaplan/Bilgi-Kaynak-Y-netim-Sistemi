@@ -179,12 +179,12 @@ def kalan_gun_hapi(deger, uyari_gun=30):
 
 
 def hatirlatma_metni(gun):
-    """Kayıttaki uyarı süresini listede okunur yazıya çevirir (bildirim kaç gün kala düşer)."""
+    """Kayıttaki uyarı süresini listede okunur yazıya çevirir: bildirim tarihe kaç gün kala düşer."""
     try:
         gun = int(gun)
     except (TypeError, ValueError):
         return "-"
-    return "Geldiği gün" if gun == 0 else f"{gun} gün önce"
+    return "Geldiği gün" if gun == 0 else f"{gun} gün kala"
 
 
 def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler):

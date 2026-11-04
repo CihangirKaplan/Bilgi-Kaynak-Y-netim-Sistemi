@@ -163,3 +163,15 @@ def test_eski_kayitta_uyari_suresi_yoksa_30_olur(qt_app):
     form = formu_ac(cihaz_bakim_ekranlari, "BakimDuzenleFormu", kayit)
     assert form.tekrar.uyari_suresi() == 30
     form.close()
+
+
+def test_bildirim_satiri_ve_secenek_adlari_anlasilir(qt_app):
+    _, _, t = alanlar(uyari=45)                            # listede olmayan değer de aynı biçimde eklenir
+    form = QFormLayout()
+    t.satirlari_ekle(form)
+    ogeler = [form.itemAt(i, QFormLayout.LabelRole) for i in range(form.rowCount())]
+    etiketler = [o.widget().text() for o in ogeler if o is not None and o.widget() is not None and o.widget().text()]
+    assert etiketler == ["Sonraki bakım:", "Bildirim ne zaman:"]
+    secenekler = [t.cmb_uyari.itemText(i) for i in range(t.cmb_uyari.count())]
+    assert secenekler == ["Tarihi geldiği gün", "7 gün kala", "15 gün kala", "30 gün kala",
+                          "60 gün kala", "90 gün kala", "45 gün kala"]
