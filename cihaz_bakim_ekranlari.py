@@ -60,11 +60,10 @@ class YeniBakimFormu(QDialog):
         form_layout.addRow("Maliyet (₺):", self.txt_maliyet)
         form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
         form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
-        form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim)
 
         # Tekrar aralığı seçilince sonraki tarih kendiliğinden hesaplanır; uyarı süresi zil/dashboard içindir.
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım", varsayilan_ay=6)
-        self.tekrar.satirlari_ekle(form_layout)
+        self.tekrar.satirlari_ekle(form_layout, "Sonraki bakım:")
 
         layout.addLayout(form_layout)
 
@@ -180,12 +179,11 @@ class BakimDuzenleFormu(QDialog):
         form_layout.addRow("Yapılan İşlem (*):", self.txt_islem)
         form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
         form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
-        form_layout.addRow("Sonraki Bakım Tarihi:", self.dt_sonraki_bakim)
 
         # Kayıtlı tarih korunur ("Elle gireceğim"); aralık seçilirse bitişe göre yeniden hesaplanır.
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım",
                                           uyari_suresi=bakim_verisi.get("uyari_suresi_gun", 30))
-        self.tekrar.satirlari_ekle(form_layout)
+        self.tekrar.satirlari_ekle(form_layout, "Sonraki bakım:")
 
         layout.addLayout(form_layout)
 
