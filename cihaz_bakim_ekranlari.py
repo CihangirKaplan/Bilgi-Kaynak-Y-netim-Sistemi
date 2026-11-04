@@ -265,7 +265,7 @@ class BakimYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
-                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "HATIRLATMA", "İŞLEM"])
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"])
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -335,7 +335,7 @@ class BakimYonetimEkrani(QWidget):
                 widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
             self.tablo.setCellWidget(i, 5, widget)
 
-            # Sonraki bakım planlanmadıysa hatırlatma da anlamsızdır
+            # Sonraki bakım planlanmadıysa bildirim de anlamsızdır
             hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
             self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
 

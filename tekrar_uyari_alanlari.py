@@ -1,10 +1,10 @@
-"""Bakım ve kalibrasyon formlarının ortak 'sonraki tarih' ve 'hatırlatma' bölümü.
+"""Bakım ve kalibrasyon formlarının ortak 'sonraki tarih' ve 'bildirim' bölümü.
 
 Kullanıcıya tek soru sorulur: "Sonraki bakım ne zaman?"
   [ 3 ay ] [ 6 ay ] [ 1 yıl ] [ Tarih seç ]   -> seçilen düğmenin sonucu hemen yazı olarak görünür
   Tarih kutusu hep görünür; ay düğmelerinde kilitli (hesaplanan tarihi gösterir), "Tarih seç"te açılır.
   Hiçbir şey gizlenmediği için düğmeye basınca pencere düzeni kaymaz.
-Altında "Hatırlatma" listesi (tarihe kaç gün kala bildirim düşsün) ve tek cümlelik özet bulunur.
+Altında "Bildirim ne zaman" listesi (tarihe kaç gün kala bildirim düşsün) ve tek cümlelik özet bulunur.
 """
 import datetime
 
@@ -22,11 +22,11 @@ TEKRAR_SECENEKLERI = (
 # (görünen ad, gün sayısı)
 UYARI_SECENEKLERI = (
     ("Tarihi geldiği gün", 0),
-    ("7 gün önce", 7),
-    ("15 gün önce", 15),
-    ("30 gün önce", 30),
-    ("60 gün önce", 60),
-    ("90 gün önce", 90),
+    ("7 gün kala", 7),
+    ("15 gün kala", 15),
+    ("30 gün kala", 30),
+    ("60 gün kala", 60),
+    ("90 gün kala", 90),
 )
 VARSAYILAN_UYARI_GUN = 30
 
@@ -42,7 +42,7 @@ OZET_STILI = ("background: #EEF4FF; color: #1E3A8A; border-radius: 10px; padding
 
 
 class TekrarUyariAlanlari(QObject):
-    """Düğmeler + tarih + hatırlatma + özet. Tarih alanı (sonraki_alani) bu sınıfın yerleşimine taşınır."""
+    """Düğmeler + tarih + bildirim zamanı + özet. Tarih alanı (sonraki_alani) bu sınıfın yerleşimine taşınır."""
 
     def __init__(self, bitis_alani, sonraki_alani, olay_adi="Sonraki bakım",
                  uyari_suresi=VARSAYILAN_UYARI_GUN, varsayilan_ay=None, ebeveyn=None):
@@ -68,13 +68,13 @@ class TekrarUyariAlanlari(QObject):
         self.lbl_sonuc = QLabel()
         self.lbl_sonuc.setStyleSheet(SONUC_STILI)
 
-        # --- hatırlatma
+        # --- bildirim zamanı
         self.cmb_uyari = QComboBox()
         for ad, gun in UYARI_SECENEKLERI:
             self.cmb_uyari.addItem(ad, gun)
         uyari_suresi = int(uyari_suresi)
         if self.cmb_uyari.findData(uyari_suresi) < 0:           # kayıtlı özel değer listede yoksa ekle
-            self.cmb_uyari.addItem(f"{uyari_suresi} gün önce", uyari_suresi)
+            self.cmb_uyari.addItem(f"{uyari_suresi} gün kala", uyari_suresi)
         self.cmb_uyari.setCurrentIndex(self.cmb_uyari.findData(uyari_suresi))
         self.cmb_uyari.setToolTip("Tarihe bu kadar gün kala dashboard'da ve zilde uyarı gösterilir.")
 
@@ -91,7 +91,7 @@ class TekrarUyariAlanlari(QObject):
 
     # ------------------------------------------------------------------- yerleşim
     def satirlari_ekle(self, form_layout, etiket="Sonraki bakım:"):
-        """Forma 'Sonraki ... ne zaman?' bölümünü, 'Hatırlatma' satırını ve özeti ekler.
+        """Forma 'Sonraki ... ne zaman?' bölümünü, 'Bildirim ne zaman' satırını ve özeti ekler.
         Tarih alanı bu çağrıyla yerleşir; forma ayrıca addRow edilmemelidir."""
         kutu = QWidget()
         dikey = QVBoxLayout(kutu)
@@ -105,7 +105,7 @@ class TekrarUyariAlanlari(QObject):
         dikey.addWidget(self.sonraki)
         dikey.addWidget(self.lbl_sonuc)
         form_layout.addRow(etiket, kutu)
-        form_layout.addRow("Hatırlatma:", self.cmb_uyari)
+        form_layout.addRow("Bildirim ne zaman:", self.cmb_uyari)
         form_layout.addRow("", self.lbl_ozet)
 
     def uyari_suresi(self):

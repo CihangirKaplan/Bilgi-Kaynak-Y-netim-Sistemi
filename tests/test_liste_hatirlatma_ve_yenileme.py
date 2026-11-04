@@ -1,4 +1,4 @@
-"""Bakım/kalibrasyon listesinde hatırlatma sütunu, kayıt başına uyarı kuralı, sayfaya geçince yenileme."""
+"""Bakım/kalibrasyon listesinde bildirim sütunu, kayıt başına uyarı kuralı, sayfaya geçince yenileme."""
 import datetime
 from unittest.mock import MagicMock, patch
 
@@ -36,7 +36,7 @@ def hap_metni(tablo, satir, sutun):
 
 
 # --------------------------------------------------------------- yardımcılar
-@pytest.mark.parametrize("deger, beklenen", [(0, "Geldiği gün"), (7, "7 gün önce"), (45, "45 gün önce"),
+@pytest.mark.parametrize("deger, beklenen", [(0, "Geldiği gün"), (7, "7 gün kala"), (45, "45 gün kala"),
                                              (None, "-"), ("x", "-")])
 def test_hatirlatma_metni(deger, beklenen):
     assert hatirlatma_metni(deger) == beklenen
@@ -70,8 +70,8 @@ def test_bakim_listesinde_hatirlatma_sutunu_ve_kayit_basina_yaklasan_sayaci(qt_a
                       bakim_kaydi(3, gun(-2), 30),      # gecikmiş
                       bakim_kaydi(4, None, 30)])        # planlanmamış
     basliklar = [e.tablo.horizontalHeaderItem(i).text() for i in range(e.tablo.columnCount())]
-    assert basliklar[-2:] == ["HATIRLATMA", "İŞLEM"]
-    assert [e.tablo.item(i, 6).text() for i in range(4)] == ["30 gün önce", "10 gün önce", "30 gün önce", "-"]
+    assert basliklar[-2:] == ["BİLDİRİM", "İŞLEM"]
+    assert [e.tablo.item(i, 6).text() for i in range(4)] == ["30 gün kala", "10 gün kala", "30 gün kala", "-"]
     assert e.cip_yaklasan.text() == "1 yaklaşan" and e.cip_gecmis.text() == "1 gecikmiş"
     assert e.tablo.cellWidget(0, 7) is not None                      # işlem butonları yeni sütunda
 
@@ -95,8 +95,8 @@ def test_kalibrasyon_listesinde_hatirlatma_sutunu(qt_app):
         for i, (g, u) in enumerate([(gun(20), 30), (gun(20), 0), (gun(-5), 7)], start=1)]
     with patch.object(kalib, "oturum_kontrollu_istek", return_value=cevap(kayitlar)):
         e = kalib.KalibrasyonYonetimEkrani("http://x", "T")
-    assert [e.tablo.horizontalHeaderItem(i).text() for i in range(e.tablo.columnCount())][-2:] == ["HATIRLATMA", "İŞLEM"]
-    assert [e.tablo.item(i, 5).text() for i in range(3)] == ["30 gün önce", "Geldiği gün", "7 gün önce"]
+    assert [e.tablo.horizontalHeaderItem(i).text() for i in range(e.tablo.columnCount())][-2:] == ["BİLDİRİM", "İŞLEM"]
+    assert [e.tablo.item(i, 5).text() for i in range(3)] == ["30 gün kala", "Geldiği gün", "7 gün kala"]
     assert e.cip_yaklasan.text() == "1 süresi yaklaşan" and e.cip_gecmis.text() == "1 süresi dolmuş"
     assert e.tablo.cellWidget(0, 6) is not None
 
