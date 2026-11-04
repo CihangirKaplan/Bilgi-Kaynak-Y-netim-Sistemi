@@ -564,6 +564,26 @@ class IzinDuzenleDialog(QDialog):
             if chk.isChecked():
                 verilen_rol_idleri.append(int(rol_id))
 
+        # ADMIN arayüzde gizlidir ancak backend tam rol listesini bekler.
+        # ADMIN izni her kaydetme işleminde korunmalıdır.
+        admin_rol_idleri = [
+            int(rol["rol_id"])
+            for rol in self.roller
+            if str(rol.get("rol_adi", "")).strip().upper() == "ADMIN"
+        ]
+
+        if not admin_rol_idleri:
+            QMessageBox.warning(
+                self,
+                "Hata",
+                "ADMIN rolü yüklenemedi. İzinler kaydedilemedi."
+            )
+            return
+
+        for admin_id in admin_rol_idleri:
+            if admin_id not in verilen_rol_idleri:
+                verilen_rol_idleri.append(admin_id)
+
         # 2. Sunucunun beklediği JSON gövdesini (payload) hazırlayalım
         gorunen_ad = self.input_izin_adi.text().strip()
         payload = {
