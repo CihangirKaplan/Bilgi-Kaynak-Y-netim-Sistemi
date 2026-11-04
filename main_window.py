@@ -867,7 +867,9 @@ QLabel {
                 for islem in islemler:
                     gun = islem.get("kalan_gun")
 
-                    if not isinstance(gun, (int, float)) or gun > 15:
+                    # Sunucu listeyi her kaydın kendi uyarı süresine göre zaten süzer; burada
+                    # ek bir gün sınırı uygulanmaz.
+                    if not isinstance(gun, (int, float)):
                         continue
 
                     metin = (

@@ -1894,7 +1894,7 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_Y
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
                    b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet,
                    b.bakim_tarihi, b.sonraki_bakim_tarihi,
-                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi, b.uyari_suresi_gun
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.bakim_tarihi DESC;
@@ -1913,7 +1913,8 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_Y
 
                 # EKSİK OLAN KISIM: JSON sözlüğüne başlangıç ve bitiş eklendi (eski kayıtlarda null gelirse bakim_tarihi kurtarır)
                 "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
-                "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi")
+                "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
+                "uyari_suresi_gun": k[10]
             }
             for k in kayitlar
         ]
@@ -1938,9 +1939,9 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         cursor.execute("""
             INSERT INTO cihaz_bakimlari (
                 cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
-                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi, uyari_suresi_gun
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
         """, (
             bakim.cihaz_id,
             bakim.bakim_yapan_kisi,
@@ -1949,7 +1950,8 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             bakim.bakim_tarihi,           # Buradaki eşleşme düzeltildi
             bakim.bakim_baslangic_tarihi,
             bakim.bakim_bitis_tarihi,
-            bakim.sonraki_bakim_tarihi
+            bakim.sonraki_bakim_tarihi,
+            bakim.uyari_suresi_gun
         ))
         bakim_id = cursor.fetchone()[0]
 
@@ -2066,7 +2068,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
         cursor.execute("""
             SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu,
                    k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi,
-                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi
+                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi, k.uyari_suresi_gun
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             ORDER BY k.islem_tarihi DESC;
@@ -2083,7 +2085,8 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
                 "islem_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
                 # Yeni alanlar ve Fallback mantığı (Eski kayıtlarda null gelirse işlem tarihi baz alınır)
                 "kalibrasyon_baslangic_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
-                "kalibrasyon_bitis_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi")
+                "kalibrasyon_bitis_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
+                "uyari_suresi_gun": k[9]
             }
             for k in kayitlar
         ]
@@ -2110,16 +2113,17 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         cursor.execute("""
             INSERT INTO cihaz_kalibrasyonlari (
                 cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi,
-                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi
+                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi, uyari_suresi_gun
             )
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s) RETURNING kalibrasyon_id;
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s) RETURNING kalibrasyon_id;
         """, (
             kalib.cihaz_id, 
             kalib.kalibrasyon_yapan_kurum, 
             kalib.gecerlilik_tarihi, 
             kalib.sertifika_no,
             kalib.kalibrasyon_baslangic_tarihi, # EKLENDİ
-            kalib.kalibrasyon_bitis_tarihi      # EKLENDİ
+            kalib.kalibrasyon_bitis_tarihi,     # EKLENDİ
+            kalib.uyari_suresi_gun
         ))
         kalibrasyon_id = cursor.fetchone()[0]
 
@@ -2571,7 +2575,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
         # 1. YAKLAŞAN BAKIMLAR
         # Her cihaz için yalnızca SON bakım kaydı dikkate alınır (eski kayıtların planı geçersizdir).
         cursor.execute("""
-            SELECT DISTINCT ON (b.cihaz_id) c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi
+            SELECT DISTINCT ON (b.cihaz_id) c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi, b.uyari_suresi_gun
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             ORDER BY b.cihaz_id,
@@ -2583,7 +2587,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
             if hedef_tarih is None:
                 continue
             kalan_gun = (hedef_tarih - bugun).days
-            if 0 <= kalan_gun <= 60:
+            if 0 <= kalan_gun <= kayit[3]:                 # kayıttaki uyarı süresi (varsayılan 60 gün)
                 islemler.append({
                     "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
                     "islem_turu": "Bakım",
@@ -2595,7 +2599,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
         # 2. YAKLAŞAN KALİBRASYONLAR
         # Her cihaz için geçerliliği en ileri olan (güncel) kalibrasyon kaydı dikkate alınır.
         cursor.execute("""
-            SELECT DISTINCT ON (k.cihaz_id) c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi
+            SELECT DISTINCT ON (k.cihaz_id) c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi, k.uyari_suresi_gun
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             WHERE k.gecerlilik_tarihi IS NOT NULL
@@ -2604,7 +2608,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
         for kayit in cursor.fetchall():
             hedef_tarih = kayit[2]
             kalan_gun = (hedef_tarih - bugun).days
-            if 0 <= kalan_gun <= 60:
+            if 0 <= kalan_gun <= kayit[3]:                 # kayıttaki uyarı süresi (varsayılan 60 gün)
                 islemler.append({
                     "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
                     "islem_turu": "Kalibrasyon",

@@ -259,6 +259,7 @@ class KalibrasyonOlusturModeli(BaseModel):
     sertifika_no: str
     kalibrasyon_baslangic_tarihi: date  # YENİ EKLENDİ
     kalibrasyon_bitis_tarihi: date      # YENİ EKLENDİ
+    uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
 
 class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = None
@@ -266,6 +267,7 @@ class KalibrasyonGuncelleModeli(BaseModel):
     sertifika_no: Optional[str] = None
     kalibrasyon_baslangic_tarihi: Optional[date] = None # YENİ EKLENDİ
     kalibrasyon_bitis_tarihi: Optional[date] = None     # YENİ EKLENDİ
+    uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
 
 # ==========================================
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
@@ -279,6 +281,7 @@ class BakimOlusturModeli(BaseModel):
     bakim_baslangic_tarihi: date
     bakim_bitis_tarihi: date
     sonraki_bakim_tarihi: Optional[date] = None
+    uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
 
 class BakimGuncelleModeli(BaseModel):
     bakim_tarihi: Optional[date] = None  # <-- DÜZENLEME İÇİN EKSİK PARÇA
@@ -288,6 +291,7 @@ class BakimGuncelleModeli(BaseModel):
     bakim_baslangic_tarihi: Optional[date] = None
     bakim_bitis_tarihi: Optional[date] = None
     sonraki_bakim_tarihi: Optional[date] = None
+    uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
 # ==========================================
