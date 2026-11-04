@@ -706,8 +706,11 @@ def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YO
             "rol_izin_map": rol_izin_map
         }
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Rol ve izin bilgileri alınamadı."
+        )
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
@@ -4189,10 +4192,13 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
         yeni_id = cursor.fetchone()[0]
         conn.commit()
         return {"mesaj": "İzin başarıyla eklendi", "izin_id": yeni_id}
-    except Exception as e:
-        print(f"!!! KRİTİK VERİTABANI HATASI: {e} !!!") # <--- BU SATIRI EKLE
-        if conn: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="İzin eklenirken beklenmeyen bir hata oluştu."
+        )
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
