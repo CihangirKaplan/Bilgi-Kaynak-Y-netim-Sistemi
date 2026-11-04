@@ -36,10 +36,18 @@ def calisan_sorgular(cursor):
 
 
 def rezervasyon_modeli():
+    # Testler her zaman gelecekteki bir tarih ile calisir.
+    from datetime import datetime, timedelta
+
+    baslangic = (datetime.now() + timedelta(days=7)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
+    bitis = baslangic + timedelta(hours=1)
+
     return RezervasyonOlusturModeli(
         cihaz_id=1,
-        baslangic_zamani="2026-10-30T10:00:00",
-        bitis_zamani="2026-10-30T11:00:00",
+        baslangic_zamani=baslangic,
+        bitis_zamani=bitis,
     )
 
 

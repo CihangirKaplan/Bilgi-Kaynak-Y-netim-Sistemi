@@ -1419,6 +1419,14 @@ def cihaz_detayi_getir(cihaz_id: int, kullanici_id: int = Depends(izin_kontrol("
 def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     if rez.baslangic_zamani >= rez.bitis_zamani:
         raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
+
+    # Geçmiş bir zamana yeni cihaz rezervasyonu oluşturulamaz.
+    if rez.baslangic_zamani < datetime.now(rez.baslangic_zamani.tzinfo):
+        raise HTTPException(
+            status_code=422,
+            detail="Rezervasyon başlangıç zamanı geçmişte olamaz."
+        )
+
     maksimum_deneme = 3
     for deneme in range(maksimum_deneme):
         conn = None
