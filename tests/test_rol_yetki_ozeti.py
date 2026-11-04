@@ -3,12 +3,13 @@
 Gerçek API veya PostgreSQL kullanılmaz.
 """
 import gc
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 import k_personel_ekranlari as modul
 from k_personel_ekranlari import KullaniciOlusturFormu, izinleri_grupla, yetki_ozeti_getir
@@ -237,7 +238,7 @@ def test_rol_secimi_kaldirilinca_bos_metne_donulur(form):
 def gorunen_form(qt_app):
     pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
     pencere.show()
-    qt_app.processEvents()
+    yerlesimi_tamamla(pencere)
     yield pencere
     pencere.close()
     pencere.deleteLater()
@@ -245,11 +246,21 @@ def gorunen_form(qt_app):
     gc.collect()
 
 
+def yerlesimi_tamamla(form):
+    """Yalnızca bu pencerenin (ve çocuklarının) bekleyen olaylarını işler. Genel `processEvents`
+    kullanılmaz: önceki testlerden kalmış pencereler ağ isteği başlatabilir ve testi bekletir."""
+    for _ in range(4):
+        for parca in [form, *form.findChildren(QWidget)]:
+            QApplication.sendPostedEvents(parca, 0)
+
+
 def rol_sec_ve_bekle(qt_app, form, izin_adlari, rol_id=5):
     with patch.object(modul, "yetki_ozeti_getir", return_value=(ozet("PROJE_ASISTANI", izin_adlari), None)):
         rol_sec(form, rol_id)
-    for _ in range(3):                           # yerleşim ve pencere boyutlandırması tamamlansın
-        qt_app.processEvents()
+    form._boyut_zamanlayici.stop()               # ertelenmiş adjustSize'ı olay döngüsü yerine elle çalıştırırız
+    yerlesimi_tamamla(form)
+    form.adjustSize()
+    yerlesimi_tamamla(form)
 
 
 KISA_LISTE = ["RANDEVU_OLUSTUR", "TAKVIM_GORUNTULE", "ODA_DURUMU_GORUNTULE",
@@ -296,3 +307,30 @@ def test_rol_degisince_pencere_ve_liste_boyutu_yeniden_hesaplanir(qt_app, gorune
     uzun_yukseklik = gorunen_form.yetki_karti.kaydirma.height()
     rol_sec_ve_bekle(qt_app, gorunen_form, ["ODA_EKLE"], rol_id=2)
     assert gorunen_form.yetki_karti.kaydirma.height() < uzun_yukseklik
+
+
+# ------------------------------------------- pencere kapanınca bekleyen boyutlandırma hata vermez
+def test_pencere_silinince_bekleyen_boyutlandirma_hata_pencereleri_acmaz(qt_app):
+    """Kullanıcı bir rol seçip pencereyi hemen kapatırsa, ertelenmiş 'boyutlandır' çağrısı silinmiş
+    pencereye ulaşıp 'already deleted' hatası (uygulamada "Beklenmeyen Hata" penceresi) üretmemeli.
+    Zamanlayıcı pencerenin çocuğu olduğu için pencereyle birlikte silinir."""
+    hatalar = []
+    eski = sys.excepthook
+    sys.excepthook = lambda tip, deger, tb: hatalar.append(deger)
+    try:
+        pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
+        with patch.object(modul, "yetki_ozeti_getir", return_value=(ozet("MEMUR", ["ODA_EKLE"]), None)):
+            rol_sec(pencere, 2)                    # boyutlandırma zamanlayıcısı başladı
+        assert pencere._boyut_zamanlayici.isActive()
+        zamanlayici = pencere._boyut_zamanlayici
+        pencere.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        pencere = None
+        gc.collect()
+        for _ in range(3):
+            QApplication.sendPostedEvents(None, 0)
+        with pytest.raises(RuntimeError):          # zamanlayıcı da pencereyle birlikte silindi
+            zamanlayici.isActive()
+    finally:
+        sys.excepthook = eski
+    assert hatalar == []
