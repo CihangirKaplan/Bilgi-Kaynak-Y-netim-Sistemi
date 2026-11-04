@@ -867,15 +867,22 @@ QLabel {
                 for islem in islemler:
                     gun = islem.get("kalan_gun")
 
-                    # Sunucu listeyi her kaydın kendi uyarı süresine göre zaten süzer; burada
-                    # ek bir gün sınırı uygulanmaz.
+                    # Sunucu listeyi her kaydın kendi uyarı süresine göre süzer; tarihi geçenler
+                    # (kalan gün < 0) da gecikmiş olarak gelir. Burada ek bir gün sınırı uygulanmaz.
                     if not isinstance(gun, (int, float)):
                         continue
 
+                    if gun < 0:
+                        zaman, ikon = f"{int(-gun)} gün gecikti", "🔴"
+                    elif gun == 0:
+                        zaman, ikon = "bugün", "🔧"
+                    else:
+                        zaman, ikon = f"{int(gun)} gün kaldı", "🔧"
+
                     metin = (
-                        f"🔧 {islem.get('cihaz_adi', 'Cihaz')} — "
+                        f"{ikon} {islem.get('cihaz_adi', 'Cihaz')} — "
                         f"{islem.get('islem_turu', 'İşlem')} "
-                        f"({gun} gün)"
+                        f"({zaman})"
                     )
 
                     self._bildirimler.append((

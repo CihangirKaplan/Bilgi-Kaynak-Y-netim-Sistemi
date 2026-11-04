@@ -135,8 +135,30 @@ def test_sinir_gunleri_dahil_ve_sifir_uyari_yalniz_o_gun_listeler():
     assert sorted(s["cihaz_adi"] for s in sonuc) == ["E1 - Sinir", "E2 - SifirBugun"]
 
 
-def test_gecmis_tarihli_kayit_listelenmez_eski_davranis_korunur():
-    assert yaklasanlar([("E1", "Gecmis", gun(-3), 60)], []) == []
+def test_gecmis_tarihli_kayit_gecikmis_olarak_listelenir():
+    sonuc = yaklasanlar([("E1", "Gecmis", gun(-3), 60)], [("E2", "Kal", gun(-20), 30)])
+    assert [(s["cihaz_adi"], s["islem_turu"], s["kalan_gun"], s["gecikmis"]) for s in sonuc] == [
+        ("E2 - Kal", "Kalibrasyon", -20, True), ("E1 - Gecmis", "Bakım", -3, True)]   # en çok geciken önde
+    assert all(s["durum_kodu"] == "KRITIK" for s in sonuc)
+
+
+def test_gecikmis_isareti_yalniz_tarihi_gecenlerde_true():
+    sonuc = yaklasanlar([("E1", "Bugun", gun(0), 30), ("E2", "Yarin", gun(1), 30), ("E3", "Dun", gun(-1), 30)], [])
+    assert {s["cihaz_adi"]: s["gecikmis"] for s in sonuc} == {"E1 - Bugun": False, "E2 - Yarin": False, "E3 - Dun": True}
+
+
+def test_gecikmis_kayit_uyari_suresi_sifir_olsa_da_listelenir():
+    assert [s["cihaz_adi"] for s in yaklasanlar([("E1", "A", gun(-1), 0)], [])] == ["E1 - A"]
+
+
+def test_sorgular_kullanim_disi_cihazlari_disarida_birakir():
+    conn = MagicMock()
+    cursor = conn.cursor.return_value
+    cursor.fetchall.side_effect = [[], []]
+    with patch("sunucu.psycopg2.connect", return_value=conn):
+        yaklasan_islemler_getir(kullanici_id=1)
+    sorgular = [c.args[0] for c in cursor.execute.call_args_list]
+    assert len(sorgular) == 2 and all("Kullanim_Disi" in q for q in sorgular)
 
 
 def test_kalibrasyon_da_ayni_kuralla_listelenir():
@@ -189,7 +211,9 @@ def test_zil_kayittaki_uyari_suresine_uyar_15_gun_siniri_yok():
             {"acik_ariza_sayisi": 2} if url.endswith("/ozet") else
             [{"cihaz_adi": "A", "islem_turu": "Bakım", "kalan_gun": 3},
              {"cihaz_adi": "B", "islem_turu": "Kalibrasyon", "kalan_gun": 25},
-             {"cihaz_adi": "C", "islem_turu": "Bakım", "kalan_gun": 58}]
+             {"cihaz_adi": "C", "islem_turu": "Bakım", "kalan_gun": 58},
+             {"cihaz_adi": "D", "islem_turu": "Kalibrasyon", "kalan_gun": -4},
+             {"cihaz_adi": "F", "islem_turu": "Bakım", "kalan_gun": 0}]
         )
         return yanit
 
@@ -201,10 +225,12 @@ def test_zil_kayittaki_uyari_suresine_uyar_15_gun_siniri_yok():
         mw.AnaPencere._bildirimleri_yenile(ana)
     metinler = [b[1] for b in ana._bildirimler]
     assert any("2 açık arıza" in m for m in metinler)                    # arıza bildirimi değişmedi
-    assert any("A —" in m and "(3 gün)" in m for m in metinler)
-    assert any("B —" in m and "(25 gün)" in m for m in metinler)          # 15 günden uzak ama listede
-    assert any("C —" in m and "(58 gün)" in m for m in metinler)
-    assert ana._bildirim_sayisi == 4                                      # 1 arıza + 3 bakım/kalibrasyon
+    assert any("A —" in m and "(3 gün kaldı)" in m for m in metinler)
+    assert any("B —" in m and "(25 gün kaldı)" in m for m in metinler)    # 15 günden uzak ama listede
+    assert any("C —" in m and "(58 gün kaldı)" in m for m in metinler)
+    assert any("D —" in m and "(4 gün gecikti)" in m for m in metinler)   # geciken de zile düşer
+    assert any("F —" in m and "(bugün)" in m for m in metinler)
+    assert ana._bildirim_sayisi == 6                                      # 1 arıza + 5 bakım/kalibrasyon
 
 
 def test_dashboard_bildirim_kutusu_listedeki_her_islemi_gosterir():
@@ -215,6 +241,7 @@ def test_dashboard_bildirim_kutusu_listedeki_her_islemi_gosterir():
     islemler = [
         {"cihaz_adi": "A", "islem_turu": "Bakım", "kalan_gun": 3, "tarih": "07.11.2026"},
         {"cihaz_adi": "B", "islem_turu": "Kalibrasyon", "kalan_gun": 40, "tarih": "14.12.2026"},
+        {"cihaz_adi": "G", "islem_turu": "Bakım", "kalan_gun": -6, "tarih": "29.10.2026"},
     ]
     with patch.object(DashboardEkrani, "_getir", side_effect=lambda yol: {"/api/dashboard/ozet": {}}.get(yol, [])):
         pano = DashboardEkrani("http://x", "T", cihaz_ozeti=True)
@@ -224,7 +251,8 @@ def test_dashboard_bildirim_kutusu_listedeki_her_islemi_gosterir():
     pano._bildirimleri_olustur()
     metinler = [l.text() for l in pano.bildirim_paneli.findChildren(QLabel)]
     assert any("B  —  Kalibrasyon 40 gün içinde" in m for m in metinler)  # 15 günden uzak ama listede
-    assert any("Bildirimler  (2)" in m for m in metinler)
+    assert any("G  —  Bakım 6 gün gecikti (29.10.2026)" in m for m in metinler)
+    assert any("Bildirimler  (3)" in m for m in metinler)
     pano.close()
     pano.deleteLater()
 

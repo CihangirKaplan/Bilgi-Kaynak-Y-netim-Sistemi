@@ -706,8 +706,11 @@ def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YO
             "rol_izin_map": rol_izin_map
         }
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Rol ve izin bilgileri alınamadı."
+        )
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
@@ -2578,6 +2581,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
             SELECT DISTINCT ON (b.cihaz_id) c.envanter_kodu, c.cihaz_adi, b.sonraki_bakim_tarihi, b.uyari_suresi_gun
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
+            WHERE c.durum::text <> 'Kullanim_Disi'
             ORDER BY b.cihaz_id,
                      COALESCE(b.bakim_baslangic_tarihi::date, b.bakim_tarihi::date) DESC,
                      b.bakim_id DESC
@@ -2587,12 +2591,13 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
             if hedef_tarih is None:
                 continue
             kalan_gun = (hedef_tarih - bugun).days
-            if 0 <= kalan_gun <= kayit[3]:                 # kayıttaki uyarı süresi (varsayılan 60 gün)
+            if kalan_gun <= kayit[3]:                      # uyarı süresi içinde ya da tarihi geçmiş (gecikmiş)
                 islemler.append({
                     "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
                     "islem_turu": "Bakım",
                     "tarih": hedef_tarih.strftime("%d.%m.%Y"),
                     "kalan_gun": kalan_gun,
+                    "gecikmis": kalan_gun < 0,
                     "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
                 })
 
@@ -2602,18 +2607,19 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
             SELECT DISTINCT ON (k.cihaz_id) c.envanter_kodu, c.cihaz_adi, k.gecerlilik_tarihi, k.uyari_suresi_gun
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
-            WHERE k.gecerlilik_tarihi IS NOT NULL
+            WHERE k.gecerlilik_tarihi IS NOT NULL AND c.durum::text <> 'Kullanim_Disi'
             ORDER BY k.cihaz_id, k.gecerlilik_tarihi DESC, k.kalibrasyon_id DESC
         """)
         for kayit in cursor.fetchall():
             hedef_tarih = kayit[2]
             kalan_gun = (hedef_tarih - bugun).days
-            if 0 <= kalan_gun <= kayit[3]:                 # kayıttaki uyarı süresi (varsayılan 60 gün)
+            if kalan_gun <= kayit[3]:                      # uyarı süresi içinde ya da tarihi geçmiş (gecikmiş)
                 islemler.append({
                     "cihaz_adi": f"{kayit[0]} - {kayit[1]}",
                     "islem_turu": "Kalibrasyon",
                     "tarih": hedef_tarih.strftime("%d.%m.%Y"),
                     "kalan_gun": kalan_gun,
+                    "gecikmis": kalan_gun < 0,
                     "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
                 })
 
@@ -4189,10 +4195,13 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
         yeni_id = cursor.fetchone()[0]
         conn.commit()
         return {"mesaj": "İzin başarıyla eklendi", "izin_id": yeni_id}
-    except Exception as e:
-        print(f"!!! KRİTİK VERİTABANI HATASI: {e} !!!") # <--- BU SATIRI EKLE
-        if conn: conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="İzin eklenirken beklenmeyen bir hata oluştu."
+        )
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
