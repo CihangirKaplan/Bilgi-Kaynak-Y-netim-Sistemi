@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate
 import requests
 from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
+from tekrar_uyari_alanlari import TekrarUyariAlanlari
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -57,6 +58,11 @@ class YeniKalibrasyonFormu(QDialog):
         form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
         form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
         form.addRow("Geçerlilik Tarihi (*):", self.dt_gecerlilik)
+
+        # Tekrar aralığı seçilince geçerlilik tarihi bitişe göre hesaplanır; uyarı süresi zil/dashboard içindir.
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Kalibrasyon geçerliliği sona erer",
+                                          varsayilan_ay=12)
+        self.tekrar.satirlari_ekle(form)
         layout.addLayout(form)
 
         self.btn_kaydet = QPushButton("Kaydet")
@@ -86,7 +92,8 @@ class YeniKalibrasyonFormu(QDialog):
             "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
             # YENİ EKLENEN VERİLER
             "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
-            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd")
+            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
             QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
@@ -145,6 +152,10 @@ class KalibrasyonDuzenleFormu(QDialog):
         form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
         form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
         form.addRow("Geçerlilik (*):", self.dt_gecerlilik)
+
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Kalibrasyon geçerliliği sona erer",
+                                          uyari_suresi=veri.get("uyari_suresi_gun", 30))
+        self.tekrar.satirlari_ekle(form)
         layout.addLayout(form)
 
         btn = QPushButton("Değişiklikleri Kaydet")
@@ -160,7 +171,8 @@ class KalibrasyonDuzenleFormu(QDialog):
             "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
             # YENİ EKLENEN VERİLER
             "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
-            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd")
+            "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
             QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
