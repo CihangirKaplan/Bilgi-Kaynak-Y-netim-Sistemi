@@ -1,6 +1,6 @@
 import datetime
 from datetime import date
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
@@ -291,6 +291,49 @@ class BakimGuncelleModeli(BaseModel):
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
 # ==========================================
+
+# ==========================================
+# BAKIM / KALİBRASYON PLANLARI (müdür konfigürasyonu)
+# ==========================================
+def _gorev_turu_temizle(deger):
+    if deger is None:
+        return deger
+    deger = deger.strip()
+    if len(deger) < 2:
+        raise ValueError("Görev türü en az 2 karakter olmalıdır.")
+    return deger
+
+
+class BakimPlaniOlusturModeli(BaseModel):
+    """Bir cihaz için tekrarlayan bakım/kalibrasyon planı (tür, periyot, uyarı süresi)."""
+    model_config = ConfigDict(extra="forbid")
+
+    cihaz_id: int = Field(gt=0)
+    gorev_turu: str = Field(max_length=100)          # örn. "Yıllık bakım", "Kalibrasyon"
+    periyot_gun: int = Field(ge=1, le=3650)
+    uyari_suresi_gun: int = Field(default=7, ge=0, le=365)
+    sonraki_gorev_tarihi: Optional[date] = None      # boşsa bugün + periyot
+
+    _gorev_turu = field_validator("gorev_turu")(_gorev_turu_temizle)
+
+    @model_validator(mode="after")
+    def uyari_periyottan_uzun_olamaz(self):
+        if self.uyari_suresi_gun > self.periyot_gun:
+            raise ValueError("Uyarı süresi periyottan uzun olamaz.")
+        return self
+
+
+class BakimPlaniGuncelleModeli(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gorev_turu: Optional[str] = Field(default=None, max_length=100)
+    periyot_gun: Optional[int] = Field(default=None, ge=1, le=3650)
+    uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
+    sonraki_gorev_tarihi: Optional[date] = None
+    aktif_mi: Optional[bool] = None
+
+    _gorev_turu = field_validator("gorev_turu")(_gorev_turu_temizle)
+
 
 class DashboardOzetModeli(BaseModel):
     toplam_cihaz: int
