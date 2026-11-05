@@ -83,6 +83,13 @@ IZIN_LISTESI = [
 
 IZIN = {ad: (kat, kod) for ad, kat, kod in IZIN_LISTESI}
 
+# Parola sıfırlama: yalnızca ADMIN rolüne açık.
+# Mevcut ADMIN yetkisinin rol maskesi kullanılır.
+IZIN["Kullanıcı parola sıfırlama"] = (
+    IZIN["Kullanıcı oluşturma"][0],
+    IZIN["Faaliyet birimlerini yönetme"][1],
+)
+
 # Ekrandaki izin adı -> sunucunun gerçekte istediği izin kod(lar)ı (rol_izinleri tablosu).
 # Menü, kullanıcının sunucudan aldığı izinlere (/api/yetkilerim) göre çizilir; bu tablo ekran
 # adlarını sunucudaki kodlara çevirir. Birden fazla kod varsa hepsi gerekir.

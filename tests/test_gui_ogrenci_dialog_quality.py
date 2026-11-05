@@ -119,6 +119,8 @@ def test_gui_login_beklenmeyen_hata_ayrintisi_gizlenir():
     )
 
     ekran = MagicMock()
+    ekran.captcha_id = "a" * 32
+    ekran.captcha_input.text.return_value = "73942"
     ekran.kalan = 0
     ekran.kullanici_input.text.return_value = "qa_test"
     ekran.sifre_input.text.return_value = "test_parolasi"
@@ -150,6 +152,8 @@ def test_gui_login_zaman_asimi_mesaji():
     )
 
     ekran = MagicMock()
+    ekran.captcha_id = "a" * 32
+    ekran.captcha_input.text.return_value = "73942"
     ekran.kalan = 0
     ekran.kullanici_input.text.return_value = "qa_test"
     ekran.sifre_input.text.return_value = "test_parolasi"
