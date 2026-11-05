@@ -67,6 +67,7 @@ jobs:
             --ignore=tests/test_randevu_eszamanlilik_quality.py \
             --ignore=tests/test_audit_postgresql_quality.py \
             --ignore=tests/test_api_audit_rollback_quality.py \
+            --ignore=tests/test_kullanici_personel_postgresql_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
             --cov=sunucu \
             --cov=guvenlik \
