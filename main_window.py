@@ -108,6 +108,7 @@ IZIN_KODLARI = {
     "Kullanıcı oluşturma": ("KULLANICI_OLUSTUR",),
     "Personel tanımlama": ("PERSONEL_TANIMLA",),
     "Kullanıcı pasifleştirme": ("KULLANICI_PASIFLESTIR",),
+    "Kullanıcı parola sıfırlama": ("KULLANICI_PAROLA_SIFIRLA",),
     "Rol atama/değiştirme": ("ROL_ATAMA_DEGISTIRME",),
     "Audit kayıtlarını inceleme": ("AUDIT_KAYITLARI_INCELE",),
     "Danışma masası oturumunu yönetme": ("DANISMA_OTURUMU_YONET",),
@@ -223,7 +224,8 @@ MENU = [
              aciklama="Kullanıcı, personel ve rol atama işlemleri",
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
                       ("⏸  Aktiflik Düzenle", "Kullanıcı pasifleştirme"),
-                      ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme")]),
+                      ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme"),
+                      ("🔑  Parola Sıfırla", "Kullanıcı parola sıfırlama")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
         dict(ikon="🏢", ad="Oda Yönetimi", izin="Oda yönetimi",
@@ -1634,6 +1636,14 @@ QLabel {
                     btn.clicked.connect(self.yeni_kullanici_formunu_ac)
                 elif "Aktiflik Düzenle" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_durum_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
+                elif etiket == "🔑  Parola Sıfırla":
+                    btn.clicked.connect(
+                        lambda: (
+                            self.aktif_personel_ekrani.secili_kullanici_parola_sifirla()
+                            if hasattr(self, "aktif_personel_ekrani")
+                            else None
+                        )
+                    )
                 elif "Rol Ata / Değiştir" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_rol_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif etiket == "＋  Yeni Faaliyet Ekle":

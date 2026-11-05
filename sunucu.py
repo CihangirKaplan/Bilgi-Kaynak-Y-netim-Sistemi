@@ -1,5 +1,5 @@
 from modeller import DanismaGorevOlusturModeli
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
@@ -39,7 +39,8 @@ from guvenlik import (
     parola_dogrula,
     gecici_parola_uret,
     access_token_olustur,
-    token_dogrula
+    token_dogrula,
+    token_parola_gecerli
 )
 from denetim import denetim_kaydi_olustur
 from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -71,13 +72,58 @@ def otomatik_danisan_kodu_uret(cursor) -> str:
     sira = cursor.fetchone()[0]
     return f"DAN-{yil}-{sira:04d}"
 
-def token_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> int:
+def token_kullanici_id(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+) -> int:
+    """İlk girişte parola değiştirmeye de izin veren güvenli token kontrolü."""
+    token = credentials.credentials
+
     try:
-        return token_dogrula(credentials.credentials)
+        kullanici_id = token_dogrula(token)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token süresi dolmuş.")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Geçersiz token.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT parola_hash, aktif_mi FROM kullanicilar "
+            "WHERE kullanici_id = %s;",
+            (kullanici_id,)
+        )
+        kayit = cursor.fetchone()
+
+        if kayit is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Kullanıcı bulunamadı."
+            )
+
+        if not kayit[1]:
+            raise HTTPException(
+                status_code=403,
+                detail="Kullanıcı hesabı aktif değil."
+            )
+
+        if not token_parola_gecerli(token, kayit[0]):
+            raise HTTPException(
+                status_code=401,
+                detail="Oturum geçersiz. Yeniden giriş yapınız."
+            )
+
+        return kullanici_id
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 
 def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> int:
     try:
@@ -93,13 +139,19 @@ def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bear
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT aktif_mi, ilk_giris_mi FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
+        cursor.execute("SELECT aktif_mi, ilk_giris_mi, parola_hash FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
         kullanici = cursor.fetchone()
 
         if kullanici is None:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         if not kullanici[0]:
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
+        if not token_parola_gecerli(token, kullanici[2]):
+            raise HTTPException(
+                status_code=401,
+                detail="Oturum geçersiz. Yeniden giriş yapınız."
+            )
+
         if kullanici[1]:
             raise HTTPException(status_code=403, detail="İlk girişte şifrenizi değiştirmeniz gerekiyor.")
 
@@ -251,7 +303,7 @@ def giris_yap(giris: GirisModeli):
                 detail="Yöneticinizden sizi personel olarak tanımlamasını isteyiniz."
             )
         personel_id = pers[0]
-        access_token = access_token_olustur(kullanici[0])
+        access_token = access_token_olustur(kullanici[0], kullanici[2])
 
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
         return {
@@ -949,6 +1001,129 @@ def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YO
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+
+@app.post("/api/kullanicilar/{kullanici_id}/parola-sifirla")
+def kullanici_parola_sifirla(
+    kullanici_id: int,
+    response: Response,
+    islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PAROLA_SIFIRLA"))
+):
+    """Yalnızca ADMIN başka bir aktif kullanıcının parolasını sıfırlar."""
+
+    if kullanici_id == islem_yapan_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Kendi parolanızı bu işlemle sıfırlayamazsınız."
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        # Kullanıcı arayüzüne güvenmeden sunucuda ADMIN kontrolü
+        cursor.execute(
+            """
+            SELECT r.rol_adi
+            FROM kullanicilar k
+            JOIN roller r ON r.rol_id = k.rol_id
+            WHERE k.kullanici_id = %s;
+            """,
+            (islem_yapan_id,)
+        )
+        yonetici = cursor.fetchone()
+
+        if yonetici is None or yonetici[0] != "ADMIN":
+            raise HTTPException(
+                status_code=403,
+                detail="Bu işlem yalnızca ADMIN tarafından yapılabilir."
+            )
+
+        cursor.execute(
+            """
+            SELECT aktif_mi
+            FROM kullanicilar
+            WHERE kullanici_id = %s
+            FOR UPDATE;
+            """,
+            (kullanici_id,)
+        )
+        hedef = cursor.fetchone()
+
+        if hedef is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Kullanıcı bulunamadı."
+            )
+
+        if not hedef[0]:
+            raise HTTPException(
+                status_code=409,
+                detail="Pasif kullanıcının parolası sıfırlanamaz."
+            )
+
+        gecici_parola = gecici_parola_uret()
+        yeni_hash = parola_hashle(gecici_parola)
+
+        cursor.execute(
+            """
+            UPDATE kullanicilar
+            SET parola_hash = %s,
+                ilk_giris_mi = TRUE,
+                basarisiz_giris_sayisi = 0,
+                kilit_bitis_zamani = NULL
+            WHERE kullanici_id = %s;
+            """,
+            (yeni_hash, kullanici_id)
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (
+                islem_yapan_id,
+                "PASSWORD_RESET",
+                "kullanicilar",
+                kullanici_id
+            )
+        )
+
+        conn.commit()
+
+        response.headers["Cache-Control"] = "no-store"
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Geçici parola oluşturuldu.",
+            "kullanici_id": kullanici_id,
+            "gecici_parola": gecici_parola
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Parola sıfırlama işlemi tamamlanamadı."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 
 @app.patch("/api/kullanicilar/{kullanici_id}/durum-degistir")

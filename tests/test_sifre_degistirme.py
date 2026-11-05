@@ -114,7 +114,7 @@ def test_ilk_giriste_diger_api_erisimleri_engellenir():
     mock_cursor = mock_conn.cursor.return_value
 
     # Kullanıcı aktif ancak ilk giriş şifresini değiştirmemiş
-    mock_cursor.fetchone.return_value = (True, True)
+    mock_cursor.fetchone.return_value = (True, True, "sahte_hash")
 
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer",
@@ -124,6 +124,7 @@ def test_ilk_giriste_diger_api_erisimleri_engellenir():
     with (
         patch("sunucu.token_dogrula", return_value=10),
         patch("sunucu.psycopg2.connect", return_value=mock_conn),
+        patch("sunucu.token_parola_gecerli", return_value=True),
     ):
         with pytest.raises(HTTPException) as hata:
             mevcut_kullanici_id(credentials=credentials)
@@ -141,7 +142,7 @@ def test_sifre_degistirildikten_sonra_erisim_acilir():
     mock_cursor = mock_conn.cursor.return_value
 
     # Kullanıcı aktif ve şifre değiştirme işlemini tamamlamış
-    mock_cursor.fetchone.return_value = (True, False)
+    mock_cursor.fetchone.return_value = (True, False, "sahte_hash")
 
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer",
@@ -151,6 +152,7 @@ def test_sifre_degistirildikten_sonra_erisim_acilir():
     with (
         patch("sunucu.token_dogrula", return_value=10),
         patch("sunucu.psycopg2.connect", return_value=mock_conn),
+        patch("sunucu.token_parola_gecerli", return_value=True),
     ):
         sonuc = mevcut_kullanici_id(credentials=credentials)
 

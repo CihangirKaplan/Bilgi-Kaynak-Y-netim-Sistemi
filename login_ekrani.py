@@ -326,7 +326,48 @@ class LoginEkrani(QWidget):
         self.goster.toggled.connect(
             lambda v: self.sifre_input.setEchoMode(QLineEdit.Normal if v else QLineEdit.Password))
         fl.addSpacing(4)
-        fl.addWidget(self.goster)
+
+        sifre_secenekleri = QHBoxLayout()
+        sifre_secenekleri.setSpacing(8)
+
+        sifre_secenekleri.addWidget(self.goster)
+        sifre_secenekleri.addStretch()
+
+        self.sifremi_unuttum_btn = QPushButton(
+            "Şifremi Unuttum?"
+        )
+
+        self.sifremi_unuttum_btn.setCursor(
+            Qt.PointingHandCursor
+        )
+
+        self.sifremi_unuttum_btn.setFlat(True)
+
+        self.sifremi_unuttum_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #1554B7;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px;
+            }
+
+            QPushButton:hover {
+                color: #0E408F;
+                text-decoration: underline;
+            }
+        """)
+
+        self.sifremi_unuttum_btn.clicked.connect(
+            self.sifremi_unuttum_bilgisi
+        )
+
+        sifre_secenekleri.addWidget(
+            self.sifremi_unuttum_btn
+        )
+
+        fl.addLayout(sifre_secenekleri)
 
         self.hata_lbl = QLabel("")
         self.hata_lbl.setObjectName("hata")
@@ -354,6 +395,20 @@ class LoginEkrani(QWidget):
         self.kullanici_input.returnPressed.connect(self.sifre_input.setFocus)
         self.sifre_input.returnPressed.connect(self.giris_yap)
         self.kullanici_input.setFocus()
+
+    def sifremi_unuttum_bilgisi(self):
+        """Parolasını unutan kullanıcıyı yönlendir."""
+
+        QMessageBox.information(
+            self,
+            "Şifremi Unuttum",
+            "Parolanızı unuttuysanız sistem yöneticinizle "
+            "iletişime geçiniz.\n\n"
+            "Sistem yöneticiniz hesabınız için yeni bir "
+            "geçici parola oluşturabilir.\n\n"
+            "Geçici parolanızla giriş yaptığınızda "
+            "yeni bir parola belirlemeniz istenecektir."
+        )
 
     def hata_goster(self, metin):
         self.hata_lbl.setText("⚠  " + metin)

@@ -1,4 +1,6 @@
 import bcrypt
+import hashlib
+import hmac
 import os
 import jwt
 import secrets
@@ -34,7 +36,7 @@ def parola_dogrula(parola: str, parola_hash: str) -> bool:
         parola_hash.encode("utf-8")
     )
 
-def access_token_olustur(kullanici_id: int) -> str:
+def access_token_olustur(kullanici_id: int, parola_hash: str | None = None) -> str:
     simdi = datetime.now(timezone.utc)
     bitis_zamani = simdi + timedelta(minutes=JWT_EXPIRE_MINUTES)
 
@@ -44,6 +46,9 @@ def access_token_olustur(kullanici_id: int) -> str:
         "exp": bitis_zamani
     }
 
+    if parola_hash is not None:
+        payload["phv"] = parola_token_ozeti(parola_hash)
+
     token = jwt.encode(
         payload,
         JWT_SECRET,
@@ -51,6 +56,36 @@ def access_token_olustur(kullanici_id: int) -> str:
     )
 
     return token
+
+def parola_token_ozeti(parola_hash: str) -> str:
+    """Parola hash'ini JWT içinde açığa çıkarmadan sürüm imzası üret."""
+    return hmac.new(
+        JWT_SECRET.encode("utf-8"),
+        parola_hash.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+
+def token_parola_gecerli(token: str, parola_hash: str) -> bool:
+    """JWT'nin mevcut parola hash'iyle eşleştiğini kontrol et."""
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
+    except jwt.InvalidTokenError:
+        return False
+
+    gelen_ozet = payload.get("phv")
+    if not isinstance(gelen_ozet, str):
+        return False
+
+    return hmac.compare_digest(
+        gelen_ozet,
+        parola_token_ozeti(parola_hash)
+    )
+
 
 def token_dogrula(token: str) -> int:
     payload = jwt.decode(
