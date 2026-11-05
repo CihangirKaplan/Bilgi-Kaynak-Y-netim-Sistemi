@@ -36,8 +36,6 @@ Görev Zamanlayıcı uygulamasında görevin oluştuğunu kontrol edin.
 Yedekler proje içindeki backups/ klasörüne kaydedilir.
 Başarılı yedekleme sonrasında 7 günden eski yedekler temizlenir.
 
-## Önemli
-
 ## Geri yükleme (yedeğin işe yaradığını doğrulama)
 
 Yedeği **yeni** bir veritabanına yükleyip kayıt sayılarını karşılaştırın:
