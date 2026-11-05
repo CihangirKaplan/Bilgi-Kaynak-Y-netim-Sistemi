@@ -176,7 +176,75 @@ def yetkilerim(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+from fastapi import Request
+from captcha_hiz_siniri import hiz_siniri_kontrol
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
+from captcha_servisi import captcha_olustur, captcha_dogrula
+from modeller import CaptchaGirisModeli
+
+
+@app.middleware("http")
+async def giris_hiz_siniri_middleware(request: Request, call_next):
+    """Gecersiz govdeli login isteklerini de hiz sinirina dahil et."""
+    if request.method == "POST" and request.url.path == "/api/login":
+        istemci_ip = (
+            request.client.host if request.client else "unknown"
+        )
+
+        try:
+            await run_in_threadpool(
+                hiz_siniri_kontrol,
+                VT_AYARLARI,
+                istemci_ip,
+                "login",
+            )
+        except HTTPException as hata:
+            return JSONResponse(
+                status_code=hata.status_code,
+                content={"detail": hata.detail},
+                headers=hata.headers or {},
+            )
+
+    return await call_next(request)
+
+
+@app.get("/api/captcha")
+def captcha_getir(request: Request):
+    """Giris ekrani icin yeni CAPTCHA olustur."""
+
+    istemci_ip = (
+        request.client.host
+        if request.client
+        else "unknown"
+    )
+
+    hiz_siniri_kontrol(
+        VT_AYARLARI,
+        istemci_ip,
+        "captcha",
+    )
+
+    return captcha_olustur(VT_AYARLARI)
+
+
 @app.post("/api/login")
+def captcha_ile_giris(giris: CaptchaGirisModeli):
+    """CAPTCHA dogrulandiktan sonra normal girisi calistir."""
+    captcha_dogrula(
+        VT_AYARLARI,
+        giris.captcha_id,
+        giris.guvenlik_kodu,
+    )
+
+    return giris_yap(
+        GirisModeli(
+            kullanici_adi=giris.kullanici_adi,
+            parola=giris.parola,
+        )
+    )
+
+
 def giris_yap(giris: GirisModeli):
     conn = None
     cursor = None
