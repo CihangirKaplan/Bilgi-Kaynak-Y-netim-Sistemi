@@ -17,6 +17,7 @@ from sunucu import app
 # (yöntem, yol): gerekçe
 ISTISNALAR = {
     ("POST", "/api/login"): "Giriş öncesi çağrılır; kimlik istenemez.",
+    ("GET", "/api/captcha"): "Giriş öncesi CAPTCHA alınır; JWT gerektirmez, hız sınırı uygulanır.",
     ("POST", "/api/sifre-degistir"): "İlk girişte şifre değiştirmek için yalnızca token yeterli olmalı.",
     ("GET", "/api/korumali-test"): "Token doğrulama deneme ucu; veri döndürmez.",
     ("GET", "/api/yetkilerim"): "Kullanıcı yalnızca kendi rolünün izinlerini görür; ayrıca izin gerektirmez.",
