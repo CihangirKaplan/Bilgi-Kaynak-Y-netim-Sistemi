@@ -679,3 +679,35 @@ def test_ogrenci_numarasi_cakismasinda_yeniden_istek_gonderilmez(form):
     # Basarisiz islem sonrasi form kilitlenmemeli.
     assert form.olusturulan_kullanici is None
     assert form.btn_kaydet.isEnabled()
+
+
+
+def test_basarili_kayit_sonrasi_iptal_butonu_kapat_olur(form):
+    """Kayit tamamlandiginda Iptal dugmesi Kapat olarak degisir."""
+    form.input_kullanici_adi.setText("qa_kapat_test")
+    rol_sec(form, 1)
+
+    form.show()
+    assert form.btn_kaydet.isVisible()
+    assert form.btn_iptal.text() == "İptal"
+
+    with patch.object(
+        modul.requests,
+        "post",
+        return_value=cevap(201, {
+            "kullanici_id": 90,
+            "personel_id": 190,
+            "personel_kodu": "PER-PSK-999",
+            "gecici_parola": "TestParolasi",
+        }),
+    ) as post:
+        form.kaydet()
+
+    post.assert_called_once()
+    assert form.btn_iptal.text() == "Kapat"
+    assert form.olusturulan_kullanici is not None
+    assert not form.btn_kaydet.isEnabled()
+    assert form.btn_kaydet.isHidden()
+
+    assert form.btn_iptal.isVisible()
+    form.close()

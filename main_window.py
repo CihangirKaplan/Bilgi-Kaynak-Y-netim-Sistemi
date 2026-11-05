@@ -1920,10 +1920,12 @@ QLabel {
         from k_personel_ekranlari import KullaniciOlusturFormu
         
         self.kullanici_formu = KullaniciOlusturFormu(api_url=self.api_url, token=self.token, ebeveyn=self)
-        # Formu ekranda üstte tutacak şekilde (Modal) açar; personel atanıp kapanırsa listeyi yenile
-        if self.kullanici_formu.exec():
-            if hasattr(self, 'aktif_personel_ekrani'):
-                self.aktif_personel_ekrani.verileri_cek()
+        # Kayıt başarılıysa pencerenin kapanma biçiminden bağımsız olarak listeyi yenile.
+        self.kullanici_formu.exec()
+        if self.kullanici_formu.olusturulan_kullanici is not None:
+            ekran = getattr(self, "aktif_personel_ekrani", None)
+            if ekran is not None:
+                ekran.verileri_cek()
     
     def faaliyet_tablosunu_guncelle(self):
         if not hasattr(self, 'tablo_faaliyetler'):

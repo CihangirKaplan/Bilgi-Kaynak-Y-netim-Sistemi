@@ -170,7 +170,8 @@ class KullaniciPersonelEkrani(QWidget):
 
     def kullanici_olustur_ac(self):
         form = KullaniciOlusturFormu(self.api_url, self.token, self)
-        if form.exec() == QDialog.Accepted:
+        form.exec()
+        if form.olusturulan_kullanici is not None:
             self.verileri_cek()
 
 # ======================================================================
@@ -562,13 +563,7 @@ class YetkiOzetiKarti(QFrame):
 
 
 class KullaniciOlusturFormu(QDialog):
-    """Kullanıcı oluşturma ve personel atamayı tek pencerede birleştirir.
-
-    1) Kullanıcı adı ve rol seçilir (Danışma Öğrencisi ise ad soyad / numara / telefon da girilir),
-       "Kullanıcıyı Oluştur" ile hesap açılır.
-    2) Aynı pencerede "Personel Olarak Ata" düğmesi çıkar; hesap personel olarak atanır.
-       Danışma öğrencisi için öğrenci kaydı da bu adımda oluşur.
-    """
+    """Kullanıcı, personel ve gerekirse öğrenci kaydını tek işlemde oluşturur."""
 
     def __init__(self, api_url, token, ebeveyn=None):
         super().__init__(ebeveyn)
@@ -805,6 +800,8 @@ class KullaniciOlusturFormu(QDialog):
                     "kullanici_adi": kullanici_adi,
                     "rol_id": rol_id,
                 }
+                self.btn_iptal.setText("Kapat")
+                self.btn_kaydet.hide()
                 self.lbl_sonuc.setText(
                     "✔ Kullanıcı ve personel başarıyla oluşturuldu.\n\n"
                     f"👤 Kullanıcı Adı: {kullanici_adi}\n"
