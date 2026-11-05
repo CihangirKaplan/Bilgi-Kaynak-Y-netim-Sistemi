@@ -100,7 +100,18 @@ Depoda düz yazılı şifre/anahtar bulunmadığını doğrulayan bir test de va
 
 ## Yedekleme
 
-PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadır. Windows'ta zamanlanmış görev kurulumu için `scripts/windows/README.md` dosyasına bakın.
+PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadır. Hepsi varsayılan olarak `.env` içindeki `DB_NAME` veritabanı (uygulamanın kullandığı ana veritabanı) için çalışır; başka bir veritabanı için `--database` verilir.
+
+| Amaç | Komut |
+|---|---|
+| Yedek al (`backups/<veritabani>_<tarih>.dump`) | `python scripts/veritabani_yedekle.py` |
+| Yedek al + 7 günden eski yedekleri sil | `python scripts/otomatik_yedekleme.py` |
+| Eski yedekleri önizle / sil | `python scripts/yedek_rotasyonu.py --days 7` (silmek için `--apply`) |
+| Yedeği **yeni** veritabanına geri yükle ve kontrol et | `python scripts/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi` |
+
+- Yedekleme yalnızca okur, veritabanını değiştirmez. Rotasyon yalnızca seçilen veritabanının, tam ad biçimine uyan yedeklerini siler.
+- Geri yükleme **hiçbir mevcut veritabanının üzerine yazmaz**: hedef veritabanı yeni olmalıdır, canlı veritabanı hedef olarak kabul edilmez, hata olursa oluşturulan yarım veritabanı silinir. Sonunda tablo satır sayıları ve migration sürümü yedeğin alındığı veritabanıyla yan yana gösterilir.
+- Windows'ta zamanlanmış görev kurulumu için `scripts/windows/README.md` dosyasına bakın.  
 
 ## Dokümanlar
 
