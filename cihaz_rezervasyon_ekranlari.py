@@ -51,7 +51,8 @@ def varsayilan_rezervasyon_zamanlari(simdi=None):
 
 class YeniRezervasyonFormu(QDialog):
     """Yeni Cihaz Rezervasyonu Oluşturma Ekranı (VIP UX Sürümü)"""
-    def __init__(self, api_url, token, parent=None):
+    def __init__(self, api_url, token, parent=None, cihaz_id=None, tarih=None,
+                 baslangic_saati=None, bitis_saati=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
@@ -77,7 +78,9 @@ class YeniRezervasyonFormu(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(15) # Satırlar arasına nefes alacak boşluk ekledik
 
-        varsayilan_tarih, baslangic_saati, bitis_saati = (
+        # Not: Buradaki değişkenler, yapıcıya dışarıdan verilen baslangic_saati/bitis_saati parametrelerinin
+        # üzerine yazmasın diye "varsayilan_" önekiyle adlandırılır.
+        varsayilan_tarih, varsayilan_baslangic, varsayilan_bitis = (
             varsayilan_rezervasyon_zamanlari()
         )
 
@@ -97,7 +100,7 @@ class YeniRezervasyonFormu(QDialog):
         self.dt_baslangic_tarih.setCalendarPopup(True) # Efsanevi Takvim Pop-up'ı
         self.cmb_baslangic_saat = QComboBox()
         self.cmb_baslangic_saat.addItems(saatler)
-        self.cmb_baslangic_saat.setCurrentText(baslangic_saati)
+        self.cmb_baslangic_saat.setCurrentText(varsayilan_baslangic)
         layout_baslangic.addWidget(self.dt_baslangic_tarih, stretch=2)
         layout_baslangic.addWidget(self.cmb_baslangic_saat, stretch=1)
 
@@ -108,7 +111,7 @@ class YeniRezervasyonFormu(QDialog):
         self.dt_bitis_tarih.setCalendarPopup(True)
         self.cmb_bitis_saat = QComboBox()
         self.cmb_bitis_saat.addItems(saatler)
-        self.cmb_bitis_saat.setCurrentText(bitis_saati)
+        self.cmb_bitis_saat.setCurrentText(varsayilan_bitis)
         layout_bitis.addWidget(self.dt_bitis_tarih, stretch=2)
         layout_bitis.addWidget(self.cmb_bitis_saat, stretch=1)
 
@@ -140,6 +143,22 @@ class YeniRezervasyonFormu(QDialog):
         layout.addWidget(self.btn_kaydet)
 
         self.verileri_yukle()
+        self.on_degerleri_uygula(cihaz_id, tarih, baslangic_saati, bitis_saati)
+
+    def on_degerleri_uygula(self, cihaz_id=None, tarih=None, baslangic_saati=None, bitis_saati=None):
+        """Cihaz Uygunluğu takviminden gelindiğinde cihaz, gün ve saati önceden seçer (verilmeyenler değişmez)."""
+        if cihaz_id is not None:
+            indeks = self.cmb_cihaz.findData(cihaz_id)
+            if indeks >= 0:
+                self.cmb_cihaz.setCurrentIndex(indeks)
+        if tarih is not None:
+            if not isinstance(tarih, QDate):
+                tarih = QDate(tarih.year, tarih.month, tarih.day)
+            self.dt_baslangic_tarih.setDate(tarih)
+            self.dt_bitis_tarih.setDate(tarih)
+        for kutu, saat in ((self.cmb_baslangic_saat, baslangic_saati), (self.cmb_bitis_saat, bitis_saati)):
+            if saat and kutu.findText(saat) >= 0:
+                kutu.setCurrentText(saat)
 
     def verileri_yukle(self):
         try:
@@ -370,8 +389,8 @@ class RezervasyonYonetimEkrani(QWidget):
         except Exception as e:
             pass
 
-    def yeni_rezervasyon_olustur(self):
-        form = YeniRezervasyonFormu(self.api_url, self.token)
+    def yeni_rezervasyon_olustur(self, **on_degerler):
+        form = YeniRezervasyonFormu(self.api_url, self.token, **on_degerler)
         if form.exec():
             self.verileri_yukle() # Form başarıyla kapanırsa tabloyu yenile
 
