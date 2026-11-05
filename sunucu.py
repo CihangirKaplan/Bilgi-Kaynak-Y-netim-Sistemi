@@ -235,17 +235,23 @@ def giris_yap(giris: GirisModeli):
 
         cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = 0, kilit_bitis_zamani = NULL WHERE kullanici_id = %s;", (kullanici[0],))
         conn.commit()
-        access_token = access_token_olustur(kullanici[0])
-
         cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici[0],))
         pers = cursor.fetchone()
         # YENİ KONTROL: Personel kaydı yoksa 403 hatası fırlat ve girişi kes
         if not pers:
+            denetim_kaydi_olustur(
+                VT_AYARLARI,
+                olay_turu="LOGIN_FAILED",
+                kullanici_id=kullanici[0],
+                hedef_tablo="kullanicilar",
+                hedef_kayit_id=kullanici[0],
+            )
             raise HTTPException(
                 status_code=403, 
                 detail="Yöneticinizden sizi personel olarak tanımlamasını isteyiniz."
             )
         personel_id = pers[0]
+        access_token = access_token_olustur(kullanici[0])
 
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
         return {
