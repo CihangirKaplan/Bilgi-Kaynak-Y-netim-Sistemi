@@ -303,7 +303,7 @@ def test_danisma_ogrencisine_kayitsiz_rol_atanamaz():
                 islem_yapan_id=10,
             )
 
-    assert hata.value.status_code == 409
+    assert hata.value.status_code == 422
 
     sorgular = [
         cagri.args[0].upper()

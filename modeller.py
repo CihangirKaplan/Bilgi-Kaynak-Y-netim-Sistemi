@@ -139,6 +139,36 @@ class RolDegistirModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rol_id: int = Field(gt=0)
+    ad_soyad: Optional[str] = Field(default=None, max_length=100)
+    ogrenci_numarasi: Optional[str] = Field(default=None, max_length=15)
+    telefon: Optional[str] = Field(default=None, max_length=20)
+
+    @field_validator("ad_soyad", "ogrenci_numarasi", "telefon")
+    @classmethod
+    def bos_deger_kontrol(cls, deger):
+        return deger.strip() or None if deger is not None else None
+
+    @field_validator("ogrenci_numarasi")
+    @classmethod
+    def ogrenci_no_kontrol(cls, deger):
+        if deger is not None and not (deger.isascii() and deger.isdigit()):
+            raise ValueError("Öğrenci numarası yalnızca rakam içermelidir.")
+        return deger
+
+    @field_validator("telefon")
+    @classmethod
+    def telefon_kontrol(cls, deger):
+        if deger is None:
+            return None
+        rakamlar = deger.replace(" ", "")
+        if len(rakamlar) == 10 and not rakamlar.startswith("0"):
+            rakamlar = "0" + rakamlar
+        if not (
+            rakamlar.isascii() and rakamlar.isdigit()
+            and len(rakamlar) == 11 and rakamlar.startswith("0")
+        ):
+            raise ValueError("Telefon numarası geçersiz.")
+        return rakamlar
 
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
