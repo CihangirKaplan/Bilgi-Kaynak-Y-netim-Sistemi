@@ -422,3 +422,132 @@ def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
                 (ortam["yapan_id"],),
             )
             assert cur.fetchone()[0] == 0
+
+
+def test_postgresql_rol_degisiminde_personel_kodu_da_degisisir(qa_ortami):
+    """Rol, personel kodu ve Audit gerçek PostgreSQL üzerinde doğrulanır."""
+    from modeller import RolDegistirModeli
+    from sunucu import kullanici_rol_degistir
+
+    ortam = qa_ortami
+    ad = f"qa_atom_{ortam['etiket']}_rol"
+    ortam["kullanici_adlari"].append(ad)
+
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR';"
+            )
+            satir = cur.fetchone()
+            assert satir is not None
+            memur_rol_id = satir[0]
+
+    olusturulan = kullanici_olustur(
+        KullaniciOlusturModeli(
+            kullanici_adi=ad,
+            rol_id=ortam["roller"]["PSIKOLOG"],
+        ),
+        kullanici_id=ortam["yapan_id"],
+    )
+
+    kullanici_id = olusturulan["kullanici_id"]
+    personel_id = olusturulan["personel_id"]
+    eski_kod = olusturulan["personel_kodu"]
+
+    assert eski_kod.startswith("PER-PSK-")
+
+    sonuc = kullanici_rol_degistir(
+        kullanici_id=kullanici_id,
+        veri=RolDegistirModeli(rol_id=memur_rol_id),
+        islem_yapan_id=ortam["yapan_id"],
+    )
+
+    assert sonuc["yeni_rol_adi"] == "MEMUR"
+    assert sonuc["yeni_personel_kodu"].startswith("PER-MEM-")
+    assert sonuc["yeni_personel_kodu"] != eski_kod
+
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT k.rol_id, p.personel_id, p.personel_kodu
+                FROM kullanicilar k
+                JOIN personel p ON p.kullanici_id = k.kullanici_id
+                WHERE k.kullanici_id = %s;
+            """, (kullanici_id,))
+
+            kayit = cur.fetchone()
+
+            assert kayit == (
+                memur_rol_id,
+                personel_id,
+                sonuc["yeni_personel_kodu"],
+            )
+
+            cur.execute("""
+                SELECT olay_turu::text, hedef_tablo
+                FROM denetim_kayitlari
+                WHERE kullanici_id = %s
+                  AND (
+                    (hedef_tablo = 'kullanicilar'
+                     AND hedef_kayit_id = %s
+                     AND olay_turu = 'ROLE_CHANGE')
+                    OR
+                    (hedef_tablo = 'personel'
+                     AND hedef_kayit_id = %s
+                     AND olay_turu = 'UPDATE')
+                  );
+            """, (
+                ortam["yapan_id"],
+                kullanici_id,
+                personel_id,
+            ))
+
+            audit_kayitlari = cur.fetchall()
+
+    assert sorted(audit_kayitlari) == sorted([
+        ("ROLE_CHANGE", "kullanicilar"),
+        ("UPDATE", "personel"),
+    ])
+
+    # Aynı rol yeniden seçilirse veriler değişmemeli.
+    with pytest.raises(HTTPException) as hata:
+        kullanici_rol_degistir(
+            kullanici_id=kullanici_id,
+            veri=RolDegistirModeli(rol_id=memur_rol_id),
+            islem_yapan_id=ortam["yapan_id"],
+        )
+
+    assert hata.value.status_code == 409
+
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.personel_id, p.personel_kodu
+                FROM personel p
+                WHERE p.kullanici_id = %s;
+            """, (kullanici_id,))
+            assert cur.fetchone() == (
+                personel_id,
+                sonuc["yeni_personel_kodu"],
+            )
+
+            cur.execute("""
+                SELECT olay_turu::text, hedef_tablo
+                FROM denetim_kayitlari
+                WHERE kullanici_id = %s
+                  AND (
+                    (hedef_tablo = 'kullanicilar'
+                     AND hedef_kayit_id = %s
+                     AND olay_turu = 'ROLE_CHANGE')
+                    OR
+                    (hedef_tablo = 'personel'
+                     AND hedef_kayit_id = %s
+                     AND olay_turu = 'UPDATE')
+                  );
+            """, (
+                ortam["yapan_id"],
+                kullanici_id,
+                personel_id,
+            ))
+
+            assert len(cur.fetchall()) == 2

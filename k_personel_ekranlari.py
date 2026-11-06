@@ -1052,9 +1052,9 @@ class RolDegistirFormu(QDialog):
         if ROL_ID_ADLARI.get(yeni_rol_id) == str(self.mevcut_rol).upper():
             QMessageBox.information(
                 self,
-                "Rol Değişikliği Yok",
-                f"'{self.kullanici_adi}' kullanıcısı zaten "
-                f"{self.combo_rol.currentText()} rolünde."
+                "Rol Zaten Atanmış",
+                f"Bu kullanıcı zaten {self.combo_rol.currentText()} rolüne sahip.\n"
+                "Herhangi bir değişiklik yapılmadı."
             )
             return
 
@@ -1068,17 +1068,23 @@ class RolDegistirFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Kullanıcının rolü başarıyla güncellendi.")
+                QMessageBox.information(self, "Başarılı", "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
                 self.accept()
             elif cevap.status_code == 409:
-                QMessageBox.information(
-                    self,
-                    "Rol Değişikliği Yok",
-                    sunucu_hata_mesaji(
-                        cevap,
-                        "Kullanıcı zaten seçilen role sahip."
-                    )
+                hata = sunucu_hata_mesaji(
+                    cevap, "Rol güncellemesi tamamlanamadı."
                 )
+                if "zaten seçilen role sahip" in hata:
+                    QMessageBox.information(
+                        self,
+                        "Rol Zaten Atanmış",
+                        f"Bu kullanıcı zaten {self.combo_rol.currentText()} rolüne sahip.\n"
+                        "Herhangi bir değişiklik yapılmadı."
+                    )
+                else:
+                    QMessageBox.warning(
+                        self, "İşlem Tamamlanamadı", hata
+                    )
             elif cevap.status_code == 403:
                 QMessageBox.warning(
                     self, "Yetki Hatası",
