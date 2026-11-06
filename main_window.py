@@ -156,6 +156,15 @@ def yetkileri_temizle(rol):
     _SUNUCU_YETKILERI.pop(rol, None)
 
 
+def cihaz_ozeti_gorebilir_mi(rol):
+    """Ana paneldeki cihaz kartları, bildirimler ve yaklaşan işlemler.
+
+    Sunucudaki /api/dashboard/ozet, /bugunku-rezervasyonlar ve /yaklasan-islemler uçları
+    CIHAZ_ENVANTER_YONET ister; istemci de aynı izne bakar, böylece ikisi hiç ayrışmaz.
+    """
+    return izin_var(rol, "Cihaz envanterini yönetme")
+
+
 def izin_var(rol, izin_adi):
     """Rolün bu izne sahip olup olmadığı. Bilinmeyen izin adı 'yok' sayılır (çökmez)."""
     if izin_adi not in IZIN:
@@ -1516,11 +1525,12 @@ QLabel {
         erisilebilir = [o for _, og in MENU for o in og
                         if o["izin"] is not None and izin_var(rol, o["izin"])]
 
-                # Randevu listesi her rolde, cihaz özeti yalnızca yetkili rollerde gösterilir.
+        # Randevu listesi her rolde, cihaz özeti yalnızca cihaz envanteri iznine sahip rollerde gösterilir.
+        # Bu özetin sunucu uçları da aynı izni ister; izin rol adına değil veritabanındaki yetkiye bağlıdır.
         self.istatistik_paneli = DashboardEkrani(
             self.api_url,
             self.token,
-            cihaz_ozeti=self.aktif_rol in ["mudur", "admin", "memur"]
+            cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol)
         )
         lay.addWidget(self.istatistik_paneli)
 
