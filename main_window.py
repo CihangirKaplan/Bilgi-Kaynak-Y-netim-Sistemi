@@ -219,6 +219,9 @@ MENU = [
         dict(ikon="🛠️", ad="Bakım Kayıtları", izin="Bakım kayıtlarını yönetme",
              aciklama="Periyodik bakım kayıtları",
              aksiyon=[("＋  Bakım Kaydı", "Bakım kayıtlarını yönetme")]),
+        dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım kayıtlarını yönetme",
+             aciklama="Cihazların tekrar aralığı, uyarı süresi ve sonraki bakım/kalibrasyon tarihi",
+             aksiyon=[("＋  Yeni Plan", "Bakım kayıtlarını yönetme")]),
         dict(ikon="🎯", ad="Kalibrasyon", izin="Kalibrasyon kayıtlarını yönetme",
              aciklama="Kalibrasyon planı ve sertifikaları",
              aksiyon=[("＋  Kalibrasyon Kaydı", "Kalibrasyon kayıtlarını yönetme")]),
@@ -1391,6 +1394,7 @@ QLabel {
         "Cihaz Envanteri": ("aktif_cihaz_ekrani", "verileri_yukle"),
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
         "Cihaz Rezervasyonu": ("aktif_rezervasyon_ekrani", "verileri_yukle"),
+        "Bakım Planları": ("aktif_plan_ekrani", "verileri_yukle"),
         "Arıza Kayıtları": ("aktif_ariza_ekrani", "verileri_yukle"),
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
     }
@@ -1635,6 +1639,8 @@ QLabel {
                 # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
                     btn.clicked.connect(self.yeni_bakim_ekrani_ac)
+                elif etiket == "＋  Yeni Plan":
+                    btn.clicked.connect(self.yeni_bakim_plani_ac)
                 elif etiket == "＋  Kullanıcı Oluştur":
                     btn.clicked.connect(self.yeni_kullanici_formunu_ac)
                 elif "Aktiflik Düzenle" in etiket:
@@ -1776,6 +1782,14 @@ QLabel {
                 token=self.token
             )
             lay.addWidget(self.aktif_bakim_ekrani, 1)
+        elif oge["ad"] == "Bakım Planları":
+            from bakim_plani_ekranlari import BakimPlanlariEkrani
+
+            self.aktif_plan_ekrani = BakimPlanlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.aktif_plan_ekrani, 1)
         elif oge["ad"] == "Kullanıcı & Personel":
             self.aktif_personel_ekrani = KullaniciPersonelEkrani(
                 api_url=self.api_url,
@@ -1953,6 +1967,11 @@ QLabel {
         """Ana yetki kartındaki 'Bakım Kaydı' butonuna basılınca formu açar."""
         if hasattr(self, 'aktif_bakim_ekrani'):
             self.aktif_bakim_ekrani.yeni_bakim_ekle()
+    def yeni_bakim_plani_ac(self):
+        """Ana yetki kartındaki 'Yeni Plan' butonuna basılınca plan formunu açar."""
+        if hasattr(self, 'aktif_plan_ekrani'):
+            self.aktif_plan_ekrani.yeni_plan_ekle()
+
     def yeni_kullanici_formunu_ac(self):
         from k_personel_ekranlari import KullaniciOlusturFormu
         

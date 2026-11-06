@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QDate
 import requests
 from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from tekrar_uyari_alanlari import TekrarUyariAlanlari
+from plan_secimi import PlanSecimi
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -36,7 +37,7 @@ class YeniBakimFormu(QDialog):
         layout = QVBoxLayout(self)
 
         form_layout = QFormLayout()
-        form_layout.setSpacing(15)
+        form_layout.setSpacing(10)
 
         self.cmb_cihaz = QComboBox()
         self.txt_kisi = QLineEdit()
@@ -63,6 +64,9 @@ class YeniBakimFormu(QDialog):
 
         # Tekrar aralığı seçilince sonraki tarih kendiliğinden hesaplanır; uyarı süresi zil/dashboard içindir.
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım", varsayilan_ay=6)
+        # Cihazın bakım planı varsa kayıt ona bağlanabilir (tarih ve bildirim plandan gelir).
+        self.plan_secimi = PlanSecimi(self.api_url, self.token, False, self.cmb_cihaz, self.dt_bitis, self.tekrar, self)
+        self.plan_secimi.satirlari_ekle(form_layout)
         self.tekrar.satirlari_ekle(form_layout, "Sonraki bakım:")
 
         layout.addLayout(form_layout)
@@ -113,6 +117,8 @@ class YeniBakimFormu(QDialog):
             "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd"),
             "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
+        if self.plan_secimi.plan_id() is not None:
+            veri["plan_id"] = self.plan_secimi.plan_id()
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
             QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")

@@ -102,6 +102,7 @@ class TekrarUyariAlanlari(QObject):
         for dugme in self.butonlar.values():
             yatay.addWidget(dugme, 1)
         dikey.addLayout(yatay)
+        self.sonraki.setMinimumHeight(36)        # dar ekranlarda tarih kutusunun yazısı kırpılmasın
         dikey.addWidget(self.sonraki)
         dikey.addWidget(self.lbl_sonuc)
         form_layout.addRow(etiket, kutu)
@@ -110,6 +111,13 @@ class TekrarUyariAlanlari(QObject):
 
     def uyari_suresi(self):
         return int(self.cmb_uyari.currentData())
+
+    def uyari_ayarla(self, gun):
+        """Bildirim zamanını verilen gün sayısına ayarlar (listede yoksa ekler)."""
+        gun = int(gun)
+        if self.cmb_uyari.findData(gun) < 0:
+            self.cmb_uyari.addItem(f"{gun} gün kala", gun)
+        self.cmb_uyari.setCurrentIndex(self.cmb_uyari.findData(gun))
 
     # ------------------------------------------------------------------ davranış
     def secili_ay(self):
