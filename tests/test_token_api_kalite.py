@@ -9,12 +9,43 @@ from sunucu import token_kullanici_id
 
 
 def test_gecerli_token_kullanici_id_doner():
-    credentials = SimpleNamespace(credentials="test-token")
+    from unittest.mock import MagicMock
+    from guvenlik import access_token_olustur
 
-    with patch("sunucu.token_dogrula", return_value=42):
+    parola_hash = "TEST_PAROLA_HASH"
+
+    # Gerçek JWT oluştur.
+    token = access_token_olustur(42, parola_hash)
+    credentials = SimpleNamespace(credentials=token)
+
+    # Veritabanı bağlantısını taklit et.
+    mock_conn = MagicMock()
+    mock_cursor = mock_conn.cursor.return_value
+
+    # Kullanıcı mevcut ve aktif.
+    mock_cursor.fetchone.return_value = (
+        parola_hash,
+        True,
+    )
+
+    with patch(
+        "sunucu.psycopg2.connect",
+        return_value=mock_conn,
+    ):
         sonuc = token_kullanici_id(credentials)
 
     assert sonuc == 42
+
+    # Kullanıcı veritabanından doğrulanmış olmalı.
+    mock_cursor.execute.assert_called_once()
+
+    sorgu, parametreler = mock_cursor.execute.call_args.args
+
+    assert "SELECT parola_hash, aktif_mi" in sorgu
+    assert parametreler == (42,)
+
+    mock_conn.close.assert_called_once()
+
 
 
 def test_suresi_dolmus_token_401_doner():

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 
 OLAY_ADLARI = {
+    "PASSWORD_RESET": "Parola Sıfırlama",
     "LOGIN": "Giriş Başarılı",
     "LOGIN_FAILED": "Başarısız Giriş",
     "CREATE": "Oluşturma",

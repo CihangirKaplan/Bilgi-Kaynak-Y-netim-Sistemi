@@ -168,6 +168,119 @@ class KullaniciPersonelEkrani(QWidget):
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
 
+    def secili_kullanici_parola_sifirla(self):
+        """Seçili kullanıcının parolasını ADMIN aracılığıyla sıfırla."""
+
+        secim = self.tablo.selectionModel().selectedRows()
+
+        if not secim:
+            QMessageBox.warning(
+    self,
+    "Kullanıcı Seçilmedi",
+    "Lütfen parolasını sıfırlamak istediğiniz kullanıcıyı seçin."
+)
+            return
+
+        satir = secim[0].row()
+        kullanici_item = self.tablo.item(satir, 1)
+
+        if kullanici_item is None:
+            QMessageBox.warning(
+                self, "Hata", "Kullanıcı bilgisi bulunamadı."
+            )
+            return
+
+        kullanici_id = kullanici_item.data(Qt.UserRole)
+        kullanici_adi = kullanici_item.text()
+
+        if not kullanici_id:
+            QMessageBox.warning(
+                self,
+                "Hata",
+                "Kullanıcı ID'si bulunamadı."
+            )
+            return
+
+        onay = QMessageBox.question(
+    self,
+    "Parola Sıfırlama Onayı",
+    f"'{kullanici_adi}' kullanıcısının parolası sıfırlansın mı?\n\n"
+    "Mevcut parola geçersiz olacak.\n"
+    "Kullanıcı ilk girişte yeni parola belirlemek zorunda kalacak.",
+    QMessageBox.Yes | QMessageBox.No,
+    QMessageBox.No
+)
+
+        if onay != QMessageBox.Yes:
+            return
+
+        headers = {
+            "Authorization": f"Bearer {self.token}"
+        }
+
+        url = (
+            f"{self.api_url}/api/kullanicilar/"
+            f"{kullanici_id}/parola-sifirla"
+        )
+
+        try:
+            cevap = oturum_kontrollu_istek(
+                "POST",
+                url,
+                headers=headers,
+                timeout=10
+            )
+
+            if oturum_hatasi_mi(cevap):
+                return
+
+            if cevap.status_code != 200:
+                try:
+                    mesaj = cevap.json().get(
+                        "detail",
+                        "Parola sıfırlanamadı."
+                    )
+                except ValueError:
+                    mesaj = "Parola sıfırlanamadı."
+
+                QMessageBox.warning(
+                    self,
+                    "İşlem Başarısız",
+                    str(mesaj)
+                )
+                return
+
+            sonuc = cevap.json()
+            gecici_parola = sonuc.get("gecici_parola")
+
+            if not gecici_parola:
+                QMessageBox.warning(
+                    self,
+                    "Hata",
+                    "İşlem sonucunda geçici parola alınamadı. "
+                    "Sistem yöneticisiyle iletişime geçin."
+                )
+                return
+
+            QMessageBox.information(
+    self,
+    "Parola Başarıyla Sıfırlandı",
+    f"Kullanıcı: {kullanici_adi}\n\n"
+    f"GEÇİCİ PAROLA\n{gecici_parola}\n\n"
+    "Bu parolayı kullanıcıya güvenli şekilde iletin.\n"
+    "Pencere kapatıldıktan sonra parola tekrar gösterilemez.\n\n"
+    "Kullanıcı ilk girişinde yeni parola belirlemelidir."
+)
+
+        except requests.RequestException:
+            QMessageBox.critical(
+                self,
+                "Bağlantı Hatası",
+                "Sunucudan yanıt alınamadı.\\n\\n"
+                "İşlem gerçekleşmiş olabilir. "
+                "Durumu kontrol etmeden tekrar denemeyin."
+            )
+
     def kullanici_olustur_ac(self):
         form = KullaniciOlusturFormu(self.api_url, self.token, self)
         form.exec()

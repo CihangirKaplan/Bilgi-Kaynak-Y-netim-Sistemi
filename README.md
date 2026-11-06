@@ -111,7 +111,7 @@ PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadı
 
 - Yedekleme yalnızca okur, veritabanını değiştirmez. Rotasyon yalnızca seçilen veritabanının, tam ad biçimine uyan yedeklerini siler.
 - Geri yükleme **hiçbir mevcut veritabanının üzerine yazmaz**: hedef veritabanı yeni olmalıdır, canlı veritabanı hedef olarak kabul edilmez, hata olursa oluşturulan yarım veritabanı silinir. Sonunda tablo satır sayıları ve migration sürümü yedeğin alındığı veritabanıyla yan yana gösterilir.
-- Windows'ta zamanlanmış görev kurulumu için `scripts/windows/README.md` dosyasına bakın.  
+- Windows'ta zamanlanmış görev kurulumu için `scripts/windows/README.md` dosyasına bakın.
 
 ## Dokümanlar
 

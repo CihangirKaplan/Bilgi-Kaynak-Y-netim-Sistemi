@@ -84,6 +84,13 @@ IZIN_LISTESI = [
 
 IZIN = {ad: (kat, kod) for ad, kat, kod in IZIN_LISTESI}
 
+# Parola sıfırlama: yalnızca ADMIN rolüne açık.
+# Mevcut ADMIN yetkisinin rol maskesi kullanılır.
+IZIN["Kullanıcı parola sıfırlama"] = (
+    IZIN["Kullanıcı oluşturma"][0],
+    IZIN["Faaliyet birimlerini yönetme"][1],
+)
+
 # Ekrandaki izin adı -> sunucunun gerçekte istediği izin kod(lar)ı (rol_izinleri tablosu).
 # Menü, kullanıcının sunucudan aldığı izinlere (/api/yetkilerim) göre çizilir; bu tablo ekran
 # adlarını sunucudaki kodlara çevirir. Birden fazla kod varsa hepsi gerekir.
@@ -109,6 +116,7 @@ IZIN_KODLARI = {
     "Kullanıcı oluşturma": ("KULLANICI_OLUSTUR",),
     "Personel tanımlama": ("PERSONEL_TANIMLA",),
     "Kullanıcı pasifleştirme": ("KULLANICI_PASIFLESTIR",),
+    "Kullanıcı parola sıfırlama": ("KULLANICI_PAROLA_SIFIRLA",),
     "Rol atama/değiştirme": ("ROL_ATAMA_DEGISTIRME",),
     "Audit kayıtlarını inceleme": ("AUDIT_KAYITLARI_INCELE",),
     "Danışma masası oturumunu yönetme": ("DANISMA_OTURUMU_YONET",),
@@ -226,7 +234,8 @@ MENU = [
              aciklama="Kullanıcı, personel ve rol atama işlemleri",
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
                       ("⏸  Aktiflik Düzenle", "Kullanıcı pasifleştirme"),
-                      ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme")]),
+                      ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme"),
+                      ("🔑  Parola Sıfırla", "Kullanıcı parola sıfırlama")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
         dict(ikon="🏢", ad="Oda Yönetimi", izin="Oda yönetimi",
@@ -906,22 +915,14 @@ QLabel {
 
             if isinstance(veri, dict):
                 toplam = int(veri.get("toplam", 0) or 0)
-                oturumlar = veri.get("oturumlar", [])
 
                 self._bildirim_sayisi += toplam
 
-                for oturum in oturumlar:
+                # Tüm danışma masası onaylarını tek bildirimde göster.
+                if toplam > 0:
                     self._bildirimler.append((
                         "Danışma Masası",
-                        f"📋 {oturum.get('ad_soyad', 'Öğrenci')} "
-                        f"— Görev onayı bekliyor",
-                        "Danışma Masası Yönetimi"
-                    ))
-
-                if toplam > len(oturumlar):
-                    self._bildirimler.append((
-                        "Danışma Masası",
-                        f"… ve {toplam - len(oturumlar)} bekleyen görev daha",
+                        f"📋 {toplam} görev onay bekliyor",
                         "Danışma Masası Yönetimi"
                     ))
 
@@ -1638,6 +1639,14 @@ QLabel {
                     btn.clicked.connect(self.yeni_kullanici_formunu_ac)
                 elif "Aktiflik Düzenle" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_durum_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
+                elif etiket == "🔑  Parola Sıfırla":
+                    btn.clicked.connect(
+                        lambda: (
+                            self.aktif_personel_ekrani.secili_kullanici_parola_sifirla()
+                            if hasattr(self, "aktif_personel_ekrani")
+                            else None
+                        )
+                    )
                 elif "Rol Ata / Değiştir" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_rol_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif etiket == "＋  Yeni Faaliyet Ekle":
