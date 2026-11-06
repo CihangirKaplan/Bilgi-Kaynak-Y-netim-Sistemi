@@ -103,11 +103,11 @@ def test_kalibrasyon_listesi_uyari_suresini_dondurur():
 
 
 # ------------------------------------------------- dashboard / bildirim: yaklaşan işlemler
-def yaklasanlar(bakimlar, kalibrasyonlar):
-    """bakimlar/kalibrasyonlar: [(kod, ad, tarih, uyari)]"""
+def yaklasanlar(bakimlar, kalibrasyonlar, plan_satirlari=()):
+    """bakimlar/kalibrasyonlar: [(kod, ad, tarih, uyari)]; plan_satirlari: [(kod, ad, tur, tarih, uyari)]"""
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchall.side_effect = [bakimlar, kalibrasyonlar]
+    cursor.fetchall.side_effect = [bakimlar, kalibrasyonlar, plan_satirlari]
     with patch("sunucu.psycopg2.connect", return_value=conn):
         return yaklasan_islemler_getir(kullanici_id=1)
 
@@ -154,11 +154,11 @@ def test_gecikmis_kayit_uyari_suresi_sifir_olsa_da_listelenir():
 def test_sorgular_kullanim_disi_cihazlari_disarida_birakir():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchall.side_effect = [[], []]
+    cursor.fetchall.side_effect = [[], [], []]
     with patch("sunucu.psycopg2.connect", return_value=conn):
         yaklasan_islemler_getir(kullanici_id=1)
     sorgular = [c.args[0] for c in cursor.execute.call_args_list]
-    assert len(sorgular) == 2 and all("Kullanim_Disi" in q for q in sorgular)
+    assert len(sorgular) == 3 and all("Kullanim_Disi" in q for q in sorgular)   # bakım, kalibrasyon, plan
 
 
 def test_kalibrasyon_da_ayni_kuralla_listelenir():
@@ -180,11 +180,12 @@ def test_kritik_esigi_ve_siralama_degismedi():
 def test_sorgular_kayittaki_uyari_suresini_secer():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchall.side_effect = [[], []]
+    cursor.fetchall.side_effect = [[], [], []]
     with patch("sunucu.psycopg2.connect", return_value=conn):
         yaklasan_islemler_getir(kullanici_id=1)
     sorgular = [c.args[0] for c in cursor.execute.call_args_list]
     assert "b.uyari_suresi_gun" in sorgular[0] and "k.uyari_suresi_gun" in sorgular[1]
+    assert "p.uyari_suresi_gun" in sorgular[2]
 
 
 # ---------------------------------------------------------------------- migration
