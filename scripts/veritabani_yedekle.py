@@ -1,7 +1,13 @@
-"""TKYS PostgreSQL veritabanı yedekleme aracı."""
+"""TKYS PostgreSQL veritabanı yedekleme aracı.
+
+Varsayılan olarak uygulamanın kullandığı veritabanını (.env içindeki DB_NAME) yedekler;
+başka bir veritabanı için --database verilebilir. Yedekleme yalnızca okur, veritabanını
+değiştirmez. Dosya adı: <veritabani>_<YYYYMMDD>_<HHMMSS>_<mikrosaniye>.dump
+"""
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime
@@ -11,17 +17,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TEST_DB = "crkys_alembic_test"
 YEDEK_KLASORU = Path(__file__).resolve().parents[1] / "backups"
+GECERLI_AD = re.compile(r"^[A-Za-z0-9_]{1,63}$")
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--database", default=TEST_DB)
-    args = parser.parse_args()
+def veritabani_adi_dogrula(ad):
+    """Dosya adına ve komut satırına güvenle girebilecek bir PostgreSQL adı olmalı."""
+    if not ad or not GECERLI_AD.fullmatch(ad):
+        raise ValueError("Veritabanı adı yalnızca harf, rakam ve alt çizgi içerebilir.")
+    return ad
 
-    if args.database != TEST_DB:
-        parser.error("Şimdilik yalnızca test veritabanı yedeklenebilir.")
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--database",
+        default=os.getenv("DB_NAME"),
+        help="Yedeklenecek veritabanı (varsayılan: .env içindeki DB_NAME)",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.database:
+        parser.error("Veritabanı adı belirtilmedi: --database verin veya .env içinde DB_NAME tanımlayın.")
+    try:
+        veritabani_adi_dogrula(args.database)
+    except ValueError as hata:
+        parser.error(str(hata))
 
     YEDEK_KLASORU.mkdir(parents=True, exist_ok=True)
     zaman = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -62,6 +83,7 @@ def main():
         raise
 
     print(f"Yedek oluşturuldu: {hedef.name}")
+    print(f"Veritabanı: {args.database}")
     print(f"Dosya boyutu: {hedef.stat().st_size} bayt")
 
 

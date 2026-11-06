@@ -36,10 +36,21 @@ Görev Zamanlayıcı uygulamasında görevin oluştuğunu kontrol edin.
 Yedekler proje içindeki backups/ klasörüne kaydedilir.
 Başarılı yedekleme sonrasında 7 günden eski yedekler temizlenir.
 
+## Geri yükleme (yedeğin işe yaradığını doğrulama)
+
+Yedeği **yeni** bir veritabanına yükleyip kayıt sayılarını karşılaştırın:
+
+    python scripts/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi
+
+Araç mevcut hiçbir veritabanının üzerine yazmaz. Doğrulamadan sonra test veritabanını kendiniz silin.
+
 ## Önemli
 
-- Mevcut yapı yalnızca crkys_alembic_test veritabanını yedekler.
-- Ana crkys veritabanı bu işlemle yedeklenmez veya değiştirilmez.
+- Yedeklenen veritabanı .env dosyasındaki DB_NAME'dir (ana veritabanı). Yedekleme yalnızca okur,
+  veritabanını değiştirmez. Başka bir veritabanı için: python scripts/veritabani_yedekle.py --database AD
+- Daha önce kurulmuş görev varsa yeniden kurmaya gerek yoktur; betik güncellenince görev bir sonraki
+  çalışmada ana veritabanını yedekler.
 - Otomatik görev, bilgisayar kapalıyken çalışmaz.
 - Windows üzerinde gerçek görev çalıştırma testi ayrıca yapılmalıdır.
+- Yedek dosyaları, parolaların hash özetleri dahil tüm veritabanı verisini içerir; backups/ klasörünü paylaşmayın.
 - Veritabanı parolalarını GitHub'a yüklemeyin.

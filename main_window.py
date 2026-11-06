@@ -24,6 +24,7 @@ from haftalik_takvim import HaftalikTakvimEkrani
 from cihaz_ekranlari import CihazYonetimEkrani
 from cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from cihaz_ariza_ekranlari import ArizaYonetimEkrani
+from cihaz_uygunluk_ekrani import CihazUygunlukEkrani
 from cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
 from cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
 from dashboard_ekrani import DashboardEkrani
@@ -204,7 +205,9 @@ MENU = [
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
-             aciklama="Cihazların anlık uygunluk durumu", aksiyon=[]),
+             aciklama="Cihazların haftalık uygunluk takvimi",
+             aksiyon=[("＋  Rezervasyon Yap", "Cihaz rezervasyonu yapma"),
+                      ("⚠  Arıza Bildir", "Arıza kayıtlarını yönetme")]),
         dict(ikon="⚙️", ad="Cihaz Envanteri", izin="Cihaz envanterini yönetme",
              aciklama="Envanter kayıtları ve cihaz yönetimi",
              aksiyon=[("＋  Cihaz Ekle", "Cihaz ekleme"),
@@ -1384,6 +1387,7 @@ QLabel {
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
     SAYFA_YENILEME = {
+        "Cihaz Uygunluğu": ("aktif_uygunluk_ekrani", "verileri_yukle"),
         "Cihaz Envanteri": ("aktif_cihaz_ekrani", "verileri_yukle"),
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
         "Cihaz Rezervasyonu": ("aktif_rezervasyon_ekrani", "verileri_yukle"),
@@ -1703,6 +1707,22 @@ QLabel {
 
             lay.addWidget(self.danisma_rapor_ekrani, 1)
 
+        elif oge["ad"] == "Cihaz Uygunluğu":
+            # Takvim yalnızca görüntüleme izniyle açılır; işlem düğmeleri kullanıcının ilgili izni varsa görünür.
+            self.aktif_uygunluk_ekrani = CihazUygunlukEkrani(
+                api_url=self.api_url,
+                token=self.token,
+                yetkiler={
+                    "rezervasyon": izin_var(rol, "Cihaz rezervasyonu yapma"),
+                    "ariza": izin_var(rol, "Arıza kayıtlarını yönetme"),
+                    "bakim": izin_var(rol, "Bakım kayıtlarını yönetme"),
+                    "kalibrasyon": izin_var(rol, "Kalibrasyon kayıtlarını yönetme"),
+                },
+                sayfaya_git=self._bildirimden_sayfaya_git,
+                rezervasyon_ac=self._uygunluktan_rezervasyon_ac,
+            )
+            lay.addWidget(self.aktif_uygunluk_ekrani, 1)
+
         elif oge["ad"] == "Cihaz Envanteri":
             cihaz_yetkisi = izin_var(rol, "Cihaz ekleme") or izin_var(rol, "Cihaz envanterini yönetme")
             self.aktif_cihaz_ekrani = CihazYonetimEkrani(
@@ -1912,6 +1932,14 @@ QLabel {
 
     def takip_listesi_tetikle(self):
         QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
+
+    def _uygunluktan_rezervasyon_ac(self, cihaz_id, gun, baslangic, bitis):
+        """Cihaz Uygunluğu takviminden: Rezervasyon sayfasına geçip formu cihaz, gün ve saatle açar."""
+        if "Cihaz Rezervasyonu" not in self.nav_btnler or not hasattr(self, "aktif_rezervasyon_ekrani"):
+            return
+        self._bildirimden_sayfaya_git("Cihaz Rezervasyonu")
+        self.aktif_rezervasyon_ekrani.yeni_rezervasyon_olustur(
+            cihaz_id=cihaz_id, tarih=gun, baslangic_saati=baslangic, bitis_saati=bitis)
 
     def yeni_rezervasyon_ekrani_ac(self):
         if hasattr(self, 'aktif_rezervasyon_ekrani'):
