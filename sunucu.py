@@ -362,6 +362,50 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
 # ==========================================
 
 
+
+def _siradaki_personel_kodu(cursor, rol_adi):
+    """Rol bazında benzersiz personel kodu üretir."""
+    import re
+
+    rol_kodlari = {
+        "PSIKOLOG": "PSK",
+        "MEMUR": "MEM",
+        "MUDUR": "MUD",
+        "DANISMA_OGRENCISI": "OGR",
+        "PROJE_ASISTANI": "AST",
+        "KLINIK SORUMLUSU": "KLS",
+        "ADMIN": "ADM",
+    }
+
+    rol_kodu = rol_kodlari.get(rol_adi, "SYS")
+    onek = f"PER-{rol_kodu}-"
+
+    # Kullanıcı oluşturmayla aynı kilit: eşzamanlı kod çakışmasını önler.
+    cursor.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s));",
+        (f"TKYS_PERSONEL_KODU_{rol_kodu}",),
+    )
+
+    cursor.execute(
+        "SELECT personel_kodu FROM personel "
+        "WHERE personel_kodu LIKE %s;",
+        (onek + "%",),
+    )
+
+    numaralar = []
+    for (kod,) in cursor.fetchall():
+        if not isinstance(kod, str):
+            continue
+
+        eslesme = re.fullmatch(
+            re.escape(onek) + r"([0-9]+)", kod
+        )
+        if eslesme:
+            numaralar.append(int(eslesme.group(1)))
+
+    return f"{onek}{max(numaralar, default=0) + 1:03d}"
+
+
 @app.post("/api/kullanicilar", status_code=201)
 def kullanici_olustur(
     yeni_kullanici: KullaniciOlusturModeli,
@@ -379,6 +423,7 @@ def kullanici_olustur(
         "MUDUR": "MUD",
         "DANISMA_OGRENCISI": "OGR",
         "PROJE_ASISTANI": "AST",
+        "KLINIK SORUMLUSU": "KLS",
         "ADMIN": "ADM",
     }
 
@@ -495,43 +540,7 @@ def kullanici_olustur(
         )
         yeni_id = cursor.fetchone()[0]
 
-        # Personel kodu yalnızca backend'de üretilir.
-        # Aynı kod öneki için eşzamanlı işlemler sıraya alınır.
-        rol_kodu = rol_kodlari.get(rol_adi, "SYS")
-        onek = f"PER-{rol_kodu}-"
-
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s));",
-            (f"TKYS_PERSONEL_KODU_{rol_kodu}",),
-        )
-
-        cursor.execute(
-            """
-            SELECT personel_kodu
-            FROM personel
-            WHERE personel_kodu LIKE %s;
-            """,
-            (onek + "%",),
-        )
-
-        numaralar = []
-
-        for kayit in cursor.fetchall():
-            kod = kayit[0]
-
-            if not isinstance(kod, str):
-                continue
-
-            eslesme = re.fullmatch(
-                re.escape(onek) + r"([0-9]+)",
-                kod,
-            )
-
-            if eslesme:
-                numaralar.append(int(eslesme.group(1)))
-
-        siradaki = max(numaralar, default=0) + 1
-        personel_kodu = f"{onek}{siradaki:03d}"
+        personel_kodu = _siradaki_personel_kodu(cursor, rol_adi)
 
         # Personel kaydı.
         asama = "personel"
@@ -716,11 +725,55 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                 detail="Kullanıcı zaten seçilen role sahip."
             )
 
+        # Danışma öğrencisi rolü için öğrenci kaydı zorunlu.
+        if yeni_rol_adi == "DANISMA_OGRENCISI":
+            cursor.execute(
+                "SELECT ogrenci_id FROM ogrenciler WHERE kullanici_id = %s;",
+                (kullanici_id,),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Bu kullanıcının danışma öğrencisi kaydı bulunmuyor. "
+                        "Öğrenci bilgileri tanımlanmadan bu rol atanamaz."
+                    ),
+                )
+
+        # Personel kaydını kilitle; mevcut personel_id korunacak.
+        cursor.execute(
+            "SELECT personel_id, personel_kodu FROM personel "
+            "WHERE kullanici_id = %s FOR UPDATE;",
+            (kullanici_id,),
+        )
+        personel = cursor.fetchone()
+
+        if personel is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Kullanıcıya ait personel kaydı bulunamadı."
+            )
+
+        yeni_personel_kodu = _siradaki_personel_kodu(
+            cursor, yeni_rol_adi
+        )
+
         cursor.execute("UPDATE kullanicilar SET rol_id = %s WHERE kullanici_id = %s;", (veri.rol_id, kullanici_id))
+        cursor.execute(
+            "UPDATE personel SET personel_kodu = %s "
+            "WHERE personel_id = %s;",
+            (yeni_personel_kodu, personel[0]),
+        )
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
+        cursor.execute(
+            "INSERT INTO denetim_kayitlari "
+            "(kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) "
+            "VALUES (%s, %s, %s, %s);",
+            (islem_yapan_id, "UPDATE", "personel", personel[0]),
+        )
         conn.commit()
 
-        return {"mesaj": "Kullanıcı rolü başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi}
+        return {"mesaj": "Kullanıcı rolü ve personel kodu başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi, "yeni_personel_kodu": yeni_personel_kodu}
     except HTTPException:
         if conn is not None:
             conn.rollback()

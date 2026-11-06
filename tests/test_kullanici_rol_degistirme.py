@@ -78,6 +78,11 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
         ("MUDUR",),       # İşlemi yapan
         ("PSIKOLOG",),    # Hedef kullanıcının mevcut rolü
         ("MEMUR",),       # Atanacak yeni rol
+        (20, "PER-PSK-003"),  # Mevcut personel
+    ]
+    mock_cursor.fetchall.return_value = [
+        ("PER-MEM-001",),
+        ("PER-MEM-002",),
     ]
 
     with patch("sunucu.psycopg2.connect", return_value=mock_conn):
@@ -117,13 +122,21 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
         if "INSERT INTO denetim_kayitlari" in call.args[0]
     ]
 
-    assert len(audit_cagrilari) == 1
+    assert len(audit_cagrilari) == 2
 
     assert audit_cagrilari[0].args[1] == (
         10,             # İşlemi yapan müdürün kullanıcı ID'si
         "ROLE_CHANGE",  # Audit olay türü
         "kullanicilar", # Hedef tablo
         5               # Rolü değiştirilen kullanıcının ID'si
+    )
+    assert audit_cagrilari[1].args[1] == (
+        10, "UPDATE", "personel", 20
+    )
+    assert sonuc["yeni_personel_kodu"] == "PER-MEM-003"
+    assert any(
+        "UPDATE PERSONEL SET PERSONEL_KODU" in sorgu
+        for sorgu in sorgular
     )
 def test_yetkisiz_kullanici_rol_degistiremez():
     from sunucu import izin_kontrol
@@ -271,3 +284,53 @@ def test_rol_degistirmede_beklenmeyen_alan_reddedilir():
 
     finally:
         app.dependency_overrides.pop(yetki_bagimliligi, None)
+
+def test_danisma_ogrencisine_kayitsiz_rol_atanamaz():
+    baglanti = MagicMock()
+    cursor = baglanti.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("ADMIN",),
+        ("PSIKOLOG",),
+        ("DANISMA_OGRENCISI",),
+        None,
+    ]
+
+    with patch("sunucu.psycopg2.connect", return_value=baglanti):
+        with pytest.raises(HTTPException) as hata:
+            kullanici_rol_degistir(
+                kullanici_id=5,
+                veri=RolDegistirModeli(rol_id=2),
+                islem_yapan_id=10,
+            )
+
+    assert hata.value.status_code == 409
+
+    sorgular = [
+        cagri.args[0].upper()
+        for cagri in cursor.execute.call_args_list
+    ]
+
+    assert not any(
+        "UPDATE KULLANICILAR" in sorgu
+        or "UPDATE PERSONEL" in sorgu
+        for sorgu in sorgular
+    )
+
+    baglanti.commit.assert_not_called()
+    baglanti.rollback.assert_called_once()
+
+
+def test_klinik_sorumlusu_personel_kodu():
+    from sunucu import _siradaki_personel_kodu
+
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [
+        ("PER-KLS-001",),
+        ("PER-KLS-002",),
+    ]
+
+    kod = _siradaki_personel_kodu(
+        cursor, "KLINIK SORUMLUSU"
+    )
+
+    assert kod == "PER-KLS-003"
