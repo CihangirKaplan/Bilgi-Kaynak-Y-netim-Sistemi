@@ -710,6 +710,12 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             if mevcut_rol == "ADMIN" or yeni_rol_adi == "ADMIN":
                 raise HTTPException(status_code=403, detail="ADMIN rolünü yalnızca ADMIN yönetebilir.")
 
+        if mevcut_rol == yeni_rol_adi:
+            raise HTTPException(
+                status_code=409,
+                detail="Kullanıcı zaten seçilen role sahip."
+            )
+
         cursor.execute("UPDATE kullanicilar SET rol_id = %s WHERE kullanici_id = %s;", (veri.rol_id, kullanici_id))
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
         conn.commit()

@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -13,6 +14,19 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRegularExpression, QTimer
 from PySide6.QtGui import QRegularExpressionValidator
+
+def kayit_tarihi_bicimle(deger):
+    """Kayıt tarihini GG.AA.YYYY biçiminde göster."""
+    if not deger:
+        return "—"
+    try:
+        tarih = datetime.fromisoformat(
+            str(deger).replace("Z", "+00:00")
+        )
+        return tarih.strftime("%d.%m.%Y")
+    except (ValueError, TypeError):
+        return str(deger)
+
 
 class KullaniciPersonelEkrani(QWidget):
     def __init__(self, api_url, token):
@@ -74,7 +88,7 @@ class KullaniciPersonelEkrani(QWidget):
 
                 for satir, p in enumerate(personeller):
                     durum = "🟢 Aktif" if p["aktif_mi"] else "🔴 Pasif"
-                    tarih = str(p["olusturulma_tarihi"])[:10]
+                    tarih = kayit_tarihi_bicimle(p.get("olusturulma_tarihi"))
 
                     item_id = QTableWidgetItem(str(p["personel_id"]))
                     item_ad = QTableWidgetItem(p["kullanici_adi"])
@@ -1035,6 +1049,15 @@ class RolDegistirFormu(QDialog):
             QMessageBox.warning(self, "Uyarı", "Lütfen listeden yeni bir rol seçiniz.")
             return
 
+        if ROL_ID_ADLARI.get(yeni_rol_id) == str(self.mevcut_rol).upper():
+            QMessageBox.information(
+                self,
+                "Rol Değişikliği Yok",
+                f"'{self.kullanici_adi}' kullanıcısı zaten "
+                f"{self.combo_rol.currentText()} rolünde."
+            )
+            return
+
         # Sunucuna gönderilecek JSON verisi ve URL
         veri = {"rol_id": yeni_rol_id}
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -1047,9 +1070,24 @@ class RolDegistirFormu(QDialog):
             if cevap.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Kullanıcının rolü başarıyla güncellendi.")
                 self.accept()
+            elif cevap.status_code == 409:
+                QMessageBox.information(
+                    self,
+                    "Rol Değişikliği Yok",
+                    sunucu_hata_mesaji(
+                        cevap,
+                        "Kullanıcı zaten seçilen role sahip."
+                    )
+                )
             elif cevap.status_code == 403:
-                QMessageBox.warning(self, "Yetki Hatası", "Bu işlem için yetkiniz yok.")
+                QMessageBox.warning(
+                    self, "Yetki Hatası",
+                    "Bu işlem için yetkiniz yok."
+                )
             else:
-                QMessageBox.critical(self, "Hata", f"Sunucu hatası: {cevap.text}")
+                QMessageBox.critical(
+                    self, "Hata",
+                    f"Sunucu hatası: {cevap.text}"
+                )
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
