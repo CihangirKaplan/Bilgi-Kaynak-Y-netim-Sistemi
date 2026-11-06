@@ -551,3 +551,334 @@ def test_postgresql_rol_degisiminde_personel_kodu_da_degisisir(qa_ortami):
             ))
 
             assert len(cur.fetchall()) == 2
+
+
+@pytest.mark.parametrize("mevcut_ogrenci", [False, True])
+def test_postgresql_danisma_ogrencisi_rol_gecisi(
+    qa_ortami, mevcut_ogrenci
+):
+    """Rol, personel kodu ve öğrenci kaydı birlikte güncellenir."""
+    from modeller import RolDegistirModeli
+    from sunucu import kullanici_rol_degistir
+
+    ortam = qa_ortami
+    ad = f"qa_atom_{ortam['etiket']}_danisma"
+    ogrenci_no = str(int(ortam["etiket"], 16)).zfill(12)
+
+    ortam["kullanici_adlari"].append(ad)
+
+    olusturulan = kullanici_olustur(
+        KullaniciOlusturModeli(
+            kullanici_adi=ad,
+            rol_id=ortam["roller"]["PSIKOLOG"],
+        ),
+        kullanici_id=ortam["yapan_id"],
+    )
+
+    kullanici_id = olusturulan["kullanici_id"]
+    personel_id = olusturulan["personel_id"]
+    eski_ogrenci_id = None
+
+    if mevcut_ogrenci:
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO ogrenciler
+                        (kullanici_id, ad_soyad,
+                         ogrenci_numarasi, tur)
+                    VALUES (%s, %s, %s, 'GONULLU')
+                    RETURNING ogrenci_id;
+                """, (
+                    kullanici_id,
+                    "QA Test Ogrencisi",
+                    ogrenci_no,
+                ))
+                eski_ogrenci_id = cur.fetchone()[0]
+            conn.commit()
+
+    model_verisi = {
+        "rol_id": ortam["roller"]["DANISMA_OGRENCISI"]
+    }
+
+    if not mevcut_ogrenci:
+        model_verisi.update({
+            "ad_soyad": "QA Test Ogrencisi",
+            "ogrenci_numarasi": ogrenci_no,
+        })
+
+    sonuc = kullanici_rol_degistir(
+        kullanici_id=kullanici_id,
+        veri=RolDegistirModeli(**model_verisi),
+        islem_yapan_id=ortam["yapan_id"],
+    )
+
+    assert sonuc["yeni_rol_adi"] == "DANISMA_OGRENCISI"
+    assert sonuc["yeni_personel_kodu"].startswith("PER-OGR-")
+
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    r.rol_adi,
+                    p.personel_id,
+                    p.personel_kodu
+                FROM kullanicilar k
+                JOIN roller r ON r.rol_id = k.rol_id
+                JOIN personel p ON p.kullanici_id = k.kullanici_id
+                WHERE k.kullanici_id = %s;
+            """, (kullanici_id,))
+
+            assert cur.fetchone() == (
+                "DANISMA_OGRENCISI",
+                personel_id,
+                sonuc["yeni_personel_kodu"],
+            )
+
+            cur.execute("""
+                SELECT ogrenci_id, tur::text,
+                       ad_soyad, ogrenci_numarasi
+                FROM ogrenciler
+                WHERE kullanici_id = %s;
+            """, (kullanici_id,))
+
+            ogrenciler = cur.fetchall()
+
+            assert len(ogrenciler) == 1
+
+            ogrenci_id, tur, ad_soyad, numara = ogrenciler[0]
+
+            assert tur == "DANISMA_MASASI"
+            assert ad_soyad == "QA Test Ogrencisi"
+            assert numara == ogrenci_no
+
+            if mevcut_ogrenci:
+                assert ogrenci_id == eski_ogrenci_id
+
+            cur.execute("""
+                SELECT olay_turu::text
+                FROM denetim_kayitlari
+                WHERE kullanici_id = %s
+                  AND hedef_tablo = 'ogrenciler'
+                  AND hedef_kayit_id = %s;
+            """, (ortam["yapan_id"], ogrenci_id))
+
+            olaylar = [satir[0] for satir in cur.fetchall()]
+
+            assert olaylar == [
+                "UPDATE" if mevcut_ogrenci else "CREATE"
+            ]
+
+
+def test_postgresql_danisma_ogrencisi_aktiflik_dongusu(qa_ortami):
+    """Öğrenci kaydı rol geçişlerinde korunur, aktifliği değişir."""
+    from modeller import RolDegistirModeli
+    from sunucu import kullanici_rol_degistir
+
+    ortam = qa_ortami
+    kullanici_adi = f"qa_atom_{ortam['etiket']}_aktiflik"
+    ogrenci_no = str(int(ortam["etiket"], 16)).zfill(12)
+
+    ortam["kullanici_adlari"].append(kullanici_adi)
+
+    olusturulan = kullanici_olustur(
+        KullaniciOlusturModeli(
+            kullanici_adi=kullanici_adi,
+            rol_id=ortam["roller"]["PSIKOLOG"],
+        ),
+        kullanici_id=ortam["yapan_id"],
+    )
+
+    kullanici_id = olusturulan["kullanici_id"]
+    personel_id = olusturulan["personel_id"]
+
+    def durum():
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        o.ogrenci_id,
+                        o.aktif_mi,
+                        o.tur::text,
+                        p.personel_id,
+                        p.personel_kodu,
+                        r.rol_adi
+                    FROM ogrenciler o
+                    JOIN kullanicilar k
+                        ON k.kullanici_id = o.kullanici_id
+                    JOIN roller r ON r.rol_id = k.rol_id
+                    JOIN personel p
+                        ON p.kullanici_id = k.kullanici_id
+                    WHERE o.kullanici_id = %s;
+                """, (kullanici_id,))
+                return cur.fetchone()
+
+    # 1. Psikolog -> Danışma Öğrencisi
+    kullanici_rol_degistir(
+        kullanici_id=kullanici_id,
+        veri=RolDegistirModeli(
+            rol_id=ortam["roller"]["DANISMA_OGRENCISI"],
+            ad_soyad="QA Aktiflik Test",
+            ogrenci_numarasi=ogrenci_no,
+        ),
+        islem_yapan_id=ortam["yapan_id"],
+    )
+
+    ilk = durum()
+    assert ilk is not None
+    ogrenci_id = ilk[0]
+    assert ilk[1] is True
+    assert ilk[2] == "DANISMA_MASASI"
+    assert ilk[3] == personel_id
+    assert ilk[4].startswith("PER-OGR-")
+    assert ilk[5] == "DANISMA_OGRENCISI"
+
+    # 2. Danışma Öğrencisi -> Psikolog
+    kullanici_rol_degistir(
+        kullanici_id=kullanici_id,
+        veri=RolDegistirModeli(
+            rol_id=ortam["roller"]["PSIKOLOG"],
+        ),
+        islem_yapan_id=ortam["yapan_id"],
+    )
+
+    ikinci = durum()
+    assert ikinci[0] == ogrenci_id
+    assert ikinci[1] is False
+    assert ikinci[3] == personel_id
+    assert ikinci[4].startswith("PER-PSK-")
+    assert ikinci[5] == "PSIKOLOG"
+
+    # 3. Psikolog -> Tekrar Danışma Öğrencisi
+    kullanici_rol_degistir(
+        kullanici_id=kullanici_id,
+        veri=RolDegistirModeli(
+            rol_id=ortam["roller"]["DANISMA_OGRENCISI"],
+        ),
+        islem_yapan_id=ortam["yapan_id"],
+    )
+
+    son = durum()
+    assert son[0] == ogrenci_id
+    assert son[1] is True
+    assert son[2] == "DANISMA_MASASI"
+    assert son[3] == personel_id
+    assert son[4].startswith("PER-OGR-")
+    assert son[5] == "DANISMA_OGRENCISI"
+
+    # Aynı kullanıcıya ikinci öğrenci kaydı açılmamalı.
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM ogrenciler WHERE kullanici_id = %s;",
+                (kullanici_id,),
+            )
+            assert cur.fetchone()[0] == 1
+
+
+def test_postgresql_acik_gorev_varken_ogrenci_rolu_degistirilemez(qa_ortami):
+    """Açık danışma görevi varsa rol değişikliği engellenmeli."""
+    from modeller import RolDegistirModeli
+    from sunucu import kullanici_rol_degistir
+
+    ortam = qa_ortami
+    ad = f"qa_atom_{ortam['etiket']}_acik_gorev"
+    ogrenci_no = str(int(ortam["etiket"], 16)).zfill(12)
+
+    ortam["kullanici_adlari"].append(ad)
+
+    olusturulan = kullanici_olustur(
+        KullaniciOlusturModeli(
+            kullanici_adi=ad,
+            rol_id=ortam["roller"]["DANISMA_OGRENCISI"],
+            ad_soyad="QA Acik Gorev Test",
+            ogrenci_numarasi=ogrenci_no,
+        ),
+        kullanici_id=ortam["yapan_id"],
+    )
+
+    kullanici_id = olusturulan["kullanici_id"]
+    ogrenci_id = olusturulan["ogrenci_id"]
+    eski_personel_kodu = olusturulan["personel_kodu"]
+
+    oturum_id = None
+
+    try:
+        # Test öğrencisine açık danışma görevi oluştur.
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO danisma_masasi_oturumlari
+                        (ogrenci_id, baslangic_zamani)
+                    VALUES (%s, CURRENT_TIMESTAMP)
+                    RETURNING oturum_id;
+                """, (ogrenci_id,))
+
+                oturum_id = cur.fetchone()[0]
+
+            conn.commit()
+
+        # Açık görev varken Psikolog rolüne geçiş reddedilmeli.
+        with pytest.raises(HTTPException) as hata:
+            kullanici_rol_degistir(
+                kullanici_id=kullanici_id,
+                veri=RolDegistirModeli(
+                    rol_id=ortam["roller"]["PSIKOLOG"],
+                ),
+                islem_yapan_id=ortam["yapan_id"],
+            )
+
+        assert hata.value.status_code == 409
+        assert "görevi" in str(hata.value.detail)
+
+        # Rol, personel kodu ve öğrenci aktifliği korunmalı.
+        with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT r.rol_adi, p.personel_kodu, o.aktif_mi
+                    FROM kullanicilar k
+                    JOIN roller r ON r.rol_id = k.rol_id
+                    JOIN personel p ON p.kullanici_id = k.kullanici_id
+                    JOIN ogrenciler o ON o.kullanici_id = k.kullanici_id
+                    WHERE k.kullanici_id = %s;
+                """, (kullanici_id,))
+
+                assert cur.fetchone() == (
+                    "DANISMA_OGRENCISI",
+                    eski_personel_kodu,
+                    True,
+                )
+
+                cur.execute("""
+                    SELECT COUNT(*)
+                    FROM danisma_masasi_oturumlari
+                    WHERE oturum_id = %s
+                      AND bitis_zamani IS NULL;
+                """, (oturum_id,))
+
+                assert cur.fetchone()[0] == 1
+
+                # Reddedilen işlem Audit'e ROLE_CHANGE yazmamalı.
+                cur.execute("""
+                    SELECT COUNT(*)
+                    FROM denetim_kayitlari
+                    WHERE kullanici_id = %s
+                      AND olay_turu = 'ROLE_CHANGE'
+                      AND hedef_tablo = 'kullanicilar'
+                      AND hedef_kayit_id = %s;
+                """, (ortam["yapan_id"], kullanici_id))
+
+                assert cur.fetchone()[0] == 0
+
+    finally:
+        # Geçici açık görevi mutlaka temizle.
+        # Diğer test kayıtlarını qa_ortami fixture'ı temizleyecek.
+        if oturum_id is not None:
+            with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        DELETE FROM danisma_masasi_oturumlari
+                        WHERE oturum_id = %s
+                          AND ogrenci_id = %s;
+                    """, (oturum_id, ogrenci_id))
+
+                conn.commit()

@@ -29,6 +29,20 @@ from PySide6.QtWidgets import (
 )
 
 
+def gecmis_gorev_tarihi_bicimle(deger):
+    """Görev tarihini GG.AA.YYYY biçiminde göster."""
+    if not deger:
+        return "—"
+
+    try:
+        tarih = datetime.fromisoformat(
+            str(deger).replace("Z", "+00:00")
+        )
+        return tarih.strftime("%d.%m.%Y")
+    except (ValueError, TypeError):
+        return str(deger)
+
+
 class DanismaMasasiEkrani(QWidget):
     BG = "#F5F7FB"
     NAVY = "#16294B"
@@ -766,9 +780,8 @@ class DanismaMasasiEkrani(QWidget):
                     ) or ""
                 )
 
-                tarih = (
-                    oturum.get("tarih")
-                    or baslangic[:10]
+                tarih = gecmis_gorev_tarihi_bicimle(
+                    oturum.get("tarih") or baslangic[:10]
                 )
 
                 try:

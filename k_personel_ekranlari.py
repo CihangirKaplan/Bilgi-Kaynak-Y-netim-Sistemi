@@ -972,7 +972,8 @@ class RolDegistirFormu(QDialog):
         self.mevcut_rol = mevcut_rol
         
         self.setWindowTitle("🔁 Rol Ata / Değiştir")
-        self.setFixedSize(400, 260) 
+        self.setMinimumWidth(460)
+        self.resize(460, 290)
         
         self.setStyleSheet("""
             QDialog { background-color: #F8FAFC; }
@@ -994,7 +995,9 @@ class RolDegistirFormu(QDialog):
             QPushButton#btn_kaydet { background-color: #2563EB; color: white; border: none; }
             QPushButton#btn_kaydet:hover { background-color: #1D4ED8; }
         """)
+        self.ogrenci_kaydi_var = None
         self.arayuzu_kur()
+        self.rol_degisti()
 
     def arayuzu_kur(self):
         layout = QVBoxLayout(self)
@@ -1022,6 +1025,21 @@ class RolDegistirFormu(QDialog):
             self.combo_rol.addItem(ad, rol_id)
             
         layout.addWidget(self.combo_rol)
+
+        self.ogrenci_bilgi = QLabel()
+        self.ogrenci_bilgi.setWordWrap(True)
+        layout.addWidget(self.ogrenci_bilgi)
+
+        (
+            self.ogrenci_kutusu,
+            self.input_ad_soyad,
+            self.input_ogrenci_no,
+            self.input_telefon,
+        ) = ogrenci_alanlari_olustur()
+
+        layout.addWidget(self.ogrenci_kutusu)
+        self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
+
         layout.addStretch()
 
         # Butonlar
@@ -1042,6 +1060,68 @@ class RolDegistirFormu(QDialog):
         buton_layout.addWidget(self.btn_kaydet)
         layout.addLayout(buton_layout)
 
+    def rol_degisti(self, *_):
+        danisma = (
+            ROL_ID_ADLARI.get(self.combo_rol.currentData())
+            == DANISMA_OGRENCISI
+        )
+
+        self.ogrenci_bilgi.setVisible(danisma)
+        self.ogrenci_kutusu.setVisible(False)
+        self.ogrenci_kaydi_var = None
+
+        if not danisma:
+            self.btn_kaydet.setEnabled(True)
+            self.adjustSize()
+            return
+
+        self.btn_kaydet.setEnabled(False)
+        self.ogrenci_bilgi.setText("Öğrenci kaydı kontrol ediliyor...")
+
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/kullanicilar/"
+                f"{self.kullanici_id}/ogrenci-kayit-durumu",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+
+            if oturum_hatasi_mi(cevap):
+                self.ogrenci_bilgi.setText(
+                    "Oturum süresi doldu. Yeniden giriş yapın."
+                )
+                return
+
+            if cevap.status_code != 200:
+                self.ogrenci_bilgi.setText(
+                    "Öğrenci kaydı kontrol edilemedi."
+                )
+                return
+
+            self.ogrenci_kaydi_var = bool(
+                cevap.json()["ogrenci_kaydi_var"]
+            )
+
+            if self.ogrenci_kaydi_var:
+                self.ogrenci_bilgi.setText(
+                    "Öğrenci kaydı mevcut. Mevcut bilgiler korunacak."
+                )
+            else:
+                self.ogrenci_bilgi.setText(
+                    "Öğrenci bilgilerini girin."
+                )
+                self.ogrenci_kutusu.setVisible(True)
+
+            self.btn_kaydet.setEnabled(True)
+
+        except Exception:
+            self.ogrenci_bilgi.setText(
+                "Sunucuya bağlanılamadı."
+            )
+        finally:
+            self.adjustSize()
+
     def kaydet(self):
         yeni_rol_id = self.combo_rol.currentData()
 
@@ -1060,6 +1140,26 @@ class RolDegistirFormu(QDialog):
 
         # Sunucuna gönderilecek JSON verisi ve URL
         veri = {"rol_id": yeni_rol_id}
+
+        if ROL_ID_ADLARI.get(yeni_rol_id) == DANISMA_OGRENCISI:
+            if self.ogrenci_kaydi_var is None:
+                QMessageBox.warning(
+                    self, "Uyarı",
+                    "Öğrenci kaydı doğrulanamadı."
+                )
+                return
+
+            if not self.ogrenci_kaydi_var:
+                ogrenci = ogrenci_bilgisi_oku(
+                    self.input_ad_soyad,
+                    self.input_ogrenci_no,
+                    self.input_telefon,
+                )
+                hata = ogrenci_bilgisi_dogrula(ogrenci)
+                if hata:
+                    QMessageBox.warning(self, "Uyarı", hata)
+                    return
+                veri.update(ogrenci)
         headers = {"Authorization": f"Bearer {self.token}"}
         url = f"{self.api_url}/api/kullanicilar/{self.kullanici_id}/rol"
 
@@ -1070,6 +1170,12 @@ class RolDegistirFormu(QDialog):
             if cevap.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
                 self.accept()
+            elif cevap.status_code == 422:
+                QMessageBox.warning(
+                    self,
+                    "Eksik veya Hatalı Bilgi",
+                    sunucu_hata_mesaji(cevap, "Öğrenci bilgilerini kontrol edin.")
+                )
             elif cevap.status_code == 409:
                 hata = sunucu_hata_mesaji(
                     cevap, "Rol güncellemesi tamamlanamadı."

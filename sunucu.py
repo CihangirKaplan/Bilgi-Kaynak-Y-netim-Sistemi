@@ -683,6 +683,30 @@ def musait_kullanici_adi(
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.get("/api/kullanicilar/{kullanici_id}/ogrenci-kayit-durumu")
+def kullanici_ogrenci_kayit_durumu(
+    kullanici_id: int,
+    islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME")),
+):
+    conn = psycopg2.connect(**VT_AYARLARI)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM kullanicilar WHERE kullanici_id = %s;",
+                (kullanici_id,),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+            cursor.execute(
+                "SELECT ogrenci_id FROM ogrenciler WHERE kullanici_id = %s;",
+                (kullanici_id,),
+            )
+            return {"ogrenci_kaydi_var": cursor.fetchone() is not None}
+    finally:
+        conn.close()
+
+
 @app.patch("/api/kullanicilar/{kullanici_id}/rol")
 def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))):
     conn = None
@@ -725,20 +749,62 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                 detail="Kullanıcı zaten seçilen role sahip."
             )
 
-        # Danışma öğrencisi rolü için öğrenci kaydı zorunlu.
+        ogrenci_kaydi = None
+        bilgi_var = any((veri.ad_soyad, veri.ogrenci_numarasi, veri.telefon))
+
         if yeni_rol_adi == "DANISMA_OGRENCISI":
             cursor.execute(
-                "SELECT ogrenci_id FROM ogrenciler WHERE kullanici_id = %s;",
+                "SELECT ogrenci_id, tur::text FROM ogrenciler "
+                "WHERE kullanici_id = %s FOR UPDATE;",
                 (kullanici_id,),
             )
-            if cursor.fetchone() is None:
+            ogrenci_kaydi = cursor.fetchone()
+
+            if ogrenci_kaydi is None and (
+                not veri.ad_soyad or not veri.ogrenci_numarasi
+            ):
                 raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "Bu kullanıcının danışma öğrencisi kaydı bulunmuyor. "
-                        "Öğrenci bilgileri tanımlanmadan bu rol atanamaz."
-                    ),
+                    status_code=422,
+                    detail="Ad soyad ve öğrenci numarası zorunludur.",
                 )
+        elif bilgi_var:
+            raise HTTPException(
+                status_code=422,
+                detail="Öğrenci bilgileri yalnızca Danışma Öğrencisi rolü içindir.",
+            )
+
+        # Danışma öğrencisi rolünden ayrılırken açık görev bulunmamalı.
+        pasiflestirilecek_ogrenci_id = None
+
+        if (
+            mevcut_rol == "DANISMA_OGRENCISI"
+            and yeni_rol_adi != "DANISMA_OGRENCISI"
+        ):
+            cursor.execute(
+                "SELECT ogrenci_id FROM ogrenciler "
+                "WHERE kullanici_id = %s FOR UPDATE;",
+                (kullanici_id,),
+            )
+            onceki_ogrenci = cursor.fetchone()
+
+            if onceki_ogrenci is not None:
+                pasiflestirilecek_ogrenci_id = onceki_ogrenci[0]
+
+                cursor.execute(
+                    "SELECT 1 FROM danisma_masasi_oturumlari "
+                    "WHERE ogrenci_id = %s "
+                    "AND bitis_zamani IS NULL LIMIT 1;",
+                    (pasiflestirilecek_ogrenci_id,),
+                )
+
+                if cursor.fetchone() is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Bu öğrencinin devam eden danışma masası "
+                            "görevi bulunuyor. Önce görevi bitirin."
+                        ),
+                    )
 
         # Personel kaydını kilitle; mevcut personel_id korunacak.
         cursor.execute(
@@ -764,6 +830,69 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             "WHERE personel_id = %s;",
             (yeni_personel_kodu, personel[0]),
         )
+        if yeni_rol_adi == "DANISMA_OGRENCISI":
+            if ogrenci_kaydi is None:
+                cursor.execute(
+                    "INSERT INTO ogrenciler "
+                    "(kullanici_id, ad_soyad, ogrenci_numarasi, telefon, tur) "
+                    "VALUES (%s, %s, %s, %s, 'DANISMA_MASASI') "
+                    "RETURNING ogrenci_id;",
+                    (
+                        kullanici_id,
+                        veri.ad_soyad,
+                        veri.ogrenci_numarasi,
+                        veri.telefon,
+                    ),
+                )
+                ogrenci_id = cursor.fetchone()[0]
+                ogrenci_olay = "CREATE"
+            else:
+                ogrenci_id = ogrenci_kaydi[0]
+                ogrenci_olay = None
+                if ogrenci_kaydi[1] != "DANISMA_MASASI":
+                    cursor.execute(
+                        "UPDATE ogrenciler "
+                        "SET tur = 'DANISMA_MASASI', aktif_mi = TRUE "
+                        "WHERE ogrenci_id = %s;",
+                        (ogrenci_id,),
+                    )
+                    ogrenci_olay = "UPDATE"
+                else:
+                    cursor.execute(
+                        "UPDATE ogrenciler SET aktif_mi = TRUE "
+                        "WHERE ogrenci_id = %s AND aktif_mi = FALSE;",
+                        (ogrenci_id,),
+                    )
+                    if cursor.rowcount > 0:
+                        ogrenci_olay = "UPDATE"
+
+            if ogrenci_olay:
+                cursor.execute(
+                    "INSERT INTO denetim_kayitlari "
+                    "(kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) "
+                    "VALUES (%s, %s, %s, %s);",
+                    (islem_yapan_id, ogrenci_olay, "ogrenciler", ogrenci_id),
+                )
+        if pasiflestirilecek_ogrenci_id is not None:
+            cursor.execute(
+                "UPDATE ogrenciler SET aktif_mi = FALSE "
+                "WHERE ogrenci_id = %s AND aktif_mi = TRUE;",
+                (pasiflestirilecek_ogrenci_id,),
+            )
+
+            if cursor.rowcount > 0:
+                cursor.execute(
+                    "INSERT INTO denetim_kayitlari "
+                    "(kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) "
+                    "VALUES (%s, %s, %s, %s);",
+                    (
+                        islem_yapan_id,
+                        "UPDATE",
+                        "ogrenciler",
+                        pasiflestirilecek_ogrenci_id,
+                    ),
+                )
+
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
         cursor.execute(
             "INSERT INTO denetim_kayitlari "
@@ -774,6 +903,13 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         conn.commit()
 
         return {"mesaj": "Kullanıcı rolü ve personel kodu başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi, "yeni_personel_kodu": yeni_personel_kodu}
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Öğrenci numarası veya personel kodu zaten kullanılıyor.",
+        )
     except HTTPException:
         if conn is not None:
             conn.rollback()
