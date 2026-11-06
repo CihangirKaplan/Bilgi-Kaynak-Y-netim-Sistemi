@@ -912,22 +912,14 @@ QLabel {
 
             if isinstance(veri, dict):
                 toplam = int(veri.get("toplam", 0) or 0)
-                oturumlar = veri.get("oturumlar", [])
 
                 self._bildirim_sayisi += toplam
 
-                for oturum in oturumlar:
+                # Tüm danışma masası onaylarını tek bildirimde göster.
+                if toplam > 0:
                     self._bildirimler.append((
                         "Danışma Masası",
-                        f"📋 {oturum.get('ad_soyad', 'Öğrenci')} "
-                        f"— Görev onayı bekliyor",
-                        "Danışma Masası Yönetimi"
-                    ))
-
-                if toplam > len(oturumlar):
-                    self._bildirimler.append((
-                        "Danışma Masası",
-                        f"… ve {toplam - len(oturumlar)} bekleyen görev daha",
+                        f"📋 {toplam} görev onay bekliyor",
                         "Danışma Masası Yönetimi"
                     ))
 

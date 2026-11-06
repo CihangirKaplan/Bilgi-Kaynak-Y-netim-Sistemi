@@ -1,9 +1,11 @@
 from collections import OrderedDict
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame, QWidget, QLabel, QPushButton,
-    QVBoxLayout, QHBoxLayout, QScrollArea
+    QVBoxLayout, QHBoxLayout, QScrollArea,
+    QGraphicsDropShadowEffect, QLayout
 )
 
 
@@ -11,7 +13,8 @@ class BildirimPaneli(QFrame):
     """TKYS merkezi bildirim acilir paneli."""
 
     def __init__(self, bildirimler, toplam, hata, sayfa_ac, parent=None):
-        super().__init__(parent, Qt.Popup)
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         self._sayfa_ac = sayfa_ac
         self.setObjectName("bildirimPaneli")
@@ -19,7 +22,11 @@ class BildirimPaneli(QFrame):
 
         self.setStyleSheet("""
             QFrame#bildirimPaneli {
-                background: white;
+                background: transparent;
+                border: none;
+            }
+            QFrame#bildirimKart {
+                background: #FFFFFF;
                 border: 1px solid #DCE5F2;
                 border-radius: 14px;
             }
@@ -53,7 +60,21 @@ class BildirimPaneli(QFrame):
             }
         """)
 
-        ana = QVBoxLayout(self)
+        dis = QVBoxLayout(self)
+        dis.setContentsMargins(12, 12, 12, 12)
+        dis.setSpacing(0)
+
+        kart = QFrame(self)
+        kart.setObjectName("bildirimKart")
+        dis.addWidget(kart)
+
+        golge = QGraphicsDropShadowEffect(self)
+        golge.setBlurRadius(20)
+        golge.setOffset(0, 3)
+        golge.setColor(QColor(20, 43, 77, 45))
+        kart.setGraphicsEffect(golge)
+
+        ana = QVBoxLayout(kart)
         ana.setContentsMargins(16, 14, 16, 14)
         ana.setSpacing(12)
 
@@ -89,6 +110,7 @@ class BildirimPaneli(QFrame):
 
         icerik = QWidget()
         liste = QVBoxLayout(icerik)
+        liste.setSizeConstraint(QLayout.SetMinAndMaxSize)
         liste.setContentsMargins(0, 2, 4, 2)
         liste.setSpacing(8)
 
@@ -146,20 +168,22 @@ class BildirimPaneli(QFrame):
             )
             liste.addWidget(uyari)
 
-        liste.addStretch()
         kaydirma.setWidget(icerik)
+
+        liste.activate()
+        icerik.adjustSize()
+
+        icerik_yuksekligi = icerik.sizeHint().height()
+
+        # Az bildirimde kompakt, çok bildirimde kaydırılabilir.
+        kaydirma.setFixedHeight(
+            min(340, max(50, icerik_yuksekligi + 6))
+        )
+
         ana.addWidget(kaydirma)
 
-        yukseklik = min(
-            520,
-            max(
-                215,
-                120 + satir_sayisi * 52
-                + len(gruplar) * 32
-                + (30 if hata else 0)
-            )
-        )
-        self.resize(440, yukseklik)
+        dis.activate()
+        self.adjustSize()
 
     @staticmethod
     def _ogrenci_bildirimlerini_grupla(satirlar):

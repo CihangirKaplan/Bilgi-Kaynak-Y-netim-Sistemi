@@ -1,8 +1,6 @@
 import os
 import sys
 import requests
-import base64
-import re
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QFrame, QPushButton, QCheckBox, QGraphicsDropShadowEffect, QMessageBox
@@ -201,7 +199,7 @@ class LoginEkrani(QWidget):
         super().__init__()
         self.setObjectName("kok")
         self.setWindowTitle("TKYS — Güvenli Giriş")
-        self.setFixedSize(980, 720)
+        self.setFixedSize(980, 620)
         self.setStyleSheet(
             STIL.replace(
                 "__TKYS_CHECK_ICON__",
@@ -371,67 +369,6 @@ class LoginEkrani(QWidget):
 
         fl.addLayout(sifre_secenekleri)
 
-        # CAPTCHA GÜVENLİK KODU
-        fl.addSpacing(10)
-
-        captcha_etiket = QLabel("GÜVENLİK KODU")
-        captcha_etiket.setObjectName("etiket")
-        fl.addWidget(captcha_etiket)
-
-        captcha_satiri = QHBoxLayout()
-        captcha_satiri.setSpacing(10)
-
-        self.captcha_resim = QLabel()
-        self.captcha_resim.setFixedSize(180, 54)
-        self.captcha_resim.setAlignment(Qt.AlignCenter)
-        self.captcha_resim.setStyleSheet(
-            "background: #EDF4FF;"
-            "border: 1px solid #D6E4F5;"
-            "border-radius: 8px;"
-        )
-        captcha_satiri.addWidget(self.captcha_resim)
-
-        self.captcha_yenile_btn = QPushButton("↻")
-        self.captcha_yenile_btn.setToolTip("Yeni güvenlik kodu al")
-        self.captcha_yenile_btn.setFixedSize(36, 36)
-        self.captcha_yenile_btn.setCursor(Qt.PointingHandCursor)
-        self.captcha_yenile_btn.setStyleSheet("""
-            QPushButton {
-                background: #E8F0FB;
-                color: #1554B7;
-                border: 1px solid #C8D9F0;
-                border-radius: 9px;
-                font-size: 25px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #D8E8FF;
-            }
-        """)
-        self.captcha_yenile_btn.clicked.connect(self.captcha_yenile)
-
-        captcha_satiri.addWidget(self.captcha_yenile_btn)
-        captcha_satiri.addStretch()
-
-        fl.addLayout(captcha_satiri)
-
-        self.captcha_input = QLineEdit()
-        self.captcha_input.setPlaceholderText(
-            "Görseldeki 5 haneli güvenlik kodunu girin"
-        )
-        self.captcha_input.setMaxLength(5)
-        self.captcha_input.setMaximumWidth(300)
-        self.captcha_input.setEnabled(False)
-        fl.addWidget(self.captcha_input)
-
-        self.captcha_id = None
-
-        self.captcha_sure_timer = QTimer(self)
-        self.captcha_sure_timer.setSingleShot(True)
-        self.captcha_sure_timer.timeout.connect(
-            self.captcha_yenile
-        )
-
         self.hata_lbl = QLabel("")
         self.hata_lbl.setObjectName("hata")
         self.hata_lbl.setWordWrap(True)
@@ -456,13 +393,7 @@ class LoginEkrani(QWidget):
         kok.addWidget(kart)
 
         self.kullanici_input.returnPressed.connect(self.sifre_input.setFocus)
-        self.sifre_input.returnPressed.connect(
-            self.captcha_input.setFocus
-        )
-        self.captcha_input.returnPressed.connect(self.giris_yap)
-
-        self.giris_btn.setEnabled(False)
-        QTimer.singleShot(0, self.captcha_yenile)
+        self.sifre_input.returnPressed.connect(self.giris_yap)
         self.kullanici_input.setFocus()
 
     def sifremi_unuttum_bilgisi(self):
@@ -487,134 +418,21 @@ class LoginEkrani(QWidget):
         roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
         return roller.get(rol_id, None)
 
-    def captcha_yenile(self):
-        """Sunucudan yeni CAPTCHA görseli al."""
-        self.captcha_sure_timer.stop()
-        self.captcha_id = None
-        self.captcha_input.clear()
-        self.captcha_input.setEnabled(False)
-        self.captcha_resim.clear()
-        self.giris_btn.setEnabled(False)
-        self.captcha_yenile_btn.setEnabled(False)
-
-        try:
-            cevap = requests.get(
-                f"{API_URL}/api/captcha",
-                timeout=5,
-            )
-            cevap.raise_for_status()
-            veri = cevap.json()
-
-            captcha_id = veri["captcha_id"]
-            if not (
-                isinstance(captcha_id, str)
-                and re.fullmatch(r"[0-9a-f]{32}", captcha_id)
-            ):
-                raise ValueError("Geçersiz CAPTCHA kimliği")
-
-            resim_verisi = base64.b64decode(
-                veri["gorsel_base64"],
-                validate=True,
-            )
-
-            pixmap = QPixmap()
-            if not pixmap.loadFromData(resim_verisi, "PNG"):
-                raise ValueError("CAPTCHA görseli yüklenemedi")
-
-            sure = int(veri["gecerlilik_saniye"])
-
-            if not 15 <= sure <= 600:
-                raise ValueError("Geçersiz CAPTCHA süresi")
-
-            self.captcha_id = captcha_id
-
-            # Sunucudaki süreden 10 saniye önce yenile.
-            self.captcha_sure_timer.start(
-                max(1000, (sure - 10) * 1000)
-            )
-
-            self.captcha_resim.setPixmap(
-                pixmap.scaled(
-                    self.captcha_resim.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation,
-                )
-            )
-
-        except requests.HTTPError as hata:
-            yanit = hata.response
-
-            if yanit is not None and yanit.status_code == 429:
-                sure = yanit.headers.get("Retry-After", "")
-                saniye = int(sure) if sure.isdigit() else 60
-
-                self.hata_goster(
-                    "Çok fazla güvenlik kodu istendi. "
-                    f"Lütfen {saniye} saniye sonra tekrar deneyin."
-                )
-            else:
-                self.hata_goster(
-                    "Güvenlik kodu yüklenemedi. "
-                    "Lütfen yenile butonuna basın."
-                )
-
-        except (
-            requests.RequestException,
-            ValueError,
-            KeyError,
-            TypeError,
-        ):
-            self.hata_goster(
-                "Güvenlik kodu yüklenemedi. "
-                "Lütfen yenile butonuna basın."
-            )
-
-        finally:
-            self.captcha_yenile_btn.setEnabled(True)
-            self.captcha_input.setEnabled(
-                self.captcha_id is not None
-            )
-            self.giris_btn.setEnabled(
-                self.captcha_id is not None
-                and self.kalan == 0
-            )
-
     def giris_yap(self):
         if self.kalan > 0:
             return
 
-        captcha_yenilensin = True
-
         kullanici = self.kullanici_input.text().strip()
         sifre = self.sifre_input.text()
-        guvenlik_kodu = self.captcha_input.text().strip()
-
-        if self.captcha_id is None:
-            self.hata_goster(
-                "Güvenlik kodu yüklenemedi. Lütfen kodu yenileyin."
-            )
-            return
 
         if not kullanici or not sifre:
             self.hata_goster("Kullanıcı adı ve şifre boş bırakılamaz.")
             return
 
-        if not re.fullmatch(r"[0-9]{5}", guvenlik_kodu):
-            self.hata_goster(
-                "Lütfen 5 haneli güvenlik kodunu girin."
-            )
-            self.captcha_input.setFocus()
-            return
-
         try:
             cevap = requests.post(
                 f"{API_URL}/api/login",
-                json={
-                    "kullanici_adi": kullanici,
-                    "parola": sifre,
-                    "captcha_id": self.captcha_id,
-                    "guvenlik_kodu": guvenlik_kodu,
-                },
+                json={"kullanici_adi": kullanici, "parola": sifre},
                 timeout=5
             )
             
@@ -625,8 +443,6 @@ class LoginEkrani(QWidget):
             veri = cevap.json()
 
             if cevap.status_code == 200 and veri.get("durum") == "basarili":
-
-                self.captcha_sure_timer.stop()
                 
                 # 1. İlk giriş şifre değiştirme kontrolü
                 if veri.get("sifre_degistirme_gerekli") is True:
@@ -668,27 +484,10 @@ class LoginEkrani(QWidget):
                 self.goster.setChecked(False)
                 self.hide()
 
-            elif cevap.status_code == 400:
-                self.hata_goster(
-                    veri.get(
-                        "detail",
-                        "Güvenlik kodu hatalı veya süresi dolmuş.",
-                    )
-                )
             elif cevap.status_code == 429:
                 sure = cevap.headers.get("Retry-After", "")
                 saniye = int(sure) if sure.isdigit() else 60
-
-                if cevap.headers.get("X-TKYS-RateLimit") == "1":
-                    captcha_yenilensin = False
-
-                    self.hata_goster(
-                        "Çok fazla giriş isteği gönderildi. "
-                        f"Lütfen {saniye} saniye sonra tekrar deneyin."
-                    )
-                else:
-                    # Mevcut hesap kilitleme davranışını koru.
-                    self.kilitle(saniye)
+                self.kilitle(saniye)
             elif cevap.status_code == 403:
                 hata_mesaji = veri.get("detail", "Erişim reddedildi.")
                 QMessageBox.warning(self, "Giriş Engellendi", hata_mesaji)
@@ -712,10 +511,6 @@ class LoginEkrani(QWidget):
                 "Giriş işlemi tamamlanamadı. Lütfen tekrar deneyin."
             )
 
-        finally:
-            if self.isVisible() and captcha_yenilensin:
-                self.captcha_yenile()
-
     def ilk_giris_sifresi_degisti(self):
         self.sifre_penceresi.close()
         self.kullanici_input.clear()
@@ -723,19 +518,16 @@ class LoginEkrani(QWidget):
         self.goster.setChecked(False)
         self.hata_lbl.hide()
         self.show()
-        self.captcha_yenile()
         self.kullanici_input.setFocus()
 
     def ilk_giris_iptal(self):
         self.sifre_input.clear()
         self.show()
-        self.captcha_yenile()
         self.sifre_input.setFocus()
 
     def oturum_kapandi(self):
         self.kullanici_input.setFocus()
         self.show()
-        self.captcha_yenile()
 
     def kilitle(self, saniye):
         import time

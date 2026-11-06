@@ -145,11 +145,6 @@ class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
 
-
-class CaptchaGirisModeli(GirisModeli):
-    captcha_id: str
-    guvenlik_kodu: str
-
 # ==========================================
 # ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
 # ==========================================

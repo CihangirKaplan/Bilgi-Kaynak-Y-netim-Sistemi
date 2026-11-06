@@ -175,11 +175,10 @@ class KullaniciPersonelEkrani(QWidget):
 
         if not secim:
             QMessageBox.warning(
-                self,
-                "Kullanıcı Seçilmedi",
-                "Lütfen parolasını sıfırlamak istediğiniz "
-                "kullanıcıyı seçin."
-            )
+    self,
+    "Kullanıcı Seçilmedi",
+    "Lütfen parolasını sıfırlamak istediğiniz kullanıcıyı seçin."
+)
             return
 
         satir = secim[0].row()
@@ -203,15 +202,14 @@ class KullaniciPersonelEkrani(QWidget):
             return
 
         onay = QMessageBox.question(
-            self,
-            "Parola Sıfırlama Onayı",
-            f"'{kullanici_adi}' adlı kullanıcının parolasını "
-            "sıfırlamak istiyor musunuz?\\n\\n"
-            "Mevcut parola geçersiz olacak ve kullanıcı "
-            "ilk girişte yeni parola belirlemek zorunda kalacaktır.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+    self,
+    "Parola Sıfırlama Onayı",
+    f"'{kullanici_adi}' kullanıcısının parolası sıfırlansın mı?\n\n"
+    "Mevcut parola geçersiz olacak.\n"
+    "Kullanıcı ilk girişte yeni parola belirlemek zorunda kalacak.",
+    QMessageBox.Yes | QMessageBox.No,
+    QMessageBox.No
+)
 
         if onay != QMessageBox.Yes:
             return
@@ -265,15 +263,14 @@ class KullaniciPersonelEkrani(QWidget):
                 return
 
             QMessageBox.information(
-                self,
-                "Geçici Parola Oluşturuldu",
-                f"Kullanıcı: {kullanici_adi}\\n\\n"
-                f"Geçici Parola: {gecici_parola}\\n\\n"
-                "Bu parolayı güvenli şekilde kullanıcıya iletin.\\n"
-                "Pencere kapatıldığında parola tekrar "
-                "görüntülenemeyecektir.\\n\\n"
-                "Kullanıcı ilk girişte yeni parola belirlemelidir."
-            )
+    self,
+    "Parola Başarıyla Sıfırlandı",
+    f"Kullanıcı: {kullanici_adi}\n\n"
+    f"GEÇİCİ PAROLA\n{gecici_parola}\n\n"
+    "Bu parolayı kullanıcıya güvenli şekilde iletin.\n"
+    "Pencere kapatıldıktan sonra parola tekrar gösterilemez.\n\n"
+    "Kullanıcı ilk girişinde yeni parola belirlemelidir."
+)
 
         except requests.RequestException:
             QMessageBox.critical(

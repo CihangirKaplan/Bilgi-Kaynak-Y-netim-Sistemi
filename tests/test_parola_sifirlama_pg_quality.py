@@ -1,4 +1,3 @@
-from unittest.mock import patch
 import os
 from uuid import uuid4
 
@@ -81,46 +80,14 @@ def test_parola_sifirlama_gercek_postgresql():
         with TestClient(app) as client:
 
             def giris(hesap, parola):
-                # Test için bilinen bir CAPTCHA oluştur.
-                # Gerçek CAPTCHA doğrulaması korunur.
-                def test_rakam(ust_sinir):
-                    return 7 if ust_sinir == 10 else 0
-
-                with patch(
-                    "captcha_servisi.secrets.randbelow",
-                    side_effect=test_rakam,
-                ):
-                    captcha_cevap = client.get("/api/captcha")
-
-                assert captcha_cevap.status_code == 200, captcha_cevap.text
-
-                captcha = captcha_cevap.json()
-
-                assert len(captcha["captcha_id"]) == 32
-                assert captcha["gorsel_base64"]
-
-                giris_verisi = {
-                    "kullanici_adi": hesap["ad"],
-                    "parola": parola,
-                    "captcha_id": captcha["captcha_id"],
-                    "guvenlik_kodu": "77777",
-                }
-
                 cevap = client.post(
                     "/api/login",
-                    json=giris_verisi,
+                    json={
+                        "kullanici_adi": hesap["ad"],
+                        "parola": parola,
+                    },
                 )
-
                 assert cevap.status_code == 200, cevap.text
-
-                # Aynı CAPTCHA ikinci kez kullanılamamalı.
-                tekrar = client.post(
-                    "/api/login",
-                    json=giris_verisi,
-                )
-
-                assert tekrar.status_code == 400
-
                 return cevap.json()
 
             def baslik(token):

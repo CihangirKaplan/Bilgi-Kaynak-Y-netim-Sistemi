@@ -20,8 +20,6 @@ IZINLI_HOSTLAR = {
 }
 
 POSTGRESQL_TEST_DOSYALARI = {
-    "test_captcha_hiz_postgresql_quality.py",
-    "test_captcha_postgresql_quality.py",
     "test_parola_sifirlama_pg_quality.py",
     "test_transaction_quality.py",
     "test_randevu_transaction_quality.py",
