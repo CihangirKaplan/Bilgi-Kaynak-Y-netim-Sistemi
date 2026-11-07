@@ -11,6 +11,15 @@ from guvenlik import parola_hashle, parola_dogrula
 from sunucu import app, VT_AYARLARI, token_kullanici_id
 
 
+def guncel_alembic_surumu():
+    from pathlib import Path
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    ayar = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    return ScriptDirectory.from_config(ayar).get_current_head()
+
+
 def test_parola_sifirlama_gercek_postgresql():
     # Yanlış veritabanında çalışmayı kesinlikle engelle.
     assert os.getenv("TKYS_PG_TEST_ONAY") == "EVET"
@@ -25,8 +34,9 @@ def test_parola_sifirlama_gercek_postgresql():
             cursor.execute("SELECT current_database()")
             assert cursor.fetchone()[0] == "crkys_alembic_test"
 
+            # Test veritabani migration zincirinin en son surumunde olmali (sabit surum numarasi yazilmaz).
             cursor.execute("SELECT version_num FROM alembic_version")
-            assert cursor.fetchall() == [("d82c4a71f06b",)]
+            assert cursor.fetchall() == [(guncel_alembic_surumu(),)]
 
             cursor.execute("""
                 SELECT rol_adi, rol_id

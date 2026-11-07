@@ -16,8 +16,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | Durum | Adet | Maddeler |
 |---|---|---|
-| ✅ Karşılanıyor | 43 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
-| ⚠️ Kısmen | 7 | FR-008, FR-013, FR-017, FR-018, FR-019, FR-041, FR-045 |
+| ✅ Karşılanıyor | 44 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
+| ⚠️ Kısmen | 6 | FR-008, FR-013, FR-017, FR-018, FR-019, FR-041 |
 | ❌ Karşılanmıyor | 1 | FR-012 |
 
 ## Açık işler
@@ -26,9 +26,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
 2. **FR-017 ve FR-018 Oda ekleme / pasifleştirme:** Kod çalışıyor, yalnızca yetki ve listeleme testleri var.
    Ekleme ve pasifleştirme davranışı için doğrudan test yazılmalı.
-3. **FR-045 Audit bütünlüğü:** API'de audit kaydını değiştiren ya da silen uç yok (yalnızca okuma), ama veritabanı
-   düzeyinde ek koruma (yetki kısıtı ya da tetikleyici) yok.
-4. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
+3. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
    yazılı değil. Cihaz raporu, danışma masası raporları ve Excel dışa aktarma var.
 
 ## Tablo
@@ -121,7 +119,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-042 | Audit kaydı oluşturma | ✅ | `denetim.py`, uçlarda `denetim_kaydi_olustur` | `test_audit_zorunlulugu_quality.py`, `test_audit_transaction_calls_quality.py`, `test_audit_security.py` |
 | FR-043 | Audit işlem türleri | ✅ | `denetim_olay_turu` enum: LOGIN, LOGIN_FAILED, CREATE, UPDATE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE (+ DELETE, PASSWORD_RESET) | `test_audit_security.py`, `test_audit_zorunlulugu_update_delete_quality.py` |
 | FR-044 | Audit görüntüleme | ✅ | `GET /api/audit-kayitlari` (`AUDIT_KAYITLARI_INCELE`), `audit_kayitlari_ekrani.py` | `test_audit_kayitlari_api.py` |
-| FR-045 | Audit bütünlüğü | ⚠️ | API'de audit'i değiştiren veya silen uç yok (yalnızca `GET`) | Veritabanı düzeyinde ek koruma yok; doğrudan test yok |
+| FR-045 | Audit bütünlüğü | ✅ | API'de audit'i değiştiren veya silen uç yok (yalnızca `GET`); veritabanında `denetim_kayitlari` için UPDATE, DELETE ve TRUNCATE tetikleyiciyle engellenir (migration `f3a9c2e47b18`) | `test_audit_degistirilemez.py`; gerçek PostgreSQL'de elle doğrulandı. Not: Yalnızca `crkys_alembic_test` test veritabanı kilitten muaftır; veritabanı yöneticisi kilidi bilerek kaldırabilir |
 
 ### 5.10 Yedekleme ve geri yükleme
 
