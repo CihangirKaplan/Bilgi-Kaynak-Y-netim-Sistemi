@@ -33,6 +33,7 @@ def bakim_modeli():
         bakim_bitis_tarihi=date(2026, 10, 27),
         sonraki_bakim_tarihi=date(2027, 10, 27),
         uyari_suresi_gun=60,
+        plan_id=None,
     )
 
 
@@ -45,6 +46,7 @@ def kalibrasyon_modeli():
         kalibrasyon_baslangic_tarihi=date(2026, 10, 27),
         kalibrasyon_bitis_tarihi=date(2026, 10, 27),
         uyari_suresi_gun=60,
+        plan_id=None,
     )
 
 

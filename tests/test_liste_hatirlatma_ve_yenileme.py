@@ -150,11 +150,3 @@ def test_sayfa_ac_yenilemeyi_tetikler_ve_bildirimden_gecis_de_sayfa_ac_kullanir(
     mw.AnaPencere.sayfa_ac(ana, 1)
     ana.stack.setCurrentIndex.assert_called_once_with(1)
     ana._sayfayi_yenile.assert_called_once_with("Bakım Kayıtları")
-
-
-# --------------------------------------------------------------- kullanılmayan plan API'si kaldırıldı
-def test_bakim_planlari_api_ucları_kaldirildi():
-    import sunucu
-    assert not [r.path for r in sunucu.app.routes if "bakim-planlari" in r.path]
-    import modeller
-    assert not hasattr(modeller, "BakimPlaniOlusturModeli") and not hasattr(modeller, "BakimPlaniGuncelleModeli")

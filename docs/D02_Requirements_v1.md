@@ -415,7 +415,7 @@ aktif randevuda kullanılamamalıdır.
 
 zamanlarda iki
 
-aktif randevuda kullanılamamalıdır.
+aktif cihaz rezervasyonunda kullanılamamalıdır.
 
 ## 5.4 Oda Yönetimi
 

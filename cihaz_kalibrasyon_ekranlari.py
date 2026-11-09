@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, QDate
 import requests
 from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from tekrar_uyari_alanlari import TekrarUyariAlanlari
+from plan_secimi import PlanSecimi
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -35,7 +36,7 @@ class YeniKalibrasyonFormu(QDialog):
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        form.setSpacing(15)
+        form.setSpacing(10)
 
         self.cmb_cihaz = QComboBox()
         self.txt_kurum = QLineEdit()
@@ -61,6 +62,9 @@ class YeniKalibrasyonFormu(QDialog):
         # Tekrar aralığı seçilince geçerlilik tarihi bitişe göre hesaplanır; uyarı süresi zil/dashboard içindir.
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Geçerlilik",
                                           varsayilan_ay=12)
+        # Cihazın kalibrasyon planı varsa kayıt ona bağlanabilir (tarih ve bildirim plandan gelir).
+        self.plan_secimi = PlanSecimi(self.api_url, self.token, True, self.cmb_cihaz, self.dt_bitis, self.tekrar, self)
+        self.plan_secimi.satirlari_ekle(form)
         self.tekrar.satirlari_ekle(form, "Geçerlilik sonu:")
         layout.addLayout(form)
 
@@ -94,6 +98,8 @@ class YeniKalibrasyonFormu(QDialog):
             "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
             "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
+        if self.plan_secimi.plan_id() is not None:
+            veri["plan_id"] = self.plan_secimi.plan_id()
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
             QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
             return

@@ -18,6 +18,8 @@ from modeller import (
     SifreDegistirModeli,
     RandevuOlusturModeli,
     RandevuGuncelleModeli,
+    BakimPlaniGuncelleModeli,
+    BakimPlaniOlusturModeli,
     DanisanKoduModeli,
     OdaOlusturModeli,
     OdaGuncelleModeli,
@@ -2691,6 +2693,18 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             cursor, bakim.cihaz_id, bakim.bakim_baslangic_tarihi, bakim.bakim_bitis_tarihi
         )
 
+        sonraki_bakim = bakim.sonraki_bakim_tarihi
+        if bakim.plan_id is not None:
+            # Tarih boş bırakıldıysa plan periyoduna göre otomatik doldurulur.
+            if sonraki_bakim is None:
+                periyot = plan_periyodu(cursor, bakim.plan_id)
+                if periyot is not None:
+                    sonraki_bakim = bakim.bakim_bitis_tarihi + timedelta(days=periyot)
+            if sonraki_bakim is not None:
+                plani_ilerlet(cursor, bakim.plan_id, bakim.cihaz_id, False, sonraki_bakim)
+            else:
+                raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+
         cursor.execute("""
             INSERT INTO cihaz_bakimlari (
                 cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
@@ -2705,7 +2719,7 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             bakim.bakim_tarihi,           # Buradaki eşleşme düzeltildi
             bakim.bakim_baslangic_tarihi,
             bakim.bakim_bitis_tarihi,
-            bakim.sonraki_bakim_tarihi,
+            sonraki_bakim,
             bakim.uyari_suresi_gun
         ))
         bakim_id = cursor.fetchone()[0]
@@ -2714,7 +2728,8 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         denetim_kaydi_olustur(VT_AYARLARI, "CREATE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
 
         conn.commit()
-        return {"durum": "basarili", "bakim_id": bakim_id}
+        return {"durum": "basarili", "bakim_id": bakim_id,
+                "sonraki_bakim_tarihi": sonraki_bakim.isoformat() if sonraki_bakim else None}
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
@@ -2864,6 +2879,9 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
             cursor, kalib.cihaz_id, kalib.kalibrasyon_baslangic_tarihi, kalib.kalibrasyon_bitis_tarihi
         )
 
+        if kalib.plan_id is not None:
+            plani_ilerlet(cursor, kalib.plan_id, kalib.cihaz_id, True, kalib.gecerlilik_tarihi)
+
         # INSERT sorgusuna ve VALUES kısmına yeni sütunlar eklendi
         cursor.execute("""
             INSERT INTO cihaz_kalibrasyonlari (
@@ -2979,6 +2997,231 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
 # ==========================================
 # DASHBOARD VE RAPORLAMA MODÜLÜ (DASH-001)
 # ==========================================
+
+# ==========================================
+# BAKIM / KALİBRASYON PLANLARI (müdür konfigürasyonu)
+# ==========================================
+def bakim_plani_durumu(kalan_gun, uyari_suresi_gun, aktif_mi):
+    if not aktif_mi:
+        return "Pasif"
+    if kalan_gun < 0:
+        return "Gecikmiş"
+    if kalan_gun <= uyari_suresi_gun:
+        return "Yaklaşıyor"
+    return "Planlı"
+
+
+@app.get("/api/bakim-planlari")
+def bakim_planlarini_listele(
+    cihaz_id: int | None = None,
+    aktif_mi: bool | None = None,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET")),
+):
+    """Cihazların tekrarlayan bakım/kalibrasyon planları (en yakın tarih önce)."""
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        kosullar, parametreler = [], []
+        if cihaz_id is not None:
+            kosullar.append("p.cihaz_id = %s")
+            parametreler.append(cihaz_id)
+        if aktif_mi is not None:
+            kosullar.append("COALESCE(p.aktif_mi, TRUE) = %s")
+            parametreler.append(aktif_mi)
+        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
+        cursor.execute(
+            f"""
+            SELECT p.plan_id, p.cihaz_id, c.envanter_kodu, c.cihaz_adi, p.gorev_turu, p.periyot_gun,
+                   COALESCE(p.uyari_suresi_gun, 0), p.sonraki_gorev_tarihi,
+                   (p.sonraki_gorev_tarihi - CURRENT_DATE), COALESCE(p.aktif_mi, TRUE)
+            FROM cihaz_bakim_planlari p
+            JOIN cihazlar c ON c.cihaz_id = p.cihaz_id
+            {where}
+            ORDER BY p.sonraki_gorev_tarihi, p.plan_id;
+            """,
+            parametreler,
+        )
+        return [
+            {
+                "plan_id": k[0], "cihaz_id": k[1], "envanter_kodu": k[2], "cihaz_adi": k[3],
+                "gorev_turu": k[4], "periyot_gun": k[5], "uyari_suresi_gun": k[6],
+                "sonraki_gorev_tarihi": k[7].isoformat(), "kalan_gun": k[8], "aktif_mi": k[9],
+                "durum": bakim_plani_durumu(k[8], k[6], k[9]),
+            }
+            for k in cursor.fetchall()
+        ]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Bakım planları alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+def plani_ilerlet(cursor, plan_id, cihaz_id, kalibrasyon_mi, sonraki_tarih):
+    """Kayıt bir plana bağlıysa planın 'sonraki tarihini' ilerletir ve o tarihi döndürür.
+
+    sonraki_tarih verilmişse (kullanıcının girdiği) o kullanılır; yoksa kayıt bitişi + periyot
+    ayrıca hesaplanıp çağıran tarafından verilir. Plan başka cihaza ait, pasif ya da türü
+    uyumsuzsa (bakım kaydı ile kalibrasyon planı gibi) kayıt hiç eklenmeden hata verilir.
+    """
+    cursor.execute(
+        "SELECT cihaz_id, gorev_turu, COALESCE(aktif_mi, TRUE) FROM cihaz_bakim_planlari WHERE plan_id = %s FOR UPDATE;",
+        (plan_id,),
+    )
+    plan = cursor.fetchone()
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+    if plan[0] != cihaz_id:
+        raise HTTPException(status_code=422, detail="Seçilen plan bu cihaza ait değil.")
+    if not plan[2]:
+        raise HTTPException(status_code=422, detail="Seçilen plan pasif durumda.")
+    if plan_kalibrasyon_mu(plan[1]) != kalibrasyon_mi:
+        raise HTTPException(status_code=422, detail="Plan türü bu kayıt türüyle uyuşmuyor.")
+    cursor.execute("UPDATE cihaz_bakim_planlari SET sonraki_gorev_tarihi = %s WHERE plan_id = %s;", (sonraki_tarih, plan_id))
+    return sonraki_tarih
+
+
+def plan_kalibrasyon_mu(gorev_turu):
+    """'Kalibrasyon' ile başlayan plan türleri kalibrasyon planıdır; diğerleri bakım planıdır."""
+    return (gorev_turu or "").strip().lower().startswith("kalibrasyon")
+
+
+def plan_periyodu(cursor, plan_id):
+    cursor.execute("SELECT periyot_gun FROM cihaz_bakim_planlari WHERE plan_id = %s;", (plan_id,))
+    satir = cursor.fetchone()
+    return satir[0] if satir else None
+
+
+def _ayni_planli_aktif_kayit_var_mi(cursor, cihaz_id, gorev_turu, haric_plan_id=None):
+    cursor.execute(
+        """
+        SELECT 1 FROM cihaz_bakim_planlari
+        WHERE cihaz_id = %s AND LOWER(gorev_turu) = LOWER(%s) AND COALESCE(aktif_mi, TRUE) = TRUE
+          AND (%s::int IS NULL OR plan_id <> %s::int)
+        LIMIT 1;
+        """,
+        (cihaz_id, gorev_turu, haric_plan_id, haric_plan_id),
+    )
+    return cursor.fetchone() is not None
+
+
+@app.post("/api/bakim-planlari", status_code=201)
+def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM cihazlar WHERE cihaz_id = %s;", (plan.cihaz_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+        if _ayni_planli_aktif_kayit_var_mi(cursor, plan.cihaz_id, plan.gorev_turu):
+            raise HTTPException(status_code=409, detail="Bu cihaz için aynı türde aktif bir plan zaten var.")
+        sonraki = plan.sonraki_gorev_tarihi or (date.today() + timedelta(days=plan.periyot_gun))
+        cursor.execute(
+            """
+            INSERT INTO cihaz_bakim_planlari (cihaz_id, gorev_turu, periyot_gun, uyari_suresi_gun, sonraki_gorev_tarihi, aktif_mi)
+            VALUES (%s, %s, %s, %s, %s, TRUE) RETURNING plan_id;
+            """,
+            (plan.cihaz_id, plan.gorev_turu, plan.periyot_gun, plan.uyari_suresi_gun, sonraki),
+        )
+        plan_id = cursor.fetchone()[0]
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan eklendi.", "plan_id": plan_id,
+                "sonraki_gorev_tarihi": sonraki.isoformat()}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.put("/api/bakim-planlari/{plan_id}")
+def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
+                         kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    degisiklikler = guncelleme.model_dump(exclude_unset=True)
+    if not degisiklikler:
+        raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
+    if any(deger is None for deger in degisiklikler.values()):
+        raise HTTPException(status_code=422, detail="Alanlar boş bırakılamaz.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT cihaz_id, gorev_turu, periyot_gun, COALESCE(uyari_suresi_gun, 0), COALESCE(aktif_mi, TRUE)
+            FROM cihaz_bakim_planlari WHERE plan_id = %s FOR UPDATE;
+            """,
+            (plan_id,),
+        )
+        mevcut = cursor.fetchone()
+        if mevcut is None:
+            raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+        cihaz_id, tur, periyot, uyari, aktif = mevcut
+        tur = degisiklikler.get("gorev_turu", tur)
+        periyot = degisiklikler.get("periyot_gun", periyot)
+        uyari = degisiklikler.get("uyari_suresi_gun", uyari)
+        aktif = degisiklikler.get("aktif_mi", aktif)
+        if uyari > periyot:
+            raise HTTPException(status_code=422, detail="Uyarı süresi periyottan uzun olamaz.")
+        if aktif and _ayni_planli_aktif_kayit_var_mi(cursor, cihaz_id, tur, plan_id):
+            raise HTTPException(status_code=409, detail="Bu cihaz için aynı türde aktif bir plan zaten var.")
+        alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
+        cursor.execute(f"UPDATE cihaz_bakim_planlari SET {alanlar} WHERE plan_id = %s;",
+                       (*degisiklikler.values(), plan_id))
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="UPDATE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan güncellendi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.delete("/api/bakim-planlari/{plan_id}")
+def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cihaz_bakim_planlari WHERE plan_id = %s RETURNING plan_id;", (plan_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Plan bulunamadı.")
+        denetim_kaydi_olustur(VT_AYARLARI, olay_turu="DELETE", kullanici_id=kullanici_id,
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Plan silindi."}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 @app.get("/api/dashboard/ozet")
 def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
@@ -3184,6 +3427,29 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
                     "gecikmis": kalan_gun < 0,
                     "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
                 })
+
+        # 3. PLANLI BAKIM/KALİBRASYONLAR
+        # Plan, kayıtla aynı cihaz ve tarihi gösteriyorsa (kayıt plana bağlıysa böyledir) tekrar listelenmez.
+        mevcut = {(i["cihaz_adi"], i["tarih"]) for i in islemler}
+        cursor.execute("""
+            SELECT c.envanter_kodu, c.cihaz_adi, p.gorev_turu, p.sonraki_gorev_tarihi, COALESCE(p.uyari_suresi_gun, 0)
+            FROM cihaz_bakim_planlari p
+            JOIN cihazlar c ON c.cihaz_id = p.cihaz_id
+            WHERE COALESCE(p.aktif_mi, TRUE) = TRUE AND c.durum::text <> 'Kullanim_Disi'
+        """)
+        for kod, ad, tur, hedef_tarih, uyari in cursor.fetchall():
+            kalan_gun = (hedef_tarih - bugun).days
+            etiket = f"{kod} - {ad}"
+            if kalan_gun > uyari or (etiket, hedef_tarih.strftime("%d.%m.%Y")) in mevcut:
+                continue
+            islemler.append({
+                "cihaz_adi": etiket,
+                "islem_turu": "Kalibrasyon" if plan_kalibrasyon_mu(tur) else "Bakım",
+                "tarih": hedef_tarih.strftime("%d.%m.%Y"),
+                "kalan_gun": kalan_gun,
+                "gecikmis": kalan_gun < 0,
+                "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
+            })
 
         islemler.sort(key=lambda x: x["kalan_gun"])
         return islemler[:10]

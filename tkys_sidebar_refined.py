@@ -46,6 +46,7 @@ PAGE_ICONS = {
     "Cihaz Envanteri": "chip",
     "Cihaz Rezervasyonu": "pin",
     "Bakım Kayıtları": "wrench",
+    "Bakım Planları": "calendar",
     "Kalibrasyon": "target",
     "Arıza Kayıtları": "warning",
     "Cihaz Raporları": "chart",
