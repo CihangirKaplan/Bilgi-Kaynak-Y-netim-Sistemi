@@ -5,15 +5,16 @@ from api_yoneticisi import (
     oturum_hatasi_mi,
 )
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QFrame
+    QWidget, QTableWidget, QTableWidgetItem,
+    QHeaderView, QAbstractItemView
 )
-from PySide6.QtWidgets import (
-    QDialog, QLineEdit, QComboBox, QHBoxLayout, QLabel,
-    QPushButton, QMessageBox, QScrollArea
-)
+
 from PySide6.QtCore import Qt, QRegularExpression, QTimer
 from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
+                               QLineEdit, QComboBox, QPushButton, QMessageBox,
+                               QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
+
 
 def kayit_tarihi_bicimle(deger):
     """Kayıt tarihini GG.AA.YYYY biçiminde göster."""
@@ -689,21 +690,8 @@ class YetkiOzetiKarti(QFrame):
         return max(min(toplam + 8, 230), 60)
 
 
-<<<<<<< Updated upstream
 class KullaniciOlusturFormu(QDialog):
     """Kullanıcı, personel ve gerekirse öğrenci kaydını tek işlemde oluşturur."""
-=======
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
-                               QLineEdit, QComboBox, QPushButton, QMessageBox,
-                               QListWidget, QListWidgetItem, QLabel, QFrame)
-from PySide6.QtCore import Qt, QTimer
-# Gerekli diğer importlarınızı (ROL_ID_ADLARI, DANISMA_OGRENCISI vb.) var sayıyorum.
-# from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi vb.
-
-
-class KullaniciOlusturFormu(QDialog):
-    """Kullanıcı oluşturma ve personel atamayı tek pencerede birleştirir."""
->>>>>>> Stashed changes
 
     def __init__(self, api_url, token, ebeveyn=None):
         super().__init__(ebeveyn)
@@ -745,17 +733,10 @@ class KullaniciOlusturFormu(QDialog):
         self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
         layout.addWidget(self.combo_rol)
 
-<<<<<<< Updated upstream
         # Seçilen rolün neler yapabildiğini gösterir.
         self.yetki_karti = YetkiOzetiKarti()
         self.yetki_karti.setMinimumWidth(420)   # SetFixedSize, pencere genişliğini içerikten alır
         layout.addWidget(self.yetki_karti)
-=======
-        # Seçilen rolün neler yapabildiğini gösterir. (Sizin kodunuz)
-        if hasattr(self, 'YetkiOzetiKarti'): # Eğer import edilmişse kullan
-             self.yetki_karti = YetkiOzetiKarti()
-             layout.addWidget(self.yetki_karti)
->>>>>>> Stashed changes
 
         # Yalnızca "Danışma Öğrencisi" seçilince görünür. (Sizin kodunuz)
         try:
@@ -798,14 +779,11 @@ class KullaniciOlusturFormu(QDialog):
         
         self.kullanici_adi_elle_degisti = False
         self._son_kontrol_edilen_ad = None
-<<<<<<< Updated upstream
         # Pencere boyutunu, içerik yerleştikten sonra bir kez daha içeriğe göre ayarlar.
         self._boyut_zamanlayici = QTimer(self)
         self._boyut_zamanlayici.setSingleShot(True)
         self._boyut_zamanlayici.timeout.connect(self.adjustSize)
         # Ad soyad yazılırken kısa bir bekleme sonrası sunucuya "bu ad boş mu?" diye sorulur.
-=======
->>>>>>> Stashed changes
         self._netlestirme_zamanlayici = QTimer(self)
         self._netlestirme_zamanlayici.setSingleShot(True)
         self._netlestirme_zamanlayici.setInterval(400)
@@ -845,8 +823,6 @@ class KullaniciOlusturFormu(QDialog):
         self.lbl_sonuc.setWordWrap(True)
         self.lbl_sonuc.setTextInteractionFlags(Qt.TextSelectableByMouse)
         sonuc_lay.addWidget(self.lbl_sonuc)
-<<<<<<< Updated upstream
-=======
         
         self.btn_personel_ata = QPushButton("Personel Olarak Ata")
         self.btn_personel_ata.setObjectName("btn_ata")
@@ -856,7 +832,6 @@ class KullaniciOlusturFormu(QDialog):
         except AttributeError:
             pass
         sonuc_lay.addWidget(self.btn_personel_ata)
->>>>>>> Stashed changes
         self.sonuc_kutusu.setVisible(False)
         layout.addWidget(self.sonuc_kutusu)
 
@@ -1028,29 +1003,6 @@ class KullaniciOlusturFormu(QDialog):
             istek_verisi.update(ogrenci)
 
         try:
-<<<<<<< Updated upstream
-            cevap = oturum_kontrollu_istek(
-                "POST", f"{self.api_url}/api/kullanicilar",
-                json=istek_verisi, headers=headers, timeout=5,
-            )
-            if oturum_hatasi_mi(cevap):
-                return
-            if (
-                cevap.status_code == 409
-                and otomatik_ad
-                and sunucu_hata_mesaji(cevap, "") == "Bu kullanıcı adı zaten kullanılıyor."
-            ):
-                # Aynı anda başka biri aynı adı aldıysa bir sonraki boş ad ile yeniden dene.
-                kullanici_adi = musait_kullanici_adi(self.api_url, self.token, kullanici_adi)
-                self.input_kullanici_adi.setText(kullanici_adi)
-                istek_verisi["kullanici_adi"] = kullanici_adi
-                cevap = oturum_kontrollu_istek(
-                    "POST", f"{self.api_url}/api/kullanicilar",
-                    json=istek_verisi, headers=headers, timeout=5,
-                )
-                if oturum_hatasi_mi(cevap):
-                    return
-=======
             import requests # Veya oturum_kontrollu_istek
             
             # JSON PAYLOADINA ODA_IDLERI EKLENDİ
@@ -1071,7 +1023,6 @@ class KullaniciOlusturFormu(QDialog):
                     cevap = requests.post(f"{self.api_url}/api/kullanicilar", json=istek_verisi, headers=headers, timeout=5)
                 except NameError:
                     pass
->>>>>>> Stashed changes
 
             if cevap.status_code == 201:
                 sonuc = cevap.json()
@@ -1134,8 +1085,6 @@ class KullaniciOlusturFormu(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
-<<<<<<< Updated upstream
-=======
     def personel_ata_tiklandi(self):
         # Sizin orijinal kodunuz (aynen korundu)
         if self.olusturulan_kullanici is None:
@@ -1171,7 +1120,6 @@ class KullaniciOlusturFormu(QDialog):
             if yanit != QMessageBox.Yes:
                 return
         super().reject()
->>>>>>> Stashed changes
 
 class RolDegistirFormu(QDialog):
     def __init__(self, api_url, token, kullanici_id, kullanici_adi, mevcut_rol, ebeveyn=None):

@@ -1,12 +1,7 @@
 import datetime
 from datetime import date
-<<<<<<< Updated upstream
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional
-=======
-from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
->>>>>>> Stashed changes
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
 from sqlalchemy.orm import declarative_base
