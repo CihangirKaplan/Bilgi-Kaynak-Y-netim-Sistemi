@@ -872,16 +872,12 @@ QLabel {
             if isinstance(ozet, dict):
                 ariza = int(ozet.get("acik_ariza_sayisi", 0) or 0)
 
-                if ariza > 0:
-                    hedef = (
-                        "Arıza Kayıtları"
-                        if "Arıza Kayıtları" in self.nav_btnler
-                        else "Cihaz Envanteri"
-                    )
+                # Yetkisi olmayan sayfanın bildirimi hiç gösterilmez (başka sayfaya yönlendirilmez).
+                if ariza > 0 and self._sayfa_izinli_mi("Arıza Kayıtları"):
                     self._bildirimler.append((
                         "Cihaz Uyarıları",
                         f"⚠️ {ariza} açık arıza kaydı çözüm bekliyor.",
-                        hedef
+                        "Arıza Kayıtları"
                     ))
                     self._bildirim_sayisi += 1
 
@@ -909,13 +905,13 @@ QLabel {
                         f"({zaman})"
                     )
 
-                    # Bildirim kendi sayfasını açar (Bakım Kayıtları / Kalibrasyon); kullanıcının
-                    # o sayfaya yetkisi yoksa Cihaz Envanteri'ne yönlenir.
+                    # Bildirim kendi sayfasını açar (Bakım Kayıtları / Kalibrasyon). Kullanıcının o sayfaya
+                    # yetkisi yoksa bildirim hiç gösterilmez (başka sayfaya yönlendirilmez).
                     tur = islem.get("islem_turu")
                     hedef = "Bakım Kayıtları" if tur == "Bakım" else (
-                        "Kalibrasyon" if tur == "Kalibrasyon" else "Cihaz Envanteri")
-                    if hedef not in self.nav_btnler:
-                        hedef = "Cihaz Envanteri"
+                        "Kalibrasyon" if tur == "Kalibrasyon" else None)
+                    if hedef is None or not self._sayfa_izinli_mi(hedef):
+                        continue
 
                     self._bildirimler.append((
                         "Cihaz Uyarıları", metin, hedef
@@ -990,6 +986,16 @@ QLabel {
         )
 
         self.btn_bildirim.setIcon(ust_ikonu(ikon_adi))
+
+    def _sayfa_izinli_mi(self, sayfa_adi):
+        """Kullanıcının menüdeki bir sayfaya yetkisi var mı? Yetkisiz olunan sayfanın bildirimi gösterilmez.
+
+        Menü çizilmeden önce de doğru çalışsın diye menü öğesinin iznine (izin_var) bakar; nav_btnler'e değil."""
+        for _, ogeler in MENU:
+            for oge in ogeler:
+                if oge["ad"] == sayfa_adi:
+                    return oge["izin"] is None or izin_var(self.aktif_rol, oge["izin"])
+        return False
 
     def _bildirimden_sayfaya_git(self, sayfa_adi):
         """Bildirimin ilgili oldugu mevcut modulu acar."""
@@ -1530,7 +1536,9 @@ QLabel {
         self.istatistik_paneli = DashboardEkrani(
             self.api_url,
             self.token,
-            cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol)
+            cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
+            sayfa_ac=self._bildirimden_sayfaya_git,
+            sayfa_izinli_mi=self._sayfa_izinli_mi,
         )
         lay.addWidget(self.istatistik_paneli)
 
