@@ -201,7 +201,15 @@ MENU = [
              aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
                       ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
                       ("🏢  Faaliyet Birimleri", "Faaliyet birimlerini yönetme"),
+                      ("📋  Faaliyet Türleri", "Faaliyet kayıtlarını düzenleme"),
                       ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
+        dict(
+            ikon="👥",
+            ad="Öğrenciler",
+            izin="Faaliyet kayıtlarını düzenleme",
+            aciklama="Öğrenci kayıtları ve aktiflik yönetimi",
+            aksiyon=[]
+        ),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
@@ -1387,6 +1395,7 @@ QLabel {
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
     SAYFA_YENILEME = {
+        "Öğrenciler": ("ogrenciler_ekrani", "yenile"),
         "Cihaz Uygunluğu": ("aktif_uygunluk_ekrani", "verileri_yukle"),
         "Cihaz Envanteri": ("aktif_cihaz_ekrani", "verileri_yukle"),
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
@@ -1424,6 +1433,23 @@ QLabel {
             self.master_stack.setCurrentIndex(0)
             self.stack.setCurrentIndex(idx)
         self._sayfayi_yenile(ad)
+
+    def ogrenciler_sayfasina_git(self, yeni_ekle=False):
+        if "Öğrenciler" not in self.nav_btnler:
+            QMessageBox.warning(
+                self,
+                "Yetki",
+                "Öğrenciler sayfasına erişim yetkiniz yok."
+            )
+            return
+
+        self._bildirimden_sayfaya_git("Öğrenciler")
+
+        if yeni_ekle:
+            QTimer.singleShot(
+                0,
+                self.ogrenciler_ekrani.yeni_ogrenci_ekle
+            )
 
     def ana_ekrana_don(self):
         self.master_stack.setCurrentIndex(0)
@@ -1591,7 +1617,7 @@ QLabel {
         bl.addWidget(ikon)
         bl.addLayout(mt)
         bl.addStretch()
-        if oge["ad"] != "Danışma Masası":
+        if oge["ad"] not in ("Danışma Masası", "Öğrenciler"):
             bl.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(bk)
 
@@ -1662,6 +1688,8 @@ QLabel {
                     btn.clicked.connect(self.rol_duzenle_diyalog_ac)
                 elif "Faaliyet Birimleri" in etiket:
                     btn.clicked.connect(self.faaliyet_birimleri_ekrani_ac)
+                elif "Faaliyet Türleri" in etiket:
+                    btn.clicked.connect(self.faaliyet_turleri_ekrani_ac)
                 elif "İzin Düzenle" in etiket:
                     btn.clicked.connect(self.izin_duzenle_tetikle)
 
@@ -1824,6 +1852,16 @@ QLabel {
             il.addWidget(self.randevu_ana_ekrani)
 
             lay.addWidget(ik, 1)
+
+        elif oge["ad"] == "Öğrenciler":
+            from ogrenci_yonetim_ekrani import OgrenciYonetimEkrani
+
+            self.ogrenciler_ekrani = OgrenciYonetimEkrani(
+                api_url=self.api_url,
+                token=self.token,
+                parent=self
+            )
+            lay.addWidget(self.ogrenciler_ekrani, 1)
 
         elif oge["ad"] == "Faaliyet Kayıtları":
             ik = kart_olustur()
@@ -2131,6 +2169,21 @@ QLabel {
                     QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
             except Exception as e:
                 QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+
+    def faaliyet_turleri_ekrani_ac(self):
+        from faaliyet_turleri_dialog import FaaliyetTurleriDialog
+
+        dialog = FaaliyetTurleriDialog(
+            self.api_url,
+            self.token,
+            self
+        )
+        dialog.exec()
+
+        # Faaliyet türü veya puanı değişmiş olabilir.
+        # Pencere kapatılınca ana faaliyet tablosunu yenile.
+        if hasattr(self, "tablo_faaliyetler"):
+            self.faaliyet_tablosunu_guncelle()
 
     def faaliyet_birimleri_ekrani_ac(self):
         # Az önce yazdığımız arayüz dosyasını çağırıyoruz

@@ -83,6 +83,7 @@ def test_quality_audit_importerror_commit_engellenmeli(
 
     cursor.fetchone.return_value = (501,)
     cursor.fetchall.return_value = []  # çakışan rezervasyon yok
+    cursor.rowcount = 1  # Başarılı INSERT işlemini taklit et
 
     with (
         patch(
