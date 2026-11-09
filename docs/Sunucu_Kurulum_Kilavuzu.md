@@ -84,7 +84,39 @@ Bu kural yalnızca "Özel" (Private) ağ profilinde geçerlidir. Ağınız "Gene
 ağ yöneticinize danışın. **PostgreSQL portunu (5432) ağa açmayın;** istemciler veritabanına
 doğrudan değil, yalnızca sunucu üzerinden bağlanır.
 
-## 8. İstemci bilgisayarlarında
+## 8. Sunucunun bilgisayar açılınca kendiliğinden başlaması
+
+Her sabah elle terminal açıp `uvicorn` yazmamak için sunucu, Windows Görev Zamanlayıcı ile bilgisayar
+açılınca kendiliğinden başlatılır. **Yönetici olarak açılmış PowerShell'de**, proje klasöründe,
+sanal ortam etkinken:
+
+    python scripts/windows/sunucu_kurulum.py
+
+Bu komut `TKYS_Sunucu` adlı görevi oluşturur. Görev, bilgisayar açıldıktan 30 saniye sonra (kimse giriş
+yapmasa da) `scripts/windows/sunucu_baslat.py` betiğini çalıştırır. Betik önce PostgreSQL'in hazır olmasını
+bekler, sunucuyu başlatır ve sunucu beklenmedik şekilde kapanırsa 10 saniye sonra yeniden başlatır.
+
+Hemen denemek için (bilgisayarı yeniden başlatmadan):
+
+    schtasks /Run /TN TKYS_Sunucu
+
+Sunucunun çalıştığını `http://SUNUCU_ADRESI:8000/docs` adresini tarayıcıda açarak görebilirsiniz.
+Sunucunun çıktıları ve hataları `logs\sunucu.log` dosyasına yazılır (5 MB'ı aşınca yeni dosyaya geçilir).
+
+Sorun çıkarsa:
+
+- Görev çalışmıyorsa ya da sunucu açılmıyorsa önce `logs\sunucu.log` dosyasına bakın.
+- Python yolu başka bir kullanıcıya aitse ve "SYSTEM" hesabı ona erişemiyorsa, görevi bunun yerine
+  kullanıcı giriş yapınca başlatın: `python scripts/windows/sunucu_kurulum.py --oturum`
+  (bu durumda bilgisayar açıldıktan sonra o kullanıcının giriş yapması gerekir).
+- Görevi silmek için: `python scripts/windows/sunucu_kurulum.py --kaldir`
+
+Sunucu kodunu güncelledikten sonra çalışan sunucunun yeni kodu alması için görevi yeniden başlatın:
+
+    schtasks /End /TN TKYS_Sunucu
+    schtasks /Run /TN TKYS_Sunucu
+
+## 9. İstemci bilgisayarlarında
 
 Her istemcide proje kurulu olmalı (3. adımdaki sanal ortam ve bağımlılıklar yeterli;
 PostgreSQL gerekmez). Sunucu adresini verip uygulamayı açın:
@@ -95,13 +127,13 @@ PostgreSQL gerekmez). Sunucu adresini verip uygulamayı açın:
 Bağlanamazsa önce istemci bilgisayarın tarayıcısından `http://192.168.1.20:8000/docs`
 adresini açmayı deneyin. Açılmıyorsa sorun ağ/güvenlik duvarındadır, uygulamada değil.
 
-## 9. Yedekleme
+## 10. Yedekleme
 
 Yedekleme için `scripts/windows/README.md` dosyasındaki adımları uygulayın
 (günlük otomatik yedek, 7 günlük rotasyon, geri yükleme doğrulaması).
 Yedeklerin en az bir kopyasını sunucu bilgisayarının dışında (harici disk gibi) saklayın.
 
-## 10. Güncelleme
+## 11. Güncelleme
 
 Yeni sürüm geldiğinde sunucu bilgisayarında, sunucuyu durdurduktan sonra:
 
@@ -119,5 +151,3 @@ başlatılmalıdır.
 
 - Sunucu şu an bağlantıları şifresiz HTTP ile alır. Yalnızca güvendiğiniz kapalı yerel ağda
   kullanın; internete açmayın.
-- Sunucunun bilgisayar açılınca kendiliğinden başlaması (Windows hizmeti / zamanlanmış görev)
-  henüz bu kılavuzda yoktur; şimdilik bir terminalde elle başlatılır ve terminal açık kalmalıdır.

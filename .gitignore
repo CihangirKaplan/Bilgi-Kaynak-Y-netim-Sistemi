@@ -6,6 +6,9 @@ __pycache__/
 .venv/
 .env
 
+# Sunucu gunluk dosyalari (scripts/windows/sunucu_baslat.py)
+logs/
+
 # PostgreSQL veritabani yedekleri
 backups/
 *.dump
