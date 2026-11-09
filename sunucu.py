@@ -71,8 +71,13 @@ VT_AYARLARI = {
 def otomatik_danisan_kodu_uret(cursor) -> str:
     yil = datetime.now().year
     cursor.execute("SELECT nextval('danisan_kodu_seq');")
-    sira = cursor.fetchone()[0]
-    return f"DAN-{yil}-{sira:04d}"
+    sira_degeri = cursor.fetchone()[0]
+    
+    # Eğer veritabanından direkt sayı geliyorsa formatlıyoruz, 
+    # zaten metin geldiyse direkt olarak dönüyoruz:
+    if isinstance(sira_degeri, int):
+        return f"DAN-{yil}-{sira_degeri:04d}"
+    return str(sira_degeri)
 
 def token_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
@@ -418,6 +423,9 @@ def kullanici_olustur(
     conn = None
     cursor = None
     asama = "kullanici"
+    personel_id = None
+    personel_kodu = None
+    ogrenci_id = None
 
     rol_kodlari = {
         "PSIKOLOG": "PSK",
@@ -1676,6 +1684,9 @@ def randevu_deadlock_yeniden_dene(fonksiyon):
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+    
+    danisan_kod_id = getattr(randevu, 'danisan_kod_id', None)
+    
     conn = None
     cursor = None
     try:
@@ -1760,23 +1771,23 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
 
 @app.get("/api/randevular")
 def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))): 
-    
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
         
-        # İstek yapan kullanıcının sadece rolünü öğreniyoruz
+        # Rol adını net bir şekilde string olarak almak için tablodaki sütun adını garantiye alıyoruz
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol_sonuc = cursor.fetchone()
         
         if not rol_sonuc: 
             return []
             
-        rol_adi = rol_sonuc[0].lower()
+        # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
+        rol_adi = str(rol_sonuc[0]).lower()
         
-        # 1. DURUM: Psikolog ise SADECE ona atanmış ODALARDAKİ randevuları getir
+        # 1. DURUM: Psikolog ise
         if "psikolog" in rol_adi:
             sorgu = """
                 SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi 
@@ -1787,8 +1798,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTU
             """
             cursor.execute(sorgu, (kullanici_id,))
             
-        # 2. DURUM: Psikolog DEĞİLSE ve izin_kontrol'ü (Depends) geçebildiyse 
-        # zaten yetkisi (Admin, Danışma Öğrencisi vb.) vardır. Tüm randevuları göster.
+        # 2. DURUM: Diğer roller (Admin vb.)
         else:
             cursor.execute(
                 "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi "
@@ -1806,7 +1816,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTU
                 "baslangic_zamani": kayit[4], 
                 "bitis_zamani": kayit[5], 
                 "durum": kayit[6],
-                "olusturma_tarihi": kayit[7] 
+                "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None
             } for kayit in kayitlar
         ]
     finally:
@@ -1971,7 +1981,10 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
         if conn is not None: conn.close()
 
 @app.get("/api/psikologlar/{personel_id}/odalar")
-def psikolog_odalarini_getir(personel_id: int):
+def psikolog_odalarini_getir(
+    personel_id: int,
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")) 
+):
     conn = None
     cursor = None
     try:
