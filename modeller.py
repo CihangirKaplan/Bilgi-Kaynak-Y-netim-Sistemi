@@ -176,6 +176,21 @@ class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
 
+
+class ParolaSifirlamaTalebiModeli(BaseModel):
+    """Giriş yapmadan gönderilen parola sıfırlama talebi: yalnızca kullanıcı adı."""
+    model_config = ConfigDict(extra="forbid")
+
+    kullanici_adi: str = Field(min_length=1, max_length=100)
+
+    @field_validator("kullanici_adi")
+    @classmethod
+    def kullanici_adi_temizle(cls, deger):
+        deger = deger.strip()
+        if not deger:
+            raise ValueError("Kullanıcı adı boş olamaz.")
+        return deger
+
 # ==========================================
 # ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
 # ==========================================

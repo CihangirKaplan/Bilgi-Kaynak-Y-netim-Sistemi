@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, date
 from modeller import (
     FaaliyetBirimIslemModeli,
     GirisModeli,
+    ParolaSifirlamaTalebiModeli,
     RolDegistirModeli,
     KullaniciOlusturModeli,
     PersonelOlusturModeli,
@@ -1291,6 +1292,16 @@ def kullanici_parola_sifirla(
             )
         )
 
+        # Bu kullanıcının bekleyen parola sıfırlama talebi varsa karşılanmış olur.
+        cursor.execute(
+            """
+            UPDATE parola_sifirlama_talepleri
+            SET durum = 'TAMAMLANDI', kapanis_zamani = CURRENT_TIMESTAMP, kapatan_kullanici_id = %s
+            WHERE kullanici_id = %s AND durum = 'ACIK';
+            """,
+            (islem_yapan_id, kullanici_id)
+        )
+
         conn.commit()
 
         response.headers["Cache-Control"] = "no-store"
@@ -1315,6 +1326,170 @@ def kullanici_parola_sifirla(
             detail="Parola sıfırlama işlemi tamamlanamadı."
         )
 
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+# ==========================================
+# PAROLA SIFIRLAMA TALEPLERI
+# Kullanıcı giriş ekranından yöneticiye bildirir; yönetici bildirimden görüp parolayı sıfırlar.
+# ==========================================
+PAROLA_TALEBI_ACIK_UST_SINIR = 50
+PAROLA_TALEBI_GENEL_MESAJ = (
+    "Talebiniz alındı. Kullanıcı adınız doğruysa yöneticinize iletilmiştir; "
+    "geçici parolanızı yöneticinizden alın."
+)
+
+
+@app.post("/api/parola-sifirlama-talebi")
+def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
+    """Giriş yapmadan parola sıfırlama talebi açar.
+
+    Kullanıcı adının var olup olmadığı yanıttan anlaşılmaz (hep aynı mesaj döner). Her kullanıcı için en
+    fazla bir açık talep tutulur; pasif kullanıcılar için talep açılmaz."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT kullanici_id, aktif_mi FROM kullanicilar WHERE kullanici_adi = %s;",
+            (talep.kullanici_adi,)
+        )
+        kullanici = cursor.fetchone()
+        genel = {"durum": "alindi", "mesaj": PAROLA_TALEBI_GENEL_MESAJ}
+
+        if kullanici is None or not kullanici[1]:
+            return genel
+
+        cursor.execute(
+            "SELECT 1 FROM parola_sifirlama_talepleri WHERE kullanici_id = %s AND durum = 'ACIK';",
+            (kullanici[0],)
+        )
+        if cursor.fetchone() is not None:
+            return genel                               # zaten bekleyen talebi var
+
+        cursor.execute("SELECT COUNT(*) FROM parola_sifirlama_talepleri WHERE durum = 'ACIK';")
+        if cursor.fetchone()[0] >= PAROLA_TALEBI_ACIK_UST_SINIR:
+            raise HTTPException(
+                status_code=429,
+                detail="Çok fazla bekleyen talep var. Lütfen yöneticinize doğrudan ulaşın."
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO parola_sifirlama_talepleri (kullanici_id)
+            VALUES (%s)
+            ON CONFLICT (kullanici_id) WHERE durum = 'ACIK' DO NOTHING
+            RETURNING talep_id;
+            """,
+            (kullanici[0],)
+        )
+        yeni = cursor.fetchone()
+        if yeni is not None:
+            from denetim import denetim_kaydi_olustur
+            denetim_kaydi_olustur(
+                VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici[0],
+                hedef_tablo="parola_sifirlama_talepleri", hedef_kayit_id=yeni[0], mevcut_cursor=cursor
+            )
+        conn.commit()
+        return genel
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Talep şu anda alınamadı. Lütfen daha sonra tekrar deneyin.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/parola-sifirlama-talepleri")
+def parola_sifirlama_taleplerini_listele(
+    response: Response,
+    kullanici_id: int = Depends(izin_kontrol("KULLANICI_PAROLA_SIFIRLA"))
+):
+    """Bekleyen (açık) parola sıfırlama talepleri; en eski talep önce."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT t.talep_id, k.kullanici_id, k.kullanici_adi, r.rol_adi, t.talep_zamani,
+                   FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - t.talep_zamani)) / 60)::int
+            FROM parola_sifirlama_talepleri t
+            JOIN kullanicilar k ON k.kullanici_id = t.kullanici_id
+            LEFT JOIN roller r ON r.rol_id = k.rol_id
+            WHERE t.durum = 'ACIK' AND k.aktif_mi
+            ORDER BY t.talep_zamani, t.talep_id;
+            """
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return [
+            {
+                "talep_id": s[0], "kullanici_id": s[1], "kullanici_adi": s[2], "rol_adi": s[3],
+                "talep_zamani": s[4].isoformat(), "bekleme_dakika": max(int(s[5] or 0), 0),
+            }
+            for s in cursor.fetchall()
+        ]
+    except Exception:
+        raise HTTPException(status_code=500, detail="Parola sıfırlama talepleri alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.patch("/api/parola-sifirlama-talepleri/{talep_id}/kapat")
+def parola_sifirlama_talebini_kapat(
+    talep_id: int,
+    islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PAROLA_SIFIRLA"))
+):
+    """Bekleyen bir talebi parolayı sıfırlamadan kapatır (örn. kullanıcı parolasını hatırladı)."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE parola_sifirlama_talepleri
+            SET durum = 'KAPATILDI', kapanis_zamani = CURRENT_TIMESTAMP, kapatan_kullanici_id = %s
+            WHERE talep_id = %s AND durum = 'ACIK'
+            RETURNING talep_id;
+            """,
+            (islem_yapan_id, talep_id)
+        )
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Bekleyen talep bulunamadı.")
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(
+            VT_AYARLARI, olay_turu="UPDATE", kullanici_id=islem_yapan_id,
+            hedef_tablo="parola_sifirlama_talepleri", hedef_kayit_id=talep_id, mevcut_cursor=cursor
+        )
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Talep kapatıldı."}
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Talep kapatılamadı.")
     finally:
         if cursor is not None:
             cursor.close()
