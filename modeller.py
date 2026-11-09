@@ -1,3 +1,4 @@
+from typing import Literal
 import datetime
 from datetime import date
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
@@ -450,7 +451,7 @@ class OgrenciEkleModeli(BaseModel):
     ad_soyad: str
     ogrenci_numarasi: str
     telefon: Optional[str] = None
-    tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
+    tur: Literal["GONULLU"]
     bolum: Optional[str] = None
     sinif: Optional[str] = None
 

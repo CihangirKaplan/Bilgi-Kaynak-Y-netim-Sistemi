@@ -2,6 +2,8 @@ import os
 from uuid import uuid4
 
 import psycopg2
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
@@ -24,6 +26,18 @@ def test_parola_sifirlama_gercek_postgresql():
         with conn.cursor() as cursor:
             cursor.execute("SELECT current_database()")
             assert cursor.fetchone()[0] == "crkys_alembic_test"
+
+            cursor.execute("SELECT version_num FROM alembic_version")
+            mevcut_surumler = {satir[0] for satir in cursor.fetchall()}
+
+            alembic_config = Config("alembic.ini")
+            script = ScriptDirectory.from_config(alembic_config)
+            beklenen_surumler = set(script.get_heads())
+
+            assert mevcut_surumler == beklenen_surumler, (
+                f"Veritabanı migration sürümü güncel değil: "
+                f"{mevcut_surumler} != {beklenen_surumler}"
+            )
 
             cursor.execute("""
                 SELECT rol_adi, rol_id

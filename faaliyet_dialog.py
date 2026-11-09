@@ -6,7 +6,7 @@ from api_yoneticisi import (
 )
 
 # Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
-from ogrenci_dialog import OgrenciEkleDialog
+from PySide6.QtCore import QTimer
 
 class FaaliyetEkleDialog(QDialog):
     # DİKKAT: __init__ içine mevcut_veri=None ekledik!
@@ -146,10 +146,26 @@ class FaaliyetEkleDialog(QDialog):
             self.sb_miktar.setValue(int(self.mevcut_veri["miktar"]))
 
     def yeni_ogrenci_ekle_formunu_ac(self):
-        dialog = OgrenciEkleDialog(self.api_url, self.token, self)
-        if dialog.exec():
-            self.ogrencileri_yukle()
-            QMessageBox.information(self, "Bilgi", "Liste güncellendi, yeni eklediğiniz öğrenciyi seçebilirsiniz.")
+        ana_pencere = self.parent()
+
+        if not hasattr(
+            ana_pencere, "ogrenciler_sayfasina_git"
+        ):
+            QMessageBox.warning(
+                self,
+                "Uyarı",
+                "Öğrenciler sayfasına geçilemiyor."
+            )
+            return
+
+        self.reject()
+
+        QTimer.singleShot(
+            0,
+            lambda: ana_pencere.ogrenciler_sayfasina_git(
+                yeni_ekle=True
+            )
+        )
 
     def kaydet_tiklandi(self):
         ogrenci_id = self.cb_ogrenci.currentData()

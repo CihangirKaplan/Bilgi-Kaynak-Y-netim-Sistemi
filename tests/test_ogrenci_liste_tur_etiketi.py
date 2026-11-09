@@ -1,7 +1,7 @@
 """Öğrenci listelerinde danışma masası öğrencilerinin belirtilmesi.
 
 Tüm öğrenciler listelenir; her öğrencinin yanında türü (gönüllü, danışma masası,
-asistan) belirtilir.
+danışma masası) belirtilir.
 """
 from unittest.mock import MagicMock, patch
 
@@ -30,7 +30,7 @@ def test_faaliyet_ogrenci_listesinde_her_ogrencinin_turu_belirtilir():
     satirlar = [
         (1, "Ali Yılmaz", "2021001", "GONULLU"),
         (2, "Veli Kaya", "2021002", "DANISMA_MASASI"),
-        (3, "Ayşe Demir", "2021003", "ASISTAN"),
+        (3, "Ayşe Demir", "2021003", "GONULLU"),
     ]
     with patch("sunucu.psycopg2.connect", return_value=sahte_baglanti(satirlar)):
         with TestClient(app) as istemci:
@@ -41,7 +41,7 @@ def test_faaliyet_ogrenci_listesinde_her_ogrencinin_turu_belirtilir():
     assert len(liste) == 3  # tüm türler listelenir
     assert liste[1]["metin"] == "Ali Yılmaz - [2021001] (Gönüllü Öğrenci)"
     assert liste[2]["metin"] == "Veli Kaya - [2021002] (Danışma Masası Öğrencisi)"
-    assert liste[3]["metin"] == "Ayşe Demir - [2021003] (Asistan Öğrenci)"
+    assert liste[3]["metin"] == "Ayşe Demir - [2021003] (Gönüllü Öğrenci)"
     assert liste[2]["tur"] == "DANISMA_MASASI"
 
 
