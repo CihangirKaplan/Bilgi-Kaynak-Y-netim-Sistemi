@@ -69,6 +69,8 @@ jobs:
             --ignore=tests/test_api_audit_rollback_quality.py \
             --ignore=tests/test_kullanici_personel_postgresql_quality.py \
             --ignore=tests/test_parola_sifirlama_pg_quality.py \
+            --ignore=tests/test_ogrenci_yonetimi_postgresql_quality.py \
+            --ignore=tests/test_faaliyet_turleri_postgresql_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
             --cov=sunucu \
             --cov=guvenlik \
@@ -84,3 +86,85 @@ jobs:
           name: tkys-qa-coverage
           path: coverage.xml
           if-no-files-found: ignore
+
+  postgresql-tests:
+    name: PostgreSQL Entegrasyon Testleri
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+          POSTGRES_DB: crkys_alembic_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d crkys_alembic_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_NAME: crkys_alembic_test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres_test_password
+      TKYS_PG_TEST_ONAY: EVET
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python 3.13 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Sistem kutuphanelerini kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0
+
+      - name: Python bagimliliklarini kur
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Test veritabanini dogrula
+        run: |
+          python - <<'PY'
+          import psycopg2
+          from sunucu import VT_AYARLARI
+
+          assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
+          assert VT_AYARLARI["host"] in ("127.0.0.1", "localhost")
+
+          with psycopg2.connect(**VT_AYARLARI) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT current_database()")
+                  assert cur.fetchone()[0] == "crkys_alembic_test"
+
+          print("PostgreSQL test veritabani dogrulandi.")
+          PY
+
+      - name: Test icin gecici JWT anahtari olustur
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Alembic migration uygula
+        run: python -m alembic upgrade head
+
+      - name: PostgreSQL testlerini calistir
+        run: |
+          python -m pytest -q --tb=short \
+            tests/test_ogrenci_yonetimi_postgresql_quality.py \
+            tests/test_faaliyet_turleri_postgresql_quality.py
