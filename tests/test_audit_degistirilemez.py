@@ -28,11 +28,14 @@ def calistirilan_sql(fonksiyon):
     return [" ".join(c.args[0].split()) for c in yurut.call_args_list]
 
 
-def test_migration_zincirin_tek_ve_son_halkasidir(migration):
+def test_migration_zincirin_icindedir_ve_zincir_tek_parcadir(migration):
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     betikler = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert betikler.get_heads() == [migration.revision]                  # tek head, o da bu migration
+    heads = betikler.get_heads()
+    assert len(heads) == 1                                               # zincir tek parça (birden çok head yok)
+    # Bu migration zincirin içinde kalmalı; sonradan eklenen migration'lar testi bozmamalı.
+    assert migration.revision in [r.revision for r in betikler.iterate_revisions(heads[0], "base")]
     assert migration.down_revision == "d82c4a71f06b"
 
 
