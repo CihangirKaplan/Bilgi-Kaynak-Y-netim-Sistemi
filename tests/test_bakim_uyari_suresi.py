@@ -235,7 +235,7 @@ def test_zil_kayittaki_uyari_suresine_uyar_15_gun_siniri_yok():
 
 
 def test_dashboard_bildirim_kutusu_listedeki_her_islemi_gosterir():
-    from PySide6.QtWidgets import QApplication, QLabel
+    from PySide6.QtWidgets import QApplication, QLabel, QPushButton
     import dashboard_ekrani
     from dashboard_ekrani import DashboardEkrani
     QApplication.instance() or QApplication([])
@@ -250,7 +250,7 @@ def test_dashboard_bildirim_kutusu_listedeki_her_islemi_gosterir():
     pano.islemler = islemler
     pano.ozet = {"acik_ariza_sayisi": 0}
     pano._bildirimleri_olustur()
-    metinler = [l.text() for l in pano.bildirim_paneli.findChildren(QLabel)]
+    metinler = [w.text() for tur in (QLabel, QPushButton) for w in pano.bildirim_paneli.findChildren(tur)]   # satırlar artık düğme
     assert any("B  —  Kalibrasyon 40 gün içinde" in m for m in metinler)  # 15 günden uzak ama listede
     assert any("G  —  Bakım 6 gün gecikti (29.10.2026)" in m for m in metinler)
     assert any("Bildirimler  (3)" in m for m in metinler)
@@ -285,6 +285,7 @@ def _zil_hedefleri(nav):
     ana._oturum_kapatiliyor = False
     ana.api_url, ana.token = "http://x", "T"
     ana.nav_btnler = {ad: object() for ad in nav}
+    ana._sayfa_izinli_mi = lambda sayfa: sayfa in nav          # yetki = sayfanın erişilebilir olması
     with patch.object(mw, "oturum_kontrollu_istek", side_effect=istek):
         mw.AnaPencere._bildirimleri_yenile(ana)
     return {m.split("—")[0].strip(" 🔧🔴⚠️"): h for _, m, h in ana._bildirimler}
@@ -296,10 +297,9 @@ def test_zil_bakim_ve_kalibrasyon_bildirimi_kendi_sayfasina_gider():
     assert hedefler["1 açık arıza kaydı çözüm bekliyor."] == "Arıza Kayıtları"
 
 
-def test_zil_sayfaya_yetkisi_yoksa_cihaz_envanterine_duser():
-    hedefler = _zil_hedefleri(["Cihaz Envanteri", "Bakım Kayıtları"])      # Kalibrasyon ve Arıza sayfası yok
-    assert hedefler["A"] == "Bakım Kayıtları" and hedefler["B"] == "Cihaz Envanteri"
-    assert hedefler["1 açık arıza kaydı çözüm bekliyor."] == "Cihaz Envanteri"
+def test_zil_sayfaya_yetkisi_yoksa_o_bildirim_hic_gosterilmez():
+    hedefler = _zil_hedefleri(["Cihaz Envanteri", "Bakım Kayıtları"])      # Kalibrasyon ve Arıza sayfasına yetki yok
+    assert hedefler == {"A": "Bakım Kayıtları"}                            # başka sayfaya yönlendirme de yok
 
 
 def test_zil_satirina_tiklaninca_hedef_sayfa_acilir():

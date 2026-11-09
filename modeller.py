@@ -1,3 +1,4 @@
+from typing import Literal
 import datetime
 from datetime import date
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
@@ -175,6 +176,21 @@ class RolDegistirModeli(BaseModel):
 class GirisModeli(BaseModel):
     kullanici_adi: str
     parola: str
+
+
+class ParolaSifirlamaTalebiModeli(BaseModel):
+    """Giriş yapmadan gönderilen parola sıfırlama talebi: yalnızca kullanıcı adı."""
+    model_config = ConfigDict(extra="forbid")
+
+    kullanici_adi: str = Field(min_length=1, max_length=100)
+
+    @field_validator("kullanici_adi")
+    @classmethod
+    def kullanici_adi_temizle(cls, deger):
+        deger = deger.strip()
+        if not deger:
+            raise ValueError("Kullanıcı adı boş olamaz.")
+        return deger
 
 # ==========================================
 # ÖĞRENCİ A MODÜLLERİ (CLI, ROOM, APT)
@@ -437,7 +453,7 @@ class OgrenciEkleModeli(BaseModel):
     ad_soyad: str
     ogrenci_numarasi: str
     telefon: Optional[str] = None
-    tur: str  # Veritabanındaki ENUM: 'GONULLU' veya 'DANISMA_MASASI'
+    tur: Literal["GONULLU"]
     bolum: Optional[str] = None
     sinif: Optional[str] = None
 

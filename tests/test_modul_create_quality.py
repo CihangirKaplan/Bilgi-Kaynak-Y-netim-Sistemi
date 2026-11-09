@@ -86,6 +86,7 @@ def test_quality_create_basarili(
     cursor = conn.cursor.return_value
     cursor.fetchone.return_value = (501,)
     cursor.fetchall.return_value = []  # çakışan rezervasyon yok
+    cursor.rowcount = 1  # Başarılı INSERT işlemi
 
     with (
         patch(
@@ -178,6 +179,7 @@ def test_quality_create_audit_hatasinda_rollback(
     cursor = conn.cursor.return_value
     cursor.fetchone.return_value = (501,)
     cursor.fetchall.return_value = []  # çakışan rezervasyon yok
+    cursor.rowcount = 1  # Başarılı INSERT işlemi
 
     with (
         patch(

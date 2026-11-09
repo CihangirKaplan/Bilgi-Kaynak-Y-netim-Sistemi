@@ -20,6 +20,8 @@ IZINLI_HOSTLAR = {
 }
 
 POSTGRESQL_TEST_DOSYALARI = {
+    "test_ogrenci_yonetimi_postgresql_quality.py",
+    "test_faaliyet_turleri_postgresql_quality.py",
     "test_kullanici_personel_postgresql_quality.py",
     "test_parola_sifirlama_pg_quality.py",
     "test_transaction_quality.py",
@@ -129,10 +131,23 @@ def cop_toplama_ana_is_parcaciginda():
     `runDeletionInMainThread` yolunda aralıklı "Segmentation fault" ile çöküyor
     (CI'da exit 139). Bu yüzden Qt nesneleri yalnızca ana iş parçacığında toplanır.
     """
-    gc.freeze()  # önceden yüklenmiş nesneler taranmaz; test başına toplama hızlı kalır
     gc.disable()
     try:
         yield
     finally:
         gc.enable()
         gc.collect()
+
+
+# TKYS ortak QApplication yasam dongusu
+@pytest.fixture(scope="session", autouse=True)
+def tkys_qapplication():
+    """Qt kullanan testlerde QApplication referansını korur."""
+    from PySide6.QtWidgets import QApplication
+
+    uygulama = QApplication.instance()
+
+    if uygulama is None:
+        uygulama = QApplication([])
+
+    yield uygulama

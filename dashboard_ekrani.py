@@ -5,7 +5,7 @@ from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
+from PySide6.QtWidgets import (QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
                                QSizePolicy)
 from PySide6.QtCore import Qt, QTimer
@@ -81,6 +81,17 @@ def _hap(tablo, satir, kolon, metin, renk, arka):
     tablo.setCellWidget(satir, kolon, kap)
 
 
+KAYDIRMA_CUBUGU_STILI = """
+QScrollArea#bildirimKaydirma { background: transparent; }
+QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
+QScrollBar:vertical { background: #DCE8FB; width: 18px; margin: 2px 0 2px 8px; border-radius: 9px; }
+QScrollBar::handle:vertical { background: #2563EB; min-height: 70px; border-radius: 9px; margin: 2px; }
+QScrollBar::handle:vertical:hover { background: #1D4ED8; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+"""
+
+
 class DashboardEkrani(QWidget):
     """Ana kontrol paneli gövdesi.
 
@@ -90,11 +101,16 @@ class DashboardEkrani(QWidget):
     Bugünkü randevu listesi her rolde gösterilir.
     """
 
-    def __init__(self, api_url, token, cihaz_ozeti=True):
+    def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None):
+        """sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
+        sayfa_izinli_mi(sayfa_adi): kullanıcının o sayfaya yetkisi yoksa False; o sayfanın bildirimi hiç gösterilmez.
+        İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz)."""
         super().__init__()
         self.api_url = api_url
         self.token = token
         self.cihaz_ozeti = cihaz_ozeti
+        self._sayfa_ac = sayfa_ac
+        self._sayfa_izinli_mi = sayfa_izinli_mi
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.ozet = {}
         self.islemler = []
@@ -158,6 +174,10 @@ class DashboardEkrani(QWidget):
         # ---- 4. YAKLAŞAN BAKIM / KALİBRASYON ----
         if cihaz_ozeti:
             self.tablo_islem = _tablo_olustur(["CİHAZ", "İŞLEM", "SON TARİH", "KALAN SÜRE"])
+            self._islem_hedefleri = []          # tablodaki her satırın açacağı sayfa
+            self.tablo_islem.cellClicked.connect(self._islem_satiri_tiklandi)
+            if self._sayfa_ac is not None:
+                self.tablo_islem.viewport().setCursor(Qt.PointingHandCursor)
             self.lbl_islem_bos = QLabel("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
             ana.addWidget(self._panel("Yaklaşan ve Geciken Bakım/Kalibrasyonlar",
                                       "🛠️  uyarı süresi içinde ve geciken", self.tablo_islem, self.lbl_islem_bos))
@@ -357,33 +377,56 @@ class DashboardEkrani(QWidget):
         except Exception as e:
             print("Yaklaşan işlemler yükleme hatası:", e)
             self.islemler = []
+        # Yetkisi olmayan sayfanın satırı hiç gösterilmez; her satır kendi sayfasına gider.
+        gorunen = [(islem, self._islem_hedefi(islem)) for islem in self.islemler]
+        gorunen = [(islem, hedef) for islem, hedef in gorunen if hedef is not None and self._sayfa_izinli(hedef)]
+        self._islem_hedefleri = [hedef for _, hedef in gorunen]
         self.lbl_islem_bos.setText("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
-        self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(self.islemler))
-        for i, islem in enumerate(self.islemler):
+        self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(gorunen))
+        for i, (islem, hedef) in enumerate(gorunen):
             kritik = islem["kalan_gun"] <= 5
             uyari = islem["kalan_gun"] <= 15
             renk, arka = (("#991B1B", "#FEE2E2") if kritik else
                           ("#854D0E", "#FEF3C7") if uyari else ("#166534", "#DCFCE7"))
             gun = islem["kalan_gun"]
             kalan = "Bugün" if gun == 0 else (f"{-gun} gün gecikti" if gun < 0 else f"{gun} gün")
-            self.tablo_islem.setItem(i, 0, _item(islem["cihaz_adi"], ortala=False, kalin=True))
-            self.tablo_islem.setItem(i, 1, _item(islem["islem_turu"]))
-            self.tablo_islem.setItem(i, 2, _item(islem["tarih"]))
+            ipucu = f"{hedef} sayfasına git" if self._sayfa_ac is not None else ""
+            for kolon, item in enumerate((_item(islem["cihaz_adi"], ortala=False, kalin=True),
+                                          _item(islem["islem_turu"]), _item(islem["tarih"]))):
+                item.setToolTip(ipucu)
+                self.tablo_islem.setItem(i, kolon, item)
             _hap(self.tablo_islem, i, 3, kalan, renk, arka)
+            self.tablo_islem.cellWidget(i, 3).setToolTip(ipucu)
+
+    def _islem_satiri_tiklandi(self, satir, _kolon):
+        """Tabloda bir satıra (herhangi bir hücresine) tıklanınca ilgili sayfa açılır."""
+        if self._sayfa_ac is not None and 0 <= satir < len(self._islem_hedefleri):
+            self._sayfa_ac(self._islem_hedefleri[satir])
 
     # ------------------------------------------------------------------
-    def _bildirimleri_olustur(self):
-        """Üstteki bildirim kutusu: kritik bakım/kalibrasyon ve açık arıza uyarıları."""
-        while self.bildirim_lay.count():
-            w = self.bildirim_lay.takeAt(0).widget()
-            if w:
-                w.deleteLater()
+    BILDIRIM_SINIRI = 5          # kaydırmadan görünen satır sayısı; fazlası kaydırma çubuğuyla görülür
+    HEDEF_SAYFALAR = {"Bakım": "Bakım Kayıtları", "Kalibrasyon": "Kalibrasyon"}
+    ARIZA_SAYFASI = "Arıza Kayıtları"
 
-        satirlar = []  # (ikon, metin, yazı rengi, arka plan)
+    def _islem_hedefi(self, islem):
+        """Bakım ya da kalibrasyon işleminin açacağı sayfa (bilinmeyen tür için None)."""
+        return self.HEDEF_SAYFALAR.get(islem.get("islem_turu"))
+
+    def _sayfa_izinli(self, sayfa):
+        """Kullanıcı o sayfaya girebiliyor mu? (Karar verilmemişse evet.)"""
+        return True if self._sayfa_izinli_mi is None else bool(self._sayfa_izinli_mi(sayfa))
+
+    def _bildirim_satirlari(self):
+        """[(ikon, metin, yazı rengi, arka plan, hedef sayfa)] — yetkisiz olunan sayfaların bildirimleri çıkarılır."""
+        satirlar = []
         acik_ariza = self.ozet.get("acik_ariza_sayisi", 0)
-        if acik_ariza:
-            satirlar.append(("⚠️", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2"))
+        if acik_ariza and self._sayfa_izinli(self.ARIZA_SAYFASI):
+            satirlar.append(("⚠️", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2",
+                             self.ARIZA_SAYFASI))
         for islem in self.islemler:
+            hedef = self._islem_hedefi(islem)
+            if hedef is None or not self._sayfa_izinli(hedef):
+                continue
             gun = islem["kalan_gun"]   # liste zaten kayıt başına uyarı süresine göre süzülmüş ve sıralı
             zaman = "bugün" if gun == 0 else (f"{-gun} gün gecikti" if gun < 0 else f"{gun} gün içinde")
             kritik = gun <= 5
@@ -391,11 +434,56 @@ class DashboardEkrani(QWidget):
                 "🔴" if kritik else "🟡",
                 f"{islem['cihaz_adi']}  —  {islem['islem_turu']} {zaman} ({islem['tarih']})",
                 "#991B1B" if kritik else "#854D0E",
-                "#FEE2E2" if kritik else "#FEF3C7"))
+                "#FEE2E2" if kritik else "#FEF3C7",
+                hedef))
+        return satirlar
 
+    def _bildirim_dugmesi(self, metin, renk, arka, hedef):
+        """Tıklanınca ilgili sayfayı açan bildirim satırı. Tıklama tek bir yuvaya gider (lambda kullanılmaz)."""
+        dugme = QPushButton(f"{metin}   →")
+        dugme.setProperty("hedef", hedef)
+        dugme.setCursor(Qt.PointingHandCursor)
+        dugme.setToolTip(f"{hedef} sayfasına git")
+        dugme.setStyleSheet(
+            f"QPushButton {{ background: {arka}; color: {renk}; border: none; border-radius: 10px; "
+            f"font-size: 13px; font-weight: 600; padding: 10px 14px; text-align: left; }} "
+            f"QPushButton:hover {{ border: 1px solid {renk}; }}")
+        dugme.clicked.connect(self._bildirim_tiklandi)
+        return dugme
+
+    def _bildirim_tiklandi(self):
+        hedef = self.sender().property("hedef") if self.sender() is not None else None
+        if hedef and self._sayfa_ac is not None:
+            self._sayfa_ac(hedef)
+
+    def _bildirimleri_olustur(self):
+        """Üstteki bildirim kutusu: kritik bakım/kalibrasyon ve açık arıza uyarıları (tıklanınca ilgili sayfa açılır)."""
+        while self.bildirim_lay.count():
+            w = self.bildirim_lay.takeAt(0).widget()
+            if w:
+                w.hide()
+                w.setParent(None)            # silinene kadar eski satırlar kutuda görünmesin / sayılmasın
+                w.deleteLater()
+
+        satirlar = self._bildirim_satirlari()
+        fazla = len(satirlar) > self.BILDIRIM_SINIRI
+
+        ust = QHBoxLayout()
         baslik = QLabel(f"🔔  Bildirimler  ({len(satirlar)})" if satirlar else "🔔  Bildirimler")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
-        self.bildirim_lay.addWidget(baslik)
+        ust.addWidget(baslik)
+        ust.addStretch()
+        if fazla:
+            # Kullanıcının fark etmesi için dikkat çeken rozet: listenin kaydırılabildiğini söyler.
+            ipucu = QLabel(f"⇅  {len(satirlar)} bildirim var — kaydırarak hepsini görün")
+            ipucu.setObjectName("bildirimKaydirmaIpucu")
+            ipucu.setStyleSheet("background: #FEF3C7; color: #854D0E; border-radius: 10px; "
+                                "font-size: 12px; font-weight: 800; padding: 4px 12px;")
+            ust.addWidget(ipucu)
+        ust_kap = QWidget()
+        ust_kap.setLayout(ust)
+        ust.setContentsMargins(0, 0, 0, 0)
+        self.bildirim_lay.addWidget(ust_kap)
 
         if not satirlar:
             ok = QLabel("✅  Bekleyen uyarı yok. Yaklaşan ya da geciken bakım, kalibrasyon ve açık arıza bulunmuyor.")
@@ -404,12 +492,28 @@ class DashboardEkrani(QWidget):
             self.bildirim_lay.addWidget(ok)
             return
 
-        for ikon, metin, renk, arka in satirlar[:6]:
-            lbl = QLabel(f"{ikon}  {metin}")
-            lbl.setStyleSheet(f"background: {arka}; color: {renk}; border-radius: 10px; "
-                              f"font-size: 13px; font-weight: 600; padding: 10px 14px;")
-            self.bildirim_lay.addWidget(lbl)
-        if len(satirlar) > 6:
-            diger = QLabel(f"… ve {len(satirlar) - 6} bildirim daha (aşağıdaki tabloya bakın)")
-            diger.setStyleSheet("font-size: 12px; color: #6B7FA8; padding-left: 6px;")
-            self.bildirim_lay.addWidget(diger)
+        satir_kutusu = QWidget()
+        satir_lay = QVBoxLayout(satir_kutusu)
+        satir_lay.setContentsMargins(0, 0, 0, 0)
+        satir_lay.setSpacing(8)
+        dugmeler = [self._bildirim_dugmesi(f"{ikon}  {metin}", renk, arka, hedef)
+                    for ikon, metin, renk, arka, hedef in satirlar]
+        for dugme in dugmeler:
+            satir_lay.addWidget(dugme)
+
+        if not fazla:
+            self.bildirim_lay.addWidget(satir_kutusu)
+            return
+
+        # Çok bildirim: ilk BILDIRIM_SINIRI satır görünür, gerisi büyük ve renkli bir kaydırma çubuğuyla kaydırılır.
+        kaydirma = QScrollArea()
+        kaydirma.setObjectName("bildirimKaydirma")
+        kaydirma.setWidgetResizable(True)
+        kaydirma.setFrameShape(QFrame.NoFrame)
+        kaydirma.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        kaydirma.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)     # çubuk hep görünsün
+        kaydirma.setStyleSheet(KAYDIRMA_CUBUGU_STILI)
+        kaydirma.setWidget(satir_kutusu)
+        satir_yuksekligi = dugmeler[0].sizeHint().height()
+        kaydirma.setFixedHeight(self.BILDIRIM_SINIRI * satir_yuksekligi + (self.BILDIRIM_SINIRI - 1) * 8 + 4)
+        self.bildirim_lay.addWidget(kaydirma)
