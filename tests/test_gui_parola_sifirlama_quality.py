@@ -98,7 +98,7 @@ def test_basarili_sifirlama_dogru_apiyi_cagirir(ekran):
             return_value=False,
         ),
         patch(
-            "k_personel_ekranlari.QMessageBox.information"
+            "k_personel_ekranlari.GeciciParolaDialog"
         ) as bilgi,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -119,8 +119,9 @@ def test_basarili_sifirlama_dogru_apiyi_cagirir(ekran):
 
     bilgi.assert_called_once()
 
-    mesaj = bilgi.call_args.args[2]
-    assert "GUVENLI_GECICI_PAROLA" in mesaj
+    # Pencereye kullanıcı adı ve geçici parola verilir ve pencere gösterilir (exec).
+    assert bilgi.call_args.args[:2] == ("test_kullanici", "GUVENLI_GECICI_PAROLA")
+    bilgi.return_value.exec.assert_called_once()
 
 
 def test_yetki_hatasinda_parola_gosterilmez(ekran):
@@ -148,7 +149,7 @@ def test_yetki_hatasinda_parola_gosterilmez(ekran):
             "k_personel_ekranlari.QMessageBox.warning"
         ) as uyari,
         patch(
-            "k_personel_ekranlari.QMessageBox.information"
+            "k_personel_ekranlari.GeciciParolaDialog"
         ) as bilgi,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -204,7 +205,7 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
             "k_personel_ekranlari.QMessageBox.warning"
         ) as uyari,
         patch(
-            "k_personel_ekranlari.QMessageBox.information"
+            "k_personel_ekranlari.GeciciParolaDialog"
         ) as bilgi,
     ):
         ekran.secili_kullanici_parola_sifirla()

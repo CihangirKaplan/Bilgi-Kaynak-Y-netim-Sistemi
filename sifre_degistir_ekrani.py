@@ -10,6 +10,7 @@ from api_yoneticisi import (
     oturum_olaylari,
 )
 from pathlib import Path
+from parola_kurallari import kural_durumlari, tum_kurallar_saglandi_mi, guc_hesapla
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
@@ -31,7 +32,7 @@ class SifreDegistirEkrani(QWidget):
         self._sifre_basariyla_degisti = False
         self._token_bitis_zamani = self._token_bitisini_oku()
         self.setWindowTitle("TKYS - İlk Giriş Şifre Değiştirme")
-        self.setFixedSize(480, 490)
+        self.setFixedSize(480, 640)
 
         self.setStyleSheet("""
             QWidget {
@@ -123,6 +124,15 @@ class SifreDegistirEkrani(QWidget):
         self.yeni_sifre_tekrar.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.yeni_sifre_tekrar)
 
+        self.guc_lbl = QLabel("")
+        self.guc_lbl.setStyleSheet("font-size: 12px; font-weight: bold;")
+        layout.addWidget(self.guc_lbl)
+
+        self.kural_lbl = QLabel("")
+        self.kural_lbl.setTextFormat(Qt.RichText)
+        self.kural_lbl.setStyleSheet("font-size: 12px;")
+        layout.addWidget(self.kural_lbl)
+
         self.goster = QCheckBox("Şifreleri göster")
         tik_resmi = (
             Path(__file__).resolve().parent
@@ -153,6 +163,10 @@ class SifreDegistirEkrani(QWidget):
 
         ana_layout.addWidget(kart)
         self.eski_sifre.setFocus()
+
+        for alan in (self.eski_sifre, self.yeni_sifre, self.yeni_sifre_tekrar):
+            alan.textChanged.connect(self._kurallari_guncelle)
+        self._kurallari_guncelle()
 
         self._oturum_zamanlayici = QTimer(self)
         self._oturum_zamanlayici.setInterval(1000)
@@ -230,6 +244,31 @@ class SifreDegistirEkrani(QWidget):
 
         self.close()
 
+    def _kurallari_guncelle(self, *_):
+        """Kural listesini ve güç göstergesini yazdıkça günceller; düğme yalnızca tüm kurallar sağlanınca açılır."""
+        eski = self.eski_sifre.text().strip()
+        yeni = self.yeni_sifre.text().strip()
+        tekrar = self.yeni_sifre_tekrar.text().strip()
+
+        satirlar = []
+        for metin, saglandi in kural_durumlari(yeni, tekrar, eski):
+            renk, isaret = ("#15803D", "✔") if saglandi else ("#B45309", "○")
+            satirlar.append(f'<span style="color:{renk}">{isaret} {metin}</span>')
+        self.kural_lbl.setText("<br>".join(satirlar))
+
+        puan, etiket = guc_hesapla(yeni)
+        renkler = {0: "#B91C1C", 1: "#B45309", 2: "#1D4ED8", 3: "#15803D"}
+        self.guc_lbl.setText(f"Şifre gücü: {etiket}" if etiket else "")
+        self.guc_lbl.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {renkler[puan]};")
+
+        self._kaydet_butonunu_ayarla()
+
+    def _kaydet_butonunu_ayarla(self):
+        hazir = tum_kurallar_saglandi_mi(
+            self.yeni_sifre.text().strip(), self.yeni_sifre_tekrar.text().strip(), self.eski_sifre.text().strip()
+        ) and bool(self.eski_sifre.text().strip())
+        self.kaydet_btn.setEnabled(hazir and not self._oturum_kapatiliyor)
+
     def sifreleri_goster(self, goster):
         mod = QLineEdit.Normal if goster else QLineEdit.Password
 
@@ -300,7 +339,7 @@ class SifreDegistirEkrani(QWidget):
             self.hata_lbl.setText("Sunucuya bağlanılamadı.")
         finally:
             if not self._oturum_kapatiliyor:
-                self.kaydet_btn.setEnabled(True)
+                self._kaydet_butonunu_ayarla()
 
     def closeEvent(self, event):
         self._oturum_zamanlayici.stop()

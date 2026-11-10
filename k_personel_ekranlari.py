@@ -1,4 +1,5 @@
 import requests
+from gecici_parola_dialog import GeciciParolaDialog
 from datetime import datetime
 from api_yoneticisi import (
     oturum_kontrollu_istek,
@@ -404,15 +405,8 @@ class KullaniciPersonelEkrani(QWidget):
                 )
                 return
 
-            QMessageBox.information(
-    self,
-    "Parola Başarıyla Sıfırlandı",
-    f"Kullanıcı: {kullanici_adi}\n\n"
-    f"GEÇİCİ PAROLA\n{gecici_parola}\n\n"
-    "Bu parolayı kullanıcıya güvenli şekilde iletin.\n"
-    "Pencere kapatıldıktan sonra parola tekrar gösterilemez.\n\n"
-    "Kullanıcı ilk girişinde yeni parola belirlemelidir."
-)
+            # Parola kopyalanabilir pencerede gösterilir; kapandıktan sonra tekrar gösterilemez.
+            GeciciParolaDialog(kullanici_adi, gecici_parola, self).exec()
             # Sıfırlanan kullanıcının bekleyen talebi sunucuda tamamlandı; paneli tazele.
             self.talepleri_yukle()
 
