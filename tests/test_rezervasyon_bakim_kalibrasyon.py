@@ -13,12 +13,13 @@ from modeller import RezervasyonOlusturModeli
 from sunucu import cihaz_rezervasyonu_yap
 
 
+# Sunucu geçmiş zamanlı rezervasyonu reddeder; bu yüzden tarih her zaman gelecekte olmalı (sabit tarih zamanla bozulur).
+BASLANGIC = (datetime.datetime.now() + datetime.timedelta(days=7)).replace(hour=10, minute=0, second=0, microsecond=0)
+BITIS = BASLANGIC + datetime.timedelta(hours=1)
+
+
 def model():
-    return RezervasyonOlusturModeli(
-        cihaz_id=7,
-        baslangic_zamani="2026-11-10T10:00:00",
-        bitis_zamani="2026-11-10T11:00:00",
-    )
+    return RezervasyonOlusturModeli(cihaz_id=7, baslangic_zamani=BASLANGIC.isoformat(), bitis_zamani=BITIS.isoformat())
 
 
 def calistir(fetchone_sirasi):
@@ -36,10 +37,11 @@ def calistir(fetchone_sirasi):
 
 @pytest.mark.parametrize("tur", ["Bakım", "Kalibrasyon"])
 def test_planli_bakim_veya_kalibrasyonla_kesisen_rezervasyon_409(tur):
-    plan = (tur, datetime.date(2026, 11, 9), datetime.date(2026, 11, 12))
+    plan_basi, plan_sonu = BASLANGIC.date() - datetime.timedelta(days=1), BASLANGIC.date() + datetime.timedelta(days=2)
+    plan = (tur, plan_basi, plan_sonu)
     _, hata, conn, cursor = calistir([("Kullanima_Hazir",), plan])
     assert hata.status_code == 409
-    assert "09.11.2026 - 12.11.2026" in hata.detail
+    assert f"{plan_basi:%d.%m.%Y} - {plan_sonu:%d.%m.%Y}" in hata.detail
     assert tur.lower() in hata.detail
     sorgular = [c.args[0].upper() for c in cursor.execute.call_args_list]
     assert not any("INSERT INTO CIHAZ_REZERVASYONLARI" in s for s in sorgular)
@@ -59,8 +61,8 @@ def test_sorgu_cihaz_ve_saat_araligini_parametre_olarak_alir():
     assert "cihaz_kalibrasyonlari" in sorgu
     assert parametreler == (
         7, 7,
-        datetime.datetime(2026, 11, 10, 11, 0),   # bitis_zamani: plan başlangıcı bundan önce olmalı
-        datetime.datetime(2026, 11, 10, 10, 0),   # baslangic_zamani: plan bitişi (dahil) bundan sonra olmalı
+        BITIS,        # bitis_zamani: plan başlangıcı bundan önce olmalı
+        BASLANGIC,    # baslangic_zamani: plan bitişi (dahil) bundan sonra olmalı
     )
 
 
