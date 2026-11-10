@@ -189,7 +189,6 @@ MENU = [
         dict(ikon="📅", ad="Randevu Takvimi", izin="Randevu takvimini görüntüleme",
              aciklama="Randevu takvimi ve seans planlaması",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
-                      ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
@@ -229,7 +228,6 @@ MENU = [
         dict(ikon="⚙️", ad="Cihaz Envanteri", izin="Cihaz envanterini yönetme",
              aciklama="Envanter kayıtları ve cihaz yönetimi",
              aksiyon=[("＋  Cihaz Ekle", "Cihaz ekleme"),
-                      ("☑  Takip Kontrol Listesi", "Cihaz takip kontrol listesini yönetme"),
                       ("✎  Envanteri Düzenle", "Cihaz envanterini yönetme")]),
         dict(ikon="📌", ad="Cihaz Rezervasyonu", izin="Cihaz rezervasyonu yapma",
              aciklama="Cihaz rezervasyon işlemleri",
@@ -1700,11 +1698,8 @@ QLabel {
                 btn.setCursor(Qt.PointingHandCursor)
 
                 # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
-                # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
-                if "Yeni Randevu" in etiket:
+                if izin_kodu == "Randevu oluşturma":
                     btn.clicked.connect(self.yeni_randevu_ekrani_ac)
-                elif "Yeni Danışan" in etiket:
-                    btn.clicked.connect(self.hizli_danisan_kod_olustur)
                 elif izin_kodu == "Arıza kayıtlarını yönetme":
                     btn.clicked.connect(self.yeni_ariza_bildirimi_ac)
                 elif izin_kodu == "Randevu düzenleme":
@@ -1717,8 +1712,6 @@ QLabel {
                     btn.clicked.connect(self.cihaz_envanter_duzenle_tetikle)
                 elif izin_kodu == "Cihaz rezervasyonu yapma":
                     btn.clicked.connect(self.yeni_rezervasyon_ekrani_ac)
-                elif izin_kodu == "Cihaz takip kontrol listesini yönetme":
-                    btn.clicked.connect(self.takip_listesi_tetikle)
                 elif etiket == "＋  Yeni Oda Ekle":
                     btn.clicked.connect(self.yeni_oda_formunu_ac)
                 elif etiket == "✎  Odayı Düzenle":
@@ -1930,12 +1923,7 @@ QLabel {
             il = QVBoxLayout(ik)
 
             from randevu_ekranlari import RandevuAnaEkrani
-            self.randevu_ana_ekrani = RandevuAnaEkrani(
-                api_url=self.api_url, 
-                token=self.token, 
-                mevcut_psikolog_id=self.kullanici_id,
-                rol=self.kullanici_adi
-            )
+            self.randevu_ana_ekrani = RandevuAnaEkrani(api_url=self.api_url, token=self.token,mevcut_psikolog_id=self.kullanici_id)
             il.addWidget(self.randevu_ana_ekrani)
 
             lay.addWidget(ik, 1)
@@ -2026,11 +2014,6 @@ QLabel {
         self.randevu_formu = RandevuOlusturFormu(
             api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
         )
-        
-        # Form başarıyla kaydedildiğinde tabloyu doğrudan tetikle
-        if hasattr(self, 'randevu_ana_ekrani'):
-            self.randevu_formu.veriler_degisti.connect(self.randevu_ana_ekrani.verileri_cek)
-
         orijinal_close = self.randevu_formu.closeEvent
         def kapanma_yakala(event):
             if (
@@ -2040,7 +2023,6 @@ QLabel {
                 self.randevu_ana_ekrani.verileri_cek()
             if orijinal_close: orijinal_close(event)
             else: event.accept()
-            
         self.randevu_formu.closeEvent = kapanma_yakala
         self.randevu_formu.show()
     
@@ -2053,15 +2035,6 @@ QLabel {
         self.liste_formu.finished.connect(lambda: self.randevu_ana_ekrani.verileri_cek() if hasattr(self, 'randevu_ana_ekrani') else None)
         self.liste_formu.show()
 
-    def hizli_danisan_kod_olustur(self):
-        from danisan_diyalog import DanisanOlusturDialog
-
-        dialog = DanisanOlusturDialog(api_url=self.api_url, token=self.token, ebeveyn=self)
-        if dialog.exec():
-            # Kullanıcı bizzat pencereyi açıp "Danışanı Oluştur" butonuna basarsa yeni kod üretilir.
-            if hasattr(self, 'randevu_ana_ekrani'):
-                self.randevu_ana_ekrani.verileri_cek()
-
     def cihaz_ekle_tetikle(self):
         if hasattr(self, 'aktif_cihaz_ekrani'):
             self.aktif_cihaz_ekrani.yeni_cihaz_ekle()
@@ -2069,9 +2042,6 @@ QLabel {
     def cihaz_envanter_duzenle_tetikle(self):
         if hasattr(self, 'aktif_cihaz_ekrani'):
             self.aktif_cihaz_ekrani.envanter_duzenle_liste_ac()
-
-    def takip_listesi_tetikle(self):
-        QMessageBox.information(self, "Bilgi", "Takip Kontrol Listesi modülü yapım aşamasındadır.")
 
     def _uygunluktan_rezervasyon_ac(self, cihaz_id, gun, baslangic, bitis):
         """Cihaz Uygunluğu takviminden: Rezervasyon sayfasına geçip formu cihaz, gün ve saatle açar."""
