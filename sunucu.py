@@ -1684,9 +1684,7 @@ def randevu_deadlock_yeniden_dene(fonksiyon):
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
-    
-    danisan_kod_id = getattr(randevu, 'danisan_kod_id', None)
-    
+
     conn = None
     cursor = None
     try:
@@ -1785,7 +1783,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTU
             return []
             
         # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
-        rol_adi = str(rol_sonuc[0]).lower()
+        rol_adi = str(rol_sonuc[0]).lower() if rol_sonuc else ""
         
         # 1. DURUM: Psikolog ise
         if "psikolog" in rol_adi:
