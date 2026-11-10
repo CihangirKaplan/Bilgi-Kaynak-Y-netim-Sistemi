@@ -7,6 +7,7 @@ from modeller import RandevuOlusturModeli, RandevuGuncelleModeli
 # Testlerde kullanılacak geçerli randevu bilgileri
 def gecerli_randevu():
     return {
+        "danisan_kod_id": "DAN-2026-0001",
         "psikolog_id": 1,
         "oda_id": 1,
         "baslangic_zamani": "2026-10-15T10:00:00",
@@ -21,15 +22,12 @@ def test_gecerli_randevu_kabul_edilir():
     assert randevu.psikolog_id == 1
     assert randevu.oda_id == 1
 
-# 2. Danışan kodu gönderilmeden randevu verileri kabul edilmeli
-def test_danisan_kodu_olmadan_randevu_kabul_edilir():
+def test_danisan_kodu_olmadan_randevu_reddedilir():
     veriler = gecerli_randevu()
+    del veriler["danisan_kod_id"]
 
-    randevu = RandevuOlusturModeli(**veriler)
-
-    assert not hasattr(randevu, "danisan_kod_id")
-    assert randevu.psikolog_id == 1
-    assert randevu.oda_id == 1
+    with pytest.raises(ValidationError):
+        RandevuOlusturModeli(**veriler)
 
 # 3. Sıfır veya negatif ID değerleri reddedilmeli
 @pytest.mark.parametrize(
@@ -55,6 +53,7 @@ def test_gecersiz_id_reddedilir(alan, deger):
     [
         "psikolog_id",
         "oda_id",
+        "danisan_kod_id",
         "baslangic_zamani",
         "bitis_zamani",
     ],
@@ -153,7 +152,7 @@ def test_gecersiz_psikolog_reddedilir():
 
         mock_cursor.fetchone.side_effect = [
             ("ADMIN",),
-            (5,),  # PostgreSQL sequence tarafından döndürülen sıra numarası
+            (5,),  # Danışan kodu aktif
             None,  # Geçerli ve aktif psikolog bulunamadı
         ]
 
@@ -183,7 +182,7 @@ def test_gecersiz_oda_reddedilir():
 
         mock_cursor.fetchone.side_effect = [
             ("ADMIN",),
-            (5,),  # PostgreSQL sequence tarafından döndürülen sıra numarası
+            (5,),  # Danışan kodu aktif
             (1,),  # Psikolog geçerli
             None,  # Oda bulunamadı veya aktif değil
         ]

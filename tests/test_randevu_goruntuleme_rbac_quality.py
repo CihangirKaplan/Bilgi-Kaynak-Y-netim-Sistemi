@@ -81,8 +81,9 @@ def test_quality_izni_olan_rol_danisan_kodu_olusturur():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         (1,),  # izin_kontrol: izin var
+        (3,),  # personel_id (aktif psikolog)
         (7,),  # danisan_kodu_seq
-        ("DAN-2026-0007", True, "YOK", True, datetime(2026, 1, 1, 9, 0)),  # INSERT ... RETURNING
+        ("DAN-2026-0007", True, "YOK", True, datetime(2026, 1, 1, 9, 0), 3),  # INSERT ... RETURNING
     ]
 
     with patch("sunucu.psycopg2.connect", return_value=conn):

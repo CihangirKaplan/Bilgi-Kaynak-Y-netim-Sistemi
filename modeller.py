@@ -2,7 +2,7 @@ from typing import Literal
 import datetime
 from datetime import date
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
 from sqlalchemy.orm import declarative_base
@@ -40,6 +40,7 @@ class KullaniciOlusturModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kullanici_adi: str = Field(min_length=3, max_length=100)
     rol_id: int = Field(gt=0)
+    oda_idleri: Optional[List[int]] = Field(default_factory=list)
 
     # Yalnızca danışma öğrencisi rolü için: aynı işlemde öğrenci kaydı da oluşturulur.
     ad_soyad: Optional[str] = Field(default=None, max_length=100)
@@ -223,6 +224,7 @@ class RandevuModeli(BaseModel):
 
 # APT-API-001 / SEC-APT-002: Randevu Oluşturma Modeli
 class RandevuOlusturModeli(BaseModel):
+    danisan_kod_id: str
     psikolog_id: int = Field(gt=0)
     oda_id: int = Field(gt=0)
     baslangic_zamani: datetime.datetime

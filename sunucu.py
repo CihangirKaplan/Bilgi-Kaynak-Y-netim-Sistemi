@@ -71,8 +71,13 @@ VT_AYARLARI = {
 def otomatik_danisan_kodu_uret(cursor) -> str:
     yil = datetime.now().year
     cursor.execute("SELECT nextval('danisan_kodu_seq');")
-    sira = cursor.fetchone()[0]
-    return f"DAN-{yil}-{sira:04d}"
+    sira_degeri = cursor.fetchone()[0]
+    
+    # Eğer veritabanından direkt sayı geliyorsa formatlıyoruz, 
+    # zaten metin geldiyse direkt olarak dönüyoruz:
+    if isinstance(sira_degeri, int):
+        return f"DAN-{yil}-{sira_degeri:04d}"
+    return str(sira_degeri)
 
 def token_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
@@ -418,6 +423,9 @@ def kullanici_olustur(
     conn = None
     cursor = None
     asama = "kullanici"
+    personel_id = None
+    personel_kodu = None
+    ogrenci_id = None
 
     rol_kodlari = {
         "PSIKOLOG": "PSK",
@@ -526,7 +534,6 @@ def kullanici_olustur(
         gecici_parola = gecici_parola_uret()
         parola_hash = parola_hashle(gecici_parola)
 
-        # Kullanıcı kaydı.
         cursor.execute(
             """
             INSERT INTO kullanicilar
@@ -546,7 +553,6 @@ def kullanici_olustur(
 
         # Personel kaydı.
         asama = "personel"
-
         cursor.execute(
             """
             INSERT INTO personel (kullanici_id, personel_kodu)
@@ -571,11 +577,8 @@ def kullanici_olustur(
                 (kullanici_id, "CREATE", tablo, kayit_id),
             )
 
-        ogrenci_id = None
-
         if danisma_ogrencisi:
             asama = "ogrenci"
-
             cursor.execute(
                 """
                 INSERT INTO ogrenciler
@@ -591,7 +594,6 @@ def kullanici_olustur(
                 ),
             )
             ogrenci_id = cursor.fetchone()[0]
-
             cursor.execute(
                 """
                 INSERT INTO denetim_kayitlari
@@ -599,6 +601,13 @@ def kullanici_olustur(
                 VALUES (%s, %s, %s, %s);
                 """,
                 (kullanici_id, "CREATE", "ogrenciler", ogrenci_id),
+            )
+
+        # Psikolog oda yetkileri.
+        for oda_id in yeni_kullanici.oda_idleri or []:
+            cursor.execute(
+                "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
+                (yeni_id, oda_id),
             )
 
         # Her şey başarılıysa tek commit.
@@ -1761,40 +1770,59 @@ def randevu_deadlock_yeniden_dene(fonksiyon):
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
+        # 1. Psikolog yetki kontrolü
+        # Rolü veritabanından çekiyoruz
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
 
-        if rol is not None and rol[0] == "PSIKOLOG":
+        if rol is not None and rol[0].lower() == "psikolog": # <-- 'psikolog' olarak güncellendi
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != randevu.psikolog_id:
                 raise HTTPException(status_code=403, detail="Yalnızca kendi adınıza randevu oluşturabilirsiniz.")
 
-        yeni_danisan_kodu = otomatik_danisan_kodu_uret(cursor)
-        cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi) VALUES (%s, TRUE, 'YOK', TRUE);", (yeni_danisan_kodu,))
+        # DİKKAT EDİN BURASI DEĞİŞTİ: Artık otomatik kod üretmiyoruz, frontend'den gelen kodu kontrol ediyoruz.
+        cursor.execute("SELECT 1 FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE;", (randevu.danisan_kod_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=422, detail="Seçilen danışan kodu bulunamadı veya aktif değil.")
 
-        cursor.execute("SELECT 1 FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND r.rol_adi = 'PSIKOLOG';", (randevu.psikolog_id,))
+        # 2. Psikolog kontrolü
+        cursor.execute(
+            "SELECT 1 FROM personel p "
+            "JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id "
+            "JOIN roller r ON k.rol_id = r.rol_id "
+            "WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND r.rol_adi ILIKE 'Psikolog';", 
+            (randevu.psikolog_id,)
+        )
         if cursor.fetchone() is None:
             raise HTTPException(status_code=422, detail="Geçerli ve aktif bir psikolog seçilmelidir.")
 
+        # 3. Oda kontrolü
         cursor.execute("SELECT 1 FROM odalar WHERE oda_id = %s AND aktif_mi = TRUE;", (randevu.oda_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=422, detail="Oda bulunamadı veya aktif değil.")
 
+        # 4. Çakışma kontrolü
         cursor.execute("SELECT 1 FROM randevular WHERE durum = 'PLANLANDI' AND (psikolog_id = %s OR oda_id = %s) AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (randevu.psikolog_id, randevu.oda_id, randevu.bitis_zamani, randevu.baslangic_zamani))
         if cursor.fetchone() is not None:
             raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
 
-        cursor.execute("INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'PLANLANDI') RETURNING randevu_id;", (yeni_danisan_kodu, randevu.psikolog_id, randevu.oda_id, randevu.baslangic_zamani, randevu.bitis_zamani))
+        # 5. Randevuyu kaydetme (ARTIK randevu.danisan_kod_id KULLANILIYOR)
+        cursor.execute(
+            "INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'PLANLANDI') RETURNING randevu_id;", 
+            (randevu.danisan_kod_id, randevu.psikolog_id, randevu.oda_id, randevu.baslangic_zamani, randevu.bitis_zamani)
+        )
         randevu_id = cursor.fetchone()[0]
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CREATE", "randevular", randevu_id))
+        
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu oluşturuldu.", "randevu_id": randevu_id}
     except ExclusionViolation:
@@ -1812,28 +1840,69 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if conn is not None:
             conn.rollback()
         raise
-    except Exception:
+    except Exception as e:
         if conn is not None:
             conn.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Randevu oluşturulurken bir hata oluştu."
+            detail=f"Randevu oluşturulurken bir hata oluştu: {str(e)}"
         )
     finally:
         if cursor is not None:
             cursor.close()
         if conn is not None:
             conn.close()
+
 @app.get("/api/randevular")
-def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
+def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))): 
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum FROM randevular ORDER BY baslangic_zamani;")
+        
+        # Rol adını net bir şekilde string olarak almak için tablodaki sütun adını garantiye alıyoruz
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol_sonuc = cursor.fetchone()
+        
+        if not rol_sonuc: 
+            return []
+            
+        # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
+        rol_adi = str(rol_sonuc[0]).lower() if rol_sonuc else ""
+        
+        # 1. DURUM: Psikolog ise
+        if "psikolog" in rol_adi:
+            sorgu = """
+                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi 
+                FROM randevular r
+                JOIN psikolog_odalar po ON r.oda_id = po.oda_id
+                WHERE po.kullanici_id = %s
+                ORDER BY r.baslangic_zamani;
+            """
+            cursor.execute(sorgu, (kullanici_id,))
+            
+        # 2. DURUM: Diğer roller (Admin vb.)
+        else:
+            cursor.execute(
+                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi "
+                "FROM randevular ORDER BY baslangic_zamani;"
+            )
+            
         kayitlar = cursor.fetchall()
-        return [{"randevu_id": kayit[0], "danisan_kod_id": kayit[1], "psikolog_id": kayit[2], "oda_id": kayit[3], "baslangic_zamani": kayit[4], "bitis_zamani": kayit[5], "durum": kayit[6]} for kayit in kayitlar]
+        
+        return [
+            {
+                "randevu_id": kayit[0], 
+                "danisan_kod_id": kayit[1], 
+                "psikolog_id": kayit[2], 
+                "oda_id": kayit[3], 
+                "baslangic_zamani": kayit[4], 
+                "bitis_zamani": kayit[5], 
+                "durum": kayit[6],
+                "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None
+            } for kayit in kayitlar
+        ]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1932,13 +2001,45 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+
+        # 1. İşlemi yapan kullanıcının aktif bir psikolog/personel olup olmadığını kontrol ediyoruz
+        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
+        pers = cursor.fetchone()
+        
+        if not pers:
+            raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
+        
+        psikolog_id = pers[0]
+
+        # 2. Otomatik danışan kodunu üret
         yeni_kod = otomatik_danisan_kodu_uret(cursor)
-        cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi) VALUES (%s, %s, %s, TRUE) RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi;", (yeni_kod, ucretli_mi, istisna_turu))
+
+        # 3. Veritabanına oluşturan psikoloğun ID'siyle birlikte kaydediyoruz
+        cursor.execute(
+            """
+            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturan_psikolog_id) 
+            VALUES (%s, %s, %s, TRUE, %s) 
+            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id;
+            """, 
+            (yeni_kod, ucretli_mi, istisna_turu, psikolog_id)
+        )
         kayit = cursor.fetchone()
+
+        # 4. Denetim (Audit) kaydı oluştur
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "CREATE", "danisan_kodlari"))
         conn.commit()
-        veri = DanisanKoduModeli(danisan_kod_id=kayit[0], ucretli_mi=kayit[1], istisna_turu=kayit[2], aktif_mi=kayit[3], olusturulma_tarihi=kayit[4])
-        return {"durum": "basarili", "veri": veri.model_dump(mode="json")}
+
+        return {
+            "durum": "basarili", 
+            "veri": {
+                "danisan_kod_id": kayit[0],
+                "ucretli_mi": kayit[1],
+                "istisna_turu": kayit[2],
+                "aktif_mi": kayit[3],
+                "olusturulma_tarihi": kayit[4],
+                "olusturan_psikolog_id": kayit[5]
+            }
+        }
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -1963,6 +2064,36 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.get("/api/psikologlar/{personel_id}/odalar")
+def psikolog_odalarini_getir(
+    personel_id: int,
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")) 
+):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        
+        # personeller tablosunu araya koyarak personel_id üzerinden 
+        # doğru kullanici_id'ye ulaşıyor ve sadece ona ait odaları çekiyoruz.
+        sorgu = """
+            SELECT o.oda_id, o.oda_adi, o.aktif_mi
+            FROM odalar o
+            JOIN psikolog_odalar po ON o.oda_id = po.oda_id
+            JOIN personeller p ON p.kullanici_id = po.kullanici_id
+            WHERE p.personel_id = %s AND o.aktif_mi = TRUE;
+        """
+        cursor.execute(sorgu, (personel_id,))
+        odalar = cursor.fetchall()
+        
+        return [{"oda_id": oda[0], "oda_adi": oda[1], "aktif_mi": oda[2]} for oda in odalar]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+        
 @app.get("/api/odalar")
 def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))):
     conn = None
@@ -2032,9 +2163,43 @@ def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OL
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT danisan_kod_id, ucretli_mi, aktif_mi FROM danisan_kodlari WHERE aktif_mi = TRUE ORDER BY olusturulma_tarihi DESC;")
+
+        # 1. Kullanıcının rolünü öğreniyoruz
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol_kayit = cursor.fetchone()
+        rol_adi = rol_kayit[0].upper() if rol_kayit else ""
+
+        # 2. Eğer kullanıcı PSIKOLOG ise, sadece kendi oluşturduğu danışan kodlarını getiriyoruz
+        if rol_adi == "PSIKOLOG":
+            cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
+            pers = cursor.fetchone()
+            if not pers:
+                raise HTTPException(status_code=403, detail="Personel kaydınız bulunamadı.")
+            psikolog_id = pers[0]
+
+            cursor.execute(
+                """
+                SELECT danisan_kod_id, ucretli_mi, aktif_mi 
+                FROM danisan_kodlari 
+                WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s 
+                ORDER BY olusturulma_tarihi DESC;
+                """, 
+                (psikolog_id,)
+            )
+        else:
+            # 3. ADMIN, MEMUR veya Müdür gibi üst roller tüm aktif danışan kodlarını görebilir
+            cursor.execute(
+                """
+                SELECT danisan_kod_id, ucretli_mi, aktif_mi 
+                FROM danisan_kodlari 
+                WHERE aktif_mi = TRUE 
+                ORDER BY olusturulma_tarihi DESC;
+                """
+            )
+
         kayitlar = cursor.fetchall()
         return [{"danisan_kod_id": k[0], "ucretli_mi": k[1], "aktif_mi": k[2]} for k in kayitlar]
+
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

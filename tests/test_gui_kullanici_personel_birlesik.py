@@ -75,9 +75,16 @@ def form(qt_app):
 def rol_sec(form, rol_id):
     form.combo_rol.setCurrentIndex(form.combo_rol.findData(rol_id))
 
+def oda_sec(form, oda_id=1):
+    """Psikolog rolü en az bir oda ister; testte işaretli bir oda ekler."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
 
-# ---------------------------------------------------------------- yardımcılar
-
+    item = QListWidgetItem("Oda 1")
+    item.setData(Qt.UserRole, oda_id)
+    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+    item.setCheckState(Qt.Checked)
+    form.liste_odalar.addItem(item)
 
 
 
@@ -107,6 +114,7 @@ def test_danisma_ogrencisi_ad_ve_numarasiz_olusturulamaz(form):
 def test_kullanici_ve_personel_tek_istekte_olusturulur(form):
     form.input_kullanici_adi.setText("doktor_x")
     rol_sec(form, 1)
+    oda_sec(form)
 
     yanit = cevap(201, {
         "kullanici_id": 30,
@@ -123,6 +131,7 @@ def test_kullanici_ve_personel_tek_istekte_olusturulur(form):
     assert post.call_args.kwargs["json"] == {
         "kullanici_adi": "doktor_x",
         "rol_id": 1,
+        "oda_idleri": [1],
     }
 
     assert not form.sonuc_kutusu.isHidden()
@@ -150,6 +159,14 @@ def test_ayni_kullanici_adi_409_pencereyi_kilitlemez(form):
     assert form.btn_kaydet.isEnabled()
     assert form.sonuc_kutusu.isHidden()
 
+def test_psikolog_odasiz_olusturulamaz(form):
+    form.input_kullanici_adi.setText("doktor_y")
+    rol_sec(form, 1)
+    with patch.object(modul.requests, "post") as post, \
+            patch.object(QMessageBox, "warning") as uyari:
+        form.kaydet()
+    post.assert_not_called()
+    uyari.assert_called_once()
 
 def test_danisma_ogrencisi_tek_istekte_kaydedilir(form):
     rol_sec(form, 4)
@@ -204,6 +221,7 @@ def test_diger_rollerde_ogrenci_bilgisi_gonderilmez(form):
 
 def test_basarili_olusturmadan_sonra_kapatirken_uyari_yok(form):
     rol_sec(form, 1)
+    oda_sec(form)
     form.input_kullanici_adi.setText("doktor_y")
 
     yanit = cevap(201, {
@@ -539,6 +557,7 @@ def oturum_bitti_yaniti():
 def test_hesap_olustururken_oturum_biterse_form_degismez_ve_uyari_cikmaz(form):
     form.input_kullanici_adi.setText("doktor_z")
     rol_sec(form, 1)
+    oda_sec(form)
     with patch.object(modul.requests, "post", return_value=oturum_bitti_yaniti()), \
             patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "critical") as hata:
         form.kaydet()
@@ -552,6 +571,7 @@ def test_personel_kodu_eksikse_basarili_gosterilmez(form):
 
     form.input_kullanici_adi.setText("doktor_w")
     rol_sec(form, 1)
+    oda_sec(form)
 
     eksik_yanit = cevap(201, {
         "kullanici_id": 60,
@@ -686,6 +706,7 @@ def test_basarili_kayit_sonrasi_iptal_butonu_kapat_olur(form):
     """Kayit tamamlandiginda Iptal dugmesi Kapat olarak degisir."""
     form.input_kullanici_adi.setText("qa_kapat_test")
     rol_sec(form, 1)
+    oda_sec(form)
 
     form.show()
     assert form.btn_kaydet.isVisible()
