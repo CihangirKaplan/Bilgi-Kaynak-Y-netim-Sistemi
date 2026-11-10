@@ -81,6 +81,7 @@ def test_quality_randevu_deadlock_sonrasi_basarili_yeniden_deneme():
         (1,),        # Danisan kodu aktif
         (1,),        # Aktif psikolog
         (1,),        # Aktif oda
+        (1,),        # Oda psikoloğa atanmış
         None,        # Randevu cakismasi yok
         (123,),      # Olusturulan randevu ID
     ]

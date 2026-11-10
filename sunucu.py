@@ -1721,6 +1721,16 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
 # ==========================================
 # RANDEVU & ODA MODÜLÜ
 # ==========================================
+def psikolog_odasina_atanmis_mi(cursor, psikolog_id: int, oda_id: int) -> bool:
+    """Oda, seçilen psikoloğa (personel_id) atanmış mı? Yetki kuralı sunucuda da uygulanır."""
+    cursor.execute(
+        "SELECT 1 FROM psikolog_odalar po "
+        "JOIN personel p ON p.kullanici_id = po.kullanici_id "
+        "WHERE p.personel_id = %s AND po.oda_id = %s;",
+        (psikolog_id, oda_id),
+    )
+    return cursor.fetchone() is not None
+
 @app.get("/api/randevular/siradaki-kod")
 def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     conn = None
@@ -1809,6 +1819,9 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if cursor.fetchone() is None:
             raise HTTPException(status_code=422, detail="Oda bulunamadı veya aktif değil.")
 
+        if not psikolog_odasina_atanmis_mi(cursor, randevu.psikolog_id, randevu.oda_id):
+            raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
+
         # 4. Çakışma kontrolü
         cursor.execute("SELECT 1 FROM randevular WHERE durum = 'PLANLANDI' AND (psikolog_id = %s OR oda_id = %s) AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (randevu.psikolog_id, randevu.oda_id, randevu.bitis_zamani, randevu.baslangic_zamani))
         if cursor.fetchone() is not None:
@@ -1871,13 +1884,13 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTU
         # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
         rol_adi = str(rol_sonuc[0]).lower() if rol_sonuc else ""
         
-        # 1. DURUM: Psikolog ise
+        # 1. DURUM: Psikolog ise yalnızca kendi randevularını görür
         if "psikolog" in rol_adi:
             sorgu = """
                 SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi 
                 FROM randevular r
-                JOIN psikolog_odalar po ON r.oda_id = po.oda_id
-                WHERE po.kullanici_id = %s
+                JOIN personel p ON p.personel_id = r.psikolog_id
+                WHERE p.kullanici_id = %s
                 ORDER BY r.baslangic_zamani;
             """
             cursor.execute(sorgu, (kullanici_id,))
@@ -1945,6 +1958,8 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
             raise HTTPException(status_code=403, detail="Randevuyu başka psikoloğa devredemezsiniz.")
         if baslangic >= bitis:
             raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+        if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
+            raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 
         cursor.execute("SELECT 1 FROM randevular WHERE randevu_id != %s AND durum = 'PLANLANDI' AND (psikolog_id = %s OR oda_id = %s) AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (randevu_id, psikolog_id, oda_id, bitis, baslangic))
         if cursor.fetchone() is not None:
@@ -2075,21 +2090,21 @@ def psikolog_odalarini_getir(
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
         
-        # personeller tablosunu araya koyarak personel_id üzerinden 
+        # personel tablosunu araya koyarak personel_id üzerinden 
         # doğru kullanici_id'ye ulaşıyor ve sadece ona ait odaları çekiyoruz.
         sorgu = """
             SELECT o.oda_id, o.oda_adi, o.aktif_mi
             FROM odalar o
             JOIN psikolog_odalar po ON o.oda_id = po.oda_id
-            JOIN personeller p ON p.kullanici_id = po.kullanici_id
+            JOIN personel p ON p.kullanici_id = po.kullanici_id
             WHERE p.personel_id = %s AND o.aktif_mi = TRUE;
         """
         cursor.execute(sorgu, (personel_id,))
         odalar = cursor.fetchall()
         
         return [{"oda_id": oda[0], "oda_adi": oda[1], "aktif_mi": oda[2]} for oda in odalar]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Psikoloğun odaları alınırken bir hata oluştu.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -2212,12 +2227,12 @@ def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT p.personel_id, k.kullanici_adi
+            SELECT p.personel_id, k.kullanici_adi, k.kullanici_id
             FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id
             WHERE p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG';
         """)
         kayitlar = cursor.fetchall()
-        return [{"personel_id": k[0], "ad_soyad": k[1]} for k in kayitlar]
+        return [{"personel_id": k[0], "ad_soyad": k[1], "kullanici_id": k[2]} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

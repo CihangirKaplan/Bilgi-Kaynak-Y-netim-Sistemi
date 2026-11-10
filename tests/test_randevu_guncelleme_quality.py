@@ -80,6 +80,7 @@ IPTAL_EDILMIS_RANDEVU = (
             [
                 MEVCUT_RANDEVU,
                 ("ADMIN",),
+                (1,),   # Oda psikoloğa atanmış
                 (99,),
             ],
             {"oda_id": 2},
@@ -220,6 +221,7 @@ def test_quality_randevu_guncelleme_basarili():
     cursor.fetchone.side_effect = [
         MEVCUT_RANDEVU,
         ("ADMIN",),
+        (1,),  # Oda psikoloğa atanmış
         None,  # Cakisma yok
     ]
 
@@ -262,6 +264,7 @@ def test_quality_randevu_guncelleme_exclusion_violation():
     cursor.fetchone.side_effect = [
         MEVCUT_RANDEVU,
         ("ADMIN",),
+        (1,),  # Oda psikoloğa atanmış
         None,
     ]
 

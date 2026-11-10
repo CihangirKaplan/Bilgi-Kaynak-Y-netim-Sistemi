@@ -79,6 +79,7 @@ def test_quality_cakisan_randevu_http_409():
         (1,),         # Danisan kodu aktif
         (1,),         # Psikolog aktif
         (1,),         # Oda aktif
+        (1,),         # Oda psikoloğa atanmış
         (99,),        # Cakisan randevu bulundu
     ]
 
