@@ -189,6 +189,7 @@ MENU = [
         dict(ikon="📅", ad="Randevu Takvimi", izin="Randevu takvimini görüntüleme",
              aciklama="Randevu takvimi ve seans planlaması",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
+                      ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
@@ -1698,8 +1699,11 @@ QLabel {
                 btn.setCursor(Qt.PointingHandCursor)
 
                 # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
-                if izin_kodu == "Randevu oluşturma":
+                # İzin koduna veya etikete bakarak ilgili fonksiyonları bağla
+                if "Yeni Randevu" in etiket:
                     btn.clicked.connect(self.yeni_randevu_ekrani_ac)
+                elif "Yeni Danışan" in etiket:
+                    btn.clicked.connect(self.hizli_danisan_kod_olustur)
                 elif izin_kodu == "Arıza kayıtlarını yönetme":
                     btn.clicked.connect(self.yeni_ariza_bildirimi_ac)
                 elif izin_kodu == "Randevu düzenleme":
@@ -1923,7 +1927,12 @@ QLabel {
             il = QVBoxLayout(ik)
 
             from randevu_ekranlari import RandevuAnaEkrani
-            self.randevu_ana_ekrani = RandevuAnaEkrani(api_url=self.api_url, token=self.token,mevcut_psikolog_id=self.kullanici_id)
+            self.randevu_ana_ekrani = RandevuAnaEkrani(
+                api_url=self.api_url, 
+                token=self.token, 
+                mevcut_psikolog_id=self.kullanici_id,
+                rol=self.kullanici_adi
+            )
             il.addWidget(self.randevu_ana_ekrani)
 
             lay.addWidget(ik, 1)
@@ -2014,6 +2023,11 @@ QLabel {
         self.randevu_formu = RandevuOlusturFormu(
             api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
         )
+        
+        # Form başarıyla kaydedildiğinde tabloyu doğrudan tetikle
+        if hasattr(self, 'randevu_ana_ekrani'):
+            self.randevu_formu.veriler_degisti.connect(self.randevu_ana_ekrani.verileri_cek)
+
         orijinal_close = self.randevu_formu.closeEvent
         def kapanma_yakala(event):
             if (
@@ -2023,6 +2037,7 @@ QLabel {
                 self.randevu_ana_ekrani.verileri_cek()
             if orijinal_close: orijinal_close(event)
             else: event.accept()
+            
         self.randevu_formu.closeEvent = kapanma_yakala
         self.randevu_formu.show()
     
@@ -2034,6 +2049,15 @@ QLabel {
         )
         self.liste_formu.finished.connect(lambda: self.randevu_ana_ekrani.verileri_cek() if hasattr(self, 'randevu_ana_ekrani') else None)
         self.liste_formu.show()
+
+    def hizli_danisan_kod_olustur(self):
+        from danisan_diyalog import DanisanOlusturDialog
+
+        dialog = DanisanOlusturDialog(api_url=self.api_url, token=self.token, ebeveyn=self)
+        if dialog.exec():
+            # Kullanıcı bizzat pencereyi açıp "Danışanı Oluştur" butonuna basarsa yeni kod üretilir.
+            if hasattr(self, 'randevu_ana_ekrani'):
+                self.randevu_ana_ekrani.verileri_cek()
 
     def cihaz_ekle_tetikle(self):
         if hasattr(self, 'aktif_cihaz_ekrani'):
