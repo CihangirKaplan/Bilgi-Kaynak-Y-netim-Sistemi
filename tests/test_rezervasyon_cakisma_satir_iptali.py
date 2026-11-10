@@ -140,8 +140,10 @@ def test_kalibrasyon_tarihi_degisince_sorulur_ve_eski_bos_kayitta_atlanir():
 # ----------------------------------------------- sunucu: yeni rezervasyon aynı saate denk gelirse
 def test_dolu_saate_rezervasyonda_cakisan_rezervasyonlar_listelenir():
     conn, cursor = baglanti(REZ[:1], fetchone=[("Kullanima_Hazir",), None, (1,)])
+    # Sunucu geçmiş zamanlı rezervasyonu reddeder; bu yüzden zaman her zaman gelecekte olmalı (sabit tarih zamanla bozulur).
+    gelecek = (datetime.datetime.now() + datetime.timedelta(days=7)).replace(hour=10, minute=30, second=0, microsecond=0)
     rez = RezervasyonOlusturModeli(
-        cihaz_id=7, baslangic_zamani="2026-11-10T10:30:00", bitis_zamani="2026-11-10T11:30:00"
+        cihaz_id=7, baslangic_zamani=gelecek.isoformat(), bitis_zamani=(gelecek + datetime.timedelta(hours=1)).isoformat()
     )
     with patch("sunucu.psycopg2.connect", return_value=conn):
         with pytest.raises(HTTPException) as hata:
