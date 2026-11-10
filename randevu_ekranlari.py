@@ -5,8 +5,10 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
                                QAbstractItemView, QPushButton, QLineEdit,
                                QDateEdit)
-from PySide6.QtCore import QDateTime, Signal, Qt, QDate
+from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QStyledItemDelegate
+from datetime import datetime, timedelta
 
 from istemci_modelleri import IstemciRandevu 
 from ui_components import StandartButon
@@ -14,7 +16,107 @@ from ui_components import StandartButon
 # ======================================================================
 #  APT-002: YENİ RANDEVU OLUŞTURMA FORMU
 # ======================================================================
-class RandevuOlusturFormu(QWidget):
+SAAT_LISTESI = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
+DOLU_ETIKETLERI = {"oda": "Oda dolu", "psikolog": "Psikolog dolu", "oda_ve_psikolog": "Dolu"}
+
+
+def dolu_saatleri_hesapla(dolu_araliklar, tarih_str):
+    """Sunucudan gelen dolu aralıklardan {saat: sebep} sözlüğü üretir (1 saatlik dilimler)."""
+    dolu = {}
+    for saat in SAAT_LISTESI:
+        dilim_bas = datetime.fromisoformat(f"{tarih_str}T{saat}:00")
+        dilim_bit = dilim_bas + timedelta(hours=1)
+        oda = psikolog = False
+        for aralik in dolu_araliklar:
+            try:
+                bas = datetime.fromisoformat(str(aralik["baslangic"]).split(".")[0])
+                bit = datetime.fromisoformat(str(aralik["bitis"]).split(".")[0])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if bas < dilim_bit and bit > dilim_bas:
+                sebep = aralik.get("sebep", "oda_ve_psikolog")
+                oda = oda or sebep in ("oda", "oda_ve_psikolog")
+                psikolog = psikolog or sebep in ("psikolog", "oda_ve_psikolog")
+        if oda or psikolog:
+            dolu[saat] = "oda_ve_psikolog" if (oda and psikolog) else ("oda" if oda else "psikolog")
+    return dolu
+
+
+class DolulukGosterimi:
+    """Randevu oluşturma ve düzenleme formlarında ortak: dolu saatleri soluk ve seçilemez gösterir.
+
+    Gösterim yalnızca kolaylıktır; son karar sunucudadır (409 + veritabanı kısıtı).
+    Sunucuya ulaşılamazsa hiçbir saat kapatılmaz.
+    """
+
+    def doluluk_gosterimini_kur(self):
+        # Stil tanımlı açılır liste varsayılan çiziciyle pasif/soluk rengi göstermez; standart çizici gerekir.
+        self.cmb_saat.setItemDelegate(QStyledItemDelegate(self.cmb_saat))
+        self._doluluk_zamanlayici = QTimer(self)
+        self._doluluk_zamanlayici.setSingleShot(True)
+        self._doluluk_zamanlayici.timeout.connect(self.doluluk_yenile)
+        self.dt_tarih.dateChanged.connect(self.doluluk_yenilemeyi_planla)
+        self.cmb_odalar.currentIndexChanged.connect(self.doluluk_yenilemeyi_planla)
+        self.cmb_psikologlar.currentIndexChanged.connect(self.doluluk_yenilemeyi_planla)
+        self.doluluk_yenilemeyi_planla()
+
+    def doluluk_yenilemeyi_planla(self, *_):
+        # Art arda gelen değişiklikler (liste temizleme + doldurma) tek istekte birleşir.
+        self._doluluk_zamanlayici.start(0)
+
+    def doluluk_yenile(self):
+        oda_id = self.cmb_odalar.currentData()
+        psikolog_id = self.cmb_psikologlar.currentData()
+        tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
+        dolu = {}
+        if oda_id is not None or psikolog_id is not None:
+            params = {"tarih": tarih_str}
+            if oda_id is not None:
+                params["oda_id"] = int(oda_id)
+            if psikolog_id is not None:
+                params["psikolog_id"] = int(psikolog_id)
+            haric = getattr(self, "randevu_id", None)
+            if haric:
+                params["haric_randevu_id"] = int(haric)
+            headers = {"Authorization": f"Bearer {self.token}"}
+            try:
+                cevap = oturum_kontrollu_istek(
+                    "GET", f"{self.api_url}/api/randevular/doluluk",
+                    params=params, headers=headers, timeout=5,
+                )
+                if oturum_hatasi_mi(cevap):
+                    return
+                if cevap.status_code == 200:
+                    dolu = dolu_saatleri_hesapla(cevap.json().get("dolu_araliklar", []), tarih_str)
+            except Exception:
+                dolu = {}
+        self.saat_kutusunu_guncelle(dolu)
+
+    def saat_kutusunu_guncelle(self, dolu):
+        model = self.cmb_saat.model()
+        for i in range(self.cmb_saat.count()):
+            saat = self.cmb_saat.itemData(i)
+            sebep = dolu.get(saat)
+            self.cmb_saat.setItemText(i, saat if sebep is None else f"{saat}  —  {DOLU_ETIKETLERI[sebep]}")
+            model.item(i).setEnabled(sebep is None)
+            # Dolu saat soluk (gri), boş saat normal renkte görünür.
+            model.item(i).setForeground(QColor("#94A3B8" if sebep else "#0F2552"))
+        if self.saat_secimi() is None:
+            ilk_bos = next((i for i in range(self.cmb_saat.count()) if model.item(i).isEnabled()), -1)
+            self.cmb_saat.setCurrentIndex(ilk_bos)
+
+    def saat_secimi(self):
+        """Seçili saat ("HH:MM"); seçim yoksa ya da seçili saat doluysa None."""
+        index = self.cmb_saat.currentIndex()
+        if index < 0:
+            return None
+        oge = self.cmb_saat.model().item(index)
+        if oge is not None and not oge.isEnabled():
+            return None
+        return self.cmb_saat.itemData(index)
+
+
+class RandevuOlusturFormu(DolulukGosterimi, QWidget):
     veriler_degisti = Signal()
     def __init__(self, api_url, token, mevcut_psikolog_id):
         super().__init__()
@@ -83,7 +185,8 @@ class RandevuOlusturFormu(QWidget):
         form_layout.addRow("Randevu Tarihi:", self.dt_tarih)
 
         self.cmb_saat = QComboBox()
-        self.cmb_saat.addItems(["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"])
+        for _saat in SAAT_LISTESI:
+            self.cmb_saat.addItem(_saat, _saat)
         form_layout.addRow("Randevu Saati:", self.cmb_saat)
 
         ana_layout.addLayout(form_layout)
@@ -100,6 +203,7 @@ class RandevuOlusturFormu(QWidget):
         self.btn_kaydet.setFixedWidth(160)
         self.btn_kaydet.setStyleSheet("background-color: #2563EB; color: white; border-radius: 6px; padding: 8px; font-weight: bold;")
         self.btn_kaydet.clicked.connect(self.randevuyu_kaydet)
+        self.doluluk_gosterimini_kur()
 
         buton_layout.addWidget(btn_iptal)
         buton_layout.addWidget(self.btn_kaydet)
@@ -204,7 +308,10 @@ class RandevuOlusturFormu(QWidget):
             return
             
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
-        saat_str = self.cmb_saat.currentText()
+        saat_str = self.saat_secimi()
+        if saat_str is None:
+            QMessageBox.warning(self, "Saat Seçilemedi", "Seçilen tarih için boş saat yok ya da seçili saat dolu. Lütfen başka bir saat, oda veya tarih seçiniz.")
+            return
         saat_int = int(saat_str.split(":")[0])
 
         baslangic_str = f"{tarih_str}T{saat_str}:00"
@@ -239,7 +346,7 @@ class RandevuOlusturFormu(QWidget):
 # ======================================================================
 #  APT-003 & APT-004: MEVCUT RANDEVUYU DÜZENLEME VE İPTAL FORMU
 # ======================================================================
-class RandevuDuzenleFormu(QWidget):
+class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
     veriler_degisti = Signal()
 
     def __init__(self, api_url, token, mevcut_psikolog_id, randevu_id, eski_veriler):
@@ -319,7 +426,8 @@ class RandevuDuzenleFormu(QWidget):
         form_layout.addRow("Randevu Tarihi:", self.dt_tarih)
 
         self.cmb_saat = QComboBox()
-        self.cmb_saat.addItems(["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"])
+        for _saat in SAAT_LISTESI:
+            self.cmb_saat.addItem(_saat, _saat)
         form_layout.addRow("Randevu Saati:", self.cmb_saat)
 
         ana_layout.addLayout(form_layout)
@@ -328,6 +436,7 @@ class RandevuDuzenleFormu(QWidget):
         self.btn_guncelle = QPushButton("Değişiklikleri Kaydet")
         self.btn_guncelle.setObjectName("btnGuncelle")
         self.btn_guncelle.clicked.connect(self.randevuyu_guncelle)
+        self.doluluk_gosterimini_kur()
         
         buton_layout.addStretch()
         buton_layout.addWidget(self.btn_guncelle)
@@ -400,7 +509,7 @@ class RandevuDuzenleFormu(QWidget):
         self.dt_tarih.setDate(QDate.fromString(tarih_kismi, "yyyy-MM-dd"))
 
         saat_kisa = saat_kismi[:5]
-        index = self.cmb_saat.findText(saat_kisa)
+        index = self.cmb_saat.findData(saat_kisa)
         if index >= 0:
             self.cmb_saat.setCurrentIndex(index)
 
@@ -411,7 +520,10 @@ class RandevuDuzenleFormu(QWidget):
             return
             
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
-        saat_str = self.cmb_saat.currentText()
+        saat_str = self.saat_secimi()
+        if saat_str is None:
+            QMessageBox.warning(self, "Saat Seçilemedi", "Seçilen tarihte boş saat yok ya da seçili saat dolu. Randevu güncellenemedi; başka bir saat, oda veya tarih seçiniz.")
+            return
         saat_int = int(saat_str.split(":")[0])
 
         guncel_veriler = {
