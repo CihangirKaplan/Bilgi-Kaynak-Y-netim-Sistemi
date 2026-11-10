@@ -8,7 +8,7 @@ from api_yoneticisi import (
 from PySide6.QtWidgets import (QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
                                QSizePolicy)
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QColor
 
 AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
@@ -51,6 +51,40 @@ class KaydirmaKilitliAlan(QScrollArea):
         super().wheelEvent(olay)
         if self.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn:
             olay.accept()
+
+
+class TiklanabilirKart(QFrame):
+    """Özet kartı: tıklanınca ilgili sayfayı açar. Tıklanabilir değilken eskisi gibi yalnızca bilgi gösterir."""
+    tiklandi = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._tiklanabilir = False
+        self._basili = False
+
+    def tiklanabilir_yap(self, acik, ipucu=""):
+        self._tiklanabilir = acik
+        self.setProperty("tiklanabilir", "true" if acik else "false")
+        self.setCursor(Qt.PointingHandCursor if acik else Qt.ArrowCursor)
+        self.setToolTip(ipucu if acik else "")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mousePressEvent(self, olay):
+        self._basili = self._tiklanabilir and olay.button() == Qt.LeftButton
+        super().mousePressEvent(olay)
+
+    def mouseReleaseEvent(self, olay):
+        if self._basili and olay.button() == Qt.LeftButton and self.rect().contains(olay.position().toPoint()):
+            self.tiklandi.emit()
+        self._basili = False
+        super().mouseReleaseEvent(olay)
+
+
+KART_TIKLANABILIR_STILI = """
+QFrame#kart[tiklanabilir="true"] { border: 1px solid transparent; }
+QFrame#kart[tiklanabilir="true"]:hover { border: 1px solid #2563EB; background: #F5F9FF; }
+"""
 
 
 def _tablo_olustur(kolonlar):
@@ -121,6 +155,15 @@ KAYDIRMA_CUBUGU_STILI = """
 QScrollArea#bildirimKaydirma { background: transparent; }
 QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
 """ + CUBUK_STILI
+# Özet kartı -> (açılacak sayfa, cihaz durumu filtresi, ipucu). Filtre yalnızca Cihaz Envanteri'nde uygulanır.
+KART_HEDEFLERI = {
+    "randevu": ("Randevu Takvimi", None, "Randevu takvimini aç"),
+    "rezervasyon": ("Cihaz Rezervasyonu", None, "Cihaz rezervasyonlarını aç"),
+    "aktif_cihaz": ("Cihaz Envanteri", "Kullanima_Hazir", "Kullanıma hazır cihazları envanterde göster"),
+    "bakimdaki_cihaz": ("Cihaz Envanteri", "Bakimda", "Bakımdaki cihazları envanterde göster"),
+    "kalibrasyondaki_cihaz": ("Cihaz Envanteri", "Kalibrasyonda", "Kalibrasyondaki cihazları envanterde göster"),
+    "arizali_cihaz": ("Cihaz Envanteri", "Arizali", "Arızalı cihazları envanterde göster"),
+}
 TABLO_GORUNEN_SATIR = 5        # tabloda kaydırmadan görünen satır sayısı; fazlası kaydırma çubuğuyla görülür
 
 
@@ -134,8 +177,10 @@ class DashboardEkrani(QWidget):
     """
 
     def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
-                 parola_talepleri_goster=False):
-        """sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
+                 parola_talepleri_goster=False, kart_ac=None):
+        """kart_ac(sayfa_adi, cihaz_durumu): özet kartına tıklanınca o sayfayı (cihaz kartlarında o duruma göre
+        süzülmüş) açar; verilmezse kartlar yalnızca bilgi gösterir. Yetkisiz olunan sayfanın kartı tıklanamaz.
+        sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
         sayfa_izinli_mi(sayfa_adi): kullanıcının o sayfaya yetkisi yoksa False; o sayfanın bildirimi hiç gösterilmez.
         İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz)."""
         super().__init__()
@@ -144,6 +189,7 @@ class DashboardEkrani(QWidget):
         self.cihaz_ozeti = cihaz_ozeti
         self._sayfa_ac = sayfa_ac
         self._sayfa_izinli_mi = sayfa_izinli_mi
+        self._kart_ac = kart_ac
         self._parola_talepleri_goster = parola_talepleri_goster
         self.parola_talepleri = []
         self.basliklar = {"Authorization": f"Bearer {token}"}
@@ -181,6 +227,7 @@ class DashboardEkrani(QWidget):
             kart, lbl_deger, lbl_alt = self._kart(baslik, ikon, renk, zemin)
             self.kartlar[anahtar] = (lbl_deger, lbl_alt)
             self.kart_widgetleri.append(kart)
+            self._karti_baglantila(kart, anahtar)
         self._kartlari_diz(self._kolon_sayisi(0))
         ana.addLayout(self.kart_grid)
 
@@ -257,8 +304,22 @@ class DashboardEkrani(QWidget):
             self.yan_yana.setDirection(yon)
 
     # ------------------------------------------------------------------
+    def _karti_baglantila(self, kart, anahtar):
+        """Kart, kart_ac verilmişse ve kullanıcı hedef sayfaya girebiliyorsa tıklanabilir olur."""
+        sayfa, _durum, ipucu = KART_HEDEFLERI[anahtar]
+        kart.setProperty("anahtar", anahtar)
+        kart.setStyleSheet(KART_TIKLANABILIR_STILI)
+        kart.tiklandi.connect(self._kart_tiklandi)
+        kart.tiklanabilir_yap(self._kart_ac is not None and self._sayfa_izinli(sayfa), ipucu)
+
+    def _kart_tiklandi(self):
+        kart = self.sender()
+        hedef = KART_HEDEFLERI.get(kart.property("anahtar")) if kart is not None else None
+        if hedef is not None and self._kart_ac is not None:
+            self._kart_ac(hedef[0], hedef[1])
+
     def _kart(self, baslik, ikon, renk, zemin):
-        kart = QFrame()
+        kart = TiklanabilirKart()
         kart.setObjectName("kart")
         ana = QHBoxLayout(kart)
         ana.setContentsMargins(18, 16, 18, 16)
