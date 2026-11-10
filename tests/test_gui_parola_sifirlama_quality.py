@@ -103,9 +103,11 @@ def test_basarili_sifirlama_dogru_apiyi_cagirir(ekran):
     ):
         ekran.secili_kullanici_parola_sifirla()
 
-    api.assert_called_once()
+    # İlk istek sıfırlamadır; ardından bekleyen talepler paneli tazelenir (ikinci istek, GET).
+    assert api.call_count == 2
+    assert api.call_args_list[1].args[:2] == ("GET", "http://127.0.0.1:8001/api/parola-sifirlama-talepleri")
 
-    args, kwargs = api.call_args
+    args, kwargs = api.call_args_list[0]
 
     assert args[0] == "POST"
     assert args[1].endswith(

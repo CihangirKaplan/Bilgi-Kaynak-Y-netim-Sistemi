@@ -48,8 +48,15 @@ def _tablo_olustur(kolonlar):
     return tablo
 
 
-def _tablo_boyutlandir(tablo, satir_sayisi):
-    tablo.setFixedHeight(46 + SATIR_YUKSEKLIK * max(satir_sayisi, 1) + 4)
+def _tablo_boyutlandir(tablo, satir_sayisi, en_fazla_gorunen=None):
+    """Tablo yüksekliğini ayarlar. en_fazla_gorunen verilmişse ve satır sayısı onu aşıyorsa tablo o satır
+    kadar yükseklikte kalır, başlık sabit durur ve satırlar büyük renkli bir çubukla kaydırılır."""
+    kaydirilabilir = en_fazla_gorunen is not None and satir_sayisi > en_fazla_gorunen
+    gorunen = en_fazla_gorunen if kaydirilabilir else max(satir_sayisi, 1)
+    tablo.setFixedHeight(46 + SATIR_YUKSEKLIK * gorunen + 4)
+    tablo.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn if kaydirilabilir else Qt.ScrollBarAlwaysOff)
+    tablo.setStyleSheet(TABLO_STIL + (CUBUK_STILI if kaydirilabilir else ""))
+    return kaydirilabilir
 
 
 def _item(metin, ortala=True, renk=None, kalin=False):
@@ -81,15 +88,18 @@ def _hap(tablo, satir, kolon, metin, renk, arka):
     tablo.setCellWidget(satir, kolon, kap)
 
 
-KAYDIRMA_CUBUGU_STILI = """
-QScrollArea#bildirimKaydirma { background: transparent; }
-QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
+CUBUK_STILI = """
 QScrollBar:vertical { background: #DCE8FB; width: 18px; margin: 2px 0 2px 8px; border-radius: 9px; }
 QScrollBar::handle:vertical { background: #2563EB; min-height: 70px; border-radius: 9px; margin: 2px; }
 QScrollBar::handle:vertical:hover { background: #1D4ED8; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 """
+KAYDIRMA_CUBUGU_STILI = """
+QScrollArea#bildirimKaydirma { background: transparent; }
+QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
+""" + CUBUK_STILI
+TABLO_GORUNEN_SATIR = 5        # tabloda kaydırmadan görünen satır sayısı; fazlası kaydırma çubuğuyla görülür
 
 
 class DashboardEkrani(QWidget):
@@ -101,7 +111,8 @@ class DashboardEkrani(QWidget):
     Bugünkü randevu listesi her rolde gösterilir.
     """
 
-    def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None):
+    def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
+                 parola_talepleri_goster=False):
         """sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
         sayfa_izinli_mi(sayfa_adi): kullanıcının o sayfaya yetkisi yoksa False; o sayfanın bildirimi hiç gösterilmez.
         İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz)."""
@@ -111,6 +122,8 @@ class DashboardEkrani(QWidget):
         self.cihaz_ozeti = cihaz_ozeti
         self._sayfa_ac = sayfa_ac
         self._sayfa_izinli_mi = sayfa_izinli_mi
+        self._parola_talepleri_goster = parola_talepleri_goster
+        self.parola_talepleri = []
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.ozet = {}
         self.islemler = []
@@ -179,8 +192,9 @@ class DashboardEkrani(QWidget):
             if self._sayfa_ac is not None:
                 self.tablo_islem.viewport().setCursor(Qt.PointingHandCursor)
             self.lbl_islem_bos = QLabel("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
-            ana.addWidget(self._panel("Yaklaşan ve Geciken Bakım/Kalibrasyonlar",
-                                      "🛠️  uyarı süresi içinde ve geciken", self.tablo_islem, self.lbl_islem_bos))
+            self.panel_islem = self._panel("Yaklaşan ve Geciken Bakım/Kalibrasyonlar",
+                                           "🛠️  uyarı süresi içinde ve geciken", self.tablo_islem, self.lbl_islem_bos)
+            ana.addWidget(self.panel_islem)
 
         self.tarih_panelleri = [(panel_randevu, "📅")]
         if cihaz_ozeti:
@@ -272,6 +286,7 @@ class DashboardEkrani(QWidget):
         lay.addWidget(tablo)
         lay.addWidget(bos_lbl)
         panel.rozet = a
+        panel.ust = ust
         return panel
 
     def _getir(self, yol):
@@ -281,11 +296,11 @@ class DashboardEkrani(QWidget):
         yanit.raise_for_status()
         return yanit.json()
 
-    def _liste_goster(self, tablo, bos_lbl, kayit_sayisi):
+    def _liste_goster(self, tablo, bos_lbl, kayit_sayisi, en_fazla_gorunen=None):
         bos_lbl.setVisible(kayit_sayisi == 0)
         tablo.setVisible(kayit_sayisi > 0)
         tablo.setRowCount(kayit_sayisi)
-        _tablo_boyutlandir(tablo, kayit_sayisi)
+        return _tablo_boyutlandir(tablo, kayit_sayisi, en_fazla_gorunen)
 
     # ------------------------------------------------------------------
     def yenile(self):
@@ -309,6 +324,7 @@ class DashboardEkrani(QWidget):
         if self.cihaz_ozeti:
             self._rezervasyonlari_yukle()
             self._islemleri_yukle()
+            self._parola_taleplerini_yukle()
             self._bildirimleri_olustur()
 
     def _ozet_yukle(self):
@@ -382,7 +398,8 @@ class DashboardEkrani(QWidget):
         gorunen = [(islem, hedef) for islem, hedef in gorunen if hedef is not None and self._sayfa_izinli(hedef)]
         self._islem_hedefleri = [hedef for _, hedef in gorunen]
         self.lbl_islem_bos.setText("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
-        self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(gorunen))
+        kaydirilabilir = self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(gorunen), TABLO_GORUNEN_SATIR)
+        self._kaydirma_ipucu_guncelle(self.panel_islem, len(gorunen) if kaydirilabilir else 0)
         for i, (islem, hedef) in enumerate(gorunen):
             kritik = islem["kalan_gun"] <= 5
             uyari = islem["kalan_gun"] <= 15
@@ -398,15 +415,53 @@ class DashboardEkrani(QWidget):
             _hap(self.tablo_islem, i, 3, kalan, renk, arka)
             self.tablo_islem.cellWidget(i, 3).setToolTip(ipucu)
 
+    def _kaydirma_ipucu_guncelle(self, panel, adet):
+        """Tablo kaydırılabilirse başlık satırına dikkat çeken rozet koyar; değilse kaldırır."""
+        eski = panel.findChild(QLabel, "tabloKaydirmaIpucu")
+        if eski is not None:
+            eski.hide()
+            eski.setParent(None)
+            eski.deleteLater()
+        if adet:
+            ipucu = QLabel(f"⇅  {adet} kayıt var — kaydırarak hepsini görün")
+            ipucu.setObjectName("tabloKaydirmaIpucu")
+            ipucu.setStyleSheet("background: #FEF3C7; color: #854D0E; border-radius: 10px; "
+                                "font-size: 11px; font-weight: 800; padding: 4px 12px;")
+            panel.ust.insertWidget(panel.ust.count() - 1, ipucu)        # sağdaki mevcut rozetin soluna
+
     def _islem_satiri_tiklandi(self, satir, _kolon):
         """Tabloda bir satıra (herhangi bir hücresine) tıklanınca ilgili sayfa açılır."""
         if self._sayfa_ac is not None and 0 <= satir < len(self._islem_hedefleri):
             self._sayfa_ac(self._islem_hedefleri[satir])
 
+    def _parola_taleplerini_yukle(self):
+        """Bekleyen parola sıfırlama talepleri (yalnızca yetkili yöneticide istenir; hata olursa liste boş kalır)."""
+        self.parola_talepleri = []
+        if not self._parola_talepleri_goster:
+            return
+        try:
+            talepler = self._getir("/api/parola-sifirlama-talepleri")
+            self.parola_talepleri = talepler if isinstance(talepler, list) else []
+        except Exception as e:
+            print("Parola talepleri yükleme hatası:", e)
+
     # ------------------------------------------------------------------
     BILDIRIM_SINIRI = 5          # kaydırmadan görünen satır sayısı; fazlası kaydırma çubuğuyla görülür
     HEDEF_SAYFALAR = {"Bakım": "Bakım Kayıtları", "Kalibrasyon": "Kalibrasyon"}
     ARIZA_SAYFASI = "Arıza Kayıtları"
+    PAROLA_SAYFASI = "Kullanıcı & Personel"
+
+    @staticmethod
+    def _bekleme_metni(dakika):
+        """'az önce', '5 dk önce', '2 saat önce', '3 gün önce'."""
+        dakika = max(int(dakika or 0), 0)
+        if dakika < 1:
+            return "az önce"
+        if dakika < 60:
+            return f"{dakika} dk önce"
+        if dakika < 1440:
+            return f"{dakika // 60} saat önce"
+        return f"{dakika // 1440} gün önce"
 
     def _islem_hedefi(self, islem):
         """Bakım ya da kalibrasyon işleminin açacağı sayfa (bilinmeyen tür için None)."""
@@ -419,6 +474,11 @@ class DashboardEkrani(QWidget):
     def _bildirim_satirlari(self):
         """[(ikon, metin, yazı rengi, arka plan, hedef sayfa)] — yetkisiz olunan sayfaların bildirimleri çıkarılır."""
         satirlar = []
+        if self._sayfa_izinli(self.PAROLA_SAYFASI):
+            for talep in self.parola_talepleri:
+                satirlar.append(("🔐", f"{talep['kullanici_adi']} parola sıfırlama istedi "
+                                       f"({self._bekleme_metni(talep.get('bekleme_dakika'))})",
+                                 "#1E3A8A", "#DBEAFE", self.PAROLA_SAYFASI))
         acik_ariza = self.ozet.get("acik_ariza_sayisi", 0)
         if acik_ariza and self._sayfa_izinli(self.ARIZA_SAYFASI):
             satirlar.append(("⚠️", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2",

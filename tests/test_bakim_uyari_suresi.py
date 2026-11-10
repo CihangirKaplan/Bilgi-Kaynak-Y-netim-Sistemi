@@ -220,6 +220,7 @@ def test_zil_kayittaki_uyari_suresine_uyar_15_gun_siniri_yok():
 
     ana = MagicMock()
     ana._oturum_kapatiliyor = False
+    ana._parola_talepleri_gorebilir_mi = lambda: False         # bu testler yalnızca cihaz bildirimlerine bakar
     ana.api_url, ana.token = "http://x", "T"
     ana.nav_btnler = {"Cihaz Envanteri": object()}
     with patch.object(mw, "oturum_kontrollu_istek", side_effect=istek):
@@ -283,6 +284,7 @@ def _zil_hedefleri(nav):
 
     ana = MagicMock()
     ana._oturum_kapatiliyor = False
+    ana._parola_talepleri_gorebilir_mi = lambda: False         # bu testler yalnızca cihaz bildirimlerine bakar
     ana.api_url, ana.token = "http://x", "T"
     ana.nav_btnler = {ad: object() for ad in nav}
     ana._sayfa_izinli_mi = lambda sayfa: sayfa in nav          # yetki = sayfanın erişilebilir olması
