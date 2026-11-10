@@ -548,6 +548,69 @@ def kullanici_olustur(
             ),
         )
         yeni_id = cursor.fetchone()[0]
+
+        personel_kodu = _siradaki_personel_kodu(cursor, rol_adi)
+
+        # Personel kaydı.
+        asama = "personel"
+        cursor.execute(
+            """
+            INSERT INTO personel (kullanici_id, personel_kodu)
+            VALUES (%s, %s)
+            RETURNING personel_id;
+            """,
+            (yeni_id, personel_kodu),
+        )
+        personel_id = cursor.fetchone()[0]
+
+        # Kullanıcı ve personel Audit kayıtları.
+        for tablo, kayit_id in (
+            ("kullanicilar", yeni_id),
+            ("personel", personel_id),
+        ):
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari
+                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (kullanici_id, "CREATE", tablo, kayit_id),
+            )
+
+        if danisma_ogrencisi:
+            asama = "ogrenci"
+            cursor.execute(
+                """
+                INSERT INTO ogrenciler
+                    (kullanici_id, ad_soyad, ogrenci_numarasi, telefon, tur)
+                VALUES (%s, %s, %s, %s, 'DANISMA_MASASI')
+                RETURNING ogrenci_id;
+                """,
+                (
+                    yeni_id,
+                    yeni_kullanici.ad_soyad,
+                    yeni_kullanici.ogrenci_numarasi,
+                    yeni_kullanici.telefon,
+                ),
+            )
+            ogrenci_id = cursor.fetchone()[0]
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari
+                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (kullanici_id, "CREATE", "ogrenciler", ogrenci_id),
+            )
+
+        # Psikolog oda yetkileri.
+        for oda_id in yeni_kullanici.oda_idleri or []:
+            cursor.execute(
+                "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
+                (yeni_id, oda_id),
+            )
+
+        # Her şey başarılıysa tek commit.
         conn.commit()
 
         return {
@@ -562,8 +625,31 @@ def kullanici_olustur(
         }
 
     except psycopg2.errors.UniqueViolation:
-        if conn: conn.rollback()
-        raise HTTPException(status_code=409, detail="Bu kullanıcı adı zaten kullanılıyor.")
+        if conn is not None:
+            conn.rollback()
+
+        if asama == "ogrenci":
+            mesaj = "Bu öğrenci numarası zaten kullanılıyor."
+        elif asama == "personel":
+            mesaj = "Personel kodu veya personel kaydı zaten mevcut."
+        else:
+            mesaj = "Bu kullanıcı adı zaten kullanılıyor."
+
+        raise HTTPException(status_code=409, detail=mesaj)
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Kullanıcı oluşturulurken beklenmeyen bir hata oluştu.",
+        )
+
     finally:
         if cursor is not None:
             cursor.close()
