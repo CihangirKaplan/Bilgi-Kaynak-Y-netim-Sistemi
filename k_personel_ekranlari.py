@@ -108,7 +108,8 @@ class KullaniciPersonelEkrani(QWidget):
                     item_ad = QTableWidgetItem(p["kullanici_adi"])
                     item_ad.setData(Qt.UserRole, p["kullanici_id"])  # YENİ: ID'yi arka planda saklıyoruz
                     item_kod = QTableWidgetItem(p["personel_kodu"])
-                    item_rol = QTableWidgetItem(p["rol_adi"])
+                    item_rol = QTableWidgetItem(p.get("gorunen_ad") or p["rol_adi"])
+                    item_rol.setData(Qt.UserRole, p["rol_adi"])  # karşılaştırmalar kodla yapılır, ekranda görünen ad gösterilir
                     item_durum = QTableWidgetItem(durum)
                     item_tarih = QTableWidgetItem(tarih)
 
@@ -180,7 +181,7 @@ class KullaniciPersonelEkrani(QWidget):
         satir = secili_satirlar[0].row()
         kullanici_adi = self.tablo.item(satir, 1).text()
         kullanici_id = self.tablo.item(satir, 1).data(Qt.UserRole)
-        mevcut_rol = self.tablo.item(satir, 3).text()
+        mevcut_rol = self.tablo.item(satir, 3).data(Qt.UserRole) or self.tablo.item(satir, 3).text()
         
         # YENİ KONTROL: 4. sütundaki durumu (Aktif/Pasif) oku
         durum = self.tablo.item(satir, 4).text()
@@ -195,6 +196,28 @@ class KullaniciPersonelEkrani(QWidget):
         form = RolDegistirFormu(self.api_url, self.token, kullanici_id, kullanici_adi, mevcut_rol, self)
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
+
+    def secili_kullanici_oda_yetkileri(self):
+        """Seçili psikologun görüşme odalarını düzenleme penceresini açar."""
+        secim = self.tablo.selectionModel().selectedRows()
+        if not secim:
+            QMessageBox.warning(self, "Kullanıcı Seçilmedi", "Lütfen oda yetkilerini düzenlemek istediğiniz psikoloğu tablodan seçin.")
+            return
+
+        satir = secim[0].row()
+        ad_item = self.tablo.item(satir, 1)
+        rol_item = self.tablo.item(satir, 3)
+        kullanici_id = ad_item.data(Qt.UserRole) if ad_item is not None else None
+        rol_kodu = str((rol_item.data(Qt.UserRole) or rol_item.text()) if rol_item is not None else "")
+
+        if rol_kodu.upper() != "PSIKOLOG":
+            QMessageBox.information(self, "Oda Yetkisi", "Oda yetkisi yalnızca psikolog rolündeki kullanıcılar için tanımlanır.")
+            return
+        if not kullanici_id:
+            QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
+            return
+
+        OdaYetkileriFormu(self.api_url, self.token, kullanici_id, ad_item.text(), self).exec()
 
     # ------------------------------------------------------------ parola sıfırlama talepleri
     @staticmethod
@@ -1200,6 +1223,119 @@ class KullaniciOlusturFormu(QDialog):
             else:
                  QMessageBox.critical(self, "Hata", f"Sunucu hatası: Kod {cevap.status_code}")
 
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+
+
+class OdaYetkileriFormu(QDialog):
+    """Seçili psikologun görüşme odalarını düzenler. Her psikologun en az bir odası olmalıdır."""
+
+    def __init__(self, api_url, token, kullanici_id, kullanici_adi, ebeveyn=None):
+        super().__init__(ebeveyn)
+        self.api_url = api_url
+        self.token = token
+        self.kullanici_id = kullanici_id
+        self.kullanici_adi = kullanici_adi
+
+        self.setWindowTitle("Oda Yetkileri")
+        self.setMinimumWidth(420)
+        self.setStyleSheet(
+            "QDialog { background-color: #F8FAFC; }"
+            "QLabel { color: #1E293B; font-size: 13px; }"
+            "QListWidget { background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px; color: #0F172A; }"
+            "QPushButton { border-radius: 8px; padding: 10px 15px; font-weight: bold; font-size: 13px; }"
+            "QPushButton#btn_iptal { background-color: white; border: 1px solid #CBD5E1; color: #475569; }"
+            "QPushButton#btn_kaydet { background-color: #2563EB; color: white; border: none; }"
+            "QPushButton#btn_kaydet:disabled { background-color: #94A3B8; }"
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        baslik = QLabel(f"<b>{kullanici_adi}</b> kullanıcısının görüşme odaları")
+        baslik.setTextFormat(Qt.RichText)
+        layout.addWidget(baslik)
+        layout.addWidget(QLabel("Her psikologun en az bir odası olmalıdır."))
+
+        self.liste_odalar = QListWidget()
+        self.liste_odalar.setObjectName("liste_odalar")
+        layout.addWidget(self.liste_odalar)
+
+        butonlar = QHBoxLayout()
+        butonlar.addStretch()
+        self.btn_iptal = QPushButton("İptal")
+        self.btn_iptal.setObjectName("btn_iptal")
+        self.btn_iptal.clicked.connect(self.reject)
+        self.btn_kaydet = QPushButton("Kaydet")
+        self.btn_kaydet.setObjectName("btn_kaydet")
+        self.btn_kaydet.clicked.connect(self.kaydet)
+        butonlar.addWidget(self.btn_iptal)
+        butonlar.addWidget(self.btn_kaydet)
+        layout.addLayout(butonlar)
+
+        self.odalari_yukle()
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.token}"}
+
+    def odalari_yukle(self):
+        """Aktif odaları listeler; psikologun mevcut odalarını işaretli getirir."""
+        self.btn_kaydet.setEnabled(False)
+        try:
+            oda_cevabi = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=self._headers(), timeout=5)
+            if oturum_hatasi_mi(oda_cevabi):
+                return
+            mevcut_cevabi = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/kullanicilar/{self.kullanici_id}/odalar",
+                headers=self._headers(), timeout=5,
+            )
+            if oturum_hatasi_mi(mevcut_cevabi):
+                return
+            if oda_cevabi.status_code != 200 or mevcut_cevabi.status_code != 200:
+                QMessageBox.warning(
+                    self, "Odalar Yüklenemedi",
+                    sunucu_hata_mesaji(mevcut_cevabi if mevcut_cevabi.status_code != 200 else oda_cevabi,
+                                       "Odalar yüklenemedi."),
+                )
+                return
+            mevcut = set(mevcut_cevabi.json().get("oda_idleri", []))
+            for oda in oda_cevabi.json():
+                if not oda.get("aktif_mi", True):
+                    continue
+                oge = QListWidgetItem(oda["oda_adi"])
+                oge.setData(Qt.UserRole, oda["oda_id"])
+                oge.setFlags(oge.flags() | Qt.ItemIsUserCheckable)
+                oge.setCheckState(Qt.Checked if oda["oda_id"] in mevcut else Qt.Unchecked)
+                self.liste_odalar.addItem(oge)
+            self.btn_kaydet.setEnabled(True)
+        except Exception as e:
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+
+    def secilen_oda_idleri(self):
+        return [
+            self.liste_odalar.item(i).data(Qt.UserRole)
+            for i in range(self.liste_odalar.count())
+            if self.liste_odalar.item(i).checkState() == Qt.Checked
+        ]
+
+    def kaydet(self):
+        secilen = self.secilen_oda_idleri()
+        if not secilen:
+            QMessageBox.warning(self, "Eksik Seçim", "Psikolog için en az bir görüşme odası seçilmelidir.")
+            return
+        try:
+            cevap = oturum_kontrollu_istek(
+                "PUT", f"{self.api_url}/api/kullanicilar/{self.kullanici_id}/odalar",
+                json={"oda_idleri": secilen}, headers=self._headers(), timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                QMessageBox.information(self, "Başarılı", "Oda yetkileri güncellendi.")
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 

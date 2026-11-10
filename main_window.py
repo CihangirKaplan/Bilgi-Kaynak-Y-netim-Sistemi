@@ -255,6 +255,7 @@ MENU = [
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
                       ("⏸  Aktiflik Düzenle", "Kullanıcı pasifleştirme"),
                       ("🔁  Rol Ata / Değiştir", "Rol atama/değiştirme"),
+                      ("🏠  Oda Yetkileri", "Rol atama/değiştirme"),
                       ("🔑  Parola Sıfırla", "Kullanıcı parola sıfırlama")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
@@ -1444,7 +1445,14 @@ QLabel {
                     QMessageBox.information(self, "Başarılı", "Oda başarıyla pasife alındı.")
                     self.odalari_getir()
                 else:
-                    QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
+                    if res.status_code == 409:
+                        try:
+                            mesaj = res.json().get("detail") or "Oda pasife alınamadı."
+                        except Exception:
+                            mesaj = "Oda pasife alınamadı."
+                        QMessageBox.warning(self, "Oda Pasife Alınamadı", mesaj)
+                    else:
+                        QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
             except Exception as e:
                 QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
@@ -1523,6 +1531,17 @@ QLabel {
                     self.sayfa_ac(i)
                     break
 
+    def oda_psikolog_atamalarini_getir(self):
+        """Oda -> atanmış psikologlar (bilgi amaçlı). Alınamazsa boş sözlük döner, sütun "-" gösterir."""
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/oda-psikolog-atamalari", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+                return {}
+            return {a["oda_id"]: ", ".join(a["psikologlar"]) for a in cevap.json()}
+        except Exception:
+            return {}
+
     def odalari_getir(self):
         if not hasattr(self, 'oda_tablosu'):
             return
@@ -1539,6 +1558,7 @@ QLabel {
             if cevap.status_code == 200:
                 odalar = cevap.json()
                 self.oda_tablosu.setRowCount(len(odalar))
+                atamalar = self.oda_psikolog_atamalarini_getir()
 
                 for satir, oda in enumerate(odalar):
                     item_id = QTableWidgetItem(str(oda["oda_id"]))
@@ -1557,6 +1577,9 @@ QLabel {
                     self.oda_tablosu.setItem(satir, 1, item_ad)
                     self.oda_tablosu.setItem(satir, 2, item_kapasite)
                     self.oda_tablosu.setItem(satir, 3, item_durum)
+                    item_psikolog = QTableWidgetItem(atamalar.get(oda["oda_id"], "-"))
+                    item_psikolog.setTextAlignment(Qt.AlignCenter)
+                    self.oda_tablosu.setItem(satir, 4, item_psikolog)
         except Exception as e:
             print("Oda verileri çekilirken hata oluştu:", e)
 
@@ -1744,6 +1767,8 @@ QLabel {
                             else None
                         )
                     )
+                elif "Oda Yetkileri" in etiket:
+                    btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_oda_yetkileri() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif "Rol Ata / Değiştir" in etiket:
                     btn.clicked.connect(lambda: self.aktif_personel_ekrani.secili_kullanici_rol_degistir() if hasattr(self, 'aktif_personel_ekrani') else None)
                 elif etiket == "＋  Yeni Faaliyet Ekle":
@@ -1896,8 +1921,8 @@ QLabel {
             il = QVBoxLayout(ik)
 
             self.oda_tablosu = QTableWidget()
-            self.oda_tablosu.setColumnCount(4)
-            self.oda_tablosu.setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum"])
+            self.oda_tablosu.setColumnCount(5)
+            self.oda_tablosu.setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum", "Psikologlar"])
             self.oda_tablosu.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.oda_tablosu.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.oda_tablosu.setSelectionBehavior(QAbstractItemView.SelectRows)

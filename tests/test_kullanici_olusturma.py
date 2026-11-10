@@ -60,11 +60,13 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
     ]
 
     # Henüz bu role ait personel kodu bulunmuyor.
-    mock_cursor.fetchall.return_value = []
+    # 1. cevap: oda doğrulama sorgusu (istenen oda aktif), 2. cevap: personel kodu sorgusu
+    mock_cursor.fetchall.side_effect = [[(2,)], []]
 
     yeni_kullanici = KullaniciOlusturModeli(
         kullanici_adi="test_psikolog",
         rol_id=1,
+        oda_idleri=[2],
     )
 
     with (
