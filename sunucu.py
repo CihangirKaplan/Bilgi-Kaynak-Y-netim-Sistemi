@@ -1920,6 +1920,64 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.get("/api/randevular/doluluk")
+def randevu_doluluk(
+    tarih: date,
+    oda_id: int | None = Query(None, gt=0),
+    psikolog_id: int | None = Query(None, gt=0),
+    haric_randevu_id: int | None = Query(None, gt=0),
+    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
+):
+    """Seçilen gün için oda ve/veya psikologun dolu saat aralıklarını döndürür.
+
+    Yalnızca zaman aralığı ve dolu olanın türü (oda / psikolog) döner; danışan kodu,
+    psikolog adı gibi kimlik bilgisi içermez. Son karar yine randevu oluşturma ve
+    güncelleme uçlarındadır (409 + veritabanı kısıtı).
+    """
+    if oda_id is None and psikolog_id is None:
+        raise HTTPException(status_code=422, detail="oda_id veya psikolog_id gönderilmelidir.")
+
+    gun_basi = datetime(tarih.year, tarih.month, tarih.day)
+    gun_sonu = gun_basi + timedelta(days=1)
+
+    sorgu = (
+        "SELECT baslangic_zamani, bitis_zamani, oda_id = %s, psikolog_id = %s "
+        "FROM randevular "
+        "WHERE durum = 'PLANLANDI' AND (oda_id = %s OR psikolog_id = %s) "
+        "AND baslangic_zamani < %s AND bitis_zamani > %s"
+    )
+    parametreler = [oda_id, psikolog_id, oda_id, psikolog_id, gun_sonu, gun_basi]
+    if haric_randevu_id is not None:
+        sorgu += " AND randevu_id <> %s"
+        parametreler.append(haric_randevu_id)
+    sorgu += " ORDER BY baslangic_zamani;"
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(sorgu, parametreler)
+        kayitlar = cursor.fetchall()
+
+        araliklar = []
+        for baslangic, bitis, oda_dolu, psikolog_dolu in kayitlar:
+            if oda_dolu and psikolog_dolu:
+                sebep = "oda_ve_psikolog"
+            elif oda_dolu:
+                sebep = "oda"
+            else:
+                sebep = "psikolog"
+            araliklar.append({
+                "baslangic": baslangic.isoformat(),
+                "bitis": bitis.isoformat(),
+                "sebep": sebep,
+            })
+        return {"tarih": tarih.isoformat(), "dolu_araliklar": araliklar}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 @app.patch("/api/randevular/{randevu_id}")
 def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_DUZENLE"))):
     conn = None
