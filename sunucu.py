@@ -3544,6 +3544,11 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# En acil (en çok geciken) kayıtlar önce gelir. Sınır yalnızca yanıtı makul tutar; istemci listeyi kaydırılabilir
+# gösterir. Eskiden 10'du: 10'dan fazla geciken kayıt varsa fazlası hiç görünmüyordu (güvenlik açısından riskli).
+YAKLASAN_ISLEM_UST_SINIR = 50
+
+
 @app.get("/api/dashboard/yaklasan-islemler")
 def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
     import datetime
@@ -3627,7 +3632,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
             })
 
         islemler.sort(key=lambda x: x["kalan_gun"])
-        return islemler[:10]
+        return islemler[:YAKLASAN_ISLEM_UST_SINIR]
 
     except Exception as e:
         print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
