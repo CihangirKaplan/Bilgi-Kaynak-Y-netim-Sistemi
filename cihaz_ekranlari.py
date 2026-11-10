@@ -4,7 +4,7 @@ Görünüm, bakım/kalibrasyon/arıza ekranlarıyla aynı ortak bileşenleri (ta
 """
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFormLayout, QFrame, QHeaderView, QLabel, QLineEdit,
+    QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
@@ -147,6 +147,9 @@ class CihazIslemFormu(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
+DURUM_ROLU = Qt.UserRole + 1      # tablo satırında cihazın veritabanı durumu (filtre için)
+
+
 class CihazYonetimEkrani(QWidget):
     """Ana Cihaz Listesi Ekranı"""
     def __init__(self, api_url, token, yetkili_mi=False):
@@ -154,6 +157,7 @@ class CihazYonetimEkrani(QWidget):
         self.api_url = api_url
         self.token = token
         self.yetkili_mi = yetkili_mi
+        self.durum_filtresi = None          # None = hepsi; aksi halde yalnızca bu veritabanı durumundaki cihazlar
         self.arayuzu_olustur()
 
     def arayuzu_olustur(self):
@@ -174,6 +178,27 @@ class CihazYonetimEkrani(QWidget):
             "Cihaz Envanteri", "Kayıtlı cihazlar ve anlık durumları",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
             [self.cip_toplam, self.cip_hazir, self.cip_bakimda, self.cip_arizali]))
+
+        # Ana paneldeki durum kartından gelindiğinde görünür; filtreyi tek tıkla kaldırır.
+        self.filtre_seridi = QFrame()
+        self.filtre_seridi.setObjectName("filtreSeridi")
+        self.filtre_seridi.setStyleSheet("QFrame#filtreSeridi { background: #EFF6FF; border: 1px solid #BFDBFE; "
+                                         "border-radius: 12px; }")
+        fs = QHBoxLayout(self.filtre_seridi)
+        fs.setContentsMargins(16, 8, 10, 8)
+        self.lbl_filtre = QLabel("")
+        self.lbl_filtre.setStyleSheet("color: #1E3A8A; font-size: 13px; font-weight: 800; background: transparent;")
+        self.btn_filtre_kaldir = QPushButton("✕  Filtreyi kaldır, tümünü göster")
+        self.btn_filtre_kaldir.setCursor(Qt.PointingHandCursor)
+        self.btn_filtre_kaldir.setStyleSheet(
+            "QPushButton { background: #DBEAFE; color: #1D4ED8; border: none; border-radius: 10px; padding: 6px 14px; "
+            "font-size: 12px; font-weight: 800; } QPushButton:hover { background: #BFDBFE; }")
+        self.btn_filtre_kaldir.clicked.connect(self.durum_filtresini_temizle)
+        fs.addWidget(self.lbl_filtre)
+        fs.addStretch()
+        fs.addWidget(self.btn_filtre_kaldir)
+        self.filtre_seridi.hide()
+        layout.addWidget(self.filtre_seridi)
 
         self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"])
         kb = self.tablo.horizontalHeader()
@@ -221,6 +246,7 @@ class CihazYonetimEkrani(QWidget):
 
             kod_item = metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True)
             kod_item.setData(Qt.UserRole, cihaz.get("cihaz_id"))
+            kod_item.setData(DURUM_ROLU, durum)
             self.tablo.setItem(satir, 0, kod_item)
             self.tablo.setItem(satir, 1, metin_item(str(cihaz.get("cihaz_adi") or "")))
             self.tablo.setItem(satir, 2, metin_item(cihaz.get("marka_model") or "-"))
@@ -236,14 +262,36 @@ class CihazYonetimEkrani(QWidget):
         self.tablo.setVisible(bool(cihazlar))
         self.filtrele(self.arama.text())
 
+    def durum_filtrele(self, durum):
+        """Yalnızca bu durumdaki cihazları gösterir (ana paneldeki durum kartlarından gelinir)."""
+        self.durum_filtresi = durum
+        if durum:
+            ad = DURUMLAR.get(durum, (durum,))[0]
+            self.lbl_filtre.setText(f"🔎  Filtre: yalnızca “{ad}” cihazlar gösteriliyor")
+        self.filtre_seridi.setVisible(bool(durum))
+        self.filtrele(self.arama.text())
+
+    def durum_filtresini_temizle(self):
+        self.durum_filtrele(None)
+
     def filtrele(self, metin):
-        """Envanter kodu, cihaz adı, marka ve seri no sütunlarında arama yapar."""
+        """Envanter kodu, cihaz adı, marka ve seri no sütunlarında arama yapar; varsa durum filtresini de uygular."""
         aranan = metin.strip().lower()
+        gorunen = 0
         for satir in range(self.tablo.rowCount()):
             icerik = " ".join(
                 (self.tablo.item(satir, k).text() if self.tablo.item(satir, k) else "")
                 for k in (0, 1, 2, 3)).lower()
-            self.tablo.setRowHidden(satir, aranan not in icerik)
+            kod_item = self.tablo.item(satir, 0)
+            durum = kod_item.data(DURUM_ROLU) if kod_item is not None else None
+            gizle = aranan not in icerik or (self.durum_filtresi is not None and durum != self.durum_filtresi)
+            self.tablo.setRowHidden(satir, gizle)
+            gorunen += not gizle
+        if self.tablo.rowCount():
+            # Filtre/arama hiçbir cihaza uymuyorsa boş tablo yerine açıklayıcı mesaj göster.
+            self.bos_mesaj.setText("Bu filtreye uyan cihaz yok." if gorunen == 0 else "Henüz cihaz kaydı yok.")
+            self.bos_mesaj.setVisible(gorunen == 0)
+            self.tablo.setVisible(gorunen > 0)
 
     def yeni_cihaz_ekle(self):
         form = CihazIslemFormu(self.api_url, self.token, islem_turu="EKLE")

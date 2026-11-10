@@ -1049,6 +1049,13 @@ QLabel {
                 btn.setChecked(True)
                 return
 
+    def _karttan_sayfaya_git(self, sayfa_adi, cihaz_durumu=None):
+        """Ana paneldeki özet kartından ilgili sayfayı açar; cihaz durum kartlarında envanteri o duruma göre süzer."""
+        self._bildirimden_sayfaya_git(sayfa_adi)
+        ekran = getattr(self, "aktif_cihaz_ekrani", None)
+        if sayfa_adi == "Cihaz Envanteri" and ekran is not None:
+            ekran.durum_filtrele(cihaz_durumu)
+
     def _bildirim_menusunu_ac(self):
         """Modern merkezi bildirim panelini acar."""
         from bildirim_paneli import BildirimPaneli
@@ -1477,6 +1484,11 @@ QLabel {
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
 
+        # Ana panelden gelen durum filtresi yalnızca o geçişe aittir; menüden/bildirimden açılışta temiz başlar.
+        envanter = getattr(self, "aktif_cihaz_ekrani", None)
+        if ad == "Cihaz Envanteri" and envanter is not None:
+            envanter.durum_filtresini_temizle()
+
         if ad == "Oda Kullanımı":
             self.master_stack.setCurrentIndex(1)
             self.stack.setCurrentIndex(idx)
@@ -1597,6 +1609,7 @@ QLabel {
             cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
             sayfa_ac=self._bildirimden_sayfaya_git,
             sayfa_izinli_mi=self._sayfa_izinli_mi,
+            kart_ac=self._karttan_sayfaya_git,
             parola_talepleri_goster=self._parola_talepleri_gorebilir_mi(),
         )
         lay.addWidget(self.istatistik_paneli)
