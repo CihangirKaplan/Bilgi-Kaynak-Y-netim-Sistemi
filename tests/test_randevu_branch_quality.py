@@ -22,12 +22,12 @@ def ornek_randevu(psikolog_id=1, oda_id=1):
     baslangic = datetime(2026, 12, 1, 10, 0)
 
     return SimpleNamespace(
+        danisan_kod_id="DAN-2026-9999",
         psikolog_id=psikolog_id,
         oda_id=oda_id,
         baslangic_zamani=baslangic,
         bitis_zamani=baslangic + timedelta(hours=1),
     )
-
 
 def test_quality_psikolog_baskasi_adina_randevu_olusturamaz():
     """
@@ -76,18 +76,13 @@ def test_quality_cakisan_randevu_http_409():
 
     cursor.fetchone.side_effect = [
         ("ADMIN",),   # Kullanici rolu
+        (1,),         # Danisan kodu aktif
         (1,),         # Psikolog aktif
         (1,),         # Oda aktif
         (99,),        # Cakisan randevu bulundu
     ]
 
-    with (
-        patch("sunucu.psycopg2.connect", return_value=conn),
-        patch(
-            "sunucu.otomatik_danisan_kodu_uret",
-            return_value="DAN-2026-9999",
-        ),
-    ):
+    with patch("sunucu.psycopg2.connect", return_value=conn):
         with pytest.raises(HTTPException) as hata:
             randevu_olustur(
                 randevu=ornek_randevu(),

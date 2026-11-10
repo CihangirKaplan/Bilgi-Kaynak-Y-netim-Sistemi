@@ -78,6 +78,7 @@ def test_quality_randevu_deadlock_sonrasi_basarili_yeniden_deneme():
     # Ikinci baglanti normal sorgu sonuclari dondursun.
     ikinci_cursor.fetchone.side_effect = [
         ("ADMIN",),  # Kullanici rolu
+        (1,),        # Danisan kodu aktif
         (1,),        # Aktif psikolog
         (1,),        # Aktif oda
         None,        # Randevu cakismasi yok
@@ -87,6 +88,7 @@ def test_quality_randevu_deadlock_sonrasi_basarili_yeniden_deneme():
     baslangic = datetime(2026, 12, 1, 10, 0)
 
     randevu = SimpleNamespace(
+        danisan_kod_id="DAN-2026-9999",
         baslangic_zamani=baslangic,
         bitis_zamani=baslangic + timedelta(hours=1),
         psikolog_id=1,
@@ -98,10 +100,6 @@ def test_quality_randevu_deadlock_sonrasi_basarili_yeniden_deneme():
             "sunucu.psycopg2.connect",
             side_effect=[ilk_baglanti, ikinci_baglanti],
         ) as mock_connect,
-        patch(
-            "sunucu.otomatik_danisan_kodu_uret",
-            return_value="DAN-2026-9999",
-        ),
         patch("time.sleep") as mock_sleep,
     ):
         sonuc = randevu_olustur(
