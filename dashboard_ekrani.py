@@ -31,8 +31,30 @@ TABLO_STIL = """
 """
 
 
+class KaydirmaKilitliTablo(QTableWidget):
+    """Kaydırma çubuğu açıkken fare tekerleği olayını hep bu tabloda tutar.
+
+    Qt'de tablo sonuna/başına gelince tekerlek olayı üstteki sayfaya geçer ve bütün ana ekran kayar. Burada olay,
+    tablo kaydırılamaz durumdayken (çubuk yok) sayfaya bırakılır; kaydırılabilirken uçlara gelinse bile tabloda kalır.
+    """
+
+    def wheelEvent(self, olay):
+        super().wheelEvent(olay)
+        if self.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn:
+            olay.accept()
+
+
+class KaydirmaKilitliAlan(QScrollArea):
+    """Bildirim kutusu için aynı davranış: uçlara gelince ana ekranı kaydırmaz."""
+
+    def wheelEvent(self, olay):
+        super().wheelEvent(olay)
+        if self.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn:
+            olay.accept()
+
+
 def _tablo_olustur(kolonlar):
-    tablo = QTableWidget(0, len(kolonlar))
+    tablo = KaydirmaKilitliTablo(0, len(kolonlar))
     tablo.setHorizontalHeaderLabels(kolonlar)
     tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     tablo.verticalHeader().setVisible(False)
@@ -168,13 +190,13 @@ class DashboardEkrani(QWidget):
 
         self.tablo_randevu = _tablo_olustur(["SAAT", "DANIŞAN KODU", "PSİKOLOG", "ODA", "DURUM"])
         self.lbl_randevu_bos = QLabel("Bugün için kayıtlı randevu bulunmuyor.")
-        panel_randevu = self._panel("Danışan Randevuları", f"📅  {tarih}",
+        panel_randevu = self.panel_randevu = self._panel("Danışan Randevuları", f"📅  {tarih}",
                                     self.tablo_randevu, self.lbl_randevu_bos)
 
         if cihaz_ozeti:
             self.tablo_rez = _tablo_olustur(["SAAT", "CİHAZ", "REZERVE EDEN", "ODA"])
             self.lbl_rez_bos = QLabel("Bugün için cihaz rezervasyonu bulunmuyor.")
-            panel_rez = self._panel("Cihaz Rezervasyonları", f"📌  {tarih}",
+            panel_rez = self.panel_rez = self._panel("Cihaz Rezervasyonları", f"📌  {tarih}",
                                     self.tablo_rez, self.lbl_rez_bos)
             self.yan_yana = QBoxLayout(QBoxLayout.LeftToRight)
             self.yan_yana.setSpacing(18)
@@ -349,13 +371,15 @@ class DashboardEkrani(QWidget):
             lbl_deger.setText("?")
             self.lbl_randevu_bos.setText("Randevular yüklenemedi.")
             self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, 0)
+            self._kaydirma_ipucu_guncelle(self.panel_randevu, 0)
             return
 
         aktif = [r for r in randevular if r["durum"] != "IPTAL_EDILDI"]
         lbl_deger.setText(str(len(aktif)))
         lbl_alt.setText("Bugün planlanan seans")
         self.lbl_randevu_bos.setText("Bugün için kayıtlı randevu bulunmuyor.")
-        self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, len(randevular))
+        kaydirilabilir = self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, len(randevular), TABLO_GORUNEN_SATIR)
+        self._kaydirma_ipucu_guncelle(self.panel_randevu, len(randevular) if kaydirilabilir else 0)
         for i, r in enumerate(randevular):
             iptal = r["durum"] == "IPTAL_EDILDI"
             gri = "#9CA3AF" if iptal else None
@@ -375,12 +399,14 @@ class DashboardEkrani(QWidget):
             lbl_deger.setText("?")
             self.lbl_rez_bos.setText("Rezervasyonlar yüklenemedi.")
             self._liste_goster(self.tablo_rez, self.lbl_rez_bos, 0)
+            self._kaydirma_ipucu_guncelle(self.panel_rez, 0)
             return
 
         lbl_deger.setText(str(len(rezervasyonlar)))
         lbl_alt.setText("Bugün rezerve edilen cihaz")
         self.lbl_rez_bos.setText("Bugün için cihaz rezervasyonu bulunmuyor.")
-        self._liste_goster(self.tablo_rez, self.lbl_rez_bos, len(rezervasyonlar))
+        kaydirilabilir = self._liste_goster(self.tablo_rez, self.lbl_rez_bos, len(rezervasyonlar), TABLO_GORUNEN_SATIR)
+        self._kaydirma_ipucu_guncelle(self.panel_rez, len(rezervasyonlar) if kaydirilabilir else 0)
         for i, r in enumerate(rezervasyonlar):
             self.tablo_rez.setItem(i, 0, _item(f"{r['baslangic']} – {r['bitis']}", kalin=True))
             self.tablo_rez.setItem(i, 1, _item(r["cihaz"]))
@@ -566,7 +592,7 @@ class DashboardEkrani(QWidget):
             return
 
         # Çok bildirim: ilk BILDIRIM_SINIRI satır görünür, gerisi büyük ve renkli bir kaydırma çubuğuyla kaydırılır.
-        kaydirma = QScrollArea()
+        kaydirma = KaydirmaKilitliAlan()
         kaydirma.setObjectName("bildirimKaydirma")
         kaydirma.setWidgetResizable(True)
         kaydirma.setFrameShape(QFrame.NoFrame)
