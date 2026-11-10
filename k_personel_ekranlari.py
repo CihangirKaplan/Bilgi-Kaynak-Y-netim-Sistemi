@@ -41,6 +41,17 @@ class KullaniciPersonelEkrani(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        # 1. PAROLA SIFIRLAMA TALEPLERİ: yalnızca bekleyen talep varsa ve kullanıcının yetkisi varsa görünür.
+        self.talep_paneli = QFrame()
+        self.talep_paneli.setObjectName("talepPaneli")
+        self.talep_paneli.setStyleSheet(
+            "QFrame#talepPaneli { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 14px; }")
+        self.talep_lay = QVBoxLayout(self.talep_paneli)
+        self.talep_lay.setContentsMargins(18, 14, 18, 14)
+        self.talep_lay.setSpacing(8)
+        self.talep_paneli.hide()
+        layout.addWidget(self.talep_paneli)
+
         # 2. TABLO (Kart görünümü için çerçeve)
         ik = QFrame()
         ik.setStyleSheet("background: white; border-radius: 16px;")
@@ -75,6 +86,7 @@ class KullaniciPersonelEkrani(QWidget):
         layout.addWidget(ik)
 
     def verileri_cek(self):
+        self.talepleri_yukle()
         headers = {"Authorization": f"Bearer {self.token}"}
         url = f"{self.api_url}/api/personel"
 
@@ -182,6 +194,118 @@ class KullaniciPersonelEkrani(QWidget):
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
 
+    # ------------------------------------------------------------ parola sıfırlama talepleri
+    @staticmethod
+    def bekleme_metni(dakika):
+        """'az önce', '5 dk önce', '2 saat önce', '3 gün önce'."""
+        dakika = max(int(dakika or 0), 0)
+        if dakika < 1:
+            return "az önce"
+        if dakika < 60:
+            return f"{dakika} dk önce"
+        if dakika < 1440:
+            return f"{dakika // 60} saat önce"
+        return f"{dakika // 1440} gün önce"
+
+    def talepleri_yukle(self):
+        """Bekleyen parola sıfırlama taleplerini getirir; yetki yoksa (403) ya da hata olursa panel gizli kalır."""
+        talepler = []
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/parola-sifirlama-talepleri",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                talepler = cevap.json()
+        except Exception:
+            talepler = []
+        self.talepleri_goster(talepler if isinstance(talepler, list) else [])
+
+    TALEP_ALANLARI = ("talep_id", "kullanici_id", "kullanici_adi")
+
+    def talepleri_goster(self, talepler):
+        # Beklenmeyen biçimde gelen kayıtlar (eksik alan) panelde sessizce atlanır; ekran çökmez.
+        talepler = [t for t in talepler if isinstance(t, dict) and all(t.get(a) is not None for a in self.TALEP_ALANLARI)]
+        while self.talep_lay.count():
+            w = self.talep_lay.takeAt(0).widget()
+            if w:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
+        if not talepler:
+            self.talep_paneli.hide()
+            return
+        baslik = QLabel(f"🔐  Parola sıfırlama talepleri  ({len(talepler)})")
+        baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #1E3A8A; background: transparent;")
+        self.talep_lay.addWidget(baslik)
+        for t in talepler:
+            self.talep_lay.addWidget(self._talep_satiri(t))
+        self.talep_paneli.show()
+
+    def _talep_satiri(self, talep):
+        satir = QFrame()
+        satir.setStyleSheet("QFrame { background: white; border-radius: 10px; }")
+        lay = QHBoxLayout(satir)
+        lay.setContentsMargins(14, 8, 10, 8)
+        rol = talep.get("rol_adi") or "-"
+        yazi = QLabel(f"<b>{talep['kullanici_adi']}</b>  ·  {rol}  ·  "
+                      f"<span style='color:#6B7FA8'>{self.bekleme_metni(talep.get('bekleme_dakika'))}</span>")
+        yazi.setTextFormat(Qt.RichText)
+        yazi.setStyleSheet("font-size: 13px; color: #0A1F5C; background: transparent;")
+        lay.addWidget(yazi, 1)
+        for ad, nesne, renk, zemin, yuva in (
+            ("🔑  Parola Sıfırla", "talepSifirla", "white", "#1554B7", self.talep_parola_sifirla),
+            ("Talebi Kapat", "talepKapat", "#1554B7", "#EEF3FC", self.talep_kapat),
+        ):
+            dugme = QPushButton(ad)
+            dugme.setObjectName(nesne)
+            dugme.setCursor(Qt.PointingHandCursor)
+            dugme.setProperty("talep_id", talep["talep_id"])
+            dugme.setProperty("kullanici_id", talep["kullanici_id"])
+            dugme.setProperty("kullanici_adi", talep["kullanici_adi"])
+            dugme.setStyleSheet(
+                f"QPushButton {{ background: {zemin}; color: {renk}; border: none; border-radius: 8px; "
+                f"padding: 7px 14px; font-size: 12px; font-weight: 700; }} QPushButton:hover {{ opacity: 0.9; }}")
+            dugme.clicked.connect(yuva)
+            lay.addWidget(dugme)
+        return satir
+
+    def talep_parola_sifirla(self):
+        """Talep satırındaki 'Parola Sıfırla': aynı sıfırlama akışı, kullanıcı seçmeye gerek kalmadan."""
+        d = self.sender()
+        if d is None:
+            return
+        self.parola_sifirla(d.property("kullanici_id"), d.property("kullanici_adi"))
+
+    def talep_kapat(self):
+        """Talebi parolayı sıfırlamadan kapatır (örn. kullanıcı parolasını hatırladı)."""
+        d = self.sender()
+        if d is None:
+            return
+        kullanici_adi, talep_id = d.property("kullanici_adi"), d.property("talep_id")
+        onay = QMessageBox.question(
+            self, "Talebi Kapat",
+            f"'{kullanici_adi}' kullanıcısının parola sıfırlama talebi, parolası sıfırlanmadan kapatılsın mı?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if onay != QMessageBox.Yes:
+            return
+        try:
+            cevap = oturum_kontrollu_istek(
+                "PATCH", f"{self.api_url}/api/parola-sifirlama-talepleri/{talep_id}/kapat",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=10)
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code != 200:
+                try:
+                    mesaj = cevap.json().get("detail", "Talep kapatılamadı.")
+                except ValueError:
+                    mesaj = "Talep kapatılamadı."
+                QMessageBox.warning(self, "İşlem Başarısız", str(mesaj))
+        except requests.RequestException:
+            QMessageBox.critical(self, "Bağlantı Hatası", "Sunucudan yanıt alınamadı. Lütfen tekrar deneyin.")
+        self.talepleri_yukle()
+
     def secili_kullanici_parola_sifirla(self):
         """Seçili kullanıcının parolasını ADMIN aracılığıyla sıfırla."""
 
@@ -215,6 +339,10 @@ class KullaniciPersonelEkrani(QWidget):
             )
             return
 
+        self.parola_sifirla(kullanici_id, kullanici_adi)
+
+    def parola_sifirla(self, kullanici_id, kullanici_adi):
+        """Verilen kullanıcının parolasını ADMIN aracılığıyla sıfırlar (onay ister, geçici parolayı gösterir)."""
         onay = QMessageBox.question(
     self,
     "Parola Sıfırlama Onayı",
@@ -285,6 +413,8 @@ class KullaniciPersonelEkrani(QWidget):
     "Pencere kapatıldıktan sonra parola tekrar gösterilemez.\n\n"
     "Kullanıcı ilk girişinde yeni parola belirlemelidir."
 )
+            # Sıfırlanan kullanıcının bekleyen talebi sunucuda tamamlandı; paneli tazele.
+            self.talepleri_yukle()
 
         except requests.RequestException:
             QMessageBox.critical(

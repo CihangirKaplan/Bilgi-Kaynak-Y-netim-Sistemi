@@ -125,11 +125,10 @@ class BildirimPaneli(QFrame):
             if grup == "Danışma Masası":
                 satirlar = self._ogrenci_bildirimlerini_grupla(satirlar)
 
-            baslik_metni = (
-                "🔧  CİHAZ UYARILARI"
-                if grup == "Cihaz Uyarıları"
-                else "📋  DANIŞMA MASASI ONAYLARI"
-            )
+            baslik_metni = {
+                "Cihaz Uyarıları": "🔧  CİHAZ UYARILARI",
+                "Parola Talepleri": "🔐  PAROLA SIFIRLAMA TALEPLERİ",
+            }.get(grup, "📋  DANIŞMA MASASI ONAYLARI")
 
             grup_baslik = QLabel(baslik_metni)
             grup_baslik.setStyleSheet("""

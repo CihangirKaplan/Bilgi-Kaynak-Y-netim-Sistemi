@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPixmap
 from main_window import AnaPencere
 from sifre_degistir_ekrani import SifreDegistirEkrani
+from parola_talebi_dialog import ParolaTalebiDialog
 import faulthandler, traceback
 faulthandler.enable()
 
@@ -397,18 +398,9 @@ class LoginEkrani(QWidget):
         self.kullanici_input.setFocus()
 
     def sifremi_unuttum_bilgisi(self):
-        """Parolasını unutan kullanıcıyı yönlendir."""
-
-        QMessageBox.information(
-            self,
-            "Şifremi Unuttum",
-            "Parolanızı unuttuysanız sistem yöneticinizle "
-            "iletişime geçiniz.\n\n"
-            "Sistem yöneticiniz hesabınız için yeni bir "
-            "geçici parola oluşturabilir.\n\n"
-            "Geçici parolanızla giriş yaptığınızda "
-            "yeni bir parola belirlemeniz istenecektir."
-        )
+        """Parolasını unutan kullanıcı için talep penceresini açar (yazdığı kullanıcı adı hazır gelir)."""
+        pencere = ParolaTalebiDialog(API_URL, self.kullanici_input.text().strip(), self)
+        pencere.exec()
 
     def hata_goster(self, metin):
         self.hata_lbl.setText("⚠  " + metin)

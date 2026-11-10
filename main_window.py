@@ -874,6 +874,20 @@ QLabel {
                 self._bildirim_hata = True
                 return None
 
+        # Parola sıfırlama talepleri: yalnızca sıfırlama izni ve Kullanıcı & Personel sayfası olan yöneticiye.
+        if self._parola_talepleri_gorebilir_mi():
+            talepler = getir("/api/parola-sifirlama-talepleri")
+
+            if isinstance(talepler, list):
+                for talep in talepler:
+                    self._bildirimler.append((
+                        "Parola Talepleri",
+                        f"🔐 {talep.get('kullanici_adi', 'Kullanıcı')} parola sıfırlama istedi "
+                        f"({self._bekleme_metni(talep.get('bekleme_dakika'))})",
+                        "Kullanıcı & Personel"
+                    ))
+                    self._bildirim_sayisi += 1
+
         if "Cihaz Envanteri" in self.nav_btnler:
             ozet = getir("/api/dashboard/ozet")
 
@@ -994,6 +1008,23 @@ QLabel {
         )
 
         self.btn_bildirim.setIcon(ust_ikonu(ikon_adi))
+
+    def _parola_talepleri_gorebilir_mi(self):
+        """Parola sıfırlama taleplerini görmek için hem sıfırlama izni hem Kullanıcı & Personel sayfası gerekir."""
+        return (izin_var(self.aktif_rol, "Kullanıcı parola sıfırlama")
+                and self._sayfa_izinli_mi("Kullanıcı & Personel"))
+
+    @staticmethod
+    def _bekleme_metni(dakika):
+        """'az önce', '5 dk önce', '2 saat önce', '3 gün önce'."""
+        dakika = max(int(dakika or 0), 0)
+        if dakika < 1:
+            return "az önce"
+        if dakika < 60:
+            return f"{dakika} dk önce"
+        if dakika < 1440:
+            return f"{dakika // 60} saat önce"
+        return f"{dakika // 1440} gün önce"
 
     def _sayfa_izinli_mi(self, sayfa_adi):
         """Kullanıcının menüdeki bir sayfaya yetkisi var mı? Yetkisiz olunan sayfanın bildirimi gösterilmez.
@@ -1419,6 +1450,7 @@ QLabel {
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
         "Cihaz Rezervasyonu": ("aktif_rezervasyon_ekrani", "verileri_yukle"),
         "Bakım Planları": ("aktif_plan_ekrani", "verileri_yukle"),
+        "Kullanıcı & Personel": ("aktif_personel_ekrani", "verileri_cek"),
         "Arıza Kayıtları": ("aktif_ariza_ekrani", "verileri_yukle"),
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
     }
@@ -1565,6 +1597,7 @@ QLabel {
             cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
             sayfa_ac=self._bildirimden_sayfaya_git,
             sayfa_izinli_mi=self._sayfa_izinli_mi,
+            parola_talepleri_goster=self._parola_talepleri_gorebilir_mi(),
         )
         lay.addWidget(self.istatistik_paneli)
 
