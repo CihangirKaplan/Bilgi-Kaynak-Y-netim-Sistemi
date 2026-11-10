@@ -362,6 +362,7 @@ def test_gecerli_randevu_guncellenir():
                 "PLANLANDI",
             ),
             ("ADMIN",),  # Kullanıcı rolü
+            (1,),        # Oda psikoloğa atanmış
             None,        # Randevu çakışması yok
         ]
 

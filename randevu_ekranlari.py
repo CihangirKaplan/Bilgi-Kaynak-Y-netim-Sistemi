@@ -128,11 +128,19 @@ class RandevuOlusturFormu(QWidget):
                 
                 self.cmb_psikologlar.currentIndexChanged.connect(self.odalari_filtrele)
                 
+                # mevcut_psikolog_id aslında giriş yapan KULLANICI kimliğidir (personel_id değil).
+                # Kullanıcı psikolog listesinde varsa (yani kendisi psikologsa) kendi adına kilitlenir;
+                # admin ve danışma öğrencisi gibi roller listede olmadığı için psikolog seçebilir.
                 if self.mevcut_psikolog_id is not None:
-                    index = self.cmb_psikologlar.findData(self.mevcut_psikolog_id)
-                    if index >= 0:
-                        self.cmb_psikologlar.setCurrentIndex(index)
-                        self.cmb_psikologlar.setEnabled(False)
+                    kendisi = next(
+                        (p for p in cevap.json() if p.get("kullanici_id") == self.mevcut_psikolog_id),
+                        None,
+                    )
+                    if kendisi is not None:
+                        index = self.cmb_psikologlar.findData(kendisi["personel_id"])
+                        if index >= 0:
+                            self.cmb_psikologlar.setCurrentIndex(index)
+                            self.cmb_psikologlar.setEnabled(False)
                 
                 self.odalari_filtrele()
         except Exception as e:
