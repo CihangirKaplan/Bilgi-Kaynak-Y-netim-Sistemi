@@ -127,9 +127,35 @@ def test_kaydirilinca_alttaki_satira_tiklamak_dogru_sayfayi_acar(qt_app):
     kapat(p)
 
 
-def test_diger_tablolar_degismez_tum_satirlarini_gosterir_cubuksuz(qt_app):
-    p = pano(qt_app, 8)
-    for tablo in (p.tablo_randevu, p.tablo_rez):
+def kayitlar_ile(qt_app, n_randevu, n_rez):
+    randevu = [{"baslangic": "09:00", "bitis": "10:00", "danisan_kod_id": f"D{i}", "psikolog": "P", "oda": "O1",
+                "durum": "PLANLANDI"} for i in range(n_randevu)]
+    rez = [{"baslangic": "09:00", "bitis": "10:00", "cihaz": f"C{i}", "rezerve_eden": "R", "oda": "O1"}
+           for i in range(n_rez)]
+
+    def getir(yol):
+        return {"/api/dashboard/ozet": {"acik_ariza_sayisi": 0}, "/api/dashboard/yaklasan-islemler": [],
+                "/api/dashboard/bugunku-randevular": randevu, "/api/dashboard/bugunku-rezervasyonlar": rez}.get(yol, [])
+    with patch.object(DashboardEkrani, "_getir", side_effect=getir):
+        p = DashboardEkrani("http://x", "T", cihaz_ozeti=True)
+    p.zamanlayici.stop()
+    return p
+
+
+def test_randevu_ve_rezervasyon_tablolari_da_cok_satirda_kaydirilir(qt_app):
+    p = kayitlar_ile(qt_app, 9, 7)
+    for tablo, panel, adet in ((p.tablo_randevu, p.panel_randevu, 9), (p.tablo_rez, p.panel_rez, 7)):
+        assert tablo.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn
+        assert CUBUK_STILI in tablo.styleSheet()
+        assert tablo.height() == 46 + SATIR_YUKSEKLIK * TABLO_GORUNEN_SATIR + 4
+        assert panel.findChild(QLabel, "tabloKaydirmaIpucu") is not None
+    kapat(p)
+
+
+def test_az_satirda_randevu_ve_rezervasyon_tablosu_eskisi_gibi(qt_app):
+    p = kayitlar_ile(qt_app, 3, 5)
+    for tablo, panel in ((p.tablo_randevu, p.panel_randevu), (p.tablo_rez, p.panel_rez)):
         assert tablo.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
         assert CUBUK_STILI not in tablo.styleSheet()
+        assert panel.findChild(QLabel, "tabloKaydirmaIpucu") is None
     kapat(p)
