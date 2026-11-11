@@ -271,6 +271,9 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 for oda in atanmis_odalar:
                     if oda.get("aktif_mi", True):
                         self.cmb_odalar.addItem(oda["oda_adi"], oda["oda_id"])
+                if self.cmb_odalar.count() == 0:
+                    self.cmb_odalar.addItem("Bu psikoloğa atanmış oda yok", None)
+                    self.cmb_odalar.model().item(0).setEnabled(False)
                         
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
@@ -492,6 +495,9 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
                 for oda in atanmis_odalar:
                     if oda.get("aktif_mi", True):
                         self.cmb_odalar.addItem(oda["oda_adi"], oda["oda_id"])
+                if self.cmb_odalar.count() == 0:
+                    self.cmb_odalar.addItem("Bu psikoloğa atanmış oda yok", None)
+                    self.cmb_odalar.model().item(0).setEnabled(False)
                         
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")

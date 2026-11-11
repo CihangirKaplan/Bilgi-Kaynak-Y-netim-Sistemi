@@ -11,6 +11,15 @@ from ui_components import StandartButon, StandartGirdi
 # ======================================================================
 #  ROOM-001: YENİ ODA EKLEME / DÜZENLEME FORMU
 # ======================================================================
+def _409_mesaji(cevap):
+    """409'da sunucunun açıklamasını göster (örn. oda bir psikologun tek odası); yoksa ad çakışması varsay."""
+    try:
+        detay = cevap.json().get("detail")
+    except Exception:
+        detay = None
+    return detay if isinstance(detay, str) and detay else "Bu isimde bir oda zaten mevcut!"
+
+
 class OdaFormu(QWidget):
     def __init__(self, api_url, token, oda_id=None, eski_veriler=None):
         super().__init__()
@@ -198,7 +207,7 @@ class OdaFormu(QWidget):
                 QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla kaydedildi!")
                 self.close()
             elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Çakışma", "Bu isimde bir oda zaten mevcut!")
+                QMessageBox.warning(self, "Çakışma", _409_mesaji(cevap))
             else:
                 QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {cevap.status_code})")
                 
@@ -247,7 +256,7 @@ def odayi_kaydet(self):
                 QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla veritabanına kaydedildi!")
                 self.close() # İşlem başarılıysa formu kapat
             elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Çakışma", "Bu isimde bir oda zaten mevcut!")
+                QMessageBox.warning(self, "Çakışma", _409_mesaji(cevap))
             else:
                 QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {cevap.status_code})\n{cevap.text}")
                 

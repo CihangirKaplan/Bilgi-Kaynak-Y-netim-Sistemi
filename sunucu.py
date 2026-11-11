@@ -531,6 +531,30 @@ def kullanici_olustur(
                 detail="Öğrenci bilgileri yalnızca danışma öğrencisi rolü için girilebilir.",
             )
 
+        psikolog_rolu = str(rol_adi).upper() == "PSIKOLOG"
+        istenen_odalar = sorted(set(yeni_kullanici.oda_idleri or []))
+        if psikolog_rolu:
+            # Her psikologun en az bir (aktif) odası olmalı.
+            if not istenen_odalar:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Psikolog için en az bir görüşme odası seçilmelidir.",
+                )
+            cursor.execute(
+                "SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;",
+                (istenen_odalar,),
+            )
+            if {k[0] for k in cursor.fetchall()} != set(istenen_odalar):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
+                )
+        elif istenen_odalar:
+            raise HTTPException(
+                status_code=422,
+                detail="Oda yetkisi yalnızca psikolog rolü için tanımlanabilir.",
+            )
+
         gecici_parola = gecici_parola_uret()
         parola_hash = parola_hashle(gecici_parola)
 
@@ -604,7 +628,7 @@ def kullanici_olustur(
             )
 
         # Psikolog oda yetkileri.
-        for oda_id in yeni_kullanici.oda_idleri or []:
+        for oda_id in istenen_odalar:
             cursor.execute(
                 "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
                 (yeni_id, oda_id),
@@ -1630,11 +1654,11 @@ def personel_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIML
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT p.personel_id, p.kullanici_id, k.kullanici_adi, p.personel_kodu, r.rol_adi, p.aktif_mi, p.olusturulma_tarihi
+            SELECT p.personel_id, p.kullanici_id, k.kullanici_adi, p.personel_kodu, r.rol_adi, p.aktif_mi, p.olusturulma_tarihi, r.gorunen_ad
             FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id ORDER BY p.personel_id;
         """)
         kayitlar = cursor.fetchall()
-        return [{"personel_id": k[0], "kullanici_id": k[1], "kullanici_adi": k[2], "personel_kodu": k[3], "rol_adi": k[4], "aktif_mi": k[5], "olusturulma_tarihi": k[6]} for k in kayitlar]
+        return [{"personel_id": k[0], "kullanici_id": k[1], "kullanici_adi": k[2], "personel_kodu": k[3], "rol_adi": k[4], "aktif_mi": k[5], "olusturulma_tarihi": k[6], "gorunen_ad": (k[7] if len(k) > 7 and k[7] else k[4])} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -2117,6 +2141,148 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+def izin_kontrol_tumu(*izin_adlari: str):
+    """Listedeki izinlerin HEPSİNE sahip olmayı ister.
+
+    Menüdeki "birden fazla kod varsa hepsi gerekir" kuralıyla aynıdır; sunucu, ekranı gören herkese
+    izin verir (örn. Oda Yönetimi ekranı ODA_EKLE ve ODA_DUZENLE ister).
+    """
+    gerekli = sorted(set(izin_adlari))
+
+    def kontrol(kullanici_id: int = Depends(mevcut_kullanici_id)):
+        conn = None
+        cursor = None
+        try:
+            conn = psycopg2.connect(**VT_AYARLARI)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT i.izin_adi) FROM kullanicilar k
+                JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
+                JOIN izinler i ON ri.izin_id = i.izin_id
+                WHERE k.kullanici_id = %s AND i.izin_adi = ANY(%s) AND ri.izin_var = 1;
+                """, (kullanici_id, gerekli)
+            )
+            sonuc = cursor.fetchone()
+            if sonuc is None or sonuc[0] != len(gerekli):
+                raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz bulunmuyor.")
+            return kullanici_id
+        finally:
+            if cursor is not None: cursor.close()
+            if conn is not None: conn.close()
+    return kontrol
+
+
+from pydantic import BaseModel as _OdaYetkiBaseModel, Field as _OdaYetkiField
+
+
+class OdaYetkileriModeli(_OdaYetkiBaseModel):
+    oda_idleri: list[int] = _OdaYetkiField(min_length=1)
+
+
+def _hedef_psikolog_kontrol(cursor, hedef_kullanici_id: int, kilitle: bool = False):
+    """Hedef kullanıcı var mı ve psikolog mu? Değilse uygun hatayı fırlatır."""
+    cursor.execute(
+        "SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON r.rol_id = k.rol_id "
+        "WHERE k.kullanici_id = %s" + (" FOR UPDATE OF k;" if kilitle else ";"),
+        (hedef_kullanici_id,),
+    )
+    kayit = cursor.fetchone()
+    if kayit is None:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    if str(kayit[0]).upper() != "PSIKOLOG":
+        raise HTTPException(status_code=422, detail="Oda yetkisi yalnızca psikolog rolündeki kullanıcılar için tanımlanabilir.")
+
+
+@app.get("/api/kullanicilar/{hedef_kullanici_id}/odalar")
+def psikolog_oda_yetkilerini_getir(hedef_kullanici_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        _hedef_psikolog_kontrol(cursor, hedef_kullanici_id)
+        cursor.execute("SELECT oda_id FROM psikolog_odalar WHERE kullanici_id = %s ORDER BY oda_id;", (hedef_kullanici_id,))
+        return {"kullanici_id": hedef_kullanici_id, "oda_idleri": [k[0] for k in cursor.fetchall()]}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.put("/api/kullanicilar/{hedef_kullanici_id}/odalar")
+def psikolog_oda_yetkilerini_guncelle(
+    hedef_kullanici_id: int,
+    yetki: OdaYetkileriModeli,
+    kullanici_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME")),
+):
+    """Psikologun görüşme odalarını verilen kümeye eşitler. Her psikologun en az bir (aktif) odası olmalıdır."""
+    oda_idleri = sorted(set(yetki.oda_idleri))
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        _hedef_psikolog_kontrol(cursor, hedef_kullanici_id, kilitle=True)
+
+        cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (oda_idleri,))
+        if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
+            raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+
+        # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
+        cursor.execute(
+            """
+            DELETE FROM psikolog_odalar po USING odalar o
+            WHERE po.oda_id = o.oda_id AND o.aktif_mi = TRUE
+              AND po.kullanici_id = %s AND po.oda_id <> ALL(%s);
+            """,
+            (hedef_kullanici_id, oda_idleri),
+        )
+        for oda_id in oda_idleri:
+            cursor.execute(
+                "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s) ON CONFLICT DO NOTHING;",
+                (hedef_kullanici_id, oda_id),
+            )
+        cursor.execute(
+            "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
+            (kullanici_id, "UPDATE", "psikolog_odalar", hedef_kullanici_id),
+        )
+        conn.commit()
+        return {"durum": "basarili", "kullanici_id": hedef_kullanici_id, "oda_idleri": oda_idleri}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.get("/api/oda-psikolog-atamalari")
+def oda_psikolog_atamalari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EKLE", "ODA_DUZENLE"))):
+    """Oda Yönetimi ekranındaki "Psikologlar" sütunu için (bilgi amaçlı). Ekranı görenler görebilir."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT po.oda_id, k.kullanici_adi
+            FROM psikolog_odalar po
+            JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
+            WHERE k.aktif_mi = TRUE
+            ORDER BY po.oda_id, k.kullanici_adi;
+            """
+        )
+        atamalar = {}
+        for oda_id, kullanici_adi in cursor.fetchall():
+            atamalar.setdefault(oda_id, []).append(kullanici_adi)
+        return [{"oda_id": oda_id, "psikologlar": adlar} for oda_id, adlar in atamalar.items()]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 @app.post("/api/odalar", status_code=201)
 def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol("ODA_EKLE"))):
     conn = None
@@ -2211,6 +2377,34 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = %s FOR UPDATE;", (oda_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Oda bulunamadı.")
+
+        if degisiklikler.get("aktif_mi") is False:
+            # Her psikologun en az bir aktif odası olmalı: tek aktif odası bu oda olan psikolog varsa pasife alınamaz.
+            cursor.execute(
+                """
+                SELECT k.kullanici_adi
+                FROM psikolog_odalar po
+                JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
+                JOIN personel p ON p.kullanici_id = k.kullanici_id
+                WHERE po.oda_id = %s AND k.aktif_mi = TRUE AND p.aktif_mi = TRUE
+                  AND EXISTS (SELECT 1 FROM odalar o0 WHERE o0.oda_id = po.oda_id AND o0.aktif_mi = TRUE)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM psikolog_odalar po2
+                      JOIN odalar o2 ON o2.oda_id = po2.oda_id
+                      WHERE po2.kullanici_id = po.kullanici_id
+                        AND po2.oda_id <> po.oda_id AND o2.aktif_mi = TRUE
+                  )
+                ORDER BY k.kullanici_adi;
+                """,
+                (oda_id,),
+            )
+            etkilenenler = [k[0] for k in cursor.fetchall()]
+            if etkilenenler:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Bu oda şu psikologların tek aktif odası: " + ", ".join(etkilenenler)
+                           + ". Önce onlara başka bir oda atayın.",
+                )
 
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())

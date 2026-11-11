@@ -17,10 +17,11 @@ from sunucu import kullanici_olustur
 def sahte_veritabani(rol="PSIKOLOG", hatali_tablo=None):
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    durum = {"son_sorgu": ""}
+    durum = {"son_sorgu": "", "parametreler": None}
 
     def execute(sorgu, parametreler=None):
         durum["son_sorgu"] = sorgu.upper()
+        durum["parametreler"] = parametreler
 
         if hatali_tablo:
             if f"INSERT INTO {hatali_tablo.upper()}" in sorgu.upper():
@@ -51,7 +52,13 @@ def sahte_veritabani(rol="PSIKOLOG", hatali_tablo=None):
 
     cursor.execute.side_effect = execute
     cursor.fetchone.side_effect = fetchone
-    cursor.fetchall.return_value = []
+    def fetchall():
+        # Oda doğrulama sorgusu: istenen odaların hepsi aktif sayılır.
+        if "FROM ODALAR" in durum["son_sorgu"]:
+            return [(oda_id,) for oda_id in durum["parametreler"][0]]
+        return []
+
+    cursor.fetchall.side_effect = fetchall
 
     return conn, cursor
 
@@ -75,6 +82,7 @@ def test_kullanici_ve_personel_birlikte_olusturulur():
             KullaniciOlusturModeli(
                 kullanici_adi="yeni_psikolog",
                 rol_id=1,
+                oda_idleri=[2],
             ),
             kullanici_id=10,
         )
@@ -112,6 +120,7 @@ def test_personel_hatasinda_kullanici_geri_alinir():
                 KullaniciOlusturModeli(
                     kullanici_adi="yeni_psikolog",
                     rol_id=1,
+                    oda_idleri=[2],
                 ),
                 kullanici_id=10,
             )
@@ -211,6 +220,7 @@ def test_audit_hatasinda_tum_islem_geri_alinir():
     yeni = KullaniciOlusturModeli(
         kullanici_adi="yeni_psikolog",
         rol_id=1,
+        oda_idleri=[2],
     )
 
     with (
