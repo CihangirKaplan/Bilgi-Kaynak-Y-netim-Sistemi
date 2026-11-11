@@ -6411,6 +6411,16 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
             (izin_verisi.get("izin_adi"),)
         )
         yeni_id = cursor.fetchone()[0]
+        # Yeni izin "kimsede yok" durumunda kalmasın: ADMIN otomatik sahip olur, diğer roller kapalı başlar.
+        cursor.execute(
+            """
+            INSERT INTO rol_izinleri (rol_id, izin_id, izin_var)
+            SELECT r.rol_id, %s, CASE WHEN UPPER(r.rol_adi) = 'ADMIN' THEN 1 ELSE 0 END
+            FROM roller r
+            ON CONFLICT (rol_id, izin_id) DO NOTHING;
+            """,
+            (yeni_id,),
+        )
         conn.commit()
         return {"mesaj": "İzin başarıyla eklendi", "izin_id": yeni_id}
     except Exception:

@@ -1637,6 +1637,8 @@ QLabel {
         "Kullanıcı & Personel": ("aktif_personel_ekrani", "verileri_cek"),
         "Arıza Kayıtları": ("aktif_ariza_ekrani", "verileri_yukle"),
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
+        # Oda tablosu ana pencerenin kendi içinde olduğundan ekran yerine None (= ana pencerenin kendisi) yazılır.
+        "Oda Yönetimi": (None, "odalari_getir"),
     }
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
 
@@ -1644,7 +1646,7 @@ QLabel {
         hedef = self.SAYFA_YENILEME.get(ad)
         if not hedef:
             return
-        ekran = getattr(self, hedef[0], None)
+        ekran = self if hedef[0] is None else getattr(self, hedef[0], None)
         yontem = getattr(ekran, hedef[1], None) if ekran is not None else None
         if yontem is None:
             return
