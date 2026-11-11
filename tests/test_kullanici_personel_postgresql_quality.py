@@ -761,6 +761,7 @@ def test_postgresql_danisma_ogrencisi_aktiflik_dongusu(qa_ortami):
         kullanici_id=kullanici_id,
         veri=RolDegistirModeli(
             rol_id=ortam["roller"]["PSIKOLOG"],
+            oda_idleri=[ortam["oda_id"]],
         ),
         islem_yapan_id=ortam["yapan_id"],
     )
@@ -847,6 +848,7 @@ def test_postgresql_acik_gorev_varken_ogrenci_rolu_degistirilemez(qa_ortami):
                 kullanici_id=kullanici_id,
                 veri=RolDegistirModeli(
                     rol_id=ortam["roller"]["PSIKOLOG"],
+                    oda_idleri=[ortam["oda_id"]],
                 ),
                 islem_yapan_id=ortam["yapan_id"],
             )
