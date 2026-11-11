@@ -125,27 +125,36 @@ def yaz(e, eski="", yeni="", tekrar=""):
     e.yeni_sifre_tekrar.setText(tekrar)
 
 
-def test_baslangicta_dugme_kapali_ve_kurallar_gorunur(ekran):
-    assert not ekran.kaydet_btn.isEnabled()
-    assert "En az 8 karakter" in ekran.kural_lbl.text()
+def test_baslangicta_dugme_aktif_ve_kurallar_gorunur(ekran):
+    assert ekran.kaydet_btn.isEnabled()
+    assert len(ekran.kural_satirlari) == 3
+    assert "En az 8 karakter" in ekran.kural_satirlari[0].text()
+    assert all("72 bayt" not in satir.text()
+               for satir in ekran.kural_satirlari)
 
-
-def test_kurallar_saglaninca_dugme_acilir(ekran):
+def test_kurallar_saglaninca_uc_yesil_tik_gorunur(ekran):
     yaz(ekran, "gecici", "Abc123!x", "Abc123!x")
     assert ekran.kaydet_btn.isEnabled()
-    assert ekran.kural_lbl.text().count("✔") == 4
+    assert len(ekran.kural_satirlari) == 3
+    assert all(satir.text().startswith("✔")
+               for satir in ekran.kural_satirlari)
 
+def test_gecersiz_sifre_sunucuya_gonderilmez(ekran):
+    durumlar = [
+        ("gecici", "Abc123!", "Abc123!"),
+        ("gecici", "Abc123!x", "Abc123!y"),
+        ("", "Abc123!x", "Abc123!x"),
+        ("Abc123!x", "Abc123!x", "Abc123!x"),
+        ("gecici", "a" * 73, "a" * 73),
+    ]
 
-def test_tek_kural_eksikse_dugme_kapali(ekran):
-    yaz(ekran, "gecici", "Abc123!", "Abc123!")                      # 7 karakter
-    assert not ekran.kaydet_btn.isEnabled()
-    yaz(ekran, "gecici", "Abc123!x", "Abc123!y")                    # uyuşmuyor
-    assert not ekran.kaydet_btn.isEnabled()
-    yaz(ekran, "", "Abc123!x", "Abc123!x")                          # mevcut şifre boş
-    assert not ekran.kaydet_btn.isEnabled()
-    yaz(ekran, "Abc123!x", "Abc123!x", "Abc123!x")                  # eskiyle aynı
-    assert not ekran.kaydet_btn.isEnabled()
-
+    for eski, yeni, tekrar in durumlar:
+        yaz(ekran, eski, yeni, tekrar)
+        assert ekran.kaydet_btn.isEnabled()
+        with patch("sifre_degistir_ekrani.oturum_kontrollu_istek") as istek:
+            ekran.sifre_degistir()
+            istek.assert_not_called()
+        assert ekran.hata_lbl.text().startswith("⚠")
 
 def test_guc_gostergesi_yazdikca_degisir(ekran):
     yaz(ekran, "g", "abc")
@@ -163,7 +172,7 @@ def test_basarisiz_istekten_sonra_dugme_kural_durumuna_gore_kalir(ekran):
     with patch("sifre_degistir_ekrani.oturum_kontrollu_istek", return_value=yanit), \
             patch("sifre_degistir_ekrani.oturum_hatasi_mi", return_value=False):
         ekran.sifre_degistir()
-    assert ekran.hata_lbl.text() == "Eski şifre hatalı."
+    assert ekran.hata_lbl.text() == "⚠ Eski şifre hatalı."
     assert ekran.kaydet_btn.isEnabled()                              # kurallar sağlanıyor, tekrar denenebilir
 
 
