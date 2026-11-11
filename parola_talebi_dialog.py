@@ -90,7 +90,9 @@ class ParolaTalebiDialog(QDialog):
         self.kutu_basari.hide()
         ana.addWidget(self.kutu_basari)
 
-        self.lbl_not = QLabel("Yöneticinize yüz yüze ya da telefonla da bildirebilirsiniz.")
+        self.lbl_not = QLabel("Yöneticinize yüz yüze ya da telefonla da bildirebilirsiniz.\n"
+                              "Yönetici hesabının şifresini unuttuysanız ve başka yönetici yoksa, sunucu bilgisayarından "
+                              "sistem sorumlusuna başvurun.")
         self.lbl_not.setObjectName("not")
         self.lbl_not.setWordWrap(True)
         ana.addWidget(self.lbl_not)

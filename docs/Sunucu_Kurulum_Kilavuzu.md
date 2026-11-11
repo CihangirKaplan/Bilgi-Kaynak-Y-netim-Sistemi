@@ -62,6 +62,25 @@ Parolayı hemen not edin; ilk girişte yeni parola belirlemeniz istenir. Veritab
 bir ADMIN varsa betik hiçbir şey eklemez. Diğer kullanıcıları ve rolleri, admin ile giriş yaptıktan
 sonra uygulamadaki Kullanıcı & Personel ekranından ekleyin.
 
+### Yönetici parolasını unuttuysanız
+
+Normal kullanıcılar giriş ekranındaki **Şifremi unuttum** ile talep açar, bir yönetici parolayı sıfırlar.
+Parolasını unutan kişi **tek yöneticiyse** talebi görecek kimse kalmaz; bu durumda yönetici hesabı
+**sunucu bilgisayarında** şu araçla kurtarılır (veritabanı ayarlarına erişim gerektirdiği için yalnızca
+sistem sorumlusu yapabilir):
+
+- Kolay yol: sunucu bilgisayarında `scripts\windows\admin_parola_kurtar.bat` dosyasına çift tıklayın.
+- Ya da proje klasöründe: `python scripts/admin_parola_kurtar.py`
+
+Araç yönetici hesaplarını listeler, hangisi olduğunu sorar ve **EVET** yazarak onayınızı ister. Ardından
+rastgele bir geçici parolayı ekrana **bir kez** yazar; hemen not edin. Uygulamaya bu parolayla giriş yapın,
+ekran sizden yeni parola belirlemenizi ister. Araç hatalı giriş kilidini de kaldırır, bekleyen parola
+talebini kapatır ve olayı denetim kaydına (`PASSWORD_RESET`) yazar. Yalnızca yönetici (ADMIN) hesapları
+için çalışır; diğer kullanıcıların parolasını yönetici uygulamadan sıfırlar.
+
+**Öneri:** Böyle bir durumla karşılaşmamak için sistemde en az **iki** yönetici hesabı bulundurun; biri
+parolasını unutursa diğeri, Kullanıcı & Personel ekranındaki parola taleplerinden onu sıfırlayabilir.
+
 ## 7. Sunucuyu ağa açın
 
 Sunucu bilgisayarının adresini öğrenin:

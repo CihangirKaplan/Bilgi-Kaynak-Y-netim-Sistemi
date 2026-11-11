@@ -212,3 +212,17 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
 
     uyari.assert_called_once()
     bilgi.assert_not_called()
+
+
+def test_onay_penceresi_kimlik_dogrulamasini_hatirlatir(ekran):
+    kullanici_sec(ekran)
+    with (
+        patch("k_personel_ekranlari.QMessageBox.question", return_value=QMessageBox.No) as soru,
+        patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
+    ):
+        ekran.secili_kullanici_parola_sifirla()
+
+    mesaj = soru.call_args.args[2]
+    assert "kimliğini" in mesaj and "doğrulayın" in mesaj
+    assert "test_kullanici" in mesaj
+    api.assert_not_called()                                         # hayır denince hiçbir istek atılmaz
