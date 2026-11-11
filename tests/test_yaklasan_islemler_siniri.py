@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import sunucu
 
-BUGUN = datetime.date.today()
+# Not: 'bugün' modül yüklenirken değil her çağrıda hesaplanır; CI gece yarısını geçerse sabit kalan tarih testi bozardı.
 
 
 def gun(n):
-    return BUGUN + datetime.timedelta(days=n)
+    return datetime.date.today() + datetime.timedelta(days=n)
 
 
 def liste(n_bakim, n_kalibrasyon=0):

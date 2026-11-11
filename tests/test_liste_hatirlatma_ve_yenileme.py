@@ -10,11 +10,11 @@ import cihaz_kalibrasyon_ekranlari as kalib
 import main_window as mw
 from tablo_tasarimi import hatirlatma_metni, kalan_gun_hapi
 
-BUGUN = datetime.date.today()
+# Not: 'bugün' modül yüklenirken değil her çağrıda hesaplanır; CI gece yarısını geçerse sabit kalan tarih testi bozardı.
 
 
 def gun(n):
-    return (BUGUN + datetime.timedelta(days=n)).isoformat()
+    return (datetime.date.today() + datetime.timedelta(days=n)).isoformat()
 
 
 @pytest.fixture(scope="module")
