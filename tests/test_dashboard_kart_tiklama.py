@@ -5,7 +5,7 @@ Gerçek API kullanılmaz; sunucu cevapları ve sayfa açma işlevleri taklit edi
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -37,8 +37,10 @@ def kart_tikla(pano, anahtar):
 
 
 def kapat(pano):
+    pano.zamanlayici.stop()
     pano.close()
     pano.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 # --------------------------------------------------------------------------- hedefler
