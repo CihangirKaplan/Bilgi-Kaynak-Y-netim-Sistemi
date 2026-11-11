@@ -232,12 +232,12 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 
                 self.cmb_psikologlar.currentIndexChanged.connect(self.odalari_filtrele)
                 
-                # mevcut_psikolog_id aslında giriş yapan KULLANICI kimliğidir (personel_id değil).
-                # Kullanıcı psikolog listesinde varsa (yani kendisi psikologsa) kendi adına kilitlenir;
+                # mevcut_psikolog_id, giriş yapan kişinin PERSONEL kimliğidir (login_ekrani: personel_id or kullanici_id).
+                # Psikolog listesinde bu kimlikte biri varsa (yani kendisi psikologsa) kendi adına kilitlenir;
                 # admin ve danışma öğrencisi gibi roller listede olmadığı için psikolog seçebilir.
                 if self.mevcut_psikolog_id is not None:
                     kendisi = next(
-                        (p for p in cevap.json() if p.get("kullanici_id") == self.mevcut_psikolog_id),
+                        (p for p in cevap.json() if p.get("personel_id") == self.mevcut_psikolog_id),
                         None,
                     )
                     if kendisi is not None:

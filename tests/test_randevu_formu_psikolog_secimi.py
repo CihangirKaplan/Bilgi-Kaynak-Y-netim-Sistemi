@@ -47,18 +47,21 @@ def form_ac(kullanici_id):
 
 
 def test_psikolog_kendi_adina_kilitlenir():
-    # Kullanıcı kimliği 12, personel kimliği 7: ikisi bilerek farklı seçildi.
-    form = form_ac(12)
+    # Forma giriş yapan kişinin PERSONEL kimliği verilir (login_ekrani: personel_id or kullanici_id).
+    # Psikolog 'ayse': personel_id 7, kullanici_id 12 (ikisi bilerek farklı).
+    form = form_ac(7)
     assert form.cmb_psikologlar.currentData() == 7
     assert not form.cmb_psikologlar.isEnabled()
     assert form.cmb_odalar.count() == 2
     form.close()
 
 
-@pytest.mark.parametrize("kullanici_id", [1, 3, 7])
-def test_psikolog_olmayan_kullanici_psikolog_secebilir(kullanici_id):
-    # 3 ve 7 başka birinin personel_id'sidir; kullanıcı kimliğiyle karışmamalı.
-    form = form_ac(kullanici_id)
+@pytest.mark.parametrize("personel_id", [1, 11, 12])
+def test_psikolog_olmayan_kullanici_psikolog_secebilir(personel_id):
+    # 11 ve 12, psikologların KULLANICI kimlikleridir ama personel kimlikleri değildir.
+    # Gerçek hayattaki hata: admin'in personel_id'si 11, psikolog1'in kullanici_id'si 11 idi;
+    # kimlikler karışınca admin psikolog1'e kilitleniyor, diğer psikologlar seçilemiyordu.
+    form = form_ac(personel_id)
     assert form.cmb_psikologlar.isEnabled()
     form.close()
 
