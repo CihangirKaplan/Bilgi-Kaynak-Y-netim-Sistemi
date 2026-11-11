@@ -36,6 +36,13 @@ def qa_ortami():
                 roller = dict(cur.fetchall())
                 assert len(roller) == 2, "Test icin gerekli roller bulunamadi."
 
+                cur.execute("""
+                    INSERT INTO odalar (oda_adi, kapasite, aktif_mi)
+                    VALUES (%s, 1, TRUE)
+                    RETURNING oda_id;
+                """, (f"QA_ATOM_ODA_{etiket}",))
+                oda_id = cur.fetchone()[0]
+
                 gerekli = {
                     "KULLANICI_OLUSTUR",
                     "ROL_ATAMA_DEGISTIRME",
@@ -82,6 +89,7 @@ def qa_ortami():
         "yapan_id": yapan_id,
         "yapan_rol_id": yapan_rol_id,
         "roller": roller,
+        "oda_id": oda_id,
         "kullanici_adlari": [yapan_adi],
     }
 
@@ -93,6 +101,11 @@ def qa_ortami():
             try:
                 with conn.cursor() as cur:
                     adlar = ortam["kullanici_adlari"]
+
+                    cur.execute("""
+                        DELETE FROM psikolog_odalar
+                        WHERE oda_id = %s;
+                    """, (ortam["oda_id"],))
 
                     cur.execute("""
                         DELETE FROM denetim_kayitlari
@@ -128,6 +141,11 @@ def qa_ortami():
                         (yapan_rol_id,),
                     )
 
+                    cur.execute(
+                        "DELETE FROM odalar WHERE oda_id = %s;",
+                        (ortam["oda_id"],),
+                    )
+
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -143,6 +161,7 @@ def test_postgresql_kullanici_personel_ve_audit_kaydedilir(qa_ortami):
         KullaniciOlusturModeli(
             kullanici_adi=ad,
             rol_id=ortam["roller"]["PSIKOLOG"],
+            oda_idleri=[ortam["oda_id"]],
         ),
         kullanici_id=ortam["yapan_id"],
     )
@@ -246,6 +265,7 @@ def test_postgresql_eszamanli_personel_kodlari_benzersiz(qa_ortami):
             KullaniciOlusturModeli(
                 kullanici_adi=ad,
                 rol_id=ortam["roller"]["PSIKOLOG"],
+                oda_idleri=[ortam["oda_id"]],
             ),
             kullanici_id=ortam["yapan_id"],
         )
@@ -383,6 +403,7 @@ def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
                 KullaniciOlusturModeli(
                     kullanici_adi=ad,
                     rol_id=ortam["roller"]["PSIKOLOG"],
+                    oda_idleri=[ortam["oda_id"]],
                 ),
                 kullanici_id=ortam["yapan_id"],
             )
@@ -446,6 +467,7 @@ def test_postgresql_rol_degisiminde_personel_kodu_da_degisisir(qa_ortami):
         KullaniciOlusturModeli(
             kullanici_adi=ad,
             rol_id=ortam["roller"]["PSIKOLOG"],
+            oda_idleri=[ortam["oda_id"]],
         ),
         kullanici_id=ortam["yapan_id"],
     )
@@ -571,6 +593,7 @@ def test_postgresql_danisma_ogrencisi_rol_gecisi(
         KullaniciOlusturModeli(
             kullanici_adi=ad,
             rol_id=ortam["roller"]["PSIKOLOG"],
+            oda_idleri=[ortam["oda_id"]],
         ),
         kullanici_id=ortam["yapan_id"],
     )
@@ -684,6 +707,7 @@ def test_postgresql_danisma_ogrencisi_aktiflik_dongusu(qa_ortami):
         KullaniciOlusturModeli(
             kullanici_adi=kullanici_adi,
             rol_id=ortam["roller"]["PSIKOLOG"],
+            oda_idleri=[ortam["oda_id"]],
         ),
         kullanici_id=ortam["yapan_id"],
     )
