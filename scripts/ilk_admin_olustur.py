@@ -5,9 +5,16 @@ Bu betik onun yerine geçer: yalnızca bir ADMIN kullanıcısı oluşturur, rast
 geçici parola üretip ekrana BİR KEZ yazar ve ilk girişte parola değiştirmeyi zorunlu kılar.
 Veritabanında zaten bir ADMIN varsa hiçbir şey eklemez.
 
+Uygulamadan yönetici (ADMIN) hesabı açılamaz; bilerek yalnızca bu betikle, SUNUCU bilgisayarında açılır.
+İkinci bir yönetici gerekiyorsa (biri şifresini unutursa diğeri sıfırlayabilsin diye) --ek-yonetici kullanılır:
+onay (EVET) ister, rastgele geçici parola üretir, ilk girişte parola değiştirmeyi zorunlu kılar ve
+denetim kaydına (CREATE) yazar.
+
 Kullanım:
     python scripts/ilk_admin_olustur.py
     python scripts/ilk_admin_olustur.py --kullanici-adi mudur_admin
+    python scripts/ilk_admin_olustur.py --ek-yonetici
+    python scripts/ilk_admin_olustur.py --ek-yonetici --kullanici-adi yonetici2
 """
 
 import argparse
@@ -21,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psycopg2
 from dotenv import load_dotenv
 
+from denetim import denetim_kaydi_olustur
 from guvenlik import gecici_parola_uret, parola_hashle
 
 load_dotenv()
@@ -32,8 +40,25 @@ class IlkAdminHatasi(Exception):
     """Kullanıcıya olduğu gibi gösterilecek, beklenen hata."""
 
 
-def admin_olustur(cursor, kullanici_adi):
-    """ADMIN kullanıcısı oluşturur. (kullanici_adi, gecici_parola, personel_kodu) döndürür."""
+def mevcut_yoneticiler(cursor):
+    """Veritabanındaki ADMIN hesaplarının kullanıcı adları (alfabetik)."""
+    cursor.execute(
+        """
+        SELECT k.kullanici_adi
+        FROM kullanicilar k
+        JOIN roller r ON r.rol_id = k.rol_id
+        WHERE r.rol_adi = 'ADMIN'
+        ORDER BY k.kullanici_adi;
+        """
+    )
+    return [satir[0] for satir in cursor.fetchall()]
+
+
+def admin_olustur(cursor, kullanici_adi, ek_yonetici=False):
+    """ADMIN kullanıcısı oluşturur. (kullanici_adi, gecici_parola, personel_kodu) döndürür.
+
+    ek_yonetici=False: yalnızca veritabanında hiç ADMIN yokken (ilk kurulum) çalışır.
+    ek_yonetici=True : zaten ADMIN olsa da yeni bir yönetici ekler ve olayı denetim kaydına yazar."""
     if not GECERLI_KULLANICI_ADI.fullmatch(kullanici_adi or ""):
         raise IlkAdminHatasi("Kullanıcı adı 3-50 karakter olmalı; harf, rakam, _ . - içerebilir.")
 
@@ -42,9 +67,13 @@ def admin_olustur(cursor, kullanici_adi):
     if rol is None:
         raise IlkAdminHatasi("ADMIN rolü bulunamadı. Önce 'python -m alembic upgrade head' çalıştırın.")
 
-    cursor.execute("SELECT 1 FROM kullanicilar WHERE rol_id = %s LIMIT 1;", (rol[0],))
-    if cursor.fetchone() is not None:
-        raise IlkAdminHatasi("Veritabanında zaten bir ADMIN kullanıcısı var; yeni hesap eklenmedi.")
+    if not ek_yonetici:
+        cursor.execute("SELECT 1 FROM kullanicilar WHERE rol_id = %s LIMIT 1;", (rol[0],))
+        if cursor.fetchone() is not None:
+            raise IlkAdminHatasi(
+                "Veritabanında zaten bir ADMIN kullanıcısı var; yeni hesap eklenmedi. "
+                "İkinci bir yönetici gerekiyorsa: python scripts/ilk_admin_olustur.py --ek-yonetici"
+            )
 
     cursor.execute("SELECT 1 FROM kullanicilar WHERE kullanici_adi = %s;", (kullanici_adi,))
     if cursor.fetchone() is not None:
@@ -67,12 +96,21 @@ def admin_olustur(cursor, kullanici_adi):
         "INSERT INTO personel (kullanici_id, personel_kodu, aktif_mi) VALUES (%s, %s, TRUE);",
         (kullanici_id, personel_kodu),
     )
+    if ek_yonetici:
+        denetim_kaydi_olustur(
+            None, olay_turu="CREATE", kullanici_id=kullanici_id,
+            hedef_tablo="kullanicilar", hedef_kayit_id=kullanici_id, mevcut_cursor=cursor,
+        )
     return kullanici_adi, gecici_parola, personel_kodu
 
 
-def main(argv=None):
+def main(argv=None, girdi=input):
     ayrac = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ayrac.add_argument("--kullanici-adi", default="admin", help="Yönetici kullanıcı adı (varsayılan: admin)")
+    ayrac.add_argument("--kullanici-adi", default=None,
+                       help="Yönetici kullanıcı adı (ilk kurulumda varsayılan: admin; --ek-yonetici ile sorulur)")
+    ayrac.add_argument("--ek-yonetici", action="store_true",
+                       help="Zaten bir yönetici varken ikinci bir yönetici hesabı ekler (onay ister)")
+    ayrac.add_argument("--evet", action="store_true", help="--ek-yonetici için onay sormadan devam et")
     args = ayrac.parse_args(argv)
 
     conn = None
@@ -85,7 +123,22 @@ def main(argv=None):
             password=os.getenv("DB_PASSWORD"),
         )
         with conn.cursor() as cursor:
-            kullanici_adi, parola, personel_kodu = admin_olustur(cursor, args.kullanici_adi)
+            kullanici_adi = args.kullanici_adi
+            if args.ek_yonetici:
+                mevcut = mevcut_yoneticiler(cursor)
+                print("Mevcut yöneticiler: " + (", ".join(mevcut) if mevcut else "(yok)"))
+                if not kullanici_adi:
+                    kullanici_adi = girdi("Yeni yöneticinin kullanıcı adı: ").strip()
+                if not kullanici_adi:
+                    raise IlkAdminHatasi("Kullanıcı adı boş bırakılamaz. Hiçbir şey değiştirilmedi.")
+                if not args.evet:
+                    print(f"'{kullanici_adi}' adında yeni bir YÖNETİCİ (ADMIN) hesabı açılacak.")
+                    if girdi("Devam etmek için EVET yazın: ").strip() != "EVET":
+                        print("Vazgeçildi. Hiçbir şey değiştirilmedi.")
+                        return 0
+            kullanici_adi, parola, personel_kodu = admin_olustur(
+                cursor, kullanici_adi or "admin", ek_yonetici=args.ek_yonetici
+            )
         conn.commit()
     except IlkAdminHatasi as hata:
         if conn is not None:

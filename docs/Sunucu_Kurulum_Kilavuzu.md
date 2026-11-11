@@ -62,6 +62,14 @@ Parolayı hemen not edin; ilk girişte yeni parola belirlemeniz istenir. Veritab
 bir ADMIN varsa betik hiçbir şey eklemez. Diğer kullanıcıları ve rolleri, admin ile giriş yaptıktan
 sonra uygulamadaki Kullanıcı & Personel ekranından ekleyin.
 
+**Uygulamadan yönetici (ADMIN) hesabı açılamaz** (bilerek; güvenlik için yalnızca sunucu bilgisayarında açılır).
+İkinci bir yönetici gerekiyorsa sunucu bilgisayarında şunu çalıştırın:
+
+    python scripts/ilk_admin_olustur.py --ek-yonetici
+
+Araç mevcut yöneticileri gösterir, yeni kullanıcı adını sorar ve **EVET** yazarak onayınızı ister. Ardından rastgele bir
+geçici parolayı **bir kez** yazar; hesap ilk girişte yeni parola belirlemek zorundadır ve olay denetim kaydına yazılır.
+
 ### Yönetici parolasını unuttuysanız
 
 Normal kullanıcılar giriş ekranındaki **Şifremi unuttum** ile talep açar, bir yönetici parolayı sıfırlar.
@@ -79,7 +87,8 @@ talebini kapatır ve olayı denetim kaydına (`PASSWORD_RESET`) yazar. Yalnızca
 için çalışır; diğer kullanıcıların parolasını yönetici uygulamadan sıfırlar.
 
 **Öneri:** Böyle bir durumla karşılaşmamak için sistemde en az **iki** yönetici hesabı bulundurun; biri
-parolasını unutursa diğeri, Kullanıcı & Personel ekranındaki parola taleplerinden onu sıfırlayabilir.
+parolasını unutursa diğeri, Kullanıcı & Personel ekranındaki parola taleplerinden onu sıfırlayabilir. İkinci yönetici,
+yukarıdaki `--ek-yonetici` seçeneğiyle sunucu bilgisayarında açılır.
 
 ### Acil durum: yönetici hesabına kimse giremiyorsa
 
@@ -100,7 +109,8 @@ Sırayla şu üç yola bakın; ilk yol yeterliyse diğerlerine gerek kalmaz.
 
 Böyle bir durumda iş yavaşlamasın diye kurulumdan hemen sonra şunları yapın:
 
-- [ ] En az **iki yönetici** hesabı açın ve bunları **farklı kişilere** verin.
+- [ ] En az **iki yönetici** hesabı açın (ikincisi için `python scripts/ilk_admin_olustur.py --ek-yonetici`) ve bunları
+      **farklı kişilere** verin.
 - [ ] `.env` içindeki `DB_PASSWORD` ile `postgres` parolasını **sunucu bilgisayarının dışında** güvenli bir yerde
       saklayın (kilitli çekmecede zarf ya da şifre yöneticisi). Parolaları kimseyle paylaşmayın.
 - [ ] Kurtarma yolunu bilen **en az iki kişi** olsun (örneğin sistem sorumlusu ve müdür).
