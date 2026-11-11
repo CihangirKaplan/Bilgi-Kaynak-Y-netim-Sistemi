@@ -138,7 +138,7 @@ Bunlar `D02` içindeki FR maddeleri değildir; Proje Detayları belgesindeki gü
 
 | İş | Ne yapar | Kodda nerede | Test kanıtı |
 |---|---|---|---|
-| Parola sıfırlama talebi | Giriş ekranından yöneticiye bildirim; kullanıcı adının var olup olmadığı belli olmaz, her kullanıcı için en fazla bir açık talep | `POST /api/parola-sifirlama-talebi`, `parola_talebi_dialog.py`, `login_ekrani.py` | `test_parola_sifirlama_talebi.py`, `test_parola_talebi_arayuz.py` |
+| Parola sıfırlama talebi | Giriş ekranından yöneticiye bildirim; var olmayan kullanıcı adı (404) ve pasif hesap (403) açıkça bildirilir ve talep kaydedilmez, her kullanıcı için en fazla bir açık talep (varsa "zaten bekleyen talep" denir) | `POST /api/parola-sifirlama-talebi`, `parola_talebi_dialog.py`, `login_ekrani.py` | `test_parola_sifirlama_talebi.py`, `test_parola_talebi_arayuz.py` |
 | Yönetici talepler paneli ve bildirimleri | Bekleyen talepler Kullanıcı & Personel sayfasında, ana panelde ve zil simgesinde görünür | `k_personel_ekranlari.py`, `dashboard_ekrani.py`, `main_window.py` | `test_parola_talebi_arayuz.py`, `test_gui_parola_sifirlama_quality.py` |
 | Geçici parola penceresi | Kopyalanabilir; pano 60 saniye sonra temizlenir; onayda kimlik doğrulama hatırlatması | `gecici_parola_dialog.py` | `test_gecici_parola_ve_sifre_kurallari.py`, `test_gui_parola_sifirlama_quality.py` |
 | Yeni şifre kuralları | Canlı kural listesi ve güç göstergesi; düğme kurallar sağlanınca açılır | `parola_kurallari.py`, `sifre_degistir_ekrani.py` | `test_gecici_parola_ve_sifre_kurallari.py` |

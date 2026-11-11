@@ -76,30 +76,72 @@ def test_aktif_kullanici_icin_talep_olusur_ve_audit_yazilir():
     assert audit.call_args.kwargs["hedef_tablo"] == "parola_sifirlama_talepleri" and audit.call_args.kwargs["hedef_kayit_id"] == 77
 
 
-def test_olmayan_kullanici_icin_talep_olusmaz_ama_yanit_ayni_kalir():
-    gercek, _ = talep_et(SahteImlec(kullanici=(12, True)))
+def talep_hata(imlec, ad="psikolog1"):
+    """Talebin HTTPException ile reddedildiği durumlar: (hata, audit)."""
+    with pytest.raises(HTTPException) as hata:
+        talep_et(imlec, ad)
+    return hata.value
+
+
+def test_olmayan_kullanici_adi_acikca_404_ve_kod_ile_bildirilir_talep_olusmaz():
     imlec = SahteImlec(kullanici=None)
-    sonuc, audit = talep_et(imlec, "yok_boyle_biri")
-    assert sonuc == gercek                                           # yanıttan kullanıcının var olup olmadığı anlaşılmaz
+    audit = MagicMock()
+    with patch("sunucu.psycopg2.connect", return_value=baglan(imlec)), patch("denetim.denetim_kaydi_olustur", audit):
+        with pytest.raises(HTTPException) as hata:
+            sunucu.parola_sifirlama_talebi_olustur(ParolaSifirlamaTalebiModeli(kullanici_adi="yok_boyle_biri"))
+    assert hata.value.status_code == 404
+    assert hata.value.detail == {"kod": "KULLANICI_BULUNAMADI", "mesaj": sunucu.PAROLA_TALEBI_KULLANICI_YOK_MESAJI}
+    assert "bulunamadı" in hata.value.detail["mesaj"] and "Yazımı kontrol" in hata.value.detail["mesaj"]
     assert not imlec.calisan("INSERT") and not audit.called
 
 
-def test_pasif_kullanici_icin_talep_olusmaz():
+def test_pasif_hesap_icin_403_ve_kod_ile_bildirilir_talep_olusmaz():
     imlec = SahteImlec(kullanici=(12, False))
-    sonuc, audit = talep_et(imlec)
-    assert sonuc["durum"] == "alindi" and not imlec.calisan("INSERT") and not audit.called
+    audit = MagicMock()
+    with patch("sunucu.psycopg2.connect", return_value=baglan(imlec)), patch("denetim.denetim_kaydi_olustur", audit):
+        with pytest.raises(HTTPException) as hata:
+            sunucu.parola_sifirlama_talebi_olustur(ParolaSifirlamaTalebiModeli(kullanici_adi="psikolog1"))
+    assert hata.value.status_code == 403
+    assert hata.value.detail == {"kod": "HESAP_PASIF", "mesaj": sunucu.PAROLA_TALEBI_HESAP_PASIF_MESAJI}
+    assert not imlec.calisan("INSERT") and not audit.called
 
 
-def test_zaten_acik_talebi_olan_kullanici_icin_ikinci_talep_olusmaz():
+def test_hata_durumlarinda_islem_geri_alinir_ve_hicbir_sey_yazilmaz():
+    for kullanici in (None, (12, False)):
+        conn = baglan(SahteImlec(kullanici=kullanici))
+        with patch("sunucu.psycopg2.connect", return_value=conn):
+            with pytest.raises(HTTPException):
+                sunucu.parola_sifirlama_talebi_olustur(ParolaSifirlamaTalebiModeli(kullanici_adi="x1"))
+        conn.rollback.assert_called_once()
+        conn.commit.assert_not_called()
+
+
+def test_basarili_talep_acik_mesaj_doner_ve_commit_edilir():
+    imlec = SahteImlec(kullanici=(12, True))
+    conn = baglan(imlec)
+    with patch("sunucu.psycopg2.connect", return_value=conn), patch("denetim.denetim_kaydi_olustur", MagicMock()):
+        sonuc = sunucu.parola_sifirlama_talebi_olustur(ParolaSifirlamaTalebiModeli(kullanici_adi="psikolog1"))
+    assert sonuc == {"durum": "alindi", "mesaj": sunucu.PAROLA_TALEBI_ALINDI_MESAJI}
+    conn.commit.assert_called_once()
+
+
+def test_zaten_acik_talebi_olan_kullanici_icin_ikinci_talep_olusmaz_zaten_var_denir():
     imlec = SahteImlec(kullanici=(12, True), acik_talep=(1,))
     sonuc, audit = talep_et(imlec)
-    assert sonuc["durum"] == "alindi" and not imlec.calisan("INSERT") and not audit.called
+    assert sonuc == {"durum": "zaten_var", "mesaj": sunucu.PAROLA_TALEBI_ZATEN_VAR_MESAJI}
+    assert not imlec.calisan("INSERT") and not audit.called
 
 
-def test_cakisan_es_zamanli_ekleme_sessizce_yutulur_ve_audit_yazilmaz():
+def test_cakisan_es_zamanli_ekleme_zaten_var_denir_ve_audit_yazilmaz():
     imlec = SahteImlec(kullanici=(12, True), eklenen=None)            # ON CONFLICT DO NOTHING hiçbir satır döndürmedi
     sonuc, audit = talep_et(imlec)
-    assert sonuc["durum"] == "alindi" and not audit.called
+    assert sonuc["durum"] == "zaten_var" and not audit.called
+
+
+def test_mesajlar_birbirinden_ve_bos_olmayan_turkce_metinlerdir():
+    mesajlar = [sunucu.PAROLA_TALEBI_ALINDI_MESAJI, sunucu.PAROLA_TALEBI_ZATEN_VAR_MESAJI,
+                sunucu.PAROLA_TALEBI_KULLANICI_YOK_MESAJI, sunucu.PAROLA_TALEBI_HESAP_PASIF_MESAJI]
+    assert len(set(mesajlar)) == 4 and all(len(m) > 20 for m in mesajlar)
 
 
 def test_acik_talep_ust_siniri_asilirsa_429_verilir_ve_talep_eklenmez():
@@ -117,7 +159,7 @@ def test_sinirin_hemen_altinda_talep_kabul_edilir():
 
 def test_sorgular_parametreli_ve_kullanici_adi_sorguya_yapistirilmaz():
     imlec = SahteImlec(kullanici=None)
-    talep_et(imlec, "x'; DROP TABLE kullanicilar;--")
+    talep_hata(imlec, "x'; DROP TABLE kullanicilar;--")                    # var olmayan ad: 404
     sorgu, parametre = imlec.sorgular[0]
     assert "DROP" not in sorgu and parametre == ("x'; DROP TABLE kullanicilar;--",)
 

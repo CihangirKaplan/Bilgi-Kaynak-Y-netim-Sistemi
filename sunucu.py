@@ -1412,18 +1412,20 @@ def kullanici_parola_sifirla(
 # Kullanıcı giriş ekranından yöneticiye bildirir; yönetici bildirimden görüp parolayı sıfırlar.
 # ==========================================
 PAROLA_TALEBI_ACIK_UST_SINIR = 50
-PAROLA_TALEBI_GENEL_MESAJ = (
-    "Talebiniz alındı. Kullanıcı adınız doğruysa yöneticinize iletilmiştir; "
-    "geçici parolanızı yöneticinizden alın."
-)
+# Kapalı ofis ağında kullanıcı adları gizli değildir; kullanıcı, yazım hatasını hemen anlasın diye var olmayan ve pasif
+# hesaplar açıkça söylenir. (Giriş ekranı ise bilerek "kullanıcı adı veya parola hatalı" der.)
+PAROLA_TALEBI_ALINDI_MESAJI = "Talebiniz yöneticiye iletildi. Geçici parolanızı yöneticinizden alın."
+PAROLA_TALEBI_ZATEN_VAR_MESAJI = "Bu hesap için zaten bekleyen bir talebiniz var. Yöneticinizin size dönmesini bekleyin."
+PAROLA_TALEBI_KULLANICI_YOK_MESAJI = "Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı. Yazımı kontrol edip tekrar deneyin."
+PAROLA_TALEBI_HESAP_PASIF_MESAJI = "Bu hesap pasif. Lütfen yöneticinize başvurun."
 
 
 @app.post("/api/parola-sifirlama-talebi")
 def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
     """Giriş yapmadan parola sıfırlama talebi açar.
 
-    Kullanıcı adının var olup olmadığı yanıttan anlaşılmaz (hep aynı mesaj döner). Her kullanıcı için en
-    fazla bir açık talep tutulur; pasif kullanıcılar için talep açılmaz."""
+    Var olmayan kullanıcı adı 404 (KULLANICI_BULUNAMADI), pasif hesap 403 (HESAP_PASIF) ile açıkça bildirilir; bu
+    durumlarda talep kaydedilmez. Her kullanıcı için en fazla bir açık talep tutulur (varsa durum "zaten_var")."""
     conn = None
     cursor = None
     try:
@@ -1435,17 +1437,26 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
             (talep.kullanici_adi,)
         )
         kullanici = cursor.fetchone()
-        genel = {"durum": "alindi", "mesaj": PAROLA_TALEBI_GENEL_MESAJ}
+        alindi = {"durum": "alindi", "mesaj": PAROLA_TALEBI_ALINDI_MESAJI}
+        zaten_var = {"durum": "zaten_var", "mesaj": PAROLA_TALEBI_ZATEN_VAR_MESAJI}
 
-        if kullanici is None or not kullanici[1]:
-            return genel
+        if kullanici is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"kod": "KULLANICI_BULUNAMADI", "mesaj": PAROLA_TALEBI_KULLANICI_YOK_MESAJI},
+            )
+        if not kullanici[1]:
+            raise HTTPException(
+                status_code=403,
+                detail={"kod": "HESAP_PASIF", "mesaj": PAROLA_TALEBI_HESAP_PASIF_MESAJI},
+            )
 
         cursor.execute(
             "SELECT 1 FROM parola_sifirlama_talepleri WHERE kullanici_id = %s AND durum = 'ACIK';",
             (kullanici[0],)
         )
         if cursor.fetchone() is not None:
-            return genel                               # zaten bekleyen talebi var
+            return zaten_var                           # zaten bekleyen talebi var
 
         cursor.execute("SELECT COUNT(*) FROM parola_sifirlama_talepleri WHERE durum = 'ACIK';")
         if cursor.fetchone()[0] >= PAROLA_TALEBI_ACIK_UST_SINIR:
@@ -1464,14 +1475,15 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
             (kullanici[0],)
         )
         yeni = cursor.fetchone()
-        if yeni is not None:
-            from denetim import denetim_kaydi_olustur
-            denetim_kaydi_olustur(
-                VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici[0],
-                hedef_tablo="parola_sifirlama_talepleri", hedef_kayit_id=yeni[0], mevcut_cursor=cursor
-            )
+        if yeni is None:
+            return zaten_var                           # eşzamanlı başka bir istek az önce açtı
+        from denetim import denetim_kaydi_olustur
+        denetim_kaydi_olustur(
+            VT_AYARLARI, olay_turu="CREATE", kullanici_id=kullanici[0],
+            hedef_tablo="parola_sifirlama_talepleri", hedef_kayit_id=yeni[0], mevcut_cursor=cursor
+        )
         conn.commit()
-        return genel
+        return alindi
 
     except HTTPException:
         if conn is not None:
