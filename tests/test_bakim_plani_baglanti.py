@@ -164,11 +164,11 @@ def test_plan_kimligi_pozitif_olmali(sinif, alan):
 
 
 # ---------------------------------------------------------- dashboard: yaklaşan işlemler
-BUGUN = date.today()
+# Not: 'bugün' modül yüklenirken değil her çağrıda hesaplanır; CI gece yarısını geçerse sabit kalan tarih testi bozardı.
 
 
 def gun(n):
-    return BUGUN + datetime.timedelta(days=n)
+    return date.today() + datetime.timedelta(days=n)
 
 
 def yaklasanlar(bakimlar=(), kalibrasyonlar=(), planlar=()):

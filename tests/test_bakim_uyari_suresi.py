@@ -112,11 +112,11 @@ def yaklasanlar(bakimlar, kalibrasyonlar, plan_satirlari=()):
         return yaklasan_islemler_getir(kullanici_id=1)
 
 
-BUGUN = D.today()
+# Not: 'bugün' modül yüklenirken değil her çağrıda hesaplanır; CI gece yarısını geçerse sabit kalan tarih testi bozardı.
 
 
 def gun(n):
-    return BUGUN + datetime.timedelta(days=n)
+    return D.today() + datetime.timedelta(days=n)
 
 
 def test_uyari_suresi_icindeki_bakim_listelenir_disindaki_listelenmez():
