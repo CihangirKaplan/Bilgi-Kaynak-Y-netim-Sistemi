@@ -1,7 +1,7 @@
 # TKYS Fonksiyonel Gereksinim İzlenebilirlik Tablosu
 
 Bu tablo, `docs/D02_Requirements_v1.md` içindeki 51 fonksiyonel gereksinimin (FR) kodda ve testlerde
-karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`0a26b51`).
+karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`7fa9a34`).
 
 Durumlar:
 
@@ -16,17 +16,15 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | Durum | Adet | Maddeler |
 |---|---|---|
-| ✅ Karşılanıyor | 44 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
-| ⚠️ Kısmen | 6 | FR-008, FR-013, FR-017, FR-018, FR-019, FR-041 |
+| ✅ Karşılanıyor | 46 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
+| ⚠️ Kısmen | 4 | FR-008, FR-013, FR-019, FR-041 |
 | ❌ Karşılanmıyor | 1 | FR-012 |
 
 ## Açık işler
 
 1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
-2. **FR-017 ve FR-018 Oda ekleme / pasifleştirme:** Kod çalışıyor, yalnızca yetki ve listeleme testleri var.
-   Ekleme ve pasifleştirme davranışı için doğrudan test yazılmalı.
-3. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
+2. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
    yazılı değil. Cihaz raporu, danışma masası raporları ve Excel dışa aktarma var.
 
 ## Tablo
@@ -66,8 +64,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-017 | Oda tanımlama | ⚠️ | `POST /api/odalar` (`ODA_EKLE`), `oda_yonetimi.py` | Yalnızca yetki testleri (`test_kalan_uclar_yetki.py`); ekleme davranışı için doğrudan test yok |
-| FR-018 | Oda pasifleştirme | ⚠️ | `PATCH /api/odalar/{id}` (`aktif_mi`), `oda_yonetimi.py` | Yalnızca yetki ve listeleme testleri (`test_odalar_yetkilendirme_quality.py`); pasifleştirme için doğrudan test yok |
+| FR-017 | Oda tanımlama | ✅ | `POST /api/odalar` (`ODA_EKLE`), `oda_yonetimi.py` | `test_oda_ekleme_pasiflestirme.py` (yetki, 201 yanıtı, yazılan SQL ve denetim kaydı, ad kırpma, aynı isim 409 ve geri alma, geçersiz girdi 422); yetki için `test_kalan_uclar_yetki.py`. Not: yalnızca boşluktan oluşan oda adı şu an kabul ediliyor (bilinen sınır) |
+| FR-018 | Oda pasifleştirme | ✅ | `PATCH /api/odalar/{id}` (`aktif_mi`, `ODA_DUZENLE`), `oda_yonetimi.py` | `test_oda_ekleme_pasiflestirme.py` (pasife alma kayıt silmeden, yeniden aktifleştirme, satır kilidi, 404, boş/null/geçersiz gövde 422, aynı isim 409, denetim kaydı); psikologun tek aktif odası kuralı `test_oda_yetkileri_sunucu.py`; yetki `test_odalar_yetkilendirme_quality.py` |
 | FR-019 | Oda uygunluğu | ⚠️ | "Oda Kullanımı" sayfası (`ODA_DURUMU_GORUNTULE`); randevuda oda çakışması 409 verir | Çakışma testleri FR-015'te; Oda Kullanımı sayfası için doğrudan test bulamadım |
 
 ### 5.5 Cihaz yönetimi ve rezervasyon
