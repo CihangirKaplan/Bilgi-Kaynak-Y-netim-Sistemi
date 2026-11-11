@@ -1,0 +1,132 @@
+"""FR-008 Kişisel veri ayrımı (uygulama katmanı).
+
+Gereksinim: operasyonel danışan kodunu gerçek kişiyle eşleştiren kayıt veya tablo bulunmamalıdır. Şema tarafı gerçek
+PostgreSQL ile `test_kisisel_veri_ayrimi_pg_quality.py` dosyasındadır; burada sunucunun danışan koduyla ilgili
+modelleri, yazdığı sütunlar, uçları ve yanıtları denetlenir. Veritabanı taklit edilir.
+"""
+import re
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+import modeller
+import sunucu
+from sunucu import app, mevcut_kullanici_id
+
+KISISEL_PARCALAR = {
+    "ad", "adi", "soyad", "soyadi", "tc", "kimlik", "telefon", "tel", "eposta", "email", "mail", "adres", "dogum",
+    "tani", "ilac", "terapi", "travma", "aciklama", "not", "notu", "sikayet", "olcek", "gozlem", "saglik",
+    "hastalik", "yorum",
+}
+DANISAN_KODLARI_SUTUNLARI = {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
+                             "olusturan_psikolog_id"}
+RANDEVU_SUTUNLARI = {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
+                     "durum", "olusturulma_tarihi"}
+KAYNAK = Path(sunucu.__file__).read_text(encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def giris_yapmis_kullanici():
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: 5
+    yield
+    app.dependency_overrides.pop(mevcut_kullanici_id, None)
+
+
+# ------------------------------------------------------------------ modeller
+DANISAN_MODELLERI = ["DanisanKoduModeli", "RandevuModeli", "RandevuOlusturModeli", "RandevuGuncelleModeli"]
+
+
+@pytest.mark.parametrize("ad", DANISAN_MODELLERI)
+def test_danisan_ve_randevu_modelleri_kisisel_alan_tasimaz(ad):
+    alanlar = set(getattr(modeller, ad).model_fields)
+    assert alanlar, ad
+    for alan in alanlar:
+        assert not (set(alan.split("_")) & KISISEL_PARCALAR), f"{ad}.{alan} kişisel veri gibi görünüyor"
+
+
+def test_modelleri_tum_alanlari_izinli_sutunlarla_eslesir():
+    assert set(modeller.DanisanKoduModeli.model_fields) <= DANISAN_KODLARI_SUTUNLARI
+    for ad in ("RandevuModeli", "RandevuOlusturModeli", "RandevuGuncelleModeli"):
+        assert set(getattr(modeller, ad).model_fields) <= RANDEVU_SUTUNLARI, ad
+
+
+# ------------------------------------------------------------------ yazılan sütunlar
+def _ekleme_sutunlari(tablo):
+    return [{c.strip() for c in m.group(1).split(",")}
+            for m in re.finditer(r"INSERT INTO " + tablo + r"\s*\(([^)]*)\)", KAYNAK)]
+
+
+def test_sunucu_danisan_kodlari_tablosuna_yalnizca_izinli_sutunlari_yazar():
+    eklemeler = _ekleme_sutunlari("danisan_kodlari")
+    assert eklemeler, "danisan_kodlari ekleme sorgusu bulunamadı (test eskimiş olabilir)"
+    for sutunlar in eklemeler:
+        assert sutunlar <= DANISAN_KODLARI_SUTUNLARI, sutunlar - DANISAN_KODLARI_SUTUNLARI
+
+
+def test_sunucu_randevular_tablosuna_yalnizca_izinli_sutunlari_yazar():
+    eklemeler = _ekleme_sutunlari("randevular")
+    assert eklemeler, "randevular ekleme sorgusu bulunamadı (test eskimiş olabilir)"
+    for sutunlar in eklemeler:
+        assert sutunlar <= RANDEVU_SUTUNLARI, sutunlar - RANDEVU_SUTUNLARI
+
+
+# ------------------------------------------------------------------ uçlar
+def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
+    """Yeni bir 'danışan' ucu eklenirse (örn. ad-soyad alan bir uç) bu liste bilerek güncellenmek zorundadır."""
+    bulunan = {(metot, yol) for yol_nesnesi in app.routes if hasattr(yol_nesnesi, "methods")
+               for yol in [yol_nesnesi.path] if "danisan" in yol.lower() for metot in yol_nesnesi.methods}
+    assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari")}
+
+
+def _kod_olustur(sorgu_dizesi=""):
+    conn = MagicMock()
+    c = conn.cursor.return_value
+    c.fetchone.side_effect = [(1,), (7,), ("DAN-2026-0099", True, "YOK", True, None, 7)]   # izin, personel, kayıt
+    with patch("sunucu.psycopg2.connect", return_value=conn), \
+            patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
+        yanit = TestClient(app).post("/api/danisan-kodlari" + sorgu_dizesi)
+    ekleme = next(x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0])
+    return yanit, ekleme.args[1]
+
+
+def test_kod_olusturma_fazladan_kisisel_alanlari_yok_sayar_ve_kaydetmez():
+    yanit, parametreler = _kod_olustur("?ad_soyad=Ali%20Veli&telefon=5551234567&tc_kimlik=12345678901&tani=x")
+    assert yanit.status_code == 201
+    assert parametreler == ("DAN-2026-0099", True, "YOK", 7)              # yalnızca kod, ücret, istisna, oluşturan psikolog
+    assert not any(isinstance(p, str) and ("Ali" in p or "555" in p or "123456" in p) for p in parametreler)
+
+
+def test_kod_olusturma_yaniti_yalnizca_izinli_alanlari_icerir():
+    yanit, _ = _kod_olustur()
+    veri = yanit.json()["veri"]
+    assert set(veri) == DANISAN_KODLARI_SUTUNLARI
+    assert not any(set(alan.split("_")) & KISISEL_PARCALAR for alan in veri)
+
+
+def test_kod_olusturma_ucu_yalnizca_ucret_ve_istisna_parametresi_alir():
+    import inspect
+    parametreler = set(inspect.signature(sunucu.danisan_kodu_olustur).parameters)
+    assert parametreler == {"ucretli_mi", "istisna_turu", "kullanici_id"}
+
+
+def test_kod_listesi_yalnizca_kod_ucret_ve_aktiflik_dondurur():
+    conn = MagicMock()
+    c = conn.cursor.return_value
+    c.fetchone.side_effect = [(1,), ("MEMUR",)]
+    c.fetchall.return_value = [("DAN-2026-0001", True, True)]
+    with patch("sunucu.psycopg2.connect", return_value=conn):
+        yanit = TestClient(app).get("/api/danisan-kodlari")
+    assert yanit.status_code == 200
+    for kayit in yanit.json():
+        assert set(kayit) <= DANISAN_KODLARI_SUTUNLARI
+
+
+# ------------------------------------------------------------------ bilinen sınır
+@pytest.mark.xfail(strict=True, reason=(
+    "Bilinen sınır (FR-008): sunucu istisna_turu alanına her metni kabul ediyor; arayüz yalnızca YOK, KANSER ve "
+    "SEHIT_GAZI sunuyor. Sunucuda izinli değer listesi olunca bu işaret kalkmalı (strict: düzelince test kırmızı olur)."))
+def test_istisna_turu_serbest_metin_kabul_etmemeli():
+    yanit, _ = _kod_olustur("?ucretli_mi=true&istisna_turu=Ali%20Veli%20-%20depresyon")
+    assert yanit.status_code == 422
