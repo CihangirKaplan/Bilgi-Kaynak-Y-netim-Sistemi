@@ -784,6 +784,31 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                 detail="Kullanıcı zaten seçilen role sahip."
             )
 
+        # Her psikologun en az bir (aktif) odası olmalı: psikolog yapılırken oda seçilmesi zorunludur.
+        psikolog_olacak = str(yeni_rol_adi).upper() == "PSIKOLOG"
+        psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
+        istenen_odalar = sorted(set(veri.oda_idleri or []))
+        if psikolog_olacak:
+            if not istenen_odalar:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Psikolog rolü için en az bir görüşme odası seçilmelidir.",
+                )
+            cursor.execute(
+                "SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;",
+                (istenen_odalar,),
+            )
+            if {k[0] for k in cursor.fetchall()} != set(istenen_odalar):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
+                )
+        elif istenen_odalar:
+            raise HTTPException(
+                status_code=422,
+                detail="Oda yetkisi yalnızca psikolog rolü için tanımlanabilir.",
+            )
+
         ogrenci_kaydi = None
         bilgi_var = any((veri.ad_soyad, veri.ogrenci_numarasi, veri.telefon))
 
@@ -927,6 +952,20 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                         pasiflestirilecek_ogrenci_id,
                     ),
                 )
+
+        # Oda yetkileri yalnızca psikologlar içindir: psikolog olurken verilen odalar yazılır,
+        # psikologluktan çıkarken silinir (yeniden psikolog olursa odalar yeniden seçilir).
+        if psikolog_olacak or psikolog_idi:
+            cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
+            for oda_id in istenen_odalar:
+                cursor.execute(
+                    "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
+                    (kullanici_id, oda_id),
+                )
+            cursor.execute(
+                "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
+                (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id),
+            )
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
         cursor.execute(

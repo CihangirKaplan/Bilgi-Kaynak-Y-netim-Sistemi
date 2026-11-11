@@ -141,6 +141,7 @@ class RolDegistirModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rol_id: int = Field(gt=0)
+    oda_idleri: Optional[List[int]] = None  # yalnızca psikolog rolüne geçerken (en az bir aktif oda zorunlu)
     ad_soyad: Optional[str] = Field(default=None, max_length=100)
     ogrenci_numarasi: Optional[str] = Field(default=None, max_length=15)
     telefon: Optional[str] = Field(default=None, max_length=20)
