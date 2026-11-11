@@ -183,11 +183,23 @@ def test_rol_secilince_ozet_sunucudan_gelir_ve_kartta_gorunur(form):
     assert kart.lbl_uyari.isHidden()                       # Memur geniş yetkili sayılmaz
 
 
-@pytest.mark.parametrize("rol_adi", ["ADMIN", "MUDUR"])
-def test_genis_yetkili_rol_uyari_gosterir(form, rol_adi):
-    with patch.object(modul, "yetki_ozeti_getir", return_value=(ozet(rol_adi, ["ROL_OLUSTUR"]), None)):
-        rol_sec(form, 6)
+def test_genis_yetkili_mudur_rolu_uyari_gosterir(form):
+    with patch.object(
+        modul,
+        "yetki_ozeti_getir",
+        return_value=(ozet("MUDUR", ["ROL_OLUSTUR"]), None),
+    ):
+        rol_sec(form, 3)
+
     assert not form.yetki_karti.lbl_uyari.isHidden()
+
+
+def test_admin_kullanici_olusturma_listesinde_yok(form):
+    assert form.combo_rol.findData(6) == -1
+    assert all(
+        "admin" not in form.combo_rol.itemText(i).lower()
+        for i in range(form.combo_rol.count())
+    )
 
 
 def test_ayni_rol_ikinci_kez_secilince_sunucuya_tekrar_sorulmaz(form):
@@ -218,10 +230,10 @@ def test_hata_onbellege_alinmaz_rol_yeniden_secilince_tekrar_denenir(form):
 
 
 def test_rol_degisince_eski_roller_listesi_kartta_kalmaz(form):
-    sonuclar = [(ozet("ADMIN", ["ODA_EKLE", "CIHAZ_EKLE", "ROL_OLUSTUR"]), None),
+    sonuclar = [(ozet("MUDUR", ["ODA_EKLE", "CIHAZ_EKLE", "ROL_OLUSTUR"]), None),
                 (ozet("MEMUR", ["ODA_EKLE"]), None)]
     with patch.object(modul, "yetki_ozeti_getir", side_effect=sonuclar):
-        rol_sec(form, 6)
+        rol_sec(form, 3)
         rol_sec(form, 2)
     assert form.yetki_karti.icerik_lay.count() == 3   # 1 grup başlığı + 1 liste + esneme boşluğu
 

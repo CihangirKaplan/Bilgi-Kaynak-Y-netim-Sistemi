@@ -138,6 +138,18 @@ class KullaniciPersonelEkrani(QWidget):
         kullanici_adi = self.tablo.item(satir, 1).text()
         kullanici_id = self.tablo.item(satir, 1).data(Qt.UserRole)
         mevcut_durum_metni = self.tablo.item(satir, 4).text()
+        rol_item = self.tablo.item(satir, 3)
+        rol_kodu = str(
+            rol_item.data(Qt.UserRole) or rol_item.text()
+        ).strip().upper()
+
+        if rol_kodu == "ADMIN":
+            QMessageBox.warning(
+                self,
+                "İşlem Engellendi",
+                "ADMIN kullanıcısının aktiflik durumu değiştirilemez."
+            )
+            return
 
         if not kullanici_id:
             QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
@@ -182,6 +194,15 @@ class KullaniciPersonelEkrani(QWidget):
         kullanici_adi = self.tablo.item(satir, 1).text()
         kullanici_id = self.tablo.item(satir, 1).data(Qt.UserRole)
         mevcut_rol = self.tablo.item(satir, 3).data(Qt.UserRole) or self.tablo.item(satir, 3).text()
+
+        if str(mevcut_rol).strip().upper() == "ADMIN":
+            QMessageBox.warning(
+                self,
+                "İşlem Engellendi",
+                "ADMIN kullanıcısının rolü değiştirilemez."
+            )
+            return
+
         
         # YENİ KONTROL: 4. sütundaki durumu (Aktif/Pasif) oku
         durum = self.tablo.item(satir, 4).text()
@@ -876,7 +897,6 @@ class KullaniciOlusturFormu(QDialog):
             ("Müdür (Yönetici)", 3),
             ("Danışma Öğrencisi", 4),
             ("Proje Asistanı", 5),
-            ("Sistem Admin", 6),
         ]
         for ad, rol_id in roller:
             self.combo_rol.addItem(ad, rol_id)
@@ -1402,7 +1422,7 @@ class RolDegistirFormu(QDialog):
         
         roller = [
             ("Psikolog", 1), ("Memur", 2), ("Müdür (Yönetici)", 3),
-            ("Danışma Öğrencisi", 4), ("Proje Asistanı", 5), ("Sistem Admin", 6)
+            ("Danışma Öğrencisi", 4), ("Proje Asistanı", 5)
         ]
         for ad, rol_id in roller:
             self.combo_rol.addItem(ad, rol_id)
@@ -1452,17 +1472,32 @@ class RolDegistirFormu(QDialog):
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
 
+        # ADMIN kullanıcıların rolleri değiştirilemez.
+        if str(self.mevcut_rol).strip().upper() in (
+            "ADMIN", "SISTEM ADMIN", "SİSTEM ADMİN"
+        ):
+            self.btn_kaydet.setEnabled(False)
+            self.combo_rol.setEnabled(False)
+
         buton_layout.addWidget(self.btn_iptal)
         buton_layout.addWidget(self.btn_kaydet)
         layout.addLayout(buton_layout)
 
     def rol_degisti(self, *_):
+        # ADMIN kullanıcısının rolü değiştirilemez.
+        if str(self.mevcut_rol).strip().upper() in (
+            "ADMIN", "SISTEM ADMIN", "SİSTEM ADMİN"
+        ):
+            self.combo_rol.setEnabled(False)
+            self.btn_kaydet.setEnabled(False)
+            return
+
         self.oda_alanini_guncelle()
+
         danisma = (
             ROL_ID_ADLARI.get(self.combo_rol.currentData())
-            == DANISMA_OGRENCISI
+            == "DANISMA_OGRENCISI"
         )
-
         self.ogrenci_bilgi.setVisible(danisma)
         self.ogrenci_kutusu.setVisible(False)
         self.ogrenci_kaydi_var = None
@@ -1560,6 +1595,19 @@ class RolDegistirFormu(QDialog):
 
     def kaydet(self):
         yeni_rol_id = self.combo_rol.currentData()
+
+        mevcut_admin = str(self.mevcut_rol).strip().upper() in (
+            "ADMIN", "SISTEM ADMIN", "SİSTEM ADMİN"
+        )
+        hedef_admin = ROL_ID_ADLARI.get(yeni_rol_id) == "ADMIN"
+
+        if mevcut_admin or hedef_admin:
+            QMessageBox.warning(
+                self,
+                "İşlem Engellendi",
+                "ADMIN rolü atanamaz veya başka bir role dönüştürülemez."
+            )
+            return
 
         if yeni_rol_id is None:
             QMessageBox.warning(self, "Uyarı", "Lütfen listeden yeni bir rol seçiniz.")

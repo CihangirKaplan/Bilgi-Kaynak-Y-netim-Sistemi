@@ -169,14 +169,19 @@ def test_rol_sutunu_gorunen_adi_gosterir_kodu_arkada_tutar():
     ekran.close()
 
 
-def test_rol_degistirme_formuna_gorunen_ad_degil_rol_kodu_gider():
-    """RolDegistirFormu 'zaten bu rolde' kontrolünü kodla yapar; ekranda görünen ad onu bozmamalı."""
+def test_admin_rol_degistirme_penceresi_acilmaz_uyari_gosterilir():
     ekran = personel_ekrani()
     satir_sec(ekran, "admin")
-    with patch.object(modul, "RolDegistirFormu") as form_sinifi:
-        form_sinifi.return_value.exec.return_value = QDialog.Rejected
+
+    with (
+        patch.object(QMessageBox, "warning") as uyari,
+        patch.object(modul, "RolDegistirFormu") as form_sinifi,
+    ):
         ekran.secili_kullanici_rol_degistir()
-    assert form_sinifi.call_args.args[4] == "ADMIN"
+
+    uyari.assert_called_once()
+    assert "ADMIN kullanıcısının rolü değiştirilemez" in uyari.call_args.args[2]
+    form_sinifi.assert_not_called()
     ekran.close()
 
 

@@ -34,7 +34,7 @@ def test_mudur_admin_kullanicisi_olusturamaz():
 
     assert hata.value.status_code == 403
     assert hata.value.detail == (
-        "ADMIN rolünü atama yetkiniz bulunmuyor."
+        "ADMIN kullanıcısı bu ekran üzerinden oluşturulamaz."
     )
 
     # Reddedilen işlem veritabanına kullanıcı eklememeli
