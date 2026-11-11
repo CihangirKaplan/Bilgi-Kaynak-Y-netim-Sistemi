@@ -71,6 +71,7 @@ jobs:
             --ignore=tests/test_parola_sifirlama_pg_quality.py \
             --ignore=tests/test_ogrenci_yonetimi_postgresql_quality.py \
             --ignore=tests/test_faaliyet_turleri_postgresql_quality.py \
+            --ignore=tests/test_admin_tum_izinler_pg_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
             --cov=sunucu \
             --cov=guvenlik \
@@ -167,4 +168,5 @@ jobs:
         run: |
           python -m pytest -q --tb=short \
             tests/test_ogrenci_yonetimi_postgresql_quality.py \
-            tests/test_faaliyet_turleri_postgresql_quality.py
+            tests/test_faaliyet_turleri_postgresql_quality.py \
+            tests/test_admin_tum_izinler_pg_quality.py
