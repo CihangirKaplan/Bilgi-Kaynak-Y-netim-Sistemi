@@ -1935,7 +1935,7 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
             conn.close()
 
 @app.get("/api/randevular")
-def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))): 
+def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
     conn = None
     cursor = None
     try:
