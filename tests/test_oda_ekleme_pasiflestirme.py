@@ -201,3 +201,52 @@ def test_ad_ve_kapasite_ayni_istekte_guncellenir_yalniz_gonderilen_alanlar_yazil
     set_kismi = guncelleme[0].split(" WHERE ")[0]                         # RETURNING listesi aktif_mi içerir; SET içermez
     assert set_kismi == "UPDATE odalar SET oda_adi = %s, kapasite = %s"
     assert guncelleme[1] == ("Yeni", 5, 2)
+
+
+# =============================================================== yalnızca boşluktan oluşan oda adı
+BOS_ADLAR = ["   ", "\t", "\n  \n", "\u00a0", " \u3000 "]          # boşluk, sekme, satır sonu, bölünmez boşluk, geniş boşluk
+
+
+@pytest.mark.parametrize("ad", BOS_ADLAR)
+def test_yalniz_bosluktan_olusan_ad_ekleme_422_ve_hicbir_sey_yazilmaz(ad):
+    conn, cursor = baglanti(fetchone=[(1,)])
+    yanit = istek("post", "/api/odalar", conn, json={"oda_adi": ad})
+    assert yanit.status_code == 422 and not yazma_var_mi(cursor)
+    assert "Oda adı boş olamaz" in yanit.text
+    conn.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("ad", BOS_ADLAR)
+def test_yalniz_bosluktan_olusan_ad_guncellemede_422(ad):
+    yanit, conn, cursor = guncelle({"oda_adi": ad}, fetchone=[(1,)])
+    assert yanit.status_code == 422 and not yazma_var_mi(cursor)
+    conn.commit.assert_not_called()
+
+
+def test_guncellemede_ad_da_kirpilarak_yazilir():
+    yanit, _, cursor = guncelle({"oda_adi": "  Yeni Ad  "}, fetchone=[(1,), (2,), (2, "Yeni Ad", 1, True)])
+    assert yanit.status_code == 200
+    assert next(p for s, p in sorgular(cursor) if s.startswith("UPDATE odalar")) == ("Yeni Ad", 2)
+
+
+def test_uzunluk_siniri_kirpilmis_ada_uygulanir_ic_bosluklar_korunur():
+    conn, cursor = baglanti(fetchone=[(1,), (90,)])
+    assert istek("post", "/api/odalar", conn, json={"oda_adi": "  " + "x" * 50 + "  "}).status_code == 201
+    assert ekleme(cursor)[0] == "x" * 50
+    conn2, _ = baglanti(fetchone=[(1,)])
+    assert istek("post", "/api/odalar", conn2, json={"oda_adi": " " + "x" * 51}).status_code == 422
+    conn3, cursor3 = baglanti(fetchone=[(1,), (91,)])
+    istek("post", "/api/odalar", conn3, json={"oda_adi": "Görüşme  Odası 3"})
+    assert ekleme(cursor3)[0] == "Görüşme  Odası 3"
+
+
+def test_modeller_adi_dogrudan_kirpar_bos_adi_reddeder_none_ve_gonderilmeyen_degismedi():
+    from pydantic import ValidationError
+    from modeller import OdaGuncelleModeli, OdaOlusturModeli
+    assert OdaOlusturModeli(oda_adi="  Oda 3 ").oda_adi == "Oda 3"
+    assert OdaGuncelleModeli(oda_adi="  Oda 3 ").oda_adi == "Oda 3"
+    for sinif in (OdaOlusturModeli, OdaGuncelleModeli):
+        with pytest.raises(ValidationError, match="Oda adı boş olamaz"):
+            sinif(oda_adi="    ")
+    assert OdaGuncelleModeli(kapasite=3).model_dump(exclude_unset=True) == {"kapasite": 3}
+    assert OdaGuncelleModeli(oda_adi=None).oda_adi is None          # None kabul edilir; "gönderilmeli" kuralı sunucuda 422 verir

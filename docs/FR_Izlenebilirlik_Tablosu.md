@@ -1,7 +1,7 @@
 # TKYS Fonksiyonel Gereksinim İzlenebilirlik Tablosu
 
 Bu tablo, `docs/D02_Requirements_v1.md` içindeki 51 fonksiyonel gereksinimin (FR) kodda ve testlerde
-karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`7fa9a34`).
+karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`d06dea3`).
 
 Durumlar:
 
@@ -64,7 +64,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-017 | Oda tanımlama | ✅ | `POST /api/odalar` (`ODA_EKLE`), `oda_yonetimi.py` | `test_oda_ekleme_pasiflestirme.py` (yetki, 201 yanıtı, yazılan SQL ve denetim kaydı, ad kırpma, aynı isim 409 ve geri alma, geçersiz girdi 422); yetki için `test_kalan_uclar_yetki.py`. Not: yalnızca boşluktan oluşan oda adı şu an kabul ediliyor (bilinen sınır) |
+| FR-017 | Oda tanımlama | ✅ | `POST /api/odalar` (`ODA_EKLE`), `oda_yonetimi.py` | `test_oda_ekleme_pasiflestirme.py` (yetki, 201 yanıtı, yazılan SQL ve denetim kaydı, ad kırpma, aynı isim 409 ve geri alma, geçersiz girdi 422); yetki için `test_kalan_uclar_yetki.py`. Not: oda adı kırpılır ve yalnızca boşluktan oluşan ad reddedilir (422) |
 | FR-018 | Oda pasifleştirme | ✅ | `PATCH /api/odalar/{id}` (`aktif_mi`, `ODA_DUZENLE`), `oda_yonetimi.py` | `test_oda_ekleme_pasiflestirme.py` (pasife alma kayıt silmeden, yeniden aktifleştirme, satır kilidi, 404, boş/null/geçersiz gövde 422, aynı isim 409, denetim kaydı); psikologun tek aktif odası kuralı `test_oda_yetkileri_sunucu.py`; yetki `test_odalar_yetkilendirme_quality.py` |
 | FR-019 | Oda uygunluğu | ⚠️ | "Oda Kullanımı" sayfası (`ODA_DURUMU_GORUNTULE`); randevuda oda çakışması 409 verir | Çakışma testleri FR-015'te; Oda Kullanımı sayfası için doğrudan test bulamadım |
 

@@ -243,15 +243,37 @@ class RandevuGuncelleModeli(BaseModel):
     baslangic_zamani: Optional[datetime.datetime] = None
     bitis_zamani: Optional[datetime.datetime] = None
 
+def _oda_adini_temizle(deger):
+    """Oda adının baş ve sonundaki boşlukları atar; yalnızca boşluktan oluşan ad reddedilir.
+
+    Uzunluk sınırı (1-50) kırpılmış ada uygulanır. Metin olmayan değerler olduğu gibi bırakılır ve tür denetimine takılır."""
+    if isinstance(deger, str):
+        deger = deger.strip()
+        if not deger:
+            raise ValueError("Oda adı boş olamaz.")
+    return deger
+
+
 class OdaOlusturModeli(BaseModel):
     oda_adi: str = Field(min_length=1, max_length=50)
     kapasite: int = Field(default=1, ge=1)
     aktif_mi: bool = True
 
+    @field_validator("oda_adi", mode="before")
+    @classmethod
+    def oda_adi_bos_olamaz(cls, deger):
+        return _oda_adini_temizle(deger)
+
+
 class OdaGuncelleModeli(BaseModel):
     oda_adi: str | None = Field(default=None, min_length=1, max_length=50)
     kapasite: int | None = Field(default=None, ge=1)
     aktif_mi: bool | None = None
+
+    @field_validator("oda_adi", mode="before")
+    @classmethod
+    def oda_adi_bos_olamaz(cls, deger):
+        return _oda_adini_temizle(deger)
 
 class CihazDurumu(str, Enum):
     KULLANIMA_HAZIR = "Kullanima_Hazir"
