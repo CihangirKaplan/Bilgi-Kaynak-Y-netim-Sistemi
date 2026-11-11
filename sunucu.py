@@ -500,12 +500,10 @@ def kullanici_olustur(
 
         rol_adi = hedef_rol[0]
 
-        if rol_adi == "ADMIN" and (
-            yapan is None or yapan[0] != "ADMIN"
-        ):
+        if rol_adi == "ADMIN":
             raise HTTPException(
                 status_code=403,
-                detail="ADMIN rolünü atama yetkiniz bulunmuyor.",
+                detail="ADMIN kullanıcısı bu ekran üzerinden oluşturulamaz.",
             )
 
         danisma_ogrencisi = rol_adi == "DANISMA_OGRENCISI"
@@ -774,9 +772,13 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             raise HTTPException(status_code=404, detail="Atanacak rol bulunamadı.")
         yeni_rol_adi = yeni_rol[0]
 
-        if islem_yapan_rol != "ADMIN":
-            if mevcut_rol == "ADMIN" or yeni_rol_adi == "ADMIN":
-                raise HTTPException(status_code=403, detail="ADMIN rolünü yalnızca ADMIN yönetebilir.")
+        # ADMIN rolu normal rol degistirme islemlerine kapali.
+        # ADMIN kullanicilar da bu kisitlamadan muaf degildir.
+        if mevcut_rol == "ADMIN" or yeni_rol_adi == "ADMIN":
+            raise HTTPException(
+                status_code=403,
+                detail="ADMIN rolü atanamaz veya başka bir role dönüştürülemez."
+            )
 
         if mevcut_rol == yeni_rol_adi:
             raise HTTPException(
@@ -1551,8 +1553,11 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
 
         hedef_rol, mevcut_durum = hedef
-        if hedef_rol == "ADMIN" and islem_yapan[0] != "ADMIN":
-            raise HTTPException(status_code=403, detail="ADMIN hesabını yalnızca ADMIN düzenleyebilir.")
+        if hedef_rol == "ADMIN":
+            raise HTTPException(
+                status_code=403,
+                detail="ADMIN kullanıcısının aktiflik durumu değiştirilemez."
+            )
 
         # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
         yeni_durum = not mevcut_durum

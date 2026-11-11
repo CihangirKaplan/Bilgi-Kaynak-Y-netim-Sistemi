@@ -334,3 +334,46 @@ def test_klinik_sorumlusu_personel_kodu():
     )
 
     assert kod == "PER-KLS-003"
+
+
+@pytest.mark.parametrize(
+    "mevcut_rol,yeni_rol",
+    [
+        ("PSIKOLOG", "ADMIN"),
+        ("ADMIN", "PSIKOLOG"),
+        ("ADMIN", "ADMIN"),
+    ],
+)
+def test_admin_kullanicisi_admin_rolunu_degistiremez(
+    mevcut_rol, yeni_rol
+):
+    baglanti = MagicMock()
+    cursor = baglanti.cursor.return_value
+    cursor.fetchone.side_effect = [
+        ("ADMIN",),
+        (mevcut_rol,),
+        (yeni_rol,),
+    ]
+
+    with patch("sunucu.psycopg2.connect", return_value=baglanti):
+        with pytest.raises(HTTPException) as hata:
+            kullanici_rol_degistir(
+                kullanici_id=5,
+                veri=RolDegistirModeli(rol_id=6),
+                islem_yapan_id=10,
+            )
+
+    assert hata.value.status_code == 403
+
+    sorgular = [
+        cagri.args[0].strip().upper()
+        for cagri in cursor.execute.call_args_list
+    ]
+
+    assert not any(
+        sorgu.startswith("UPDATE") or sorgu.startswith("INSERT")
+        for sorgu in sorgular
+    )
+
+    baglanti.commit.assert_not_called()
+    baglanti.rollback.assert_called_once()
