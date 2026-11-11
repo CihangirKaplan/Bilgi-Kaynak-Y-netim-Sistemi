@@ -1,8 +1,8 @@
 """Giriş ekranındaki 'Şifremi Unuttum' penceresi: kullanıcı yöneticiye parola sıfırlama talebi bildirir.
 
-Giriş yapılmamış olduğundan istek kimliksiz gönderilir; yalnızca kullanıcı adı iletilir. Sunucu, kullanıcının
-var olup olmadığını belli etmeyen aynı yanıtı verir. Pencere sonucu sade bir dille gösterir; ağ ya da sunucu
-hatalarında kullanıcıya yöneticiye doğrudan ulaşmasını söyler.
+Giriş yapılmamış olduğundan istek kimliksiz gönderilir; yalnızca kullanıcı adı iletilir. Sunucu var olmayan
+kullanıcı adını (404) ve pasif hesabı (403) açıkça bildirir; kullanıcı yazım hatasını hemen anlar. Pencere sonucu
+sade bir dille gösterir; ağ ya da sunucu hatalarında kullanıcıya yöneticiye doğrudan ulaşmasını söyler.
 """
 import requests
 from PySide6.QtCore import Qt
@@ -162,6 +162,19 @@ class ParolaTalebiDialog(QDialog):
                 self.btn_gonder.setEnabled(True)
                 self.btn_gonder.setText("Yöneticiye Bildir")
 
+    BILINEN_HATA_KODLARI = ("KULLANICI_BULUNAMADI", "HESAP_PASIF")
+
+    @classmethod
+    def _bilinen_hata_mesaji(cls, yanit):
+        """Sunucunun bu uca özgü 404/403 yanıtındaki mesaj; başka bir 404/403 (örn. eski sunucu) için None."""
+        try:
+            detay = yanit.json().get("detail")
+        except (ValueError, AttributeError):
+            return None
+        if isinstance(detay, dict) and detay.get("kod") in cls.BILINEN_HATA_KODLARI and isinstance(detay.get("mesaj"), str):
+            return detay["mesaj"]
+        return None
+
     def _yaniti_isle(self, yanit):
         if yanit.status_code == 200:
             try:
@@ -173,5 +186,7 @@ class ParolaTalebiDialog(QDialog):
             self.hata_goster("Şu anda çok fazla bekleyen talep var. Lütfen yöneticinize doğrudan ulaşın.")
         elif yanit.status_code == 422:
             self.hata_goster("Kullanıcı adı geçersiz görünüyor. Lütfen kontrol edip tekrar deneyin.")
+        elif yanit.status_code in (403, 404) and self._bilinen_hata_mesaji(yanit):
+            self.hata_goster(self._bilinen_hata_mesaji(yanit))       # kullanıcı adı yok / hesap pasif
         else:
             self.hata_goster("Talep şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin ya da yöneticinize ulaşın.")

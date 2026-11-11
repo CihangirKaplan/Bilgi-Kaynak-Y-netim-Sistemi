@@ -96,6 +96,52 @@ def test_sunucu_hatalari_anlasilir_mesajla_gosterilir_ve_form_acik_kalir(qt_app,
     kapat(p)
 
 
+def hata_yaniti(durum, kod, mesaj):
+    return yanit(durum, {"detail": {"kod": kod, "mesaj": mesaj}})
+
+
+@pytest.mark.parametrize("durum,kod,mesaj", [
+    (404, "KULLANICI_BULUNAMADI", "Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı. Yazımı kontrol edip tekrar deneyin."),
+    (403, "HESAP_PASIF", "Bu hesap pasif. Lütfen yöneticinize başvurun."),
+])
+def test_var_olmayan_ya_da_pasif_hesapta_sunucu_mesaji_aynen_gosterilir_ve_form_acik_kalir(qt_app, durum, kod, mesaj):
+    p = pencere(qt_app, "yanlis_ad")
+    gonder(p, hata_yaniti(durum, kod, mesaj))
+    assert not p.lbl_hata.isHidden() and mesaj in p.lbl_hata.text()
+    assert not p.talep_gonderildi and p.kutu_basari.isHidden()
+    assert p.btn_gonder.isEnabled() and p.btn_gonder.text() == "Yöneticiye Bildir" and not p.txt_kullanici.isHidden()
+    kapat(p)
+
+
+@pytest.mark.parametrize("durum,veri", [
+    (404, {"detail": "Not Found"}),                                              # eski sunucu / yanlış adres
+    (404, {"detail": {"kod": "BASKA_KOD", "mesaj": "x"}}),
+    (403, {"detail": {"mesaj": "kodsuz"}}),
+    (404, {"detail": ["liste"]}),
+])
+def test_tanimadigi_404_ve_403_yanitlari_icin_genel_hata_mesaji_gosterilir(qt_app, durum, veri):
+    p = pencere(qt_app)
+    gonder(p, yanit(durum, veri))
+    assert "gönderilemedi" in p.lbl_hata.text() and not p.talep_gonderildi
+    kapat(p)
+
+
+def test_gecersiz_json_ile_gelen_404_genel_mesaj_gosterir(qt_app):
+    p = pencere(qt_app)
+    sonuc = yanit(404)
+    sonuc.json.side_effect = ValueError("json degil")
+    gonder(p, sonuc)
+    assert "gönderilemedi" in p.lbl_hata.text()
+    kapat(p)
+
+
+def test_zaten_bekleyen_talepte_sunucu_mesaji_basari_olarak_gosterilir(qt_app):
+    p = pencere(qt_app)
+    gonder(p, yanit(200, {"durum": "zaten_var", "mesaj": "Bu hesap için zaten bekleyen bir talebiniz var. Yöneticinizin size dönmesini bekleyin."}))
+    assert p.talep_gonderildi and "zaten bekleyen bir talebiniz var" in p.lbl_basari.text()
+    kapat(p)
+
+
 @pytest.mark.parametrize("hata,parca", [(requests.exceptions.ConnectionError(), "bağlanılamadı"),
                                          (requests.exceptions.Timeout(), "yanıt vermedi")])
 def test_ag_hatalarinda_yoneticiye_dogrudan_ulasmasi_soylenir(qt_app, hata, parca):
