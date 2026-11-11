@@ -1,7 +1,7 @@
 # TKYS Fonksiyonel Gereksinim İzlenebilirlik Tablosu
 
 Bu tablo, `docs/D02_Requirements_v1.md` içindeki 51 fonksiyonel gereksinimin (FR) kodda ve testlerde
-karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`b6d0967`).
+karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`b524e50`).
 
 Durumlar:
 
@@ -24,7 +24,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
-2. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
+2. **FR-008 `istisna_turu` serbest metin:** `POST /api/danisan-kodlari` bu alana her metni kabul ediyor (örn. ad ya da tanı yazılabilir). Arayüz yalnızca 3 değer sunar; sunucuda izinli değer listesi (ve ücretli/istisna tutarlılığı) eklenmeli. Test `xfail(strict)` ile izleniyor.
+3. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
    yazılı değil. Cihaz raporu, danışma masası raporları ve Excel dışa aktarma var.
 
 ## Tablo
@@ -45,7 +46,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 |---|---|---|---|---|
 | FR-006 | Operasyonel danışan kodu | ✅ | `danisan_kodlari` tablosu, `GET /api/danisan-kodlari` | `test_randevu_branch_quality.py` |
 | FR-007 | Danışan kodu oluşturma | ✅ | `otomatik_danisan_kodu_uret`, `danisan_kodu_seq`, `GET /api/randevular/siradaki-kod` | `test_randevu_branch_quality.py`, `test_randevu_girdi_dogrulama.py` |
-| FR-008 | Kişisel veri ayrımı | ⚠️ | `danisan_kodlari` tablosunda yalnızca kod ve ücret/istisna alanları var; kişiyle eşleştiren tablo yok | Şema incelemesiyle doğrulandı; "eşleştirme tablosu yok" diyen özel bir test yok |
+| FR-008 | Kişisel veri ayrımı | ⚠️ | `danisan_kodlari` tablosunda yalnızca kod, ücret/istisna, aktiflik, tarih ve oluşturan psikolog var; danışan koduna yalnızca `randevular` başvurur; kişi tablolarıyla (öğrenci, kullanıcı, personel) bağlantı yok; kodu oluşturan psikolog dışında kişi göstergesi yok | Şema: `test_kisisel_veri_ayrimi_pg_quality.py` (gerçek PostgreSQL; fazladan sütun, eşleştirme tablosu, serbest metin sütunu eklenirse kırılır); uygulama: `test_kisisel_veri_ayrimi.py` (modeller, yazılan sütunlar, uçlar, yanıtlar, fazladan kişisel alanlar yok sayılır). **Bilinen sınır:** sunucu `istisna_turu` alanına her metni kabul ediyor (arayüz yalnızca YOK, KANSER, SEHIT_GAZI sunuyor); serbest metin yazılabilir. Test bunu `xfail` olarak izler; sunucuda izinli değer listesi olunca ✅ olur |
 
 ### 5.3 Randevu ve takvim yönetimi
 
