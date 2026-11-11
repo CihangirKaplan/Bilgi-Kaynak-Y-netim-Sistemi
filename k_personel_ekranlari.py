@@ -373,7 +373,8 @@ class KullaniciPersonelEkrani(QWidget):
     "Parola Sıfırlama Onayı",
     f"'{kullanici_adi}' kullanıcısının parolası sıfırlansın mı?\n\n"
     "Mevcut parola geçersiz olacak.\n"
-    "Kullanıcı ilk girişte yeni parola belirlemek zorunda kalacak.",
+    "Kullanıcı ilk girişte yeni parola belirlemek zorunda kalacak.\n\n"
+    "Parolayı vermeden önce kullanıcının kimliğini yüz yüze ya da telefonla doğrulayın.",
     QMessageBox.Yes | QMessageBox.No,
     QMessageBox.No
 )

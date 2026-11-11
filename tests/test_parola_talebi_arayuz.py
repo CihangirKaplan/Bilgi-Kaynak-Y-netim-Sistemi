@@ -394,3 +394,8 @@ def test_talep_listesi_beklenmeyen_bicimdeyse_bos_sayilir(qt_app):
     p = pano(qt_app, talepler={"detail": "x"})
     assert p.parola_talepleri == []
     kapat(p)
+
+
+def test_yonetici_hesabi_icin_sunucu_bilgisayarina_yonlendirme_notu_var():
+    p = ParolaTalebiDialog("http://x", "")
+    assert "sunucu bilgisayarından" in p.lbl_not.text() and "yüz yüze" in p.lbl_not.text()
