@@ -122,7 +122,11 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
         if "INSERT INTO denetim_kayitlari" in call.args[0]
     ]
 
-    assert len(audit_cagrilari) == 2
+    # Psikologluktan çıkarken oda yetkileri silinir ve bunun için ayrıca denetim kaydı düşer.
+    assert any(c.args[0].startswith('DELETE FROM psikolog_odalar') for c in mock_cursor.execute.call_args_list)
+    assert len(audit_cagrilari) == 3
+    assert audit_cagrilari[0].args[1] == (10, "UPDATE", "psikolog_odalar", 5)
+    audit_cagrilari = audit_cagrilari[1:]
 
     assert audit_cagrilari[0].args[1] == (
         10,             # İşlemi yapan müdürün kullanıcı ID'si

@@ -193,7 +193,10 @@ class KullaniciPersonelEkrani(QWidget):
             QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
             return
 
-        form = RolDegistirFormu(self.api_url, self.token, kullanici_id, kullanici_adi, mevcut_rol, self)
+        form = RolDegistirFormu(
+            self.api_url, self.token, kullanici_id, kullanici_adi, mevcut_rol, self,
+            mevcut_rol_gorunen=self.tablo.item(satir, 3).text(),
+        )
         if form.exec() == QDialog.Accepted:
             self.verileri_cek()
 
@@ -1342,13 +1345,14 @@ class OdaYetkileriFormu(QDialog):
 
 
 class RolDegistirFormu(QDialog):
-    def __init__(self, api_url, token, kullanici_id, kullanici_adi, mevcut_rol, ebeveyn=None):
+    def __init__(self, api_url, token, kullanici_id, kullanici_adi, mevcut_rol, ebeveyn=None, mevcut_rol_gorunen=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
         self.token = token
         self.kullanici_id = kullanici_id
         self.kullanici_adi = kullanici_adi
         self.mevcut_rol = mevcut_rol
+        self.mevcut_rol_gorunen = mevcut_rol_gorunen or mevcut_rol
         
         self.setWindowTitle("🔁 Rol Ata / Değiştir")
         self.setMinimumWidth(460)
@@ -1386,7 +1390,7 @@ class RolDegistirFormu(QDialog):
         # Seçilen Kullanıcı (Kilitli)
         layout.addWidget(QLabel("İşlem Yapılan Kullanıcı:"))
         self.input_kullanici = QLineEdit()
-        self.input_kullanici.setText(f"{self.kullanici_adi} (Mevcut: {self.mevcut_rol})")
+        self.input_kullanici.setText(f"{self.kullanici_adi} (Mevcut: {self.mevcut_rol_gorunen})")
         self.input_kullanici.setReadOnly(True)
         layout.addWidget(self.input_kullanici)
 
@@ -1417,6 +1421,19 @@ class RolDegistirFormu(QDialog):
         ) = ogrenci_alanlari_olustur()
 
         layout.addWidget(self.ogrenci_kutusu)
+
+        # Psikolog seçilirse en az bir görüşme odası zorunludur (her psikologun odası olmalı).
+        self.oda_bilgi = QLabel("Psikolog için en az bir görüşme odası seçin.")
+        self.oda_bilgi.setWordWrap(True)
+        self.oda_bilgi.setVisible(False)
+        layout.addWidget(self.oda_bilgi)
+        self.liste_odalar = QListWidget()
+        self.liste_odalar.setObjectName("liste_odalar")
+        self.liste_odalar.setMaximumHeight(130)
+        self.liste_odalar.setVisible(False)
+        layout.addWidget(self.liste_odalar)
+        self._odalar_yuklendi = False
+
         self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
 
         layout.addStretch()
@@ -1440,6 +1457,7 @@ class RolDegistirFormu(QDialog):
         layout.addLayout(buton_layout)
 
     def rol_degisti(self, *_):
+        self.oda_alanini_guncelle()
         danisma = (
             ROL_ID_ADLARI.get(self.combo_rol.currentData())
             == DANISMA_OGRENCISI
@@ -1501,6 +1519,45 @@ class RolDegistirFormu(QDialog):
         finally:
             self.adjustSize()
 
+    def oda_alanini_guncelle(self):
+        """Psikolog seçilince oda listesini gösterir (odalar ilk gösterişte yüklenir)."""
+        psikolog = ROL_ID_ADLARI.get(self.combo_rol.currentData()) == "PSIKOLOG"
+        self.oda_bilgi.setVisible(psikolog)
+        self.liste_odalar.setVisible(psikolog)
+        if psikolog and not self._odalar_yuklendi:
+            self.odalari_yukle()
+        self.adjustSize()
+
+    def odalari_yukle(self):
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/odalar",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code != 200:
+                self.oda_bilgi.setText("Odalar yüklenemedi: " + sunucu_hata_mesaji(cevap, f"Kod {cevap.status_code}"))
+                return
+            for oda in cevap.json():
+                if not oda.get("aktif_mi", True):
+                    continue
+                oge = QListWidgetItem(oda["oda_adi"])
+                oge.setData(Qt.UserRole, oda["oda_id"])
+                oge.setFlags(oge.flags() | Qt.ItemIsUserCheckable)
+                oge.setCheckState(Qt.Unchecked)
+                self.liste_odalar.addItem(oge)
+            self._odalar_yuklendi = True
+        except Exception:
+            self.oda_bilgi.setText("Sunucuya bağlanılamadı; odalar yüklenemedi.")
+
+    def secilen_oda_idleri(self):
+        return [
+            self.liste_odalar.item(i).data(Qt.UserRole)
+            for i in range(self.liste_odalar.count())
+            if self.liste_odalar.item(i).checkState() == Qt.Checked
+        ]
+
     def kaydet(self):
         yeni_rol_id = self.combo_rol.currentData()
 
@@ -1519,6 +1576,13 @@ class RolDegistirFormu(QDialog):
 
         # Sunucuna gönderilecek JSON verisi ve URL
         veri = {"rol_id": yeni_rol_id}
+
+        if ROL_ID_ADLARI.get(yeni_rol_id) == "PSIKOLOG":
+            secilen_odalar = self.secilen_oda_idleri()
+            if not secilen_odalar:
+                QMessageBox.warning(self, "Eksik Seçim", "Psikolog rolü için en az bir görüşme odası seçilmelidir.")
+                return
+            veri["oda_idleri"] = secilen_odalar
 
         if ROL_ID_ADLARI.get(yeni_rol_id) == DANISMA_OGRENCISI:
             if self.ogrenci_kaydi_var is None:

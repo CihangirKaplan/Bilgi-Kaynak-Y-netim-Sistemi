@@ -215,58 +215,8 @@ class OdaFormu(QWidget):
             QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı.")
         except Exception as e:
             QMessageBox.critical(self, "Hata", str(e))
-def odayi_kaydet(self):
-        oda_adi = self.in_oda_adi.text().strip()
-        kapasite_str = self.in_kapasite.text().strip()
-        
-        # 1. Frontend Validasyonları
-        if not oda_adi:
-            QMessageBox.warning(self, "Eksik Veri", "Oda adı boş bırakılamaz!")
-            return
-            
-        if not kapasite_str.isdigit() or int(kapasite_str) < 1:
-            QMessageBox.warning(self, "Hatalı Veri", "Kapasite 1 veya daha büyük bir sayı olmalıdır!")
-            return
 
-        # 2. Sunucuya Gönderilecek JSON Verisini Hazırla
-        oda_verisi = {
-            "oda_adi": oda_adi,
-            "kapasite": int(kapasite_str),
-            "aktif_mi": self.chk_aktif.isChecked()
-        }
 
-        headers = {"Authorization": f"Bearer {self.token}"}
-        
-        # 3. Backend API'sine İstek At
-        try:
-            # Düzenleme mi yoksa yeni ekleme mi kontrolü
-            if self.oda_id:
-                # ODA DÜZENLEME (PATCH)
-                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/odalar/{self.oda_id}", json=oda_verisi, headers=headers, timeout=5)
-                if oturum_hatasi_mi(cevap):
-                    return
-            else:
-                # YENİ ODA EKLEME (POST)
-                cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/odalar", json=oda_verisi, headers=headers, timeout=5)
-                if oturum_hatasi_mi(cevap):
-                    return
-
-            # 4. Sunucudan Gelen Cevabı İşle
-            if cevap.status_code in [200, 201]:
-                QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla veritabanına kaydedildi!")
-                self.close() # İşlem başarılıysa formu kapat
-            elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Çakışma", _409_mesaji(cevap))
-            else:
-                QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {cevap.status_code})\n{cevap.text}")
-                
-        except requests.exceptions.Timeout:
-            QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.")
-        except requests.exceptions.ConnectionError:
-             QMessageBox.warning(self, "Bağlantı Hatası", "Sunucu kapalı olabilir. Backend'in (sunucu.py) çalıştığından emin olun.")
-        except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Beklenmeyen bir hata oluştu:\n{str(e)}")
-# Sadece bu dosyayı test etmek için
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     pencere = OdaFormu(api_url="http://127.0.0.1:8000", token="TEST_TOKEN")
