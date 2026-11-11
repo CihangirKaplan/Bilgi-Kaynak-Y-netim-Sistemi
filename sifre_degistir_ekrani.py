@@ -14,7 +14,7 @@ from parola_kurallari import kural_durumlari, tum_kurallar_saglandi_mi, guc_hesa
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFrame, QCheckBox, QMessageBox
+    QPushButton, QFrame, QCheckBox, QMessageBox, QHBoxLayout, QSizePolicy
 )
 
 API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000")
@@ -24,144 +24,250 @@ class SifreDegistirEkrani(QWidget):
     sifre_degistirildi = Signal()
     iptal_edildi = Signal()
 
-    def __init__(self, token):
+    def __init__(self, token, ilk_giris=True):
         super().__init__()
 
+        self.ilk_giris = ilk_giris
         self.token = token
         self._oturum_kapatiliyor = False
         self._sifre_basariyla_degisti = False
         self._token_bitis_zamani = self._token_bitisini_oku()
-        self.setWindowTitle("TKYS - İlk Giriş Şifre Değiştirme")
-        self.setFixedSize(480, 640)
+        self.setWindowTitle(
+            "TKYS - İlk Giriş Şifre Değiştirme"
+            if ilk_giris else "TKYS - Şifremi Değiştir"
+        )
+
+
+
+        self.setFixedSize(475, 535)
+        self.setObjectName("sifrePencere")
 
         self.setStyleSheet("""
-            QWidget {
-                background-color: #EAF0FA;
-                font-family: Arial;
-            }
-            QFrame {
-                background-color: white;
-                border-radius: 18px;
+            QWidget#sifrePencere {
+                background: #F7FAFD;
             }
             QLabel {
-                color: #0A1F5C;
                 background: transparent;
+                border: none;
+                color: #243653;
             }
             QLineEdit {
-                background: #F3F7FF;
-                color: #0A1F5C;
-                border: 1px solid #D5E2FB;
+                background: #FFFFFF;
+                border: 1px solid #CBD9EC;
                 border-radius: 8px;
-                padding: 10px;
+                color: #243653;
+                padding: 0px 13px;
+                font-size: 13px;
             }
-            QPushButton {
-                background: #1D4ED8;
-                color: white;
-                border-radius: 8px;
-                padding: 12px;
-                font-weight: bold;
+            QLineEdit:focus {
+                border: 1px solid #2682FF;
             }
-            QPushButton:hover {
-                background: #1E40AF;
+            QFrame#parolaBilgi {
+                background: #FFFFFF;
+                border: 1px solid #DCE6F4;
+                border-radius: 9px;
             }
             QCheckBox {
                 background: transparent;
-                color: #0A1F5C;
+                color: #405572;
                 font-size: 12px;
-                spacing: 10px;
+                spacing: 8px;
             }
-
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 2px solid #7BA6F8;
-                border-radius: 0px;
-                background-color: white;
+            QPushButton {
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 700;
+                min-height: 39px;
             }
-
-            QCheckBox::indicator:checked {
-                background-color: #2563EB;
-                border: 2px solid #2563EB;
+            QPushButton#vazgec {
+                background: #FFFFFF;
+                border: 1px solid #CBD9EC;
+                color: #405572;
             }
-
-            QCheckBox::indicator:hover {
-                border: 2px solid #1D4ED8;
+            QPushButton#vazgec:hover {
+                background: #EEF4FC;
+                border: 1px solid #89B6FA;
+            }
+            QPushButton#kaydetSifre {
+                background: #0866F5;
+                border: 1px solid #0866F5;
+                color: #FFFFFF;
+            }
+            QPushButton#kaydetSifre:hover {
+                background: #0054D6;
+            }
+            QPushButton#kaydetSifre:disabled {
+                background: #B7C8E1;
+                border: 1px solid #B7C8E1;
+                color: #FFFFFF;
             }
         """)
 
-        ana_layout = QVBoxLayout(self)
-        ana_layout.setContentsMargins(30, 30, 30, 30)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(23, 19, 23, 19)
+        layout.setSpacing(7)
 
-        kart = QFrame()
-        layout = QVBoxLayout(kart)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(12)
-
-        baslik = QLabel("İlk Giriş - Şifre Değiştirme")
-        baslik.setStyleSheet("font-size: 20px; font-weight: bold;")
-        baslik.setAlignment(Qt.AlignCenter)
+        baslik = QLabel(
+            "İlk Giriş - Şifre Değiştirme"
+            if self.ilk_giris else "Şifremi Değiştir"
+        )
+        baslik.setStyleSheet(
+            "font-size: 17px; font-weight: 800; color: #142E60;"
+        )
         layout.addWidget(baslik)
 
         aciklama = QLabel(
-            "Güvenliğiniz için geçici şifrenizi değiştirmeniz gerekiyor."
+            "Devam etmek için geçici şifrenizi değiştirin."
+            if self.ilk_giris
+            else "Hesap güvenliğiniz için şifrenizi güncelleyin."
         )
-        aciklama.setWordWrap(True)
-        aciklama.setAlignment(Qt.AlignCenter)
+        aciklama.setStyleSheet(
+            "font-size: 12px; color: #7185A5;"
+        )
         layout.addWidget(aciklama)
+        layout.addSpacing(10)
 
+        def etiket(metin):
+            yazi = QLabel(metin)
+            yazi.setStyleSheet(
+                "font-size: 12px; font-weight: 700; color: #243653;"
+            )
+            return yazi
+
+        layout.addWidget(etiket("Mevcut Şifre"))
         self.eski_sifre = QLineEdit()
-        self.eski_sifre.setPlaceholderText("Mevcut geçici şifre")
+        self.eski_sifre.setPlaceholderText(
+            "Geçici şifrenizi girin"
+            if self.ilk_giris else "Mevcut şifrenizi girin"
+        )
         self.eski_sifre.setEchoMode(QLineEdit.Password)
+        self.eski_sifre.setFixedHeight(40)
         layout.addWidget(self.eski_sifre)
 
+        layout.addSpacing(5)
+
+        layout.addWidget(etiket("Yeni Şifre"))
         self.yeni_sifre = QLineEdit()
-        self.yeni_sifre.setPlaceholderText("Yeni şifre (en az 8 karakter)")
+        self.yeni_sifre.setPlaceholderText("Yeni şifrenizi girin")
         self.yeni_sifre.setEchoMode(QLineEdit.Password)
+        self.yeni_sifre.setFixedHeight(40)
         layout.addWidget(self.yeni_sifre)
 
+        layout.addSpacing(5)
+
+        layout.addWidget(etiket("Yeni Şifre Tekrar"))
         self.yeni_sifre_tekrar = QLineEdit()
-        self.yeni_sifre_tekrar.setPlaceholderText("Yeni şifre tekrar")
+        self.yeni_sifre_tekrar.setPlaceholderText(
+            "Yeni şifrenizi tekrar girin"
+        )
         self.yeni_sifre_tekrar.setEchoMode(QLineEdit.Password)
+        self.yeni_sifre_tekrar.setFixedHeight(40)
         layout.addWidget(self.yeni_sifre_tekrar)
 
-        self.guc_lbl = QLabel("")
-        self.guc_lbl.setStyleSheet("font-size: 12px; font-weight: bold;")
-        layout.addWidget(self.guc_lbl)
+        layout.addSpacing(12)
 
+        bilgi_kutusu = QFrame()
+        bilgi_kutusu.setObjectName("parolaBilgi")
+        bilgi_layout = QVBoxLayout(bilgi_kutusu)
+        bilgi_layout.setContentsMargins(12, 7, 12, 7)
+        bilgi_layout.setSpacing(2)
+
+        bilgi_baslik = QLabel("Parola gereksinimleri")
+        bilgi_baslik.setStyleSheet(
+            "font-size: 12px; font-weight: 700; color: #243653;"
+        )
+        bilgi_baslik.setFixedHeight(20)
+        bilgi_layout.addWidget(bilgi_baslik)
+
+        self.kural_satirlari = []
+        for _ in range(3):
+            satir = QLabel("")
+            satir.setFixedHeight(19)
+            satir.setStyleSheet(
+                "font-size: 11px; color: #7085A3;"
+            )
+            bilgi_layout.addWidget(satir)
+            self.kural_satirlari.append(satir)
+
+        self.guc_lbl = QLabel("")
+        self.guc_lbl.setFixedHeight(19)
+        bilgi_layout.addWidget(self.guc_lbl)
+
+        # Eski QLabel referansı korunuyor;
+        # görselde yalnızca ayrı kural satırları kullanılıyor.
         self.kural_lbl = QLabel("")
-        self.kural_lbl.setTextFormat(Qt.RichText)
-        self.kural_lbl.setStyleSheet("font-size: 12px;")
-        layout.addWidget(self.kural_lbl)
+        self.kural_lbl.hide()
+
+        bilgi_layout.setContentsMargins(12, 7, 12, 7)
+        bilgi_layout.setSpacing(2)
+        self.parola_bilgi_kutusu = bilgi_kutusu
+        bilgi_kutusu.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Fixed
+        )
+        bilgi_kutusu.setMinimumHeight(0)
+        bilgi_kutusu.setMaximumHeight(167)
+
+        layout.addWidget(bilgi_kutusu)
+        layout.addSpacing(10)
 
         self.goster = QCheckBox("Şifreleri göster")
+
         tik_resmi = (
             Path(__file__).resolve().parent
             / "assets/ui/checkbox_checked.png"
         )
 
         self.goster.setStyleSheet(f"""
-            QCheckBox::indicator:checked {{
-                width: 16px;
-                height: 16px;
-                border: none;
-                border-radius: 0px;
+            QCheckBox {{
+                color: #516B91;
+                font-size: 12px;
+                spacing: 9px;
                 background: transparent;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 1px solid #96B0D1;
+                border-radius: 5px;
+                background: #FFFFFF;
+            }}
+            QCheckBox::indicator:hover {{
+                border: 1px solid #3578D4;
+                background: #F0F6FF;
+            }}
+            QCheckBox::indicator:checked {{
+                background: #1554B7;
+                border: 1px solid #1554B7;
                 image: url("{tik_resmi.as_posix()}");
             }}
         """)
+
         self.goster.toggled.connect(self.sifreleri_goster)
         layout.addWidget(self.goster)
 
         self.hata_lbl = QLabel("")
         self.hata_lbl.setWordWrap(True)
-        self.hata_lbl.setStyleSheet("color: #B91C1C;")
+        self.hata_lbl.setStyleSheet(
+            "font-size: 11px; color: #DC2626;"
+        )
         layout.addWidget(self.hata_lbl)
 
-        self.kaydet_btn = QPushButton("ŞİFREMİ DEĞİŞTİR")
-        self.kaydet_btn.clicked.connect(self.sifre_degistir)
-        layout.addWidget(self.kaydet_btn)
 
-        ana_layout.addWidget(kart)
+        butonlar = QHBoxLayout()
+        butonlar.setSpacing(10)
+
+        self.btn_vazgec = QPushButton("Vazgeç")
+        self.btn_vazgec.setObjectName("vazgec")
+        self.btn_vazgec.clicked.connect(self.close)
+
+        self.kaydet_btn = QPushButton("Şifreyi Güncelle")
+        self.kaydet_btn.setObjectName("kaydetSifre")
+        self.kaydet_btn.clicked.connect(self.sifre_degistir)
+
+        butonlar.addWidget(self.btn_vazgec)
+        butonlar.addWidget(self.kaydet_btn)
+        layout.addLayout(butonlar)
+
         self.eski_sifre.setFocus()
 
         for alan in (self.eski_sifre, self.yeni_sifre, self.yeni_sifre_tekrar):
@@ -250,16 +356,37 @@ class SifreDegistirEkrani(QWidget):
         yeni = self.yeni_sifre.text().strip()
         tekrar = self.yeni_sifre_tekrar.text().strip()
 
-        satirlar = []
-        for metin, saglandi in kural_durumlari(yeni, tekrar, eski):
-            renk, isaret = ("#15803D", "✔") if saglandi else ("#B45309", "○")
-            satirlar.append(f'<span style="color:{renk}">{isaret} {metin}</span>')
-        self.kural_lbl.setText("<br>".join(satirlar))
+        kurallar = [
+            (metin, saglandi)
+            for metin, saglandi in kural_durumlari(yeni, tekrar, eski)
+            if "72 bayt" not in metin
+        ]
+
+        if len(kurallar) != 3:
+            raise ValueError(
+                f"Beklenen 3 parola kuralı yerine {len(kurallar)} bulundu."
+            )
+
+        for satir, (metin, saglandi) in zip(
+            self.kural_satirlari, kurallar
+        ):
+            satir.setText(
+                ("✔  " if saglandi else "○  ") + metin
+            )
+            renk = "#15803D" if saglandi else "#7085A3"
+            satir.setStyleSheet(
+                f"font-size: 11px; color: {renk};"
+            )
+
+        self.kural_lbl.setText(
+            "\n".join(metin for metin, _ in kurallar)
+        )
 
         puan, etiket = guc_hesapla(yeni)
         renkler = {0: "#B91C1C", 1: "#B45309", 2: "#1D4ED8", 3: "#15803D"}
         self.guc_lbl.setText(f"Şifre gücü: {etiket}" if etiket else "")
-        self.guc_lbl.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {renkler[puan]};")
+        self.guc_lbl.setVisible(bool(etiket))
+        self.guc_lbl.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {renkler[puan]};")
 
         self._kaydet_butonunu_ayarla()
 
@@ -267,7 +394,7 @@ class SifreDegistirEkrani(QWidget):
         hazir = tum_kurallar_saglandi_mi(
             self.yeni_sifre.text().strip(), self.yeni_sifre_tekrar.text().strip(), self.eski_sifre.text().strip()
         ) and bool(self.eski_sifre.text().strip())
-        self.kaydet_btn.setEnabled(hazir and not self._oturum_kapatiliyor)
+        self.kaydet_btn.setEnabled(not self._oturum_kapatiliyor)
 
     def sifreleri_goster(self, goster):
         mod = QLineEdit.Normal if goster else QLineEdit.Password
@@ -289,16 +416,42 @@ class SifreDegistirEkrani(QWidget):
         tekrar = self.yeni_sifre_tekrar.text().strip()
 
         if not eski or not yeni or not tekrar:
-            self.hata_lbl.setText("Tüm alanları doldurmalısınız.")
+            self.hata_lbl.setText(
+                "⚠ Lütfen tüm şifre alanlarını doldurun."
+            )
             return
 
         if yeni != tekrar:
-            self.hata_lbl.setText("Yeni şifreler eşleşmiyor.")
+            self.hata_lbl.setText(
+                "⚠ Yeni şifreler birbiriyle eşleşmiyor."
+            )
+            return
+
+        if eski == yeni:
+            self.hata_lbl.setText(
+                "⚠ Yeni şifreniz mevcut şifrenizden farklı olmalıdır."
+            )
             return
 
         if len(yeni) < 8:
-            self.hata_lbl.setText("Yeni şifre en az 8 karakter olmalıdır.")
+            self.hata_lbl.setText(
+                "⚠ Yeni şifreniz en az 8 karakter olmalıdır."
+            )
             return
+
+        if len(yeni.encode("utf-8")) > 72:
+            self.hata_lbl.setText(
+                "⚠ Yeni şifreniz en fazla 72 bayt olabilir."
+            )
+            return
+
+        if not tum_kurallar_saglandi_mi(yeni, tekrar, eski):
+            self.hata_lbl.setText(
+                "⚠ Yeni şifreniz parola gereksinimlerini karşılamıyor."
+            )
+            return
+
+        self.hata_lbl.clear()
 
         self.kaydet_btn.setEnabled(False)
 
@@ -333,7 +486,7 @@ class SifreDegistirEkrani(QWidget):
                 except ValueError:
                     detay = "Sunucudan geçersiz yanıt alındı."
 
-                self.hata_lbl.setText(detay)
+                self.hata_lbl.setText("⚠ " + detay)
 
         except requests.exceptions.RequestException:
             self.hata_lbl.setText("Sunucuya bağlanılamadı.")

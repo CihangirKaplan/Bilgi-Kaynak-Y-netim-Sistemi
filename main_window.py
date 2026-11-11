@@ -13,11 +13,11 @@ import sys
 import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
+    QPushButton, QFrame, QMenu, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
     QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem
 )
 from oda_yonetimi import OdaFormu
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QColor
 from randevu_ekranlari import RandevuOlusturFormu
 from haftalik_takvim import HaftalikTakvimEkrani
@@ -703,6 +703,14 @@ QLabel {
             self.ust_kullanici_kutusu
         )
 
+        for parca in (
+            self.ust_kullanici_kutusu,
+            self.lbl_ust_kullanici,
+            self.lbl_ust_kullanici_ikon,
+        ):
+            parca.setCursor(Qt.PointingHandCursor)
+            parca.installEventFilter(self)
+
         # INDEX 0: Normal Dashboard (Sol Menü + Sağ İçerik)
         ana_widget = QWidget()
         self.master_stack.addWidget(ana_widget)
@@ -1114,6 +1122,166 @@ QLabel {
         if sidebar is not None:
             sidebar.refresh()
 
+    def eventFilter(self, nesne, olay):
+        kullanici_alanlari = (
+            getattr(self, "ust_kullanici_kutusu", None),
+            getattr(self, "lbl_ust_kullanici", None),
+            getattr(self, "lbl_ust_kullanici_ikon", None),
+        )
+
+        if (
+            nesne in kullanici_alanlari
+            and olay.type() == QEvent.MouseButtonRelease
+            and olay.button() == Qt.LeftButton
+        ):
+            self._kullanici_hesap_menusu()
+            return True
+
+        return super().eventFilter(nesne, olay)
+
+    def _kullanici_hesap_menusu(self):
+        if self._oturum_kapatiliyor:
+            return
+
+        from PySide6.QtWidgets import QWidget, QFrame, QVBoxLayout, QPushButton
+
+        mevcut = getattr(self, "_hesap_popup", None)
+        if mevcut is not None and mevcut.isVisible():
+            mevcut.close()
+            return
+
+        popup = QWidget(
+            self,
+            Qt.Popup | Qt.FramelessWindowHint
+        )
+        popup.setAttribute(Qt.WA_TranslucentBackground)
+        popup.setObjectName("hesapPopup")
+
+        dis = QVBoxLayout(popup)
+        dis.setContentsMargins(4, 5, 4, 5)
+
+        kart = QFrame()
+        kart.setObjectName("hesapKart")
+        kart.setStyleSheet("""
+            QFrame#hesapKart {
+                background: #FFFFFF;
+                border: 1px solid #D3E1F2;
+                border-radius: 12px;
+            }
+            QPushButton#hesapSifre {
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                color: #243653;
+                font-size: 13px;
+                font-weight: 700;
+                text-align: left;
+                padding: 10px 12px;
+            }
+            QPushButton#hesapSifre:hover {
+                background: #EAF2FF;
+                color: #075BD8;
+            }
+        """)
+
+        ic = QVBoxLayout(kart)
+        ic.setContentsMargins(6, 6, 6, 6)
+        ic.setSpacing(0)
+
+        sifre_btn = QPushButton("🔑  Şifremi Değiştir")
+        sifre_btn.setObjectName("hesapSifre")
+        sifre_btn.setCursor(Qt.PointingHandCursor)
+        sifre_btn.setFixedHeight(38)
+        ic.addWidget(sifre_btn)
+
+        ayirici = QFrame()
+        ayirici.setFrameShape(QFrame.HLine)
+        ayirici.setStyleSheet(
+            "background: #E3EAF5; border: none; max-height: 1px;"
+        )
+        ic.addWidget(ayirici)
+
+        cikis_btn = QPushButton("⏻  Çıkış Yap")
+        cikis_btn.setObjectName("hesapSifre")
+        cikis_btn.setCursor(Qt.PointingHandCursor)
+        cikis_btn.setFixedHeight(38)
+        cikis_btn.setStyleSheet("""
+            QPushButton#hesapSifre {
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                color: #B42332;
+                font-size: 13px;
+                font-weight: 700;
+                text-align: left;
+                padding: 10px 12px;
+            }
+            QPushButton#hesapSifre:hover {
+                background: #FFF0F0;
+                color: #991B1B;
+            }
+        """)
+        ic.addWidget(cikis_btn)
+
+        dis.addWidget(kart)
+
+        popup.setFixedWidth(230)
+        popup.adjustSize()
+
+        def sifre_ac():
+            popup.close()
+            self._kisisel_sifre_penceresini_ac()
+
+        sifre_btn.clicked.connect(sifre_ac)
+
+        def cikis_yap():
+            popup.close()
+            self.oturum_kapat()
+
+        cikis_btn.clicked.connect(cikis_yap)
+
+        konum = self.ust_kullanici_kutusu.mapToGlobal(
+            self.ust_kullanici_kutusu.rect().bottomRight()
+        )
+
+        popup.move(
+            konum.x() - popup.width(),
+            konum.y() + 3
+        )
+
+        self._hesap_popup = popup
+        popup.show()
+
+    def _kisisel_sifre_penceresini_ac(self):
+        if self._oturum_kapatiliyor or not self.token:
+            return
+
+        from sifre_degistir_ekrani import SifreDegistirEkrani
+
+        mevcut = getattr(self, "sifre_penceresi", None)
+        if mevcut is not None and mevcut.isVisible():
+            mevcut.raise_()
+            mevcut.activateWindow()
+            return
+
+        self.sifre_penceresi = SifreDegistirEkrani(
+            self.token, ilk_giris=False
+        )
+        self.sifre_penceresi.sifre_degistirildi.connect(
+            self._kisisel_sifre_degisti
+        )
+        self.sifre_penceresi.show()
+
+    def _kisisel_sifre_degisti(self):
+        self.sifre_penceresi.close()
+
+        QMessageBox.information(
+            self,
+            "Şifre Değiştirildi",
+            "Şifreniz başarıyla değiştirildi. Lütfen yeniden giriş yapın."
+        )
+        self.oturum_kapat()
+
     def rol_uygula(self, rol):
         from tkys_logo_widget import sol_panel_logosu_kur
         sol_panel_logosu_kur(self)
@@ -1222,6 +1390,7 @@ QLabel {
         bagimsiz_formlar = (
             "oda_ekle_penceresi",
             "oda_duzenle_penceresi",
+            "sifre_penceresi",
             "randevu_formu",
             "liste_formu",
         )
