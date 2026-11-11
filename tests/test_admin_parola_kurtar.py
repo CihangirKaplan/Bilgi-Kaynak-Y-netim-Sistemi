@@ -161,3 +161,12 @@ def test_kilavuz_kurtarma_adimlarini_ve_iki_yonetici_onerisini_icerir():
     kilavuz = (Path(__file__).resolve().parents[1] / "docs" / "Sunucu_Kurulum_Kilavuzu.md").read_text(encoding="utf-8")
     assert "Yönetici parolasını unuttuysanız" in kilavuz and "admin_parola_kurtar" in kilavuz
     assert "en az **iki** yönetici" in kilavuz
+
+
+def test_kilavuz_acil_durum_bolumu_uc_yolu_ve_onlem_listesini_icerir():
+    kilavuz = (Path(__file__).resolve().parents[1] / "docs" / "Sunucu_Kurulum_Kilavuzu.md").read_text(encoding="utf-8")
+    bolum = kilavuz[kilavuz.index("### Acil durum: yönetici hesabına kimse giremiyorsa"):kilavuz.index("## 7. Sunucuyu ağa açın")]
+    assert "Başka bir yönetici varsa" in bolum and "Tüm yöneticiler şifresini unuttuysa" in bolum
+    assert "ulaşılamıyorsa" in bolum and "admin_parola_kurtar.bat" in bolum
+    assert bolum.count("- [ ]") == 5                                 # kurulum sonrası önlem listesi
+    assert "kimliğini doğrulayın" in bolum and "yedek" in bolum

@@ -81,6 +81,35 @@ için çalışır; diğer kullanıcıların parolasını yönetici uygulamadan s
 **Öneri:** Böyle bir durumla karşılaşmamak için sistemde en az **iki** yönetici hesabı bulundurun; biri
 parolasını unutursa diğeri, Kullanıcı & Personel ekranındaki parola taleplerinden onu sıfırlayabilir.
 
+### Acil durum: yönetici hesabına kimse giremiyorsa
+
+Sırayla şu üç yola bakın; ilk yol yeterliyse diğerlerine gerek kalmaz.
+
+1. **Başka bir yönetici varsa (en kolayı).** Şifresini unutan yönetici, giriş ekranındaki **Şifremi unuttum**
+   penceresine kendi kullanıcı adını yazıp **Yöneticiye Bildir**'e basar. Diğer yönetici, ana panelde ve zil
+   simgesinde **Parola Talepleri** bildirimini görür. Önce şifresini unutan kişinin kimliğini yüz yüze ya da
+   telefonla doğrular, sonra Kullanıcı & Personel ekranından **Parolayı Sıfırla** der ve geçici parolayı o kişiye
+   verir.
+2. **Tüm yöneticiler şifresini unuttuysa.** Sunucu bilgisayarında kurtarma aracı çalıştırılır
+   (`scripts\windows\admin_parola_kurtar.bat`). Araç bütün yöneticileri listeler. Biri seçilip kurtarılır; o kişi
+   giriş yaptıktan sonra diğer yöneticinin parolasını uygulamadan sıfırlayabilir (ya da araç ikinci kez çalıştırılır).
+3. **Sunucu bilgisayarına ya da `.env` dosyasına da ulaşılamıyorsa.** Veritabanı parolasını (`.env` içindeki
+   `DB_PASSWORD` ve PostgreSQL `postgres` kullanıcısının parolası) bilen kişi veritabanı yöneticisi olarak
+   müdahale eder. Bu teknik bir iştir; bir yazılım geliştiriciden yardım alın. Hiçbir veri kaybolmaz, en kötü
+   durumda 10. bölümdeki yedekten geri dönülür.
+
+Böyle bir durumda iş yavaşlamasın diye kurulumdan hemen sonra şunları yapın:
+
+- [ ] En az **iki yönetici** hesabı açın ve bunları **farklı kişilere** verin.
+- [ ] `.env` içindeki `DB_PASSWORD` ile `postgres` parolasını **sunucu bilgisayarının dışında** güvenli bir yerde
+      saklayın (kilitli çekmecede zarf ya da şifre yöneticisi). Parolaları kimseyle paylaşmayın.
+- [ ] Kurtarma yolunu bilen **en az iki kişi** olsun (örneğin sistem sorumlusu ve müdür).
+- [ ] Kurtarma aracını bir kez **deneme yönetici hesabıyla** deneyin; gerçek bir sorunda ilk kez çalıştırmayın.
+- [ ] Yedeklerin bir kopyası sunucu bilgisayarının dışında dursun (10. bölüm).
+
+Geçici parolayı vermeden önce her zaman kullanıcının kimliğini doğrulayın; parolayı telefonda ya da mesajla
+değil, mümkünse yüz yüze iletin.
+
 ## 7. Sunucuyu ağa açın
 
 Sunucu bilgisayarının adresini öğrenin:
