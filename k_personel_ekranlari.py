@@ -1,3 +1,4 @@
+from api_yoneticisi import api_hata_mesaji
 import requests
 from gecici_parola_dialog import GeciciParolaDialog
 from datetime import datetime
@@ -54,6 +55,15 @@ class KullaniciPersonelEkrani(QWidget):
         self.talep_paneli.hide()
         layout.addWidget(self.talep_paneli)
 
+        self.lbl_talep_hatasi = QLabel()
+        self.lbl_talep_hatasi.setObjectName("talepYuklemeHatasi")
+        self.lbl_talep_hatasi.setWordWrap(True)
+        self.lbl_talep_hatasi.setStyleSheet(
+            "color: #B42318; padding: 8px; font-size: 12px;"
+        )
+        self.lbl_talep_hatasi.hide()
+        layout.addWidget(self.lbl_talep_hatasi)
+
         # 2. TABLO (Kart görünümü için çerçeve)
         ik = QFrame()
         ik.setStyleSheet("background: white; border-radius: 16px;")
@@ -85,10 +95,21 @@ class KullaniciPersonelEkrani(QWidget):
         """)
 
         il.addWidget(self.tablo)
+
+        self.lbl_personel_hatasi = QLabel()
+        self.lbl_personel_hatasi.setObjectName("personelYuklemeHatasi")
+        self.lbl_personel_hatasi.setWordWrap(True)
+        self.lbl_personel_hatasi.setStyleSheet(
+            "color: #B42318; padding: 8px; font-size: 12px;"
+        )
+        self.lbl_personel_hatasi.hide()
+        layout.addWidget(self.lbl_personel_hatasi)
+
         layout.addWidget(ik)
 
     def verileri_cek(self):
         self.talepleri_yukle()
+        self.lbl_personel_hatasi.hide()
         headers = {"Authorization": f"Bearer {self.token}"}
         url = f"{self.api_url}/api/personel"
 
@@ -98,6 +119,8 @@ class KullaniciPersonelEkrani(QWidget):
                 return
             if cevap.status_code == 200:
                 personeller = cevap.json()
+                if not isinstance(personeller, list):
+                    raise ValueError("Geçersiz personel listesi")
                 self.tablo.setRowCount(len(personeller))
 
                 for satir, p in enumerate(personeller):
@@ -123,9 +146,15 @@ class KullaniciPersonelEkrani(QWidget):
                     self.tablo.setItem(satir, 4, item_durum)
                     self.tablo.setItem(satir, 5, item_tarih)
             else:
-                print(f"Veri çekilemedi. Hata Kodu: {cevap.status_code}")
-        except Exception as e:
-            print("Sunucuya bağlanılamadı:", e)
+                self.tablo.setRowCount(0)
+                self.lbl_personel_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_personel_hatasi.show()
+        except Exception as hata:
+            self.tablo.setRowCount(0)
+            self.lbl_personel_hatasi.setText(
+                api_hata_mesaji(hata=hata)
+            )
+            self.lbl_personel_hatasi.show()
 
     def secili_kullanici_durum_degistir(self):
         secili_satirlar = self.tablo.selectionModel().selectedRows()
@@ -257,19 +286,42 @@ class KullaniciPersonelEkrani(QWidget):
         return f"{dakika // 1440} gün önce"
 
     def talepleri_yukle(self):
-        """Bekleyen parola sıfırlama taleplerini getirir; yetki yoksa (403) ya da hata olursa panel gizli kalır."""
-        talepler = []
+        """Bekleyen parola taleplerini yükler; hataları sessizce gizlemez."""
+        self.lbl_talep_hatasi.hide()
+
         try:
             cevap = oturum_kontrollu_istek(
-                "GET", f"{self.api_url}/api/parola-sifirlama-talepleri",
-                headers={"Authorization": f"Bearer {self.token}"}, timeout=5)
+                "GET",
+                f"{self.api_url}/api/parola-sifirlama-talepleri",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+
             if oturum_hatasi_mi(cevap):
                 return
-            if cevap.status_code == 200:
-                talepler = cevap.json()
-        except Exception:
-            talepler = []
-        self.talepleri_goster(talepler if isinstance(talepler, list) else [])
+
+            if cevap.status_code == 403:
+                self.talepleri_goster([])
+                return
+
+            if cevap.status_code != 200:
+                self.talepleri_goster([])
+                self.lbl_talep_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_talep_hatasi.show()
+                return
+
+            talepler = cevap.json()
+            if not isinstance(talepler, list):
+                raise ValueError("Geçersiz talep listesi")
+
+            self.talepleri_goster(talepler)
+
+        except Exception as hata:
+            self.talepleri_goster([])
+            self.lbl_talep_hatasi.setText(
+                api_hata_mesaji(hata=hata)
+            )
+            self.lbl_talep_hatasi.show()
 
     TALEP_ALANLARI = ("talep_id", "kullanici_id", "kullanici_adi")
 

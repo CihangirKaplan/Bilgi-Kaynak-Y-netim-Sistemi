@@ -113,3 +113,34 @@ def test_kartlar_pencere_genisligine_gore_dizilir_ve_yetim_kart_kalmaz(pano, gen
     assert len(set(konumlar)) == 6                        # üst üste binen kart yok
     satir_sayilari = [sum(1 for s, _ in konumlar if s == r) for r in sorted({s for s, _ in konumlar})]
     assert satir_sayilari == ([6] if beklenen_kolon == 6 else [3, 3])
+
+
+def test_dashboard_ozet_yukleme_hatasinda_eski_sayilar_gizlenir(pano):
+    with patch.object(
+        pano, "_getir", side_effect=ConnectionError("Teknik detay")
+    ):
+        pano._ozet_yukle()
+
+    for anahtar in (
+        "aktif_cihaz",
+        "bakimdaki_cihaz",
+        "kalibrasyondaki_cihaz",
+        "arizali_cihaz",
+    ):
+        deger, alt = pano.kartlar[anahtar]
+        assert deger.text() == "?"
+        assert "yüklenemedi" in alt.text().lower()
+
+
+def test_dashboard_yaklasan_islemler_hatasi_bos_liste_sanilmaz(pano):
+    with patch.object(
+        pano, "_getir", side_effect=ConnectionError("Teknik detay")
+    ):
+        pano._islemleri_yukle()
+
+    assert "yüklenemedi" in pano.lbl_islem_bos.text().lower()
+
+    with patch.object(pano, "_getir", return_value=[]):
+        pano._islemleri_yukle()
+
+    assert "yüklenemedi" not in pano.lbl_islem_bos.text().lower()

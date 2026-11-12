@@ -8,6 +8,7 @@ import requests
 from rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from tekrar_uyari_alanlari import TekrarUyariAlanlari
 from plan_secimi import PlanSecimi
+from api_yoneticisi import api_hata_mesaji
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -72,20 +73,65 @@ class YeniKalibrasyonFormu(QDialog):
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
+        self.lbl_cihaz_hatasi = QLabel()
+        self.lbl_cihaz_hatasi.setWordWrap(True)
+        self.lbl_cihaz_hatasi.setStyleSheet("color: #B42318;")
+        self.lbl_cihaz_hatasi.hide()
+        layout.addWidget(self.lbl_cihaz_hatasi)
+
         layout.addWidget(self.btn_kaydet)
 
         self.cihazlari_yukle()
 
     def cihazlari_yukle(self):
+        if self.cmb_cihaz is None:
+            return
+
+        self.btn_kaydet.setEnabled(False)
+        self.cmb_cihaz.clear()
+        self.lbl_cihaz_hatasi.hide()
+
         try:
-            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(res):
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/cihazlar",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=10,
+            )
+
+            if oturum_hatasi_mi(cevap):
                 return
-            if res.status_code == 200:
-                for c in res.json():
-                    self.cmb_cihaz.addItem(f"{c['envanter_kodu']} - {c['cihaz_adi']}", c['cihaz_id'])
-        except Exception:
-            pass
+
+            if cevap.status_code != 200:
+                self.lbl_cihaz_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            cihazlar = cevap.json()
+
+            if not isinstance(cihazlar, list):
+                raise ValueError("Geçersiz cihaz listesi")
+
+            if not cihazlar:
+                self.lbl_cihaz_hatasi.setText(
+                    "Sistemde kayıtlı cihaz bulunmamaktadır."
+                )
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            for cihaz in cihazlar:
+                self.cmb_cihaz.addItem(
+                    f"{cihaz['envanter_kodu']} - {cihaz['cihaz_adi']}",
+                    cihaz["cihaz_id"]
+                )
+
+            self.btn_kaydet.setEnabled(True)
+
+        except Exception as hata:
+            self.cmb_cihaz.clear()
+            self.btn_kaydet.setEnabled(False)
+            self.lbl_cihaz_hatasi.setText(api_hata_mesaji(hata=hata))
+            self.lbl_cihaz_hatasi.show()
 
     def kaydet(self):
         veri = {

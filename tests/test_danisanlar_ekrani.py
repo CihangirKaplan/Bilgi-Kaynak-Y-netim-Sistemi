@@ -362,3 +362,36 @@ def test_sunucu_yaniti_kisisel_veri_sutunu_icermez(istemci):
     for kayit in yanit.json():
         assert set(kayit) <= {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
                               "olusturan_psikolog_id"}
+
+
+def test_psikolog_degisirken_yukleme_hatasinda_eski_danisanlar_gizlenir():
+    from unittest.mock import patch
+
+    ekran = ekran_ac()
+    assert len(kodlar(ekran)) == 3
+
+    with patch.object(ekran, "_api_liste_getir", return_value=None):
+        ekran.cmb_psikolog.setCurrentIndex(
+            ekran.cmb_psikolog.findData(7)
+        )
+
+    assert kodlar(ekran) == []
+
+    # Sunucu yeniden çalışınca doğru psikoloğun kayıtları gelir.
+    ekran._danisanlari_yukle()
+    assert kodlar(ekran) == ["DAN-2026-0003"]
+
+    ekran.close()
+
+
+def test_ayni_psikologda_yenileme_hatasi_eski_listeyi_korur():
+    from unittest.mock import patch
+
+    ekran = ekran_ac()
+    onceki = kodlar(ekran)
+
+    with patch.object(ekran, "_api_liste_getir", return_value=None):
+        ekran._danisanlari_yukle()
+
+    assert kodlar(ekran) == onceki
+    ekran.close()

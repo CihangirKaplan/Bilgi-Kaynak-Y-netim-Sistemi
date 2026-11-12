@@ -257,3 +257,199 @@ def test_duzenleme_formu_dolu_saate_kaydetmez():
     uyari.assert_called_once()
     assert sunucu.diger_istekler == []  # PATCH atılmadı
     form.close()
+
+
+@pytest.mark.parametrize("durum", [403, 500])
+def test_doluluk_hatasinda_kaydet_pasif_ve_uyari_gorunur(durum):
+    sunucu = Sunucu([], doluluk_durumu=durum)
+    form = olustur_formu(sunucu)
+
+    assert not form.btn_kaydet.isEnabled()
+    assert not form.lbl_doluluk_hatasi.isHidden()
+    assert "doğrulanamadı" in form.lbl_doluluk_hatasi.text()
+
+    form.close()
+
+
+def test_doluluk_sunucusu_duzelince_kaydet_aktiflesir():
+    sunucu = Sunucu([], doluluk_durumu=500)
+    form = olustur_formu(sunucu)
+
+    assert not form.btn_kaydet.isEnabled()
+
+    sunucu.doluluk_durumu = 200
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
+        form.doluluk_yenile()
+
+    assert form.btn_kaydet.isEnabled()
+    assert form.lbl_doluluk_hatasi.isHidden()
+
+    form.close()
+
+
+def test_doluluk_dogrulanmadan_post_gonderilmez():
+    sunucu = Sunucu([], doluluk_durumu=500)
+    form = olustur_formu(sunucu)
+
+    with patch.object(QMessageBox, "warning") as uyari, \
+         patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
+        form.randevuyu_kaydet()
+
+    uyari.assert_called_once()
+    assert sunucu.diger_istekler == []
+
+    form.close()
+
+
+@pytest.mark.parametrize("durum", [403, 500])
+def test_form_listesi_http_hatasinda_kayit_engellenir(durum):
+    sunucu = Sunucu([])
+    form = olustur_formu(sunucu)
+
+    assert form.btn_kaydet.isEnabled()
+
+    def hata(yontem, url, **kwargs):
+        if url.endswith("/api/odalar"):
+            return Sunucu.cevap({"detail": "hata"}, durum)
+        return sunucu(yontem, url, **kwargs)
+
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=hata):
+        form.odalari_yukle()
+
+    assert not form.btn_kaydet.isEnabled()
+    assert not form.lbl_form_hatasi.isHidden()
+    assert "Gerekli bilgiler yüklenemedi" in form.lbl_form_hatasi.text()
+
+    form.close()
+
+
+def test_form_listesi_baglanti_hatasinda_kayit_engellenir():
+    sunucu = Sunucu([])
+    form = olustur_formu(sunucu)
+
+    def kopuk(yontem, url, **kwargs):
+        if url.endswith("/api/odalar"):
+            raise OSError("Sunucuya ulasilamadi")
+        return sunucu(yontem, url, **kwargs)
+
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=kopuk):
+        form.odalari_yukle()
+
+    assert not form.btn_kaydet.isEnabled()
+    assert not form.lbl_form_hatasi.isHidden()
+
+    form.close()
+
+
+def test_form_listesi_duzelince_kayit_yeniden_etkinlesir():
+    sunucu = Sunucu([])
+    form = olustur_formu(sunucu)
+
+    with patch.object(
+        modul, "oturum_kontrollu_istek",
+        return_value=Sunucu.cevap({"detail": "hata"}, 500)
+    ):
+        form.odalari_yukle()
+
+    assert not form.btn_kaydet.isEnabled()
+
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
+        form.odalari_yukle()
+
+    assert form.btn_kaydet.isEnabled()
+    assert form.lbl_form_hatasi.isHidden()
+
+    form.close()
+
+
+def test_form_listesi_gecersiz_200_yanitinda_kayit_engellenir():
+    sunucu = Sunucu([])
+    form = olustur_formu(sunucu)
+
+    assert form.btn_kaydet.isEnabled()
+
+    with patch.object(
+        modul,
+        "oturum_kontrollu_istek",
+        return_value=Sunucu.cevap({"beklenmeyen": "veri"}, 200),
+    ):
+        form.odalari_yukle()
+
+    assert not form.btn_kaydet.isEnabled()
+    assert not form.lbl_form_hatasi.isHidden()
+    assert "beklenmeyen veri" in form.lbl_form_hatasi.text()
+
+    form.close()
+
+
+def test_form_listesi_hatasinda_dogrudan_post_engellenir():
+    sunucu = Sunucu([])
+    form = olustur_formu(sunucu)
+
+    assert form._doluluk_dogrulandi
+
+    with patch.object(
+        modul, "oturum_kontrollu_istek",
+        return_value=Sunucu.cevap({"detail": "hata"}, 500),
+    ):
+        form.odalari_yukle()
+
+    assert form._doluluk_dogrulandi
+    assert form._form_hatalari
+
+    with patch.object(QMessageBox, "warning") as uyari, \
+         patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
+        form.randevuyu_kaydet()
+
+    uyari.assert_called_once()
+    assert sunucu.diger_istekler == []
+
+    form.close()
+
+
+@pytest.mark.parametrize("durum", [403, 500])
+def test_duzenleme_formu_liste_hatasinda_patch_engellenir(durum):
+    sunucu = Sunucu([])
+    form = duzenle_formu(sunucu)
+
+    assert form._doluluk_dogrulandi
+    assert form.btn_guncelle.isEnabled()
+
+    with patch.object(
+        modul, "oturum_kontrollu_istek",
+        return_value=Sunucu.cevap({"detail": "hata"}, durum),
+    ):
+        form.odalari_yukle()
+
+    assert not form.btn_guncelle.isEnabled()
+    assert not form.lbl_form_hatasi.isHidden()
+
+    with patch.object(QMessageBox, "warning") as uyari, \
+         patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
+        form.randevuyu_guncelle()
+
+    uyari.assert_called_once()
+    assert sunucu.diger_istekler == []
+    form.close()
+
+
+def test_duzenleme_formu_liste_duzelince_guncelleme_acilir():
+    sunucu = Sunucu([])
+    form = duzenle_formu(sunucu)
+
+    with patch.object(
+        modul, "oturum_kontrollu_istek",
+        return_value=Sunucu.cevap({"detail": "hata"}, 500),
+    ):
+        form.odalari_yukle()
+
+    assert not form.btn_guncelle.isEnabled()
+
+    with patch.object(
+        modul, "oturum_kontrollu_istek", side_effect=sunucu
+    ):
+        form.odalari_yukle()
+
+    assert form.btn_guncelle.isEnabled()
+    assert form.lbl_form_hatasi.isHidden()
+    form.close()

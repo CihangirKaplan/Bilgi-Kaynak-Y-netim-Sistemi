@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from api_yoneticisi import api_hata_mesaji
 from api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, hap, islem_butonlari, metin_item, sayfa_basligi, sayi_cipi,
@@ -170,6 +171,12 @@ class PlanFormu(QDialog):
         self.lbl_ozet.setWordWrap(True)
         ana.addWidget(self.lbl_ozet)
 
+        self.lbl_cihaz_hatasi = QLabel()
+        self.lbl_cihaz_hatasi.setWordWrap(True)
+        self.lbl_cihaz_hatasi.setStyleSheet("color: #B42318;")
+        self.lbl_cihaz_hatasi.hide()
+        ana.addWidget(self.lbl_cihaz_hatasi)
+
         butonlar = QHBoxLayout()
         butonlar.setSpacing(10)
         self.btn_vazgec = QPushButton("Vazgeç")
@@ -224,15 +231,55 @@ class PlanFormu(QDialog):
 
     # ---------------------------------------------------------------- veri alma
     def cihazlari_yukle(self):
+        if self.cmb_cihaz is None:
+            return
+
+        self.btn_kaydet.setEnabled(False)
+        self.cmb_cihaz.clear()
+        self.cmb_cihaz.addItem("— Cihaz seçiniz —", None)
+        self.lbl_cihaz_hatasi.hide()
+
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar",
-                                           headers={"Authorization": f"Bearer {self.token}"}, timeout=10)
-            if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/cihazlar",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=10,
+            )
+
+            if oturum_hatasi_mi(cevap):
                 return
-            for c in cevap.json():
-                self.cmb_cihaz.addItem(f"{c['envanter_kodu']} - {c['cihaz_adi']}", c["cihaz_id"])
-        except Exception:
-            pass
+
+            if cevap.status_code != 200:
+                self.lbl_cihaz_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            cihazlar = cevap.json()
+
+            if not isinstance(cihazlar, list):
+                raise ValueError("Geçersiz cihaz listesi")
+
+            if not cihazlar:
+                self.lbl_cihaz_hatasi.setText(
+                    "Sistemde kayıtlı cihaz bulunmamaktadır."
+                )
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            for cihaz in cihazlar:
+                self.cmb_cihaz.addItem(
+                    f"{cihaz['envanter_kodu']} - {cihaz['cihaz_adi']}",
+                    cihaz["cihaz_id"]
+                )
+
+            self.btn_kaydet.setEnabled(True)
+
+        except Exception as hata:
+            self.cmb_cihaz.clear()
+            self.btn_kaydet.setEnabled(False)
+            self.lbl_cihaz_hatasi.setText(api_hata_mesaji(hata=hata))
+            self.lbl_cihaz_hatasi.show()
 
     def plan_bilgisini_yukle(self):
         p = self.plan
