@@ -47,27 +47,6 @@ ROL_BILGI = {
     "admin":    {"ad": "Sistem Admin",      "aciklama": "Tam Yetkili Sistem ve Yetki Yönetimi"},
 }
 
-
-def dinamik_rol_tanimla(rol_kodu, rol_adi):
-    """Sunucudan doğrulanmış, yeni bir rolü arayüze tanıtır.
-
-    Bu işlem rolün izinlerini vermez; izinler API'den alınır.
-    """
-    if not rol_kodu.startswith("rol_"):
-        return
-
-    if not rol_adi or not str(rol_adi).strip():
-        raise ValueError("Rol adı bulunamadı.")
-
-    if rol_kodu not in ROLLER:
-        ROLLER.append(rol_kodu)
-
-    ROL_BILGI[rol_kodu] = {
-        "ad": str(rol_adi).strip().title(),
-        "aciklama": "Rolünüze tanımlanan yetkiler kapsamında işlem yapabilirsiniz.",
-    }
-
-
 IZIN_LISTESI = [
     ("Randevu oluşturma",                    "Randevu & Oda",     "EHHEHE"),
     ("Randevu düzenleme",                    "Randevu & Oda",     "EHHEHE"),
@@ -130,8 +109,8 @@ IZIN_KODLARI = {
     "Cihaz ekleme": ("CIHAZ_EKLE",),
     "Cihaz takip kontrol listesini yönetme": ("CIHAZ_TAKIP_KONTROL_LISTESI",),
     "Cihaz raporlarını görüntüleme": ("CIHAZ_ENVANTER_YONET",),
-    "Bakım kayıtlarını yönetme": ("BAKIM_KAYITLARI_YONET",),
-    "Kalibrasyon kayıtlarını yönetme": ("KALIBRASYON_KAYITLARI_YONET",),
+    "Bakım kayıtlarını yönetme": ("CIHAZ_ENVANTER_YONET",),
+    "Kalibrasyon kayıtlarını yönetme": ("CIHAZ_ENVANTER_YONET",),
     "Arıza kayıtlarını yönetme": ("ARIZA_KAYITLARI_YONET",),
     "Faaliyet kayıtlarını düzenleme": ("FAALIYET_KAYITLARI_DUZENLE",),
     "Kullanıcı oluşturma": ("KULLANICI_OLUSTUR",),
@@ -188,20 +167,11 @@ def cihaz_ozeti_gorebilir_mi(rol):
 
 def izin_var(rol, izin_adi):
     """Rolün bu izne sahip olup olmadığı. Bilinmeyen izin adı 'yok' sayılır (çökmez)."""
-    if izin_adi == "Bakım/kalibrasyon planlarını yönetme":
-        return (
-            izin_var(rol, "Bakım kayıtlarını yönetme")
-            or izin_var(rol, "Kalibrasyon kayıtlarını yönetme")
-        )
     if izin_adi not in IZIN:
         return False
     kodlar = _SUNUCU_YETKILERI.get(rol)
     if kodlar is None:
-        # Dinamik rollerde sunucu izinleri zorunludur.
-        # Bağlantı/izin yükleme hatasında hiçbir yetki verilmez.
-        if rol.startswith("rol_"):
-            return False
-        # Mevcut rollerin eski davranışı korunur.
+        # Sunucu yetkileri alınamadı (örn. eski sunucu): elle yazılmış tabloya dön.
         return IZIN[izin_adi][1][ROLLER.index(rol)] == "E"
     sadece = IZIN_SADECE_ROL.get(izin_adi)
     if sadece is not None and rol not in sadece:
@@ -276,9 +246,9 @@ MENU = [
         dict(ikon="🛠️", ad="Bakım Kayıtları", izin="Bakım kayıtlarını yönetme",
              aciklama="Periyodik bakım kayıtları",
              aksiyon=[("＋  Bakım Kaydı", "Bakım kayıtlarını yönetme")]),
-        dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım/kalibrasyon planlarını yönetme",
+        dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım kayıtlarını yönetme",
              aciklama="Cihazların tekrar aralığı, uyarı süresi ve sonraki bakım/kalibrasyon tarihi",
-             aksiyon=[("＋  Yeni Plan", "Bakım/kalibrasyon planlarını yönetme")]),
+             aksiyon=[("＋  Yeni Plan", "Bakım kayıtlarını yönetme")]),
         dict(ikon="🎯", ad="Kalibrasyon", izin="Kalibrasyon kayıtlarını yönetme",
              aciklama="Kalibrasyon planı ve sertifikaları",
              aksiyon=[("＋  Kalibrasyon Kaydı", "Kalibrasyon kayıtlarını yönetme")]),
@@ -2400,7 +2370,10 @@ QLabel {
 
     def yeni_faaliyet_ekrani_ac(self):
         from faaliyet_dialog import FaaliyetEkleDialog
-        dialog = FaaliyetEkleDialog(self.api_url, self.token, self)
+        dialog = FaaliyetEkleDialog(
+            self.api_url, self.token, self,
+            birim_yonetebilir=izin_var(self.aktif_rol, "Faaliyet birimlerini yönetme"),
+        )
         if dialog.exec():
             # Kullanıcı formu doldurup kaydete basınca tablo şak diye yenilenecek
             self.faaliyet_tablosunu_guncelle()
