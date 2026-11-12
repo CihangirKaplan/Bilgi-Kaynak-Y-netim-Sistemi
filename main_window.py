@@ -512,6 +512,8 @@ class AnaPencere(QMainWindow):
                 0, self._oturum_suresini_kontrol_et
             )
 
+        self._yetki_zamanlayicisini_kur()
+
         self.resize(1360, 820)
         self.setMinimumSize(1100, 700)
         self.setStyleSheet(STIL)
@@ -1499,12 +1501,102 @@ QLabel {
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                izinler = cevap.json().get("izinler")
+                veri = cevap.json()
+                izinler = veri.get("izinler")
                 if isinstance(izinler, list):
                     yetkileri_ayarla(rol, izinler)
+                    self._sunucu_rol_adi = veri.get("rol_adi")      # rol sonradan değişirse fark edilsin
                     return
         except Exception as e:
             print("Yetkiler sunucudan alınamadı, yerel tablo kullanılacak:", e)
+
+    # ------------------------------------------------------------------ açık oturumda yetki yenileme
+    # Yönetici bir rolün izinlerini değiştirdiğinde ya da kullanıcının rolünü değiştirdiğinde, o kullanıcı
+    # uygulamayı kapatıp açmak zorunda kalmasın: menü kısa aralıklarla sunucudaki yetkilerle karşılaştırılır.
+    YETKI_YENILEME_ARALIGI_MS = 20_000
+    YETKI_HATA_SONRASI_ATLANAN_TUR = 3        # sunucuya ulaşılamazsa art arda denemeyip bir süre beklenir
+
+    def _yetki_zamanlayicisini_kur(self):
+        self._yetki_istegi_suruyor = False
+        self._yetki_atlanan_tur = 0
+        self._yetki_zamanlayici = QTimer(self)
+        self._yetki_zamanlayici.setInterval(self.YETKI_YENILEME_ARALIGI_MS)
+        self._yetki_zamanlayici.timeout.connect(self._yetkileri_denetle)
+        if self.token and not self.rol_onizleme:
+            self._yetki_zamanlayici.start()
+
+    def _yetkileri_denetle(self):
+        """Sunucudaki güncel yetkileri alır; değiştiyse menüyü yeniler, rol değiştiyse yeniden girişi ister."""
+        if self._oturum_kapatiliyor or self.rol_onizleme or not self.token or self._yetki_istegi_suruyor:
+            return
+        if self._yetki_atlanan_tur > 0:
+            self._yetki_atlanan_tur -= 1
+            return
+        if QApplication.activeModalWidget() is not None:
+            return                                   # kullanıcı bir pencerede çalışıyor; bir sonraki turda bakılır
+
+        self._yetki_istegi_suruyor = True
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/yetkilerim",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=2,
+            )
+            if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+                return
+            veri = cevap.json()
+        except Exception:
+            self._yetki_atlanan_tur = self.YETKI_HATA_SONRASI_ATLANAN_TUR      # ağ sorunu: sessizce bekle
+            return
+        finally:
+            self._yetki_istegi_suruyor = False
+
+        self._yeni_yetkileri_uygula(veri)
+
+    def _yeni_yetkileri_uygula(self, veri):
+        izinler = veri.get("izinler") if isinstance(veri, dict) else None
+        if not isinstance(izinler, list):
+            return
+
+        rol_adi = veri.get("rol_adi")
+        onceki_rol = getattr(self, "_sunucu_rol_adi", None)
+        if onceki_rol is not None and rol_adi != onceki_rol:
+            self._rol_degisti_uyarisi()
+            return
+
+        if _SUNUCU_YETKILERI.get(self.aktif_rol) == frozenset(izinler):
+            return                                   # değişiklik yok
+
+        yetkileri_ayarla(self.aktif_rol, izinler)
+        self._sunucu_rol_adi = rol_adi
+        self._menuyu_yeniden_kur()
+
+    def _menuyu_yeniden_kur(self):
+        """Menüyü ve sayfaları yeni yetkilere göre yeniden çizer; kullanıcı açık olan sayfada kalır (yetkisi sürüyorsa)."""
+        acik_sayfa = None
+        if 0 <= self.stack.currentIndex() < len(self.sayfa_bilgi):
+            acik_sayfa = self.sayfa_bilgi[self.stack.currentIndex()][0]
+
+        self.rol_uygula(self.aktif_rol)
+
+        if acik_sayfa in self.nav_btnler:
+            self._bildirimden_sayfaya_git(acik_sayfa)
+
+        QMessageBox.information(
+            self,
+            "Yetkileriniz Güncellendi",
+            "Yöneticiniz yetkilerinizde değişiklik yaptı. Menü yeni yetkilerinize göre yenilendi.",
+        )
+
+    def _rol_degisti_uyarisi(self):
+        """Rol değişince yetkilerin tamamı değişir; yeni rol için yeniden giriş yapılır."""
+        self._yetki_zamanlayici.stop()
+        QMessageBox.information(
+            self,
+            "Rolünüz Değişti",
+            "Yöneticiniz rolünüzü değiştirdi.\n\n"
+            "Yeni yetkilerinizin geçerli olması için lütfen yeniden giriş yapın.",
+        )
+        self.oturum_kapat()
 
     def _token_bitisini_oku(self):
         """JWT bitiş zamanını zamanlayıcı için okur."""
@@ -1550,6 +1642,7 @@ QLabel {
     def oturum_kapat(self):
         self._oturum_kapatiliyor = True
         self._oturum_zamanlayici.stop()
+        self._yetki_zamanlayici.stop()
         self._oturum_pencerelerini_temizle()
 
         try:
