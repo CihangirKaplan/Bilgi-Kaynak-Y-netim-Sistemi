@@ -250,10 +250,8 @@ class DolulukGosterimi:
 
 class RandevuOlusturFormu(DolulukGosterimi, QWidget):
     veriler_degisti = Signal()
-    def __init__(self, api_url, token, mevcut_psikolog_id, onceden_danisan=None, onceden_psikolog_id=None):
+    def __init__(self, api_url, token, mevcut_psikolog_id):
         super().__init__()
-        self._onceden_danisan = onceden_danisan
-        self._onceden_psikolog_id = onceden_psikolog_id
         self.api_url = api_url
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
@@ -265,7 +263,6 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
 
         self.odalari_yukle()
         self.psikologlari_yukle()
-        self._onceden_psikolog_sec()
         self.danisan_kodlarini_yukle()
 
     def init_ui(self):
@@ -414,21 +411,13 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
 
-    def _onceden_psikolog_sec(self):
-        """Danışanlar sayfasından açıldıysa psikolog önceden seçilir (kilitli psikolog hesabında dokunulmaz)."""
-        if self._onceden_psikolog_id is None or not self.cmb_psikologlar.isEnabled():
-            return
-        index = self.cmb_psikologlar.findData(self._onceden_psikolog_id)
-        if index >= 0:
-            self.cmb_psikologlar.setCurrentIndex(index)
-
     def danisan_kodlarini_yukle(self, *_):
         """Danışan listesi seçilen psikologun oluşturduğu danışanlarla sınırlanır.
 
         Psikolog hesabında sunucu zaten yalnızca kendi danışanlarını döndürür. Psikolog değişince liste yenilenir;
         seçili danışan yeni listede de varsa korunur.
         """
-        onceki = self.cmb_danisan_kodu.currentData() or self._onceden_danisan
+        onceki = self.cmb_danisan_kodu.currentData()
         self.cmb_danisan_kodu.clear()
         self.cmb_danisan_kodu.addItem("--- Danışan Seçiniz ---", "")
 
@@ -455,7 +444,6 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             index = self.cmb_danisan_kodu.findData(onceki)
             if index >= 0:
                 self.cmb_danisan_kodu.setCurrentIndex(index)
-        self._onceden_danisan = None  # yalnızca ilk yüklemede geçerli
 
     def randevuyu_kaydet(self):
         if (

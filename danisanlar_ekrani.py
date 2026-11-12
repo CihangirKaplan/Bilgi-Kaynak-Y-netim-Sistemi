@@ -13,14 +13,14 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QSplitter, QStackedWidget,
+    QHeaderView, QLabel, QLineEdit, QPushButton, QSplitter, QStackedWidget,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from api_yoneticisi import api_hata_mesaji
 from randevu_ekranlari import (
-    DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani, RandevuOlusturFormu,
+    DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
 
@@ -99,10 +99,6 @@ SAYFA_STILI = """
         padding: 7px 16px; color: #475569; font-weight: bold;
     }
     QPushButton#segment:checked { background-color: #0A1F5C; border: 1px solid #0A1F5C; color: white; }
-    QPushButton#btn_yeni_randevu {
-        background-color: #2563EB; border: none; border-radius: 8px; padding: 8px 14px; color: white; font-weight: bold;
-    }
-    QPushButton#btn_yeni_randevu:hover { background-color: #1D4ED8; }
     QLabel#lbl_sayac { color: #64748B; font-size: 12px; font-weight: bold; }
     QLabel#lbl_danisan_kodu { color: #0A1F5C; font-size: 18px; font-weight: bold; }
     QLabel#lbl_alt_baslik { color: #64748B; font-size: 12px; }
@@ -229,12 +225,7 @@ class DanisanlarEkrani(QWidget):
         self.lbl_alt.setObjectName("lbl_alt_baslik")
         basliklar.addWidget(self.lbl_kod)
         basliklar.addWidget(self.lbl_alt)
-        self.btn_yeni_randevu = QPushButton("＋  Randevu")
-        self.btn_yeni_randevu.setObjectName("btn_yeni_randevu")
-        self.btn_yeni_randevu.setCursor(Qt.PointingHandCursor)
-        self.btn_yeni_randevu.clicked.connect(self.yeni_randevu_ac)
         baslik.addLayout(basliklar, 1)
-        baslik.addWidget(self.btn_yeni_randevu)
         icerik.addLayout(baslik)
 
         dugmeler = QHBoxLayout()
@@ -561,18 +552,3 @@ class DanisanlarEkrani(QWidget):
             kap, _ = RandevuAnaEkrani._durum_rozeti(r.get("durum"))
             self.gecmis_tablosu.setCellWidget(satir, 3, kap)
             self.gecmis_tablosu.setRowHeight(satir, 36)
-
-    # ------------------------------------------------------------------ işlemler
-    def yeni_randevu_ac(self):
-        """Seçili danışan ve onu oluşturan psikologla yeni randevu formunu açar."""
-        danisan = self.secili_danisan()
-        if danisan is None:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen randevu oluşturmak istediğiniz danışanı seçin.")
-            return
-        self.randevu_formu = RandevuOlusturFormu(
-            self.api_url, self.token, self.mevcut_psikolog_id,
-            onceden_danisan=danisan.get("danisan_kod_id"),
-            onceden_psikolog_id=danisan.get("olusturan_psikolog_id"),
-        )
-        self.randevu_formu.veriler_degisti.connect(self.verileri_cek)
-        self.randevu_formu.show()

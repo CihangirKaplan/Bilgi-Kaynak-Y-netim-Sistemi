@@ -11,10 +11,12 @@ OKUNUR_STIL = "background-color: #F1F5F9; color: #64748B; font-weight: bold;"
 class DanisanOlusturDialog(QDialog):
     """Yeni danışan kodu oluşturur ve dinamik ücret/istisna kurallarını uygular."""
 
-    def __init__(self, api_url, token, ebeveyn=None):
+    def __init__(self, api_url, token, ebeveyn=None, mevcut_psikolog_id=None, onceden_psikolog_id=None):
         super().__init__(ebeveyn)
         self.api_url = api_url.rstrip("/")
         self.token = token
+        self.mevcut_psikolog_id = mevcut_psikolog_id
+        self.onceden_psikolog_id = onceden_psikolog_id
         self.olusan_kod = None
 
         self.setWindowTitle("Yeni Danışan")
@@ -62,6 +64,10 @@ class DanisanOlusturDialog(QDialog):
         self.txt_kod.setStyleSheet(OKUNUR_STIL)
         form.addRow("Danışan Kodu:", self.txt_kod)
 
+        # Psikolog: psikolog hesabında kendi adına kilitli; yetkili roller danışanın psikoloğunu seçer
+        self.cmb_psikolog = QComboBox()
+        form.addRow("Psikolog:", self.cmb_psikolog)
+
         # Ücret Durumu Seçimi
         self.cmb_ucret = QComboBox()
         self.cmb_ucret.addItem("Ücretli", True)
@@ -106,7 +112,32 @@ class DanisanOlusturDialog(QDialog):
         # Event bağlantıları ve başlangıç yüklemeleri
         self.cmb_ucret.currentIndexChanged.connect(self.ucret_durumu_degisti)
         self.ucret_durumu_degisti()  # İlk açılışta kuralları uygula
+        self.psikologlari_yukle()
         self.siradaki_kodu_yukle()   # Sıradaki danışan kodunu getir
+
+    def psikologlari_yukle(self):
+        """Psikolog listesini doldurur; giriş yapan psikologsa kendi adına kilitlenir."""
+        self.cmb_psikolog.clear()
+        self.cmb_psikolog.addItem("--- Psikolog Seçiniz ---", None)
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+                return
+            for psikolog in cevap.json():
+                self.cmb_psikolog.addItem(psikolog["ad_soyad"], psikolog["personel_id"])
+        except Exception as e:
+            print("Psikologlar çekilirken hata oluştu:", e)
+            return
+
+        kendisi = self.cmb_psikolog.findData(self.mevcut_psikolog_id)
+        if self.mevcut_psikolog_id is not None and kendisi >= 0:
+            self.cmb_psikolog.setCurrentIndex(kendisi)
+            self.cmb_psikolog.setEnabled(False)
+            return
+        onceden = self.cmb_psikolog.findData(self.onceden_psikolog_id)
+        if self.onceden_psikolog_id is not None and onceden >= 0:
+            self.cmb_psikolog.setCurrentIndex(onceden)
 
     def ucret_durumu_degisti(self):
         """Ücret durumuna göre istisna türlerini dinamik günceller."""
@@ -157,17 +188,24 @@ class DanisanOlusturDialog(QDialog):
             return cevap.text[:200]
 
     def kaydet(self):
-        payload = {
-            "ucretli_mi": bool(self.cmb_ucret.currentData()),
+        # Sunucu bu değerleri sorgu parametresi olarak okur (JSON gövdesi yok sayılır; ücretsiz seçimi kaybolurdu).
+        parametreler = {
+            "ucretli_mi": "true" if self.cmb_ucret.currentData() else "false",
             "istisna_turu": self.cmb_istisna.currentData(),
         }
+        psikolog_id = self.cmb_psikolog.currentData()
+        if self.cmb_psikolog.isEnabled() and psikolog_id is None:
+            QMessageBox.warning(self, "Psikolog Seçilmedi", "Lütfen danışanın psikoloğunu seçin.")
+            return
+        if psikolog_id is not None:
+            parametreler["psikolog_id"] = int(psikolog_id)
 
         self.btn_kaydet.setEnabled(False)
         try:
             cevap = oturum_kontrollu_istek(
                 "POST",
                 f"{self.api_url}/api/danisan-kodlari",
-                json=payload,
+                params=parametreler,
                 headers={"Authorization": f"Bearer {self.token}"},
                 timeout=5,
             )
