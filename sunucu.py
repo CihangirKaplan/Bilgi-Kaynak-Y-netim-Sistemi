@@ -2200,7 +2200,17 @@ IZINLI_ISTISNA_TURLERI = ("YOK", "KANSER", "SEHIT_GAZI")
 
 
 @app.post("/api/danisan-kodlari", status_code=201)
-def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
+def danisan_kodu_olustur(
+    ucretli_mi: bool = True,
+    istisna_turu: str = "YOK",
+    psikolog_id: int | None = Query(None, gt=0),
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
+):
+    """Yeni danışan kodu üretir.
+
+    Psikolog hesabında danışan kendi adına açılır (psikolog_id yok sayılır). Diğer roller (admin, danışma vb.)
+    danışanın hangi psikologa ait olduğunu psikolog_id ile belirtmek zorundadır; böylece danışan sahipsiz kalmaz.
+    """
     # Doğrulama veritabanına bağlanmadan önce yapılır; gelen metin hata mesajına da yazılmaz.
     if istisna_turu not in IZINLI_ISTISNA_TURLERI:
         raise HTTPException(status_code=422, detail="Geçersiz istisna türü. İzinli değerler: " + ", ".join(IZINLI_ISTISNA_TURLERI) + ".")
@@ -2212,14 +2222,34 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # 1. İşlemi yapan kullanıcının aktif bir psikolog/personel olup olmadığını kontrol ediyoruz
-        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
-        pers = cursor.fetchone()
-        
-        if not pers:
-            raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
-        
-        psikolog_id = pers[0]
+        # 1. İşlemi yapanın rolünü ve (varsa) aktif personel kaydını öğreniyoruz
+        cursor.execute(
+            "SELECT p.personel_id, UPPER(r.rol_adi) FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id "
+            "LEFT JOIN personel p ON p.kullanici_id = k.kullanici_id AND p.aktif_mi = TRUE "
+            "WHERE k.kullanici_id = %s;",
+            (kullanici_id,),
+        )
+        kimlik = cursor.fetchone()
+        personel_id, rol_adi = (kimlik[0], kimlik[1]) if kimlik else (None, "")
+
+        if rol_adi == "PSIKOLOG":
+            # Psikolog danışanı yalnızca kendi adına açabilir
+            if personel_id is None:
+                raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
+            olusturan_psikolog_id = personel_id
+        else:
+            # Diğer roller danışanı hangi psikologa açtığını belirtmelidir
+            if psikolog_id is None:
+                raise HTTPException(status_code=422, detail="Danışan için bir psikolog seçilmelidir.")
+            cursor.execute(
+                "SELECT p.personel_id FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id "
+                "JOIN roller r ON k.rol_id = r.rol_id "
+                "WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG';",
+                (psikolog_id,),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=422, detail="Seçilen psikolog bulunamadı.")
+            olusturan_psikolog_id = psikolog_id
 
         # 2. Otomatik danışan kodunu üret
         yeni_kod = otomatik_danisan_kodu_uret(cursor)
@@ -2231,7 +2261,7 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
             VALUES (%s, %s, %s, TRUE, %s) 
             RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id;
             """, 
-            (yeni_kod, ucretli_mi, istisna_turu, psikolog_id)
+            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id)
         )
         kayit = cursor.fetchone()
 

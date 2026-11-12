@@ -219,7 +219,6 @@ MENU = [
         dict(ikon="📅", ad="Randevu Yönetimi", izin="Randevu takvimini görüntüleme",
              aciklama="Randevuları listeleme, düzenleme ve iptal etme",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
-                      ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="👤", ad="Danışanlar", izin="Randevu oluşturma",
@@ -2407,7 +2406,15 @@ QLabel {
     def hizli_danisan_kod_olustur(self):
         from danisan_diyalog import DanisanOlusturDialog
 
-        dialog = DanisanOlusturDialog(api_url=self.api_url, token=self.token, ebeveyn=self)
+        # Danışanlar sayfasında seçili psikolog varsa yeni danışan için önerilir
+        onceden = None
+        sayfa = getattr(self, 'danisanlar_ekrani', None)
+        if sayfa is not None:
+            onceden = sayfa.cmb_psikolog.currentData()
+        dialog = DanisanOlusturDialog(
+            api_url=self.api_url, token=self.token, ebeveyn=self,
+            mevcut_psikolog_id=self.kullanici_id, onceden_psikolog_id=onceden,
+        )
         if dialog.exec():
             # Kullanıcı bizzat pencereyi açıp "Danışanı Oluştur" butonuna basarsa yeni kod üretilir.
             if hasattr(self, 'randevu_ana_ekrani'):

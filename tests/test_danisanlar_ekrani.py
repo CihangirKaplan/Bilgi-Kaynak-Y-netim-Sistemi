@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QLabel, QPushButton
 
 import danisanlar_ekrani as modul
 import main_window as mw
@@ -269,24 +269,12 @@ def test_sayfada_kisisel_veri_alani_yok():
 
 
 # ------------------------------------------------------------------ yeni randevu
-def test_yeni_randevu_secili_danisan_ve_psikologla_acilir():
+def test_danisanlar_sayfasinda_randevu_olusturma_yok():
+    """Randevu oluşturma Randevu Yönetimi'nde; bu sayfa yalnızca danışanları gösterir."""
     ekran = ekran_ac()
-    sec(ekran, "DAN-2026-0003")
-    ekran.yeni_randevu_ac()
-    form = ekran.randevu_formu
-    assert form.cmb_psikologlar.currentData() == 7
-    assert form.cmb_danisan_kodu.currentData() == "DAN-2026-0003"
-    assert [form.cmb_danisan_kodu.itemData(i) for i in range(form.cmb_danisan_kodu.count())] == ["", "DAN-2026-0003"]
-    form.close()
-    ekran.close()
-
-
-def test_yeni_randevu_secim_yokken_uyari_verir():
-    ekran = ekran_ac()
-    with patch.object(modul.QMessageBox, "warning") as uyari:
-        ekran.yeni_randevu_ac()
-    uyari.assert_called_once()
-    assert not hasattr(ekran, "randevu_formu")
+    sec(ekran, "DAN-2026-0001")
+    assert not hasattr(ekran, "yeni_randevu_ac") and not hasattr(ekran, "btn_yeni_randevu")
+    assert not [b for b in ekran.findChildren(QPushButton) if "Randevu" in b.text()]
     ekran.close()
 
 
