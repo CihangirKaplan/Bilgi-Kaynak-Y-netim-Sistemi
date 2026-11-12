@@ -22,10 +22,23 @@ def cevap(kod, veri):
 
 
 def form_olustur():
-    return RolDegistirFormu(
-        "http://test", "test-token",
-        5, "test_psikolog", "PSIKOLOG",
-    )
+    def sahte_roller(api_url, token, combo, islem):
+        onceki = combo.blockSignals(True)
+        try:
+            combo.addItem("Psikolog", 1)
+            combo.addItem("Danışma Masası Öğrencisi", 4)
+        finally:
+            combo.blockSignals(onceki)
+        return True
+
+    with patch(
+        "k_personel_ekranlari.atanabilir_rolleri_yukle",
+        side_effect=sahte_roller,
+    ):
+        return RolDegistirFormu(
+            "http://test", "test-token",
+            5, "test_psikolog", "PSIKOLOG",
+        )
 
 
 def test_yeni_ogrenci_bilgileri_apiye_gonderilir(qt_app):

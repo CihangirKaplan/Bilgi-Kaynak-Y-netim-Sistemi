@@ -165,6 +165,23 @@ class Sunucu:
         return cevap({})
 
 
+@pytest.fixture(autouse=True)
+def sahte_dinamik_roller(monkeypatch):
+    """Rol değiştirme ekranının dinamik rol listesini taklit et."""
+    def rolleri_yukle(api_url, token, combo, islem):
+        assert islem == "degistirme"
+        combo.addItem("Psikolog", 1)
+        combo.addItem("Memur", 2)
+        combo.addItem("Müdür", 3)
+        combo.addItem("Danışma Masası Öğrencisi", 4)
+
+    monkeypatch.setattr(
+        modul,
+        "atanabilir_rolleri_yukle",
+        rolleri_yukle,
+    )
+
+
 def form_ac(mevcut_rol="MEMUR"):
     return modul.RolDegistirFormu("http://testserver", "TOKEN", 5, "kisi", mevcut_rol)
 

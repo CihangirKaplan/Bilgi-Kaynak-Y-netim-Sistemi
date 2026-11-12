@@ -19,6 +19,24 @@ def qt_app():
     return QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def sahte_rol_listesi(monkeypatch):
+    """Rol değiştirme formu testlerinde gerçek API'ye bağlanma."""
+    import k_personel_ekranlari as modul
+
+    def rolleri_yukle(api_url, token, combo, islem):
+        assert islem == "degistirme"
+        combo.addItem("Psikolog", 1)
+        combo.addItem("Memur", 2)
+        combo.addItem("Danışma Masası Öğrencisi", 4)
+
+    monkeypatch.setattr(
+        modul,
+        "atanabilir_rolleri_yukle",
+        rolleri_yukle,
+    )
+
+
 def test_kayit_tarihi_turkce_bicimde():
     assert kayit_tarihi_bicimle("2026-11-06T09:33:24") == "06.11.2026"
     assert kayit_tarihi_bicimle("2026-01-05") == "05.01.2026"

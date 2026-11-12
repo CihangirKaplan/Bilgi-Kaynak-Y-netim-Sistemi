@@ -327,17 +327,38 @@ def izinli_mi(mw, rol, sayfa):
 
 
 def test_sayfa_izni_menudeki_izne_gore_belirlenir(temiz_yetkiler):
-    """Bakım ve Kalibrasyon sayfaları CIHAZ_ENVANTER_YONET, Arıza sayfası ARIZA_KAYITLARI_YONET ister."""
+    """Bakım, kalibrasyon ve arıza izinleri bağımsızdır."""
     mw = temiz_yetkiler
-    sayfalar = ("Arıza Kayıtları", "Kalibrasyon", "Bakım Kayıtları")
-    mw.yetkileri_ayarla("memur", ["ARIZA_KAYITLARI_YONET", "CIHAZ_ENVANTER_YONET"])
-    assert all(izinli_mi(mw, "memur", s) for s in sayfalar)
-    mw.yetkileri_ayarla("memur", ["CIHAZ_ENVANTER_YONET"])
+
+    mw.yetkileri_ayarla(
+        "memur",
+        ["BAKIM_KAYITLARI_YONET"]
+    )
+    assert izinli_mi(mw, "memur", "Bakım Kayıtları")
+    assert not izinli_mi(mw, "memur", "Kalibrasyon")
     assert not izinli_mi(mw, "memur", "Arıza Kayıtları")
-    assert izinli_mi(mw, "memur", "Kalibrasyon") and izinli_mi(mw, "memur", "Bakım Kayıtları")
-    mw.yetkileri_ayarla("memur", ["ARIZA_KAYITLARI_YONET"])
+
+    mw.yetkileri_ayarla(
+        "memur",
+        ["KALIBRASYON_KAYITLARI_YONET"]
+    )
+    assert izinli_mi(mw, "memur", "Kalibrasyon")
+    assert not izinli_mi(mw, "memur", "Bakım Kayıtları")
+
+    mw.yetkileri_ayarla(
+        "memur",
+        ["CIHAZ_ENVANTER_YONET"]
+    )
+    assert not izinli_mi(mw, "memur", "Bakım Kayıtları")
+    assert not izinli_mi(mw, "memur", "Kalibrasyon")
+
+    mw.yetkileri_ayarla(
+        "memur",
+        ["ARIZA_KAYITLARI_YONET"]
+    )
     assert izinli_mi(mw, "memur", "Arıza Kayıtları")
-    assert not izinli_mi(mw, "memur", "Kalibrasyon") and not izinli_mi(mw, "memur", "Bakım Kayıtları")
+    assert not izinli_mi(mw, "memur", "Bakım Kayıtları")
+    assert not izinli_mi(mw, "memur", "Kalibrasyon")
 
 
 def test_sunucu_yetkisi_yokken_eski_tabloya_donulur_ve_psikolog_goremez(temiz_yetkiler):

@@ -862,6 +862,48 @@ class YetkiOzetiKarti(QFrame):
         return max(min(toplam + 8, 230), 60)
 
 
+
+def atanabilir_rolleri_yukle(api_url, token, combo, islem):
+    """Aktif atanabilir rolleri sunucudan al; hata durumunda boş bırak."""
+    adres = (
+        "/api/roller/atanabilir/olusturma"
+        if islem == "olusturma"
+        else "/api/roller/atanabilir/degistirme"
+    )
+    try:
+        cevap = oturum_kontrollu_istek(
+            "GET",
+            f"{api_url}{adres}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+        if oturum_hatasi_mi(cevap):
+            return
+
+        if cevap.status_code != 200:
+            raise ValueError(
+                f"Rol listesi alınamadı (HTTP {cevap.status_code})."
+            )
+
+        roller = cevap.json()
+        if not isinstance(roller, list):
+            raise ValueError("Sunucudan geçersiz rol listesi geldi.")
+
+        for rol in roller:
+            rol_id = int(rol["rol_id"])
+            rol_adi = str(rol["gorunen_ad"]).strip()
+            if not rol_adi:
+                raise ValueError("Rolün görünen adı boş.")
+            combo.addItem(rol_adi, rol_id)
+
+    except (ValueError, TypeError, KeyError, OSError) as hata:
+        QMessageBox.warning(
+            combo.window(),
+            "Roller Yüklenemedi",
+            str(hata),
+        )
+
+
 class KullaniciOlusturFormu(QDialog):
     """Kullanıcı, personel ve gerekirse öğrenci kaydını tek işlemde oluşturur."""
 
@@ -891,15 +933,9 @@ class KullaniciOlusturFormu(QDialog):
         self.combo_rol = QComboBox()
         self.combo_rol.addItem("— Rol seçiniz —", None)
         self.combo_rol.setCursor(Qt.PointingHandCursor)
-        roller = [
-            ("Psikolog", 1),
-            ("Memur", 2),
-            ("Müdür (Yönetici)", 3),
-            ("Danışma Öğrencisi", 4),
-            ("Proje Asistanı", 5),
-        ]
-        for ad, rol_id in roller:
-            self.combo_rol.addItem(ad, rol_id)
+        atanabilir_rolleri_yukle(
+            self.api_url, self.token, self.combo_rol, "olusturma"
+        )
         self.combo_rol.setCurrentIndex(0)
         self.combo_rol.currentIndexChanged.connect(self.rol_degisti)
         layout.addWidget(self.combo_rol)
@@ -1022,7 +1058,7 @@ class KullaniciOlusturFormu(QDialog):
 
     # SİZİN METOTLARINIZI KORUYORUM
     def _kullanici_adi_oner(self, ad_soyad):
-        if self.kullanici_adi_elle_degisti or self.secili_rol_adi() != "Danışma Öğrencisi":
+        if self.kullanici_adi_elle_degisti or self.combo_rol.currentData() != 4:
             return
         self._son_kontrol_edilen_ad = None
         self.input_kullanici_adi.clear()
@@ -1038,7 +1074,7 @@ class KullaniciOlusturFormu(QDialog):
 
     def _kullanici_adini_netlestir(self):
         self._netlestirme_zamanlayici.stop()
-        if self.kullanici_adi_elle_degisti or self.secili_rol_adi() != "Danışma Öğrencisi":
+        if self.kullanici_adi_elle_degisti or self.combo_rol.currentData() != 4:
             return
         try:
             temel = kullanici_adi_oner(self.input_ad_soyad.text())
@@ -1072,18 +1108,18 @@ class KullaniciOlusturFormu(QDialog):
         self.yetki_ozetini_guncelle()
         rol_adi = self.secili_rol_adi()
         
-        if rol_adi != "Danışma Öğrencisi":
+        if self.combo_rol.currentData() != 4:
             self._netlestirme_zamanlayici.stop()
             self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
             
-        goster = self.olusturulan_kullanici is None and rol_adi == "Danışma Öğrencisi"
+        goster = self.olusturulan_kullanici is None and self.combo_rol.currentData() == 4
         if hasattr(self, 'ogrenci_kutusu'):
             self.ogrenci_kutusu.setVisible(goster)
 
         # =======================================================
         # EKLENEN KISIM: PSİKOLOG SEÇİLİRSE ODALARI GÖSTER
         # =======================================================
-        if rol_adi and "psikolog" in rol_adi.lower():
+        if self.combo_rol.currentData() == 1:
             if hasattr(self, 'yetki_karti'):
                  self.yetki_karti.hide() # Odalar çok yer kaplamasın diye kartı gizleyebiliriz
             self.lbl_oda.setVisible(True)
@@ -1111,7 +1147,7 @@ class KullaniciOlusturFormu(QDialog):
             return
 
         rol_adi = self.secili_rol_adi()
-        danisma_ogrencisi = (rol_adi == "Danışma Öğrencisi")
+        danisma_ogrencisi = (self.combo_rol.currentData() == 4)
         otomatik_ad = danisma_ogrencisi and not self.kullanici_adi_elle_degisti
         
         if danisma_ogrencisi:
@@ -1128,7 +1164,7 @@ class KullaniciOlusturFormu(QDialog):
         # EKLENEN KISIM: PSİKOLOG ODA KONTROLÜ
         # =======================================================
         secilen_oda_idleri = []
-        if rol_adi and "psikolog" in rol_adi.lower():
+        if self.combo_rol.currentData() == 1:
             for i in range(self.liste_odalar.count()):
                 item = self.liste_odalar.item(i)
                 if item.checkState() == Qt.Checked:
@@ -1420,12 +1456,9 @@ class RolDegistirFormu(QDialog):
         self.combo_rol.addItem("— Yeni Rolü Seçiniz —", None)
         self.combo_rol.setCursor(Qt.PointingHandCursor)
         
-        roller = [
-            ("Psikolog", 1), ("Memur", 2), ("Müdür (Yönetici)", 3),
-            ("Danışma Öğrencisi", 4), ("Proje Asistanı", 5)
-        ]
-        for ad, rol_id in roller:
-            self.combo_rol.addItem(ad, rol_id)
+        atanabilir_rolleri_yukle(
+            self.api_url, self.token, self.combo_rol, "degistirme"
+        )
             
         layout.addWidget(self.combo_rol)
 

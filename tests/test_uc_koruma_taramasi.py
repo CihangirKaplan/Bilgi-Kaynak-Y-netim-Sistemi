@@ -16,6 +16,20 @@ from sunucu import app
 
 # (yöntem, yol): gerekçe
 ISTISNALAR = {
+    # Bu dört uç izinsiz değildir. JWT kimlik doğrulamasından sonra
+    # bakım/kalibrasyon izinleri sunucuda plan türüne göre denetlenir.
+    # GET: yetkili türleri filtreler.
+    # POST: oluşturulacak türü kontrol eder.
+    # PUT: mevcut ve yeni türün izinlerini kontrol eder.
+    # DELETE: silinecek planın türünü kontrol eder.
+    ("GET", "/api/bakim-planlari"):
+        "JWT ve _plan_yetkileri ile tür bazlı filtreleme.",
+    ("POST", "/api/bakim-planlari"):
+        "JWT ve _plan_turu_yetkisini_dogrula ile tür bazlı izin.",
+    ("PUT", "/api/bakim-planlari/{plan_id}"):
+        "JWT ile mevcut ve yeni plan türünün izni doğrulanır.",
+    ("DELETE", "/api/bakim-planlari/{plan_id}"):
+        "JWT ile kayıt türünün silme izni doğrulanır.",
     ("POST", "/api/login"): "Giriş öncesi çağrılır; kimlik istenemez.",
     ("POST", "/api/parola-sifirlama-talebi"): "Parolasını unutan kullanıcı giriş yapamaz; yalnızca kullanıcı adı alınır, "
                                                "yanıt kullanıcının var olup olmadığını belli etmez, kullanıcı başına tek açık talep tutulur.",

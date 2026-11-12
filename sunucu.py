@@ -1168,6 +1168,54 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
             conn.close()
  
  
+
+def _atanabilir_rolleri_getir():
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT rol_id, rol_adi, gorunen_ad
+            FROM roller
+            WHERE aktif_mi = TRUE
+              AND UPPER(rol_adi) <> 'ADMIN'
+            ORDER BY rol_id;
+        """)
+        return [
+            {
+                "rol_id": kayit[0],
+                "rol_adi": kayit[1],
+                "gorunen_ad": kayit[2] or kayit[1],
+            }
+            for kayit in cursor.fetchall()
+        ]
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Atanabilir roller alınamadı."
+        )
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/roller/atanabilir/olusturma")
+def olusturma_rolleri(
+    kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR"))
+):
+    return _atanabilir_rolleri_getir()
+
+
+@app.get("/api/roller/atanabilir/degistirme")
+def degistirme_rolleri(
+    kullanici_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME"))
+):
+    return _atanabilir_rolleri_getir()
+
+
 @app.get("/api/roller")
 def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET"))):
     conn = None
@@ -3327,7 +3375,7 @@ def cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis):
 
 
 @app.get("/api/bakimlar")
-def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3370,7 +3418,7 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_Y
         if conn is not None: conn.close()
 
 @app.post("/api/bakimlar", status_code=201)
-def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3429,7 +3477,7 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         if conn is not None: conn.close()
 
 @app.put("/api/bakimlar/{bakim_id}")
-def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3483,7 +3531,7 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
 
 
 @app.delete("/api/bakimlar/{bakim_id}")
-def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3515,7 +3563,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("CIH
 # ==========================================
 
 @app.get("/api/kalibrasyonlar")
-def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3556,7 +3604,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
 
 
 @app.post("/api/kalibrasyonlar", status_code=201)
-def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3604,7 +3652,7 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         if conn is not None: conn.close()
 
 @app.put("/api/kalibrasyonlar/{kalibrasyon_id}")
-def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleModeli, kullanici_id: int = Depends(izin_kontrol("KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3655,7 +3703,7 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
 
 
 @app.delete("/api/kalibrasyonlar/{kalibrasyon_id}")
-def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_kontrol("KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -3699,11 +3747,42 @@ def bakim_plani_durumu(kalan_gun, uyari_suresi_gun, aktif_mi):
     return "Planlı"
 
 
+
+def _plan_yetkileri(cursor, kullanici_id):
+    """Giriş yapan kişinin bakım ve kalibrasyon izinlerini DB'den al."""
+    cursor.execute("""
+        SELECT i.izin_adi
+        FROM kullanicilar k
+        JOIN rol_izinleri ri ON ri.rol_id = k.rol_id
+        JOIN izinler i ON i.izin_id = ri.izin_id
+        WHERE k.kullanici_id = %s
+          AND ri.izin_var = 1
+          AND i.izin_adi = ANY(%s);
+    """, (
+        kullanici_id,
+        ["BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"]
+    ))
+    return {satir[0] for satir in cursor.fetchall()}
+
+
+def _plan_turu_yetkisini_dogrula(izinler, gorev_turu):
+    gerekli = (
+        "KALIBRASYON_KAYITLARI_YONET"
+        if plan_kalibrasyon_mu(gorev_turu)
+        else "BAKIM_KAYITLARI_YONET"
+    )
+    if gerekli not in izinler:
+        raise HTTPException(
+            status_code=403,
+            detail="Bu plan türü için yetkiniz bulunmuyor."
+        )
+
+
 @app.get("/api/bakim-planlari")
 def bakim_planlarini_listele(
     cihaz_id: int | None = None,
     aktif_mi: bool | None = None,
-    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET")),
+    kullanici_id: int = Depends(mevcut_kullanici_id),
 ):
     """Cihazların tekrarlayan bakım/kalibrasyon planları (en yakın tarih önce)."""
     if cihaz_id is not None and cihaz_id <= 0:
@@ -3713,7 +3792,26 @@ def bakim_planlarini_listele(
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        izinler = _plan_yetkileri(cursor, kullanici_id)
+        bakim = "BAKIM_KAYITLARI_YONET" in izinler
+        kalibrasyon = "KALIBRASYON_KAYITLARI_YONET" in izinler
+
+        if not bakim and not kalibrasyon:
+            raise HTTPException(
+                status_code=403,
+                detail="Planları görüntüleme yetkiniz bulunmuyor."
+            )
+
         kosullar, parametreler = [], []
+
+        if bakim and not kalibrasyon:
+            kosullar.append(
+                "LOWER(BTRIM(p.gorev_turu)) NOT LIKE 'kalibrasyon%'"
+            )
+        elif kalibrasyon and not bakim:
+            kosullar.append(
+                "LOWER(BTRIM(p.gorev_turu)) LIKE 'kalibrasyon%'"
+            )
         if cihaz_id is not None:
             kosullar.append("p.cihaz_id = %s")
             parametreler.append(cihaz_id)
@@ -3800,12 +3898,14 @@ def _ayni_planli_aktif_kayit_var_mi(cursor, cihaz_id, gorev_turu, haric_plan_id=
 
 
 @app.post("/api/bakim-planlari", status_code=201)
-def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        izinler = _plan_yetkileri(cursor, kullanici_id)
+        _plan_turu_yetkisini_dogrula(izinler, plan.gorev_turu)
         cursor.execute("SELECT 1 FROM cihazlar WHERE cihaz_id = %s;", (plan.cihaz_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
@@ -3838,7 +3938,7 @@ def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(
 
 @app.put("/api/bakim-planlari/{plan_id}")
 def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
-                         kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+                         kullanici_id: int = Depends(mevcut_kullanici_id)):
     degisiklikler = guncelleme.model_dump(exclude_unset=True)
     if not degisiklikler:
         raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
@@ -3860,7 +3960,11 @@ def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Plan bulunamadı.")
         cihaz_id, tur, periyot, uyari, aktif = mevcut
-        tur = degisiklikler.get("gorev_turu", tur)
+        izinler = _plan_yetkileri(cursor, kullanici_id)
+        _plan_turu_yetkisini_dogrula(izinler, tur)
+        yeni_tur = degisiklikler.get("gorev_turu", tur)
+        _plan_turu_yetkisini_dogrula(izinler, yeni_tur)
+        tur = yeni_tur
         periyot = degisiklikler.get("periyot_gun", periyot)
         uyari = degisiklikler.get("uyari_suresi_gun", uyari)
         aktif = degisiklikler.get("aktif_mi", aktif)
@@ -3887,12 +3991,24 @@ def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
 
 
 @app.delete("/api/bakim-planlari/{plan_id}")
-def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        cursor.execute(
+            "SELECT gorev_turu FROM cihaz_bakim_planlari "
+            "WHERE plan_id = %s FOR UPDATE;",
+            (plan_id,)
+        )
+        mevcut = cursor.fetchone()
+        if mevcut is None:
+            raise HTTPException(
+                status_code=404, detail="Plan bulunamadı."
+            )
+        izinler = _plan_yetkileri(cursor, kullanici_id)
+        _plan_turu_yetkisini_dogrula(izinler, mevcut[0])
         cursor.execute("DELETE FROM cihaz_bakim_planlari WHERE plan_id = %s RETURNING plan_id;", (plan_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Plan bulunamadı.")

@@ -59,12 +59,28 @@ def test_sadece_rol_istisnalari_gecerli_izin_ve_rol_icerir():
 
 def test_menu_ve_aksiyonlardaki_izin_adlari_tabloda_vardir():
     """Menüde yazım hatalı bir izin adı kalırsa (örn. 'REZERVASYON_IPTAL') o öğe sessizce gizlenir."""
+    birlesik_izinler = {
+        "Bakım/kalibrasyon planlarını yönetme": (
+            "Bakım kayıtlarını yönetme",
+            "Kalibrasyon kayıtlarını yönetme",
+        ),
+    }
+
+    for bilesenler in birlesik_izinler.values():
+        assert all(izin in mw.IZIN for izin in bilesenler)
+
+    gecerli_izinler = set(mw.IZIN) | set(birlesik_izinler)
+
     for bolum, ogeler in mw.MENU:
         for oge in ogeler:
             if oge["izin"] is not None:
-                assert oge["izin"] in mw.IZIN, (oge["ad"], oge["izin"])
+                assert oge["izin"] in gecerli_izinler, (
+                    oge["ad"], oge["izin"]
+                )
             for etiket, izin in oge.get("aksiyon", []):
-                assert izin in mw.IZIN, (oge["ad"], etiket, izin)
+                assert izin in gecerli_izinler, (
+                    oge["ad"], etiket, izin
+                )
 
 
 # ------------------------------------------------------------------- izin_var

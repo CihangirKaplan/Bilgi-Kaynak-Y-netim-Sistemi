@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPixmap
-from main_window import AnaPencere
+from main_window import AnaPencere, dinamik_rol_tanimla
 from sifre_degistir_ekrani import SifreDegistirEkrani
 from parola_talebi_dialog import ParolaTalebiDialog
 import faulthandler, traceback
@@ -406,9 +406,22 @@ class LoginEkrani(QWidget):
         self.hata_lbl.setText("⚠  " + metin)
         self.hata_lbl.show()
 
-    def rol_adindan_koda(self, rol_id):
-        roller = {1: "psikolog", 2: "memur", 3: "mudur", 4: "ogrenci", 5: "asistan", 6: "admin"}
-        return roller.get(rol_id, None)
+    def rol_adindan_koda(self, rol_id, rol_adi=None):
+        roller = {
+            1: "psikolog",
+            2: "memur",
+            3: "mudur",
+            4: "ogrenci",
+            5: "asistan",
+            6: "admin",
+        }
+        if type(rol_id) is not int or rol_id <= 0:
+            return None
+        if rol_id in roller:
+            return roller[rol_id]
+        if not isinstance(rol_adi, str) or not rol_adi.strip():
+            return None
+        return f"rol_{rol_id}"
 
     def giris_yap(self):
         if self.kalan > 0:
@@ -447,7 +460,7 @@ class LoginEkrani(QWidget):
 
                 # 2. Rol kontrolü
                 r_id = veri.get("rol_id")
-                aktif_rol = self.rol_adindan_koda(r_id)
+                aktif_rol = self.rol_adindan_koda(r_id, veri.get("rol_adi"))
 
                 if not aktif_rol:
                     QMessageBox.warning(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
@@ -460,6 +473,9 @@ class LoginEkrani(QWidget):
                 print("DEBUG: AnaPencere oluşturulmaya çalışılıyor...")
                 print(f"DEBUG Parametreler -> Rol: {aktif_rol}, Kullanıcı: {veri.get('kullanici_adi')}, ID: {veri.get('personel_id') or veri.get('kullanici_id')}")
 
+                dinamik_rol_tanimla(
+                    aktif_rol, veri.get("rol_adi")
+                )
                 self.ana_pencere = AnaPencere(
                     aktif_rol=aktif_rol,
                     kullanici_adi=veri.get("kullanici_adi"),

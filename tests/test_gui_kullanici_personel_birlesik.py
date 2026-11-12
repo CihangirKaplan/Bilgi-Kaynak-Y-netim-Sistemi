@@ -65,6 +65,27 @@ def beklenmeyen_modal_pencereleri_engelle(monkeypatch):
         monkeypatch.setattr(QMessageBox, isim, hata)
 
 
+@pytest.fixture(autouse=True)
+def sahte_dinamik_roller(monkeypatch):
+    """Form için rol listesini ağ bağlantısı olmadan hazırla."""
+    def rolleri_yukle(api_url, token, combo, islem):
+        roller = [
+            ("Psikolog", 1),
+            ("Memur", 2),
+            ("Müdür", 3),
+            ("Danışma Masası Öğrencisi", 4),
+            ("Proje Asistanı", 5),
+        ]
+        for ad, rol_id in roller:
+            combo.addItem(ad, rol_id)
+
+    monkeypatch.setattr(
+        modul,
+        "atanabilir_rolleri_yukle",
+        rolleri_yukle,
+    )
+
+
 @pytest.fixture
 def form(qt_app):
     pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
