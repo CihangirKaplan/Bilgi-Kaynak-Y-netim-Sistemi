@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import requests
+from danisma_rapor_excel import excel_dosyasi_olustur
 from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDateEdit,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -38,6 +40,8 @@ class DanismaMasasiRaporlari(QWidget):
         self.api_url = api_url.rstrip("/")
         self.token = token
         self._ogrenciler_yuklendi = False
+        self._son_veri = None
+        self._son_filtre = []
 
         self._arayuz_kur()
         self.yenile()
@@ -162,6 +166,17 @@ class DanismaMasasiRaporlari(QWidget):
         yenile_btn.clicked.connect(self.yenile)
         filtre_satiri.addWidget(yenile_btn)
 
+        # Cihaz raporlarındaki düğmeyle aynı görünüm ve davranış.
+        self.excel_btn = QPushButton("⬇ Excel'e Aktar")
+        self.excel_btn.setEnabled(False)
+        self.excel_btn.setStyleSheet(
+            "QPushButton { background: #16803C; } "
+            "QPushButton:hover { background: #126A31; } "
+            "QPushButton:disabled { background: #AEB9CC; }"
+        )
+        self.excel_btn.clicked.connect(self.excel_aktar)
+        filtre_satiri.addWidget(self.excel_btn)
+
         ana.addLayout(filtre_satiri)
         self._tarih_alanlari()
 
@@ -270,6 +285,7 @@ class DanismaMasasiRaporlari(QWidget):
         self.ogrenci_tablo = self._tablo_olustur([
             "Öğrenci",
             "Öğrenci No",
+            "Durum",
             "Görev",
             "Onay Bekleyen",
             "Onaylanan",
@@ -370,6 +386,51 @@ class DanismaMasasiRaporlari(QWidget):
 
         tablo.setItem(satir, sutun, hucre)
 
+    @staticmethod
+    def _ogrenci_durumu(ogrenci):
+        aktif = ogrenci.get("aktif_mi")
+        if aktif is None:
+            return "—"          # eski sunucu bu alanı göndermez
+        return "Aktif" if aktif else "Pasif"
+
+    def _filtre_ozeti(self, params):
+        if "baslangic_tarihi" in params:
+            gun = lambda metin: QDate.fromString(metin, "yyyy-MM-dd").toString("dd.MM.yyyy")
+            donem = f"{gun(params['baslangic_tarihi'])} - {gun(params['bitis_tarihi'])}"
+        else:
+            donem = "Tümü"
+        return [
+            ("Dönem", donem),
+            ("Öğrenci", self.ogrenci_sec.currentText()),
+        ]
+
+    def excel_aktar(self):
+        if self._son_veri is None:
+            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            return
+
+        varsayilan = f"danisma_masasi_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        dosya_yolu, _ = QFileDialog.getSaveFileName(
+            self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)"
+        )
+        if not dosya_yolu:
+            return
+        if not dosya_yolu.lower().endswith(".xlsx"):
+            dosya_yolu += ".xlsx"
+
+        try:
+            excel_dosyasi_olustur(self._son_veri, self._son_filtre, dosya_yolu)
+        except OSError as hata:
+            QMessageBox.warning(
+                self,
+                "Kaydedilemedi",
+                "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
+                f"ya da klasöre yazma izniniz olmayabilir.\n{hata}",
+            )
+            return
+
+        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+
     def yenile(self):
         try:
             params = self._parametreler()
@@ -398,6 +459,11 @@ class DanismaMasasiRaporlari(QWidget):
                 f"Rapor bilgileri alınamadı:\n{hata}"
             )
             return
+
+        # Excel çıktısı ekranda gösterilen (son çekilen) veriyle ve o anki filtrelerle üretilir.
+        self._son_veri = veri
+        self._son_filtre = self._filtre_ozeti(params)
+        self.excel_btn.setEnabled(True)
 
         ozet = veri.get("ozet", {})
 
@@ -430,6 +496,7 @@ class DanismaMasasiRaporlari(QWidget):
             degerler = [
                 ogrenci["ad_soyad"],
                 ogrenci["ogrenci_numarasi"],
+                self._ogrenci_durumu(ogrenci),
                 ogrenci["toplam_gorev"],
                 ogrenci["onay_bekleyen"],
                 ogrenci["onaylanan"],
@@ -440,7 +507,8 @@ class DanismaMasasiRaporlari(QWidget):
             for sutun, deger in enumerate(degerler):
                 self._hucre(
                     self.ogrenci_tablo,
-                    satir, sutun, deger
+                    satir, sutun, deger,
+                    "#C0392B" if deger == "Pasif" else None
                 )
 
         oturumlar = veri.get("oturumlar", [])

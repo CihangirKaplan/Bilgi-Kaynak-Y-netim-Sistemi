@@ -6198,7 +6198,8 @@ def danisma_raporlari(
                 o.ogrenci_numarasi,
                 d.baslangic_zamani,
                 d.bitis_zamani,
-                d.onaylandi_mi
+                d.onaylandi_mi,
+                o.aktif_mi
             FROM danisma_masasi_oturumlari d
             JOIN ogrenciler o
                 ON o.ogrenci_id = d.ogrenci_id
@@ -6228,7 +6229,8 @@ def danisma_raporlari(
             ogrenci_no,
             baslangic,
             bitis,
-            onaylandi
+            onaylandi,
+            ogrenci_aktif
         ) in kayitlar:
 
             tamamlandi = bitis is not None
@@ -6259,6 +6261,7 @@ def danisma_raporlari(
                     "ogrenci_id": ogr_id,
                     "ad_soyad": ad_soyad,
                     "ogrenci_numarasi": ogrenci_no,
+                    "aktif_mi": bool(ogrenci_aktif),
                     "toplam_gorev": 0,
                     "devam_eden": 0,
                     "onay_bekleyen": 0,
@@ -6284,6 +6287,7 @@ def danisma_raporlari(
                 "ogrenci_id": ogr_id,
                 "ad_soyad": ad_soyad,
                 "ogrenci_numarasi": ogrenci_no,
+                "ogrenci_aktif_mi": bool(ogrenci_aktif),
                 "baslangic_zamani": baslangic.isoformat(),
                 "bitis_zamani": (
                     bitis.isoformat() if bitis else None
