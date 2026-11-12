@@ -2400,7 +2400,10 @@ QLabel {
 
     def yeni_faaliyet_ekrani_ac(self):
         from faaliyet_dialog import FaaliyetEkleDialog
-        dialog = FaaliyetEkleDialog(self.api_url, self.token, self)
+        dialog = FaaliyetEkleDialog(
+            self.api_url, self.token, self,
+            birim_yonetebilir=izin_var(self.aktif_rol, "Faaliyet birimlerini yönetme"),
+        )
         if dialog.exec():
             # Kullanıcı formu doldurup kaydete basınca tablo şak diye yenilenecek
             self.faaliyet_tablosunu_guncelle()
