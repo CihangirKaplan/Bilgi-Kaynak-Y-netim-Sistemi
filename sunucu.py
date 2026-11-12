@@ -2489,7 +2489,15 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
         if conn is not None: conn.close()
 
 @app.get("/api/danisan-kodlari")
-def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
+def danisan_kodlari_listele(
+    psikolog_id: int | None = Query(None, gt=0),
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
+):
+    """Aktif danışan kodlarını (kişisel veri içermez) döndürür.
+
+    Psikolog yalnızca kendi oluşturduğu danışanları görür (psikolog_id parametresi yok sayılır). Diğer roller
+    tüm danışanları görür; psikolog_id verilirse yalnızca o psikologun (personel_id) oluşturduğu danışanlar döner.
+    """
     conn = None
     cursor = None
     try:
@@ -2501,36 +2509,44 @@ def danisan_kodlari_listele(kullanici_id: int = Depends(izin_kontrol("RANDEVU_OL
         rol_kayit = cursor.fetchone()
         rol_adi = rol_kayit[0].upper() if rol_kayit else ""
 
-        # 2. Eğer kullanıcı PSIKOLOG ise, sadece kendi oluşturduğu danışan kodlarını getiriyoruz
+        sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id"
+
+        # 2. Psikolog yalnızca kendi oluşturduğu danışan kodlarını görür
         if rol_adi == "PSIKOLOG":
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             pers = cursor.fetchone()
             if not pers:
                 raise HTTPException(status_code=403, detail="Personel kaydınız bulunamadı.")
-            psikolog_id = pers[0]
-
             cursor.execute(
-                """
-                SELECT danisan_kod_id, ucretli_mi, aktif_mi 
-                FROM danisan_kodlari 
-                WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s 
-                ORDER BY olusturulma_tarihi DESC;
-                """, 
-                (psikolog_id,)
+                f"SELECT {sutunlar} FROM danisan_kodlari "
+                "WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
+                (pers[0],),
+            )
+        elif psikolog_id is not None:
+            # 3. Üst roller seçilen psikologun danışanlarını görür
+            cursor.execute(
+                f"SELECT {sutunlar} FROM danisan_kodlari "
+                "WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
+                (psikolog_id,),
             )
         else:
-            # 3. ADMIN, MEMUR veya Müdür gibi üst roller tüm aktif danışan kodlarını görebilir
+            # 4. Üst roller psikolog seçmediyse tüm aktif danışan kodlarını görür
             cursor.execute(
-                """
-                SELECT danisan_kod_id, ucretli_mi, aktif_mi 
-                FROM danisan_kodlari 
-                WHERE aktif_mi = TRUE 
-                ORDER BY olusturulma_tarihi DESC;
-                """
+                f"SELECT {sutunlar} FROM danisan_kodlari "
+                "WHERE aktif_mi = TRUE ORDER BY olusturulma_tarihi DESC;"
             )
 
-        kayitlar = cursor.fetchall()
-        return [{"danisan_kod_id": k[0], "ucretli_mi": k[1], "aktif_mi": k[2]} for k in kayitlar]
+        return [
+            {
+                "danisan_kod_id": k[0],
+                "ucretli_mi": k[1],
+                "aktif_mi": k[2],
+                "istisna_turu": k[3],
+                "olusturulma_tarihi": k[4].isoformat() if hasattr(k[4], "isoformat") else k[4],
+                "olusturan_psikolog_id": k[5],
+            }
+            for k in cursor.fetchall()
+        ]
 
     finally:
         if cursor is not None: cursor.close()
