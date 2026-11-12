@@ -1,8 +1,8 @@
 import requests
-from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi, api_hata_mesaji
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
-                               QComboBox, QMessageBox, QDateTimeEdit, QDialog, 
-                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
+                               QComboBox, QMessageBox, QDateTimeEdit, QDialog,
+                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
                                QAbstractItemView, QPushButton, QLineEdit,
                                QDateEdit)
 from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
 
-from istemci_modelleri import IstemciRandevu 
+from istemci_modelleri import IstemciRandevu
 from ui_components import StandartButon
 
 # ======================================================================
@@ -53,6 +53,27 @@ class DolulukGosterimi:
     def doluluk_gosterimini_kur(self):
         # Stil tanımlı açılır liste varsayılan çiziciyle pasif/soluk rengi göstermez; standart çizici gerekir.
         self.cmb_saat.setItemDelegate(QStyledItemDelegate(self.cmb_saat))
+        self._doluluk_dogrulandi = False
+        self._form_hatalari = {}
+
+        self.lbl_form_hatasi = QLabel(self)
+        self.lbl_form_hatasi.setObjectName("randevuFormYuklemeHatasi")
+        self.lbl_form_hatasi.setWordWrap(True)
+        self.lbl_form_hatasi.setStyleSheet(
+            "color: #B42318; padding: 6px; font-size: 12px;"
+        )
+        self.lbl_form_hatasi.hide()
+        self.layout().addWidget(self.lbl_form_hatasi)
+        self.lbl_doluluk_hatasi = QLabel(self)
+        self.lbl_doluluk_hatasi.setObjectName("dolulukKontrolDurumu")
+        self.lbl_doluluk_hatasi.setWordWrap(True)
+        self.lbl_doluluk_hatasi.setStyleSheet(
+            "color: #B42318; padding: 6px; font-size: 12px;"
+        )
+        self.layout().addWidget(self.lbl_doluluk_hatasi)
+        self._doluluk_durumunu_ayarla(
+            False, "Saat uygunluğu henüz doğrulanmadı."
+        )
         self._doluluk_zamanlayici = QTimer(self)
         self._doluluk_zamanlayici.setSingleShot(True)
         self._doluluk_zamanlayici.timeout.connect(self.doluluk_yenile)
@@ -63,35 +84,145 @@ class DolulukGosterimi:
 
     def doluluk_yenilemeyi_planla(self, *_):
         # Art arda gelen değişiklikler (liste temizleme + doldurma) tek istekte birleşir.
+        self._doluluk_durumunu_ayarla(
+            False, "Saat uygunluğu kontrol ediliyor..."
+        )
         self._doluluk_zamanlayici.start(0)
+
+    def _doluluk_durumunu_ayarla(self, dogrulandi, mesaj=""):
+        self._doluluk_dogrulandi = dogrulandi
+
+        for ad in ("btn_kaydet", "btn_guncelle"):
+            buton = getattr(self, ad, None)
+            if buton is not None:
+                buton.setEnabled(dogrulandi and not self._form_hatalari)
+
+        self.lbl_doluluk_hatasi.setText(mesaj)
+        self.lbl_doluluk_hatasi.setVisible(bool(mesaj))
+
+    def _form_hata_durumu(self, kaynak, mesaj=None):
+        if mesaj:
+            self._form_hatalari[kaynak] = mesaj
+        else:
+            self._form_hatalari.pop(kaynak, None)
+
+        metin = "\\n".join(dict.fromkeys(self._form_hatalari.values()))
+        self.lbl_form_hatasi.setText(metin)
+        self.lbl_form_hatasi.setVisible(bool(metin))
+
+        for ad in ("btn_kaydet", "btn_guncelle"):
+            buton = getattr(self, ad, None)
+            if buton is not None:
+                buton.setEnabled(
+                    self._doluluk_dogrulandi
+                    and not self._form_hatalari
+                )
+
+    def _form_istegi(self, method, url, **kwargs):
+        """Form listelerini getir; HTTP ve ağ hatalarını göster."""
+        try:
+            cevap = oturum_kontrollu_istek(
+                method, url, **kwargs
+            )
+
+            if oturum_hatasi_mi(cevap):
+                return None
+
+            if cevap.status_code != 200:
+                self._form_hata_durumu(
+                    url,
+                    api_hata_mesaji(cevap)
+                    + " Gerekli bilgiler yüklenemedi."
+                )
+                return None
+
+            try:
+                veri = cevap.json()
+                if not isinstance(veri, list):
+                    raise ValueError("Liste bekleniyordu")
+            except (ValueError, TypeError) as hata:
+                self._form_hata_durumu(
+                    url,
+                    "Sunucudan beklenmeyen veri alındı. "
+                    "Gerekli bilgiler yüklenemedi."
+                )
+                return None
+
+            self._form_hata_durumu(url)
+            return cevap
+
+        except Exception as hata:
+            self._form_hata_durumu(
+                url,
+                api_hata_mesaji(hata=hata)
+                + " Gerekli bilgiler yüklenemedi."
+            )
+            return None
 
     def doluluk_yenile(self):
         oda_id = self.cmb_odalar.currentData()
         psikolog_id = self.cmb_psikologlar.currentData()
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
-        dolu = {}
-        if oda_id is not None or psikolog_id is not None:
-            params = {"tarih": tarih_str}
-            if oda_id is not None:
-                params["oda_id"] = int(oda_id)
-            if psikolog_id is not None:
-                params["psikolog_id"] = int(psikolog_id)
-            haric = getattr(self, "randevu_id", None)
-            if haric:
-                params["haric_randevu_id"] = int(haric)
-            headers = {"Authorization": f"Bearer {self.token}"}
-            try:
-                cevap = oturum_kontrollu_istek(
-                    "GET", f"{self.api_url}/api/randevular/doluluk",
-                    params=params, headers=headers, timeout=5,
+
+        self._doluluk_durumunu_ayarla(
+            False, "Saat uygunluğu kontrol ediliyor..."
+        )
+
+        if oda_id is None and psikolog_id is None:
+            self._doluluk_durumunu_ayarla(
+                False, "Saat kontrolü için psikolog ve oda seçiniz."
+            )
+            return
+
+        params = {"tarih": tarih_str}
+        if oda_id is not None:
+            params["oda_id"] = int(oda_id)
+        if psikolog_id is not None:
+            params["psikolog_id"] = int(psikolog_id)
+
+        haric = getattr(self, "randevu_id", None)
+        if haric:
+            params["haric_randevu_id"] = int(haric)
+
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/randevular/doluluk",
+                params=params,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+
+            if oturum_hatasi_mi(cevap):
+                return
+
+            if cevap.status_code != 200:
+                self._doluluk_durumunu_ayarla(
+                    False,
+                    api_hata_mesaji(cevap)
+                    + " Saat uygunluğu doğrulanamadı; kayıt yapılamaz."
                 )
-                if oturum_hatasi_mi(cevap):
-                    return
-                if cevap.status_code == 200:
-                    dolu = dolu_saatleri_hesapla(cevap.json().get("dolu_araliklar", []), tarih_str)
-            except Exception:
-                dolu = {}
-        self.saat_kutusunu_guncelle(dolu)
+                return
+
+            veri = cevap.json()
+            if (
+                not isinstance(veri, dict)
+                or not isinstance(veri.get("dolu_araliklar"), list)
+            ):
+                raise ValueError("Geçersiz doluluk yanıtı")
+
+            dolu = dolu_saatleri_hesapla(
+                veri["dolu_araliklar"], tarih_str
+            )
+            self.saat_kutusunu_guncelle(dolu)
+            self._doluluk_durumunu_ayarla(True)
+
+        except Exception as hata:
+            self._doluluk_durumunu_ayarla(
+                False,
+                api_hata_mesaji(hata=hata)
+                + " Saat uygunluğu doğrulanamadı; kayıt yapılamaz."
+            )
 
     def saat_kutusunu_guncelle(self, dolu):
         model = self.cmb_saat.model()
@@ -126,12 +257,12 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.api_url = api_url
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
-        self.tum_odalar = [] 
-        
+        self.tum_odalar = []
+
         self.setWindowTitle("Yeni Randevu Oluştur (APT-002)")
         self.resize(480, 360)
         self.init_ui()
-        
+
         self.odalari_yukle()
         self.psikologlari_yukle()
         self._onceden_psikolog_sec()
@@ -141,8 +272,8 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.setStyleSheet("""
             QWidget { background-color: #F8F9FA; font-family: 'Segoe UI', Arial; }
             QLabel { font-weight: bold; color: #0F2552; font-size: 13px; }
-            QLineEdit, QComboBox, QDateTimeEdit { 
-                padding: 9px; border-radius: 6px; border: 1px solid #CBD5E1; 
+            QLineEdit, QComboBox, QDateTimeEdit {
+                padding: 9px; border-radius: 6px; border: 1px solid #CBD5E1;
                 background-color: white; color: #0F2552; font-size: 13px; font-weight: bold;
             }
             QLineEdit:focus, QComboBox:focus, QDateTimeEdit:focus { border: 2px solid #2563EB; }
@@ -158,12 +289,12 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         baslik_frame.setStyleSheet("background-color: #0A1F5C; border-radius: 8px;")
         baslik_layout = QHBoxLayout(baslik_frame)
         baslik_layout.setContentsMargins(15, 12, 15, 12)
-        
+
         lbl_ikon = QLabel("📅")
         lbl_ikon.setStyleSheet("font-size: 18px; background: transparent;")
         lbl_baslik = QLabel("Yeni Randevu Oluştur")
         lbl_baslik.setStyleSheet("color: white; font-size: 15px; font-weight: bold; background: transparent;")
-        
+
         baslik_layout.addWidget(lbl_ikon)
         baslik_layout.addWidget(lbl_baslik)
         baslik_layout.addStretch()
@@ -216,8 +347,8 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
     def odalari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
+            cevap = self._form_istegi("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if cevap is None:
                 return
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
@@ -227,16 +358,16 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
+            cevap = self._form_istegi("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            if cevap is None:
                 return
             if cevap.status_code == 200:
                 for psi in cevap.json():
                     self.cmb_psikologlar.addItem(psi["ad_soyad"], psi["personel_id"])
-                
+
                 self.cmb_psikologlar.currentIndexChanged.connect(self.odalari_filtrele)
                 self.cmb_psikologlar.currentIndexChanged.connect(self.danisan_kodlarini_yukle)
-                
+
                 # mevcut_psikolog_id, giriş yapan kişinin PERSONEL kimliğidir (login_ekrani: personel_id or kullanici_id).
                 # Psikolog listesinde bu kimlikte biri varsa (yani kendisi psikologsa) kendi adına kilitlenir;
                 # admin ve danışma öğrencisi gibi roller listede olmadığı için psikolog seçebilir.
@@ -250,27 +381,27 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                         if index >= 0:
                             self.cmb_psikologlar.setCurrentIndex(index)
                             self.cmb_psikologlar.setEnabled(False)
-                
+
                 self.odalari_filtrele()
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
-        
+
         secilen_psikolog_id = self.cmb_psikologlar.currentData()
         if secilen_psikolog_id is None:
             return
-            
+
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             # Artık tüm odaları değil, sadece bu psikoloğa atanmış odaları çekiyoruz
             istek_url = f"{self.api_url}/api/psikologlar/{secilen_psikolog_id}/odalar"
-            cevap = oturum_kontrollu_istek("GET", istek_url, headers=headers, timeout=5)
-            
-            if oturum_hatasi_mi(cevap): 
+            cevap = self._form_istegi("GET", istek_url, headers=headers, timeout=5)
+
+            if cevap is None:
                 return
-                
+
             if cevap.status_code == 200:
                 atanmis_odalar = cevap.json()
                 for oda in atanmis_odalar:
@@ -279,10 +410,10 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 if self.cmb_odalar.count() == 0:
                     self.cmb_odalar.addItem("Bu psikoloğa atanmış oda yok", None)
                     self.cmb_odalar.model().item(0).setEnabled(False)
-                        
+
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
-    
+
     def _onceden_psikolog_sec(self):
         """Danışanlar sayfasından açıldıysa psikolog önceden seçilir (kilitli psikolog hesabında dokunulmaz)."""
         if self._onceden_psikolog_id is None or not self.cmb_psikologlar.isEnabled():
@@ -308,10 +439,10 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek(
+            cevap = self._form_istegi(
                 "GET", f"{self.api_url}/api/danisan-kodlari", params=params, headers=headers, timeout=5
             )
-            if oturum_hatasi_mi(cevap):
+            if cevap is None:
                 return
             if cevap.status_code == 200:
                 for danisan in cevap.json():
@@ -327,6 +458,18 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self._onceden_danisan = None  # yalnızca ilk yüklemede geçerli
 
     def randevuyu_kaydet(self):
+        if (
+            not getattr(self, "_doluluk_dogrulandi", False)
+            or bool(getattr(self, "_form_hatalari", {}))
+        ):
+            QMessageBox.warning(
+                self,
+                "Saat Uygunluğu",
+                "Saat uygunluğu doğrulanamadı. "
+                "Lütfen kontrolü yenileyip tekrar deneyin."
+            )
+            return
+
         secilen_danisan_kodu = self.cmb_danisan_kodu.currentData()
         secilen_oda_id = self.cmb_odalar.currentData()
         secilen_psikolog_id = self.cmb_psikologlar.currentData()
@@ -340,7 +483,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         if secilen_oda_id is None:
             QMessageBox.warning(self, "Eksik Veri", "Lütfen geçerli bir görüşme odası seçiniz.")
             return
-            
+
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
         saat_str = self.saat_secimi()
         if saat_str is None:
@@ -364,11 +507,11 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             cevap = oturum_kontrollu_istek("POST", f"{self.api_url}/api/randevular", json=payload, headers=headers, timeout=5)
             if oturum_hatasi_mi(cevap):
                 return
-            
+
             if cevap.status_code in (200, 201):
                 QMessageBox.information(self, "Başarılı", "Randevu başarıyla oluşturuldu!")
                 self.veriler_degisti.emit()
-                self.close() 
+                self.close()
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", "Seçilen psikolog veya oda bu saatlerde dolu!")
             else:
@@ -389,31 +532,31 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
         self.randevu_id = randevu_id
-        self.eski_veriler = eski_veriler 
+        self.eski_veriler = eski_veriler
         self.tum_odalar = []
-        
+
         self.setWindowTitle("Randevu Yönetimi")
         self.resize(450, 420)
-        
+
         self.init_ui()
-        self.odalari_yukle() 
-        self.psikologlari_yukle() 
+        self.odalari_yukle()
+        self.psikologlari_yukle()
         self.eski_verileri_arayuze_bas()
 
     def init_ui(self):
         self.setStyleSheet("""
             QWidget { background-color: #F8F9FA; font-family: 'Segoe UI', Arial; }
             QLabel { font-weight: bold; color: #0F2552; font-size: 13px; }
-            QLineEdit, QComboBox, QDateEdit, QDateTimeEdit { 
-                padding: 10px; border-radius: 6px; border: 1px solid #CBD5E1; 
+            QLineEdit, QComboBox, QDateEdit, QDateTimeEdit {
+                padding: 10px; border-radius: 6px; border: 1px solid #CBD5E1;
                 background-color: white; color: #0F2552; font-size: 13px; font-weight: bold;
             }
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus { border: 2px solid #2563EB; }
-            QComboBox QAbstractItemView { 
-                background-color: white; color: #0F2552; selection-background-color: #2563EB; selection-color: white; 
+            QComboBox QAbstractItemView {
+                background-color: white; color: #0F2552; selection-background-color: #2563EB; selection-color: white;
             }
             QPushButton#btnGuncelle {
-                background-color: #2563EB; color: white; border-radius: 6px; padding: 10px 20px; 
+                background-color: #2563EB; color: white; border-radius: 6px; padding: 10px 20px;
                 font-weight: bold; font-size: 14px; border: none;
             }
             QPushButton#btnGuncelle:hover { background-color: #1D4ED8; }
@@ -428,12 +571,12 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         baslik_frame.setStyleSheet("background-color: #0A1F5C; border-radius: 8px;")
         baslik_layout = QHBoxLayout(baslik_frame)
         baslik_layout.setContentsMargins(15, 15, 15, 15)
-        
+
         lbl_ikon = QLabel("✏️")
         lbl_ikon.setStyleSheet("font-size: 18px; color: white; background: transparent;")
         lbl_baslik = QLabel("Randevu Yönetimi")
         lbl_baslik.setStyleSheet("color: white; font-size: 15px; font-weight: bold; background: transparent;")
-        
+
         baslik_layout.addWidget(lbl_ikon)
         baslik_layout.addWidget(lbl_baslik)
         baslik_layout.addStretch()
@@ -471,18 +614,18 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         self.btn_guncelle.setObjectName("btnGuncelle")
         self.btn_guncelle.clicked.connect(self.randevuyu_guncelle)
         self.doluluk_gosterimini_kur()
-        
+
         buton_layout.addStretch()
         buton_layout.addWidget(self.btn_guncelle)
         buton_layout.addStretch()
-        
+
         ana_layout.addLayout(buton_layout)
 
     def odalari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap): return
+            cevap = self._form_istegi("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
+            if cevap is None: return
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
@@ -491,36 +634,36 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap): return
+            cevap = self._form_istegi("GET", f"{self.api_url}/api/psikologlar", headers=headers, timeout=5)
+            if cevap is None: return
             if cevap.status_code == 200:
                 for psi in cevap.json():
                     self.cmb_psikologlar.addItem(psi["ad_soyad"], psi["personel_id"])
-                
+
                 index = self.cmb_psikologlar.findData(self.eski_veriler["psikolog_id"])
                 if index >= 0:
                     self.cmb_psikologlar.setCurrentIndex(index)
-                    
+
                 self.odalari_filtrele()
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
-        
+
         secilen_psikolog_id = self.cmb_psikologlar.currentData()
         if secilen_psikolog_id is None:
             return
-            
+
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             # Artık tüm odaları değil, sadece bu psikoloğa atanmış odaları çekiyoruz
             istek_url = f"{self.api_url}/api/psikologlar/{secilen_psikolog_id}/odalar"
-            cevap = oturum_kontrollu_istek("GET", istek_url, headers=headers, timeout=5)
-            
-            if oturum_hatasi_mi(cevap): 
+            cevap = self._form_istegi("GET", istek_url, headers=headers, timeout=5)
+
+            if cevap is None:
                 return
-                
+
             if cevap.status_code == 200:
                 atanmis_odalar = cevap.json()
                 for oda in atanmis_odalar:
@@ -529,17 +672,17 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
                 if self.cmb_odalar.count() == 0:
                     self.cmb_odalar.addItem("Bu psikoloğa atanmış oda yok", None)
                     self.cmb_odalar.model().item(0).setEnabled(False)
-                        
+
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
 
     def eski_verileri_arayuze_bas(self):
         self.txt_danisan_kodu.setText(self.eski_veriler["danisan_kod_id"])
-        
+
         oda_index = self.cmb_odalar.findData(self.eski_veriler["oda_id"])
         if oda_index >= 0:
             self.cmb_odalar.setCurrentIndex(oda_index)
-            
+
         baslangic = self.eski_veriler["baslangic_zamani"].split('.')[0]
         tarih_kismi, saat_kismi = baslangic.split("T")
 
@@ -551,11 +694,23 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             self.cmb_saat.setCurrentIndex(index)
 
     def randevuyu_guncelle(self):
+        if (
+            not getattr(self, "_doluluk_dogrulandi", False)
+            or bool(getattr(self, "_form_hatalari", {}))
+        ):
+            QMessageBox.warning(
+                self,
+                "Saat Uygunluğu",
+                "Saat uygunluğu doğrulanamadı. "
+                "Lütfen kontrolü yenileyip tekrar deneyin."
+            )
+            return
+
         secilen_oda_id = self.cmb_odalar.currentData()
         if secilen_oda_id is None:
             QMessageBox.warning(self, "Eksik Veri", "Lütfen bir görüşme odası seçiniz.")
             return
-            
+
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
         saat_str = self.saat_secimi()
         if saat_str is None:
@@ -576,11 +731,11 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/randevular/{self.randevu_id}",
                                           json=guncel_veriler, headers=headers, timeout=5)
             if oturum_hatasi_mi(cevap): return
-            
+
             if cevap.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "Randevu başarıyla güncellendi!")
-                self.veriler_degisti.emit() 
-                self.close() 
+                self.veriler_degisti.emit()
+                self.close()
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", "Seçilen saatte oda veya psikolog dolu!")
             else:
@@ -734,6 +889,15 @@ class RandevuAnaEkrani(QWidget):
         layout.setSpacing(10)
         layout.addLayout(self._filtre_cubugu())
 
+        self.lbl_randevu_hatasi = QLabel()
+        self.lbl_randevu_hatasi.setObjectName("randevuYuklemeHatasi")
+        self.lbl_randevu_hatasi.setWordWrap(True)
+        self.lbl_randevu_hatasi.setStyleSheet(
+            "color: #B42318; padding: 8px; font-size: 12px;"
+        )
+        self.lbl_randevu_hatasi.hide()
+        layout.addWidget(self.lbl_randevu_hatasi)
+
         self.lbl_bos = QLabel("Filtreye uyan randevu yok.")
         self.lbl_bos.setAlignment(Qt.AlignCenter)
         self.lbl_bos.setStyleSheet("color: #64748B; font-size: 14px; font-weight: bold; padding: 40px;")
@@ -851,21 +1015,53 @@ class RandevuAnaEkrani(QWidget):
         return onceki
 
     def verileri_cek(self, *_):
-        self.oda_adlari = self._sozluk_cek("/api/odalar", "oda_id", "oda_adi", self.oda_adlari)
-        self.psikolog_adlari = self._sozluk_cek("/api/psikologlar", "personel_id", "ad_soyad", self.psikolog_adlari)
+        self.lbl_randevu_hatasi.hide()
+
+        self.oda_adlari = self._sozluk_cek(
+            "/api/odalar", "oda_id", "oda_adi", self.oda_adlari
+        )
+        self.psikolog_adlari = self._sozluk_cek(
+            "/api/psikologlar", "personel_id", "ad_soyad",
+            self.psikolog_adlari
+        )
 
         headers = {"Authorization": f"Bearer {self.token}"}
+
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/randevular",
+                headers=headers,
+                timeout=5
+            )
+
             if oturum_hatasi_mi(cevap):
                 return
-            if cevap.status_code == 200:
-                self.randevular = cevap.json()
-            else:
-                print(f"Hata: {cevap.text}")
-        except Exception as e:
-            print("Randevular çekilirken hata oluştu:", e)
-        self.tabloyu_guncelle()
+
+            if cevap.status_code != 200:
+                self._randevu_yukleme_hatasi(api_hata_mesaji(cevap))
+                return
+
+            randevular = cevap.json()
+            if not isinstance(randevular, list):
+                raise ValueError("Geçersiz randevu listesi")
+
+            self.randevular = randevular
+            self.tabloyu_guncelle()
+
+        except Exception as hata:
+            self._randevu_yukleme_hatasi(
+                api_hata_mesaji(hata=hata)
+            )
+
+    def _randevu_yukleme_hatasi(self, mesaj):
+        """Hata durumunda mevcut listeyi koru ve güncellik uyarısı göster."""
+        self.lbl_randevu_hatasi.setText(
+            (mesaj or "Randevu listesi yüklenemedi.")
+            + " Liste yenilenemedi; gösterilen kayıtlar güncel olmayabilir."
+        )
+        self.lbl_randevu_hatasi.show()
+
 
     # ------------------------------------------------------------------ tablo
     @staticmethod

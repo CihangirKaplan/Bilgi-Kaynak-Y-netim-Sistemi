@@ -1,3 +1,4 @@
+from api_yoneticisi import api_hata_mesaji
 
 """TKYS - Öğrenci Yönetimi."""
 
@@ -615,7 +616,7 @@ class OgrenciYonetimEkrani(QWidget):
             QMessageBox.warning(
                 self,
                 "Bağlantı Hatası",
-                str(hata)
+                api_hata_mesaji(hata=hata)
             )
             return None
 
@@ -647,7 +648,7 @@ class OgrenciYonetimEkrani(QWidget):
             QMessageBox.warning(
                 self,
                 "Öğrenci Listesi",
-                self.hata(cevap)
+                api_hata_mesaji(cevap)
             )
             return
 

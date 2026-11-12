@@ -1,3 +1,4 @@
+from api_yoneticisi import api_hata_mesaji
 """Cihaz envanteri: liste ekranı, 'Cihaz ekle / durum güncelle' formu ve düzenleme listesi.
 
 Görünüm, bakım/kalibrasyon/arıza ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
@@ -333,27 +334,74 @@ class CihazDuzenlemeListesi(QDialog):
         self.tablo.setColumnWidth(3, 90)
         layout.addWidget(self.tablo, 1)
 
+        self.lbl_yukleme_hatasi = QLabel()
+        self.lbl_yukleme_hatasi.setObjectName("cihazDuzenlemeYuklemeDurumu")
+        self.lbl_yukleme_hatasi.setWordWrap(True)
+        self.lbl_yukleme_hatasi.setStyleSheet(
+            "color: #B42318; padding: 8px; font-size: 12px;"
+        )
+        self.lbl_yukleme_hatasi.hide()
+        layout.addWidget(self.lbl_yukleme_hatasi)
+
         self.verileri_yukle()
 
     def verileri_yukle(self):
+        self.lbl_yukleme_hatasi.hide()
         self.tablo.setRowCount(0)
+
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/cihazlar",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+
             if oturum_hatasi_mi(cevap):
                 return
-            cevap.raise_for_status()
+
+            if cevap.status_code != 200:
+                self.lbl_yukleme_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_yukleme_hatasi.show()
+                return
+
             cihazlar = cevap.json()
-        except Exception as e:
-            print(f"Düzenleme listesi yükleme hatası: {e}")
+            if not isinstance(cihazlar, list):
+                raise ValueError("Geçersiz cihaz listesi")
+
+        except Exception as hata:
+            self.lbl_yukleme_hatasi.setText(
+                api_hata_mesaji(hata=hata)
+            )
+            self.lbl_yukleme_hatasi.show()
+            return
+
+        if not cihazlar:
+            self.lbl_yukleme_hatasi.setText("Henüz cihaz kaydı bulunmuyor.")
+            self.lbl_yukleme_hatasi.show()
             return
 
         self.tablo.setRowCount(len(cihazlar))
         for satir, cihaz in enumerate(cihazlar):
-            self.tablo.setItem(satir, 0, metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True))
-            self.tablo.setItem(satir, 1, metin_item(str(cihaz.get("cihaz_adi") or "")))
-            self.tablo.setCellWidget(satir, 2, durum_hapi(cihaz.get("durum")))
-            self.tablo.setCellWidget(satir, 3, tek_islem_butonu(
-                lambda _=False, c=cihaz: self.cihazi_duzenle(c), "✎", "Düzenle"))
+            self.tablo.setItem(
+                satir, 0,
+                metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True)
+            )
+            self.tablo.setItem(
+                satir, 1,
+                metin_item(str(cihaz.get("cihaz_adi") or ""))
+            )
+            self.tablo.setCellWidget(
+                satir, 2, durum_hapi(cihaz.get("durum"))
+            )
+            self.tablo.setCellWidget(
+                satir, 3,
+                tek_islem_butonu(
+                    lambda _=False, c=cihaz: self.cihazi_duzenle(c),
+                    "✎",
+                    "Düzenle",
+                )
+            )
 
     def cihazi_duzenle(self, cihaz):
         form = CihazIslemFormu(self.api_url, self.token, islem_turu="GUNCELLE", cihaz_veri=cihaz)

@@ -335,14 +335,25 @@ class RezervasyonYonetimEkrani(QWidget):
         self.verileri_yukle()
 
     def verileri_yukle(self):
-        self.tablo.setRowCount(0)
         try:
             # Backend'de henüz bu endpoint'i yazmadıysak 404 döner, şimdilik sadece try bloğunda
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/rezervasyonlar", headers={"Authorization": f"Bearer {self.token}"})
             if oturum_hatasi_mi(cevap):
                 return
+            if cevap.status_code != 200:
+                from PySide6.QtWidgets import QMessageBox
+                from api_yoneticisi import api_hata_mesaji
+                QMessageBox.warning(
+                    self, "Rezervasyon Listesi",
+                    api_hata_mesaji(cevap),
+                )
+                return
             if cevap.status_code == 200:
                 rezervasyonlar = cevap.json()
+                if not isinstance(rezervasyonlar, list):
+                    raise ValueError("Geçersiz rezervasyon listesi")
+                # Yeni liste başarıyla alındıktan sonra eski satırları temizle.
+                self.tablo.setRowCount(0)
                 self.tablo.setRowCount(len(rezervasyonlar))
                 for satir, rez in enumerate(rezervasyonlar):
                     self.tablo.setItem(satir, 0, QTableWidgetItem(str(rez.get("rezervasyon_id", ""))))
@@ -387,7 +398,12 @@ class RezervasyonYonetimEkrani(QWidget):
                         hucre_layout.setAlignment(Qt.AlignCenter)
                         self.tablo.setCellWidget(satir, 5, hucre_widget)
         except Exception as e:
-            pass
+            from PySide6.QtWidgets import QMessageBox
+            from api_yoneticisi import api_hata_mesaji
+            QMessageBox.warning(
+                self, "Rezervasyon Listesi",
+                api_hata_mesaji(hata=e),
+            )
 
     def yeni_rezervasyon_olustur(self, **on_degerler):
         form = YeniRezervasyonFormu(self.api_url, self.token, **on_degerler)

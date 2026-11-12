@@ -95,3 +95,44 @@ def oturum_hatasi_mi(hata_veya_yanit):
     return bool(
         getattr(yanit, "_tkys_oturum_reddedildi", False)
     )
+
+
+def api_hata_mesaji(yanit=None, hata=None):
+    """API ve bağlantı hatalarını kullanıcı dostu metne dönüştürür.
+
+    Mevcut 401 oturum yönetimi bu fonksiyondan bağımsızdır.
+    """
+    if hata is not None:
+        if isinstance(hata, requests.exceptions.Timeout):
+            return "Sunucu yanıt vermedi. Lütfen tekrar deneyin."
+        if isinstance(hata, requests.exceptions.ConnectionError):
+            return "Sunucuya bağlanılamadı. Bağlantınızı kontrol edin."
+        return "İşlem sırasında beklenmeyen bir hata oluştu."
+
+    if yanit is None:
+        return "Sunucudan yanıt alınamadı."
+
+    durum = yanit.status_code
+
+    mesajlar = {
+        401: "Oturumunuz geçersiz. Lütfen yeniden giriş yapın.",
+        403: (
+            "Bu işlem için gerekli yetkiniz bulunmamaktadır. "
+            "Lütfen sistem yöneticinizle iletişime geçin."
+        ),
+        404: "İstenen kayıt bulunamadı.",
+        408: "İstek zaman aşımına uğradı. Lütfen tekrar deneyin.",
+        422: "Girilen bilgiler geçersiz. Lütfen kontrol edin.",
+        429: "Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin.",
+    }
+
+    if durum in mesajlar:
+        return mesajlar[durum]
+
+    if durum >= 500:
+        return "Sunucuda bir hata oluştu. Lütfen daha sonra tekrar deneyin."
+
+    if durum >= 400:
+        return f"İşlem gerçekleştirilemedi (HTTP {durum})."
+
+    return ""

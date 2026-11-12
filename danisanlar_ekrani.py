@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from api_yoneticisi import api_hata_mesaji
 from randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani, RandevuOlusturFormu,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
@@ -121,6 +122,7 @@ class DanisanlarEkrani(QWidget):
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
         self.danisanlar = []
+        self._son_danisan_filtre_id = None
         self.randevular = []
         self.psikolog_adlari = {}
         self.oda_adlari = {}
@@ -130,6 +132,16 @@ class DanisanlarEkrani(QWidget):
         kok.setContentsMargins(0, 0, 0, 0)
         kok.setSpacing(10)
         kok.addLayout(self._ust_cubuk())
+
+        self._yukleme_hatalari = {}
+        self.lbl_yukleme_hatasi = QLabel()
+        self.lbl_yukleme_hatasi.setObjectName("danisanYuklemeHatasi")
+        self.lbl_yukleme_hatasi.setWordWrap(True)
+        self.lbl_yukleme_hatasi.setStyleSheet(
+            "color: #B42318; padding: 8px; font-size: 12px;"
+        )
+        self.lbl_yukleme_hatasi.hide()
+        kok.addWidget(self.lbl_yukleme_hatasi)
 
         self.bolucu = QSplitter(Qt.Horizontal)
         self.bolucu.setChildrenCollapsible(False)
@@ -328,17 +340,69 @@ class DanisanlarEkrani(QWidget):
         return self.gecmis_tablosu
 
     # ------------------------------------------------------------------ veri
-    def _sozluk_cek(self, yol, anahtar, deger, onceki):
-        headers = {"Authorization": f"Bearer {self.token}"}
+    def _yukleme_durumu(self, yol, mesaj=None):
+        if mesaj:
+            self._yukleme_hatalari[yol] = mesaj
+        else:
+            self._yukleme_hatalari.pop(yol, None)
+
+        metin = "\\n".join(self._yukleme_hatalari.values())
+        if metin:
+            metin += (
+                "\\nListe yenilenemedi; gösterilen bilgiler "
+                "güncel olmayabilir."
+            )
+
+        self.lbl_yukleme_hatasi.setText(metin)
+        self.lbl_yukleme_hatasi.setVisible(bool(metin))
+
+    def _api_liste_getir(self, yol, params=None):
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}{yol}",
+                params=params,
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+
             if oturum_hatasi_mi(cevap):
-                return onceki
-            if cevap.status_code == 200:
-                return {k[anahtar]: k[deger] for k in cevap.json()}
-        except Exception as e:
-            print(f"{yol} çekilirken hata oluştu:", e)
-        return onceki
+                return None
+
+            if cevap.status_code != 200:
+                self._yukleme_durumu(
+                    yol, f"{yol}: {api_hata_mesaji(cevap)}"
+                )
+                return None
+
+            veri = cevap.json()
+            if (
+                not isinstance(veri, list)
+                or not all(isinstance(k, dict) for k in veri)
+            ):
+                raise ValueError("Geçersiz liste yanıtı")
+
+            self._yukleme_durumu(yol)
+            return veri
+
+        except Exception as hata:
+            self._yukleme_durumu(
+                yol, f"{yol}: {api_hata_mesaji(hata=hata)}"
+            )
+            return None
+
+    def _sozluk_cek(self, yol, anahtar, deger, onceki):
+        liste = self._api_liste_getir(yol)
+        if liste is None:
+            return onceki
+        try:
+            return {k[anahtar]: k[deger] for k in liste}
+        except (KeyError, TypeError):
+            self._yukleme_durumu(
+                yol, f"{yol}: Sunucudan beklenmeyen veri alındı."
+            )
+            return onceki
+
 
     def _psikologlari_yukle(self):
         """Psikolog kutusunu doldurur; giriş yapan kişi psikologsa kendi adına kilitlenir."""
@@ -359,36 +423,34 @@ class DanisanlarEkrani(QWidget):
         self.cmb_psikolog.blockSignals(False)
 
     def _randevulari_yukle(self):
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap):
-                return
-            if cevap.status_code == 200:
-                self.randevular = cevap.json()
-        except Exception as e:
-            print("Randevular çekilirken hata oluştu:", e)
-        self.randevu_gruplari = randevulari_danisana_gore(self.randevular)
+        liste = self._api_liste_getir("/api/randevular")
+        if liste is not None:
+            self.randevular = liste
+        self.randevu_gruplari = randevulari_danisana_gore(
+            self.randevular
+        )
+
 
     def _danisanlari_yukle(self):
         params = {}
         psikolog_id = self.cmb_psikolog.currentData()
         if psikolog_id is not None:
             params["psikolog_id"] = int(psikolog_id)
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = oturum_kontrollu_istek(
-                "GET", f"{self.api_url}/api/danisan-kodlari", params=params, headers=headers, timeout=5
-            )
-            if oturum_hatasi_mi(cevap):
-                return
-            if cevap.status_code == 200:
-                self.danisanlar = cevap.json()
-            else:
-                print(f"Danışanlar alınamadı: {cevap.status_code}")
-        except Exception as e:
-            print("Danışanlar çekilirken hata oluştu:", e)
+
+        liste = self._api_liste_getir(
+            "/api/danisan-kodlari", params=params
+        )
+
+        if liste is not None:
+            self.danisanlar = liste
+            self._son_danisan_filtre_id = psikolog_id
+        elif psikolog_id != self._son_danisan_filtre_id:
+            # Farklı psikoloğa geçildiğinde eski psikoloğun
+            # danışanlarını yeni seçimin altında gösterme.
+            self.danisanlar = []
+
         self.tabloyu_guncelle()
+
 
     def verileri_cek(self, *_):
         self.oda_adlari = self._sozluk_cek("/api/odalar", "oda_id", "oda_adi", self.oda_adlari)

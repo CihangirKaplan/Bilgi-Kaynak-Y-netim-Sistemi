@@ -454,4 +454,17 @@ def test_sunucu_hatasinda_mevcut_liste_korunur():
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=bozuk):
         ekran.verileri_cek()
     assert ekran.tablo.rowCount() == 4                               # eski liste silinmedi
+    # Sunucu hatasında kullanıcıya açıklama gösterilmeli.
+    assert not ekran.lbl_randevu_hatasi.isHidden()
+    assert "güncel olmayabilir" in ekran.lbl_randevu_hatasi.text()
+
+    # Başarılı yenileme sonrasında uyarı kaybolmalı.
+    sunucu.randevular = ornek_liste()
+    with patch.object(
+        modul, "oturum_kontrollu_istek", side_effect=sunucu
+    ):
+        ekran.verileri_cek()
+
+    assert ekran.tablo.rowCount() == 4
+    assert ekran.lbl_randevu_hatasi.isHidden()
     ekran.close()

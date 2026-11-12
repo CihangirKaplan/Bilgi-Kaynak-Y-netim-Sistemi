@@ -413,8 +413,14 @@ class DashboardEkrani(QWidget):
     def _ozet_yukle(self):
         try:
             self.ozet = self._getir("/api/dashboard/ozet")
-        except Exception as e:
-            print("Özet yükleme hatası:", e)
+        except Exception:
+            for anahtar in (
+                "aktif_cihaz", "bakimdaki_cihaz",
+                "kalibrasyondaki_cihaz", "arizali_cihaz"
+            ):
+                deger, alt = self.kartlar[anahtar]
+                deger.setText("?")
+                alt.setText("Özet yüklenemedi.")
             return
         for anahtar in ("aktif_cihaz", "bakimdaki_cihaz", "kalibrasyondaki_cihaz", "arizali_cihaz"):
             self.kartlar[anahtar][0].setText(str(self.ozet.get(anahtar, 0)))
@@ -475,16 +481,23 @@ class DashboardEkrani(QWidget):
             self.tablo_rez.setItem(i, 3, _item(r["oda"]))
 
     def _islemleri_yukle(self):
+        yukleme_hatasi = False
         try:
             self.islemler = self._getir("/api/dashboard/yaklasan-islemler")
-        except Exception as e:
-            print("Yaklaşan işlemler yükleme hatası:", e)
+            if not isinstance(self.islemler, list):
+                raise ValueError("Geçersiz işlem listesi")
+        except Exception:
+            yukleme_hatasi = True
             self.islemler = []
         # Yetkisi olmayan sayfanın satırı hiç gösterilmez; her satır kendi sayfasına gider.
         gorunen = [(islem, self._islem_hedefi(islem)) for islem in self.islemler]
         gorunen = [(islem, hedef) for islem, hedef in gorunen if hedef is not None and self._sayfa_izinli(hedef)]
         self._islem_hedefleri = [hedef for _, hedef in gorunen]
-        self.lbl_islem_bos.setText("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
+        self.lbl_islem_bos.setText(
+            "Yaklaşan işlemler yüklenemedi. Lütfen yeniden deneyin."
+            if yukleme_hatasi
+            else "Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok."
+        )
         kaydirilabilir = self._liste_goster(self.tablo_islem, self.lbl_islem_bos, len(gorunen), TABLO_GORUNEN_SATIR)
         self._kaydirma_ipucu_guncelle(self.panel_islem, len(gorunen) if kaydirilabilir else 0)
         for i, (islem, hedef) in enumerate(gorunen):
