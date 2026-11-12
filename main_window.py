@@ -220,6 +220,13 @@ MENU = [
             aciklama="Öğrenci kayıtları ve aktiflik yönetimi",
             aksiyon=[]
         ),
+        dict(
+            ikon="🏆",
+            ad="Puan Raporu",
+            izin="Faaliyet kayıtlarını düzenleme",
+            aciklama="Öğrencilerin faaliyet puanlarına göre sıralaması ve Excel raporu",
+            aksiyon=[]
+        ),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
@@ -1629,6 +1636,7 @@ QLabel {
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
     SAYFA_YENILEME = {
         "Öğrenciler": ("ogrenciler_ekrani", "yenile"),
+        "Puan Raporu": ("puan_raporu_ekrani", "yenile"),
         "Cihaz Uygunluğu": ("aktif_uygunluk_ekrani", "verileri_yukle"),
         "Cihaz Envanteri": ("aktif_cihaz_ekrani", "verileri_yukle"),
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
@@ -2142,6 +2150,15 @@ QLabel {
                 parent=self
             )
             lay.addWidget(self.ogrenciler_ekrani, 1)
+
+        elif oge["ad"] == "Puan Raporu":
+            from puan_raporu_ekrani import PuanRaporuEkrani
+
+            self.puan_raporu_ekrani = PuanRaporuEkrani(
+                api_url=self.api_url,
+                token=self.token,
+            )
+            lay.addWidget(self.puan_raporu_ekrani, 1)
 
         elif oge["ad"] == "Faaliyet Kayıtları":
             ik = kart_olustur()

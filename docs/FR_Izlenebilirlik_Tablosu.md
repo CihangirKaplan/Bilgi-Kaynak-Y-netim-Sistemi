@@ -25,7 +25,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
 2. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
-   yazılı değil. Cihaz raporu ve danışma masası raporu var; ikisi de Excel'e aktarılabiliyor.
+   yazılı değil. Cihaz raporu, danışma masası raporu ve öğrenci puan raporu var; üçü de Excel'e aktarılabiliyor.
 
 ## Tablo
 
@@ -108,7 +108,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
 | FR-040 | Dashboard | ✅ | `dashboard_ekrani.py`, `/api/dashboard/*` (özet, bugünkü randevular ve rezervasyonlar, yaklaşan işlemler) | `test_dashboard_kalibrasyondaki_cihaz.py`, `test_dashboard_cihaz_ozeti_izni.py`, `test_bakim_uyari_suresi.py` Ek: özet kartları tıklanabilir, tablolar kaydırılabilir, yaklaşan işlemler listesi 50 kayıtla sınırlı (`test_dashboard_kart_tiklama.py`, `test_dashboard_tablo_kaydirma.py`, `test_dashboard_tekerlek_kilidi.py`, `test_yaklasan_islemler_siniri.py`). |
-| FR-041 | Temel raporlar | ⚠️ | `GET /api/cihaz-raporlari`, `cihaz_raporlari_ekrani.py`, `rapor_excel.py` (cihaz Excel'i); `GET /api/danisma/raporlar`, `danisma_masasi_raporlari.py`, `danisma_rapor_excel.py` (danışma masası raporu ve Excel'i; pasif öğrenciler "Pasif" olarak görünür) | `test_cihaz_raporlari.py`, `test_rapor_excel.py`, `test_danisma_rapor_excel.py`. Not: "V1.0 raporları" listesi dokümanda tanımlı değil |
+| FR-041 | Temel raporlar | ⚠️ | `GET /api/cihaz-raporlari`, `cihaz_raporlari_ekrani.py`, `rapor_excel.py` (cihaz Excel'i); `GET /api/danisma/raporlar`, `danisma_masasi_raporlari.py`, `danisma_rapor_excel.py` (danışma masası raporu ve Excel'i; pasif öğrenciler "Pasif" olarak görünür) | `test_cihaz_raporlari.py`, `test_rapor_excel.py`, `test_danisma_rapor_excel.py`. Ek: öğrenci puan raporu (`GET /api/puan-raporu`, `puan_raporu_ekrani.py`, `puan_rapor_excel.py`; en yüksek puanlı en üstte, pasifler "Pasif" olarak görünür, Excel'e aktarılır; `test_puan_raporu.py`). Not: "V1.0 raporları" listesi dokümanda tanımlı değil |
 
 ### 5.9 Audit
 
