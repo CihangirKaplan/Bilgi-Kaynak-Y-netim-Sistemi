@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
 from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QStyledItemDelegate
+from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
 
 from istemci_modelleri import IstemciRandevu 
@@ -561,190 +562,417 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 # ======================================================================
 #  RANDEVU ANA EKRANI (TABLO GÖRÜNÜMÜ VE DOĞRUDAN DÜZENLEME MANTIĞI)
 # ======================================================================
+# ======================================================================
+#  RANDEVU YÖNETİMİ EKRANI (LİSTE, ARAMA, FİLTRE, DÜZENLEME VE İPTAL)
+# ======================================================================
+DURUM_ETIKETLERI = {
+    "PLANLANDI": "Planlandı",
+    "TAMAMLANDI": "Tamamlandı",
+    "GELMEDI": "Gelmedi",
+    "IPTAL_EDILDI": "İptal Edildi",
+}
+# (arka plan, yazı) - yumuşak rozet renkleri. İptal bir hata değil; kırmızı yerine nötr gri.
+DURUM_RENKLERI = {
+    "PLANLANDI": ("#DBEAFE", "#1D4ED8"),
+    "TAMAMLANDI": ("#DCFCE7", "#15803D"),
+    "GELMEDI": ("#FFEDD5", "#C2410C"),
+    "IPTAL_EDILDI": ("#F1F5F9", "#64748B"),
+}
+DONEM_SECENEKLERI = [
+    ("tumu", "Tüm tarihler"), ("bugun", "Bugün"), ("hafta", "Bu hafta"),
+    ("ay", "Bu ay"), ("ozel", "Özel aralık"),
+]
+DURUM_SECENEKLERI = [
+    (None, "Tüm durumlar"), ("PLANLANDI", "Planlandı"), ("TAMAMLANDI", "Tamamlandı"),
+    ("GELMEDI", "Gelmedi"), ("IPTAL_EDILDI", "İptal Edildi"),
+]
+RANDEVU_TABLO_BASLIKLARI = ["Randevu ID", "Danışan Kodu", "Psikolog", "Oda", "Tarih", "Saat", "Durum"]
+
+_TR_KATLA = str.maketrans("çğıöşü", "cgiosu")
+
+
+def ara_normalle(metin):
+    """Aramada Türkçe karakter ve büyük/küçük harf farkı önemsenmez ('gorusme' -> 'Görüşme')."""
+    return str(metin or "").replace("İ", "i").replace("I", "ı").lower().translate(_TR_KATLA)
+
+
+def randevu_zamani(metin):
+    if not metin:
+        return None
+    try:
+        return datetime.fromisoformat(str(metin).split(".")[0])
+    except ValueError:
+        return None
+
+
+def tarih_saat_metinleri(baslangic, bitis):
+    """('15.10.2026', '11:47 – 12:47')"""
+    bas, bit = randevu_zamani(baslangic), randevu_zamani(bitis)
+    if bas is None:
+        return "", ""
+    saat = bas.strftime("%H:%M") + (" – " + bit.strftime("%H:%M") if bit else "")
+    return bas.strftime("%d.%m.%Y"), saat
+
+
+def donem_araligi(anahtar, bugun):
+    """Hazır dönemler için (ilk gün, son gün); 'tumu' ve 'ozel' için None."""
+    if anahtar == "bugun":
+        return bugun, bugun
+    if anahtar == "hafta":
+        ilk = bugun - timedelta(days=bugun.weekday())
+        return ilk, ilk + timedelta(days=6)
+    if anahtar == "ay":
+        ilk = bugun.replace(day=1)
+        return ilk, (ilk + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    return None
+
+
+def siralama_anahtari(randevu, simdi):
+    """Yaklaşan planlı randevular önce (en yakını en üstte); sonra geçmiş ve diğerleri (en yenisi önce)."""
+    bas = randevu_zamani(randevu.get("baslangic_zamani"))
+    bit = randevu_zamani(randevu.get("bitis_zamani")) or bas
+    if bas is None:
+        return (2, 0.0)
+    if randevu.get("durum") == "PLANLANDI" and bit >= simdi:
+        return (0, bas.timestamp())
+    return (1, -bas.timestamp())
+
+
+def randevulari_filtrele(randevular, psikolog_adlari, oda_adlari, arama="", aralik=None,
+                         durum=None, iptalleri_gizle=False):
+    """Arama (ID, danışan kodu, psikolog, oda), tarih aralığı (başlangıç günü) ve durum filtresi.
+
+    Durum açıkça seçilmişse iptal gizleme dikkate alınmaz (İptal Edildi seçilince iptaller görünür).
+    """
+    aranan = ara_normalle(arama).strip()
+    sonuc = []
+    for r in randevular:
+        d = r.get("durum")
+        if durum is not None:
+            if d != durum:
+                continue
+        elif iptalleri_gizle and d == "IPTAL_EDILDI":
+            continue
+        if aralik is not None:
+            bas = randevu_zamani(r.get("baslangic_zamani"))
+            if bas is None or not (aralik[0] <= bas.date() <= aralik[1]):
+                continue
+        if aranan:
+            metin = " ".join(str(x) for x in (
+                r.get("randevu_id"), r.get("danisan_kod_id"),
+                psikolog_adlari.get(r.get("psikolog_id"), ""), oda_adlari.get(r.get("oda_id"), ""),
+            ))
+            if aranan not in ara_normalle(metin):
+                continue
+        sonuc.append(r)
+    return sonuc
+
+
+FILTRE_STILI = """
+    QLineEdit, QComboBox, QDateEdit {
+        background-color: white; border: 1px solid #CBD5E1; border-radius: 8px;
+        padding: 7px 10px; color: #0F172A; font-size: 13px;
+    }
+    QLineEdit:focus, QComboBox:focus, QDateEdit:focus { border: 1px solid #3B82F6; }
+    /* Ana pencerenin genel stili her açılır kutuya min-width: 170px verir; filtre çubuğunda geçersiz kılınır. */
+    QComboBox { min-width: 120px; }
+    QCheckBox { color: #1E293B; font-size: 13px; font-weight: bold; }
+    QPushButton#btn_yenile {
+        background-color: white; border: 1px solid #CBD5E1; border-radius: 8px;
+        padding: 7px 14px; color: #1E293B; font-weight: bold;
+    }
+    QPushButton#btn_yenile:hover { background-color: #F1F5F9; }
+    QLabel#lbl_sayac { color: #64748B; font-size: 12px; font-weight: bold; }
+"""
+
+
 class RandevuAnaEkrani(QWidget):
+    """Randevu Yönetimi: randevuları listeler; arama, tarih aralığı ve durum filtresi; düzenleme ve iptal."""
+
     def __init__(self, api_url, token, mevcut_psikolog_id, rol=""):
         super().__init__()
         self.api_url = api_url
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
         self.rol = rol
-        
+        self.randevular = []
+        self.psikolog_adlari = {}
+        self.oda_adlari = {}
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+        layout.setSpacing(10)
+        layout.addLayout(self._filtre_cubugu())
+
+        self.lbl_bos = QLabel("Filtreye uyan randevu yok.")
+        self.lbl_bos.setAlignment(Qt.AlignCenter)
+        self.lbl_bos.setStyleSheet("color: #64748B; font-size: 14px; font-weight: bold; padding: 40px;")
+        self.lbl_bos.setVisible(False)
+        layout.addWidget(self.lbl_bos)
+
         self.tablo = QTableWidget()
-        self.tablo.setColumnCount(7)
-        self.tablo.setHorizontalHeaderLabels([
-            "Randevu ID", "Danışan Kodu", "Oda", "Başlangıç", "Bitiş", "Durum", "Oluşturulma Tarihi"
-        ])
+        self.tablo.setColumnCount(len(RANDEVU_TABLO_BASLIKLARI))
+        self.tablo.setHorizontalHeaderLabels(RANDEVU_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tablo.verticalHeader().setVisible(False)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
-        
+        self.tablo.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tablo.setToolTip("Düzenlemek için satıra çift tıklayın")
         self.tablo.setStyleSheet("""
             QTableWidget { background-color: white; border: 1px solid #D0D7E5; border-radius: 8px; gridline-color: #E2E8F0; }
             QHeaderView::section { background-color: #0A1F5C; color: white; font-weight: bold; padding: 10px; border: none; }
         """)
-        layout.addWidget(self.tablo)
-        
+        self.tablo.cellDoubleClicked.connect(lambda *_: self.duzenle_secilen())
+        layout.addWidget(self.tablo, 1)
+
         self.verileri_cek()
 
-    def verileri_cek(self):
-        self.tablo.setRowCount(0)
-        
+    # ------------------------------------------------------------------ arayüz
+    def _filtre_cubugu(self):
+        """İki satır: üstte arama, sayaç ve Yenile; altta dönem, tarih, durum ve iptal filtreleri.
+
+        Tek satıra sığmaz: ana pencerenin genel stili her açılır kutuya min-width: 170px verir ve
+        pencere genişliği sabittir; kutular birbirinin üstüne biner.
+        """
+        kok = QVBoxLayout()
+        kok.setSpacing(8)
+        ust = QHBoxLayout()
+        ust.setSpacing(8)
+        alt = QHBoxLayout()
+        alt.setSpacing(8)
+
+        self.arama = QLineEdit()
+        self.arama.setPlaceholderText("Ara: danışan kodu, psikolog, oda...")
+        self.arama.setClearButtonEnabled(True)
+        self.arama.setMinimumWidth(200)
+        self.arama.textChanged.connect(self.tabloyu_guncelle)
+
+        self.cmb_donem = QComboBox()
+        for anahtar, etiket in DONEM_SECENEKLERI:
+            self.cmb_donem.addItem(etiket, anahtar)
+        self.cmb_donem.currentIndexChanged.connect(self._donem_degisti)
+
+        bugun = QDate.currentDate()
+        self.dt_bas = QDateEdit(bugun.addDays(-30))
+        self.dt_bit = QDateEdit(bugun)
+        for kutu in (self.dt_bas, self.dt_bit):
+            kutu.setDisplayFormat("dd.MM.yyyy")
+            kutu.setCalendarPopup(True)
+            kutu.setMinimumWidth(125)
+            kutu.setVisible(False)
+            kutu.dateChanged.connect(self.tabloyu_guncelle)
+        self.lbl_tire = QLabel("–")
+        self.lbl_tire.setVisible(False)
+
+        self.cmb_durum = QComboBox()
+        for anahtar, etiket in DURUM_SECENEKLERI:
+            self.cmb_durum.addItem(etiket, anahtar)
+        self.cmb_durum.currentIndexChanged.connect(self.tabloyu_guncelle)
+
+        self.chk_iptal_gizle = QCheckBox("İptalleri gizle")
+        self.chk_iptal_gizle.setChecked(True)
+        self.chk_iptal_gizle.toggled.connect(self.tabloyu_guncelle)
+
+        self.btn_yenile = QPushButton("⟳  Yenile")
+        self.btn_yenile.setObjectName("btn_yenile")
+        self.btn_yenile.setCursor(Qt.PointingHandCursor)
+        self.btn_yenile.clicked.connect(self.verileri_cek)
+
+        self.lbl_sayac = QLabel("")
+        self.lbl_sayac.setObjectName("lbl_sayac")
+
+        ust.addWidget(self.arama, 1)
+        ust.addWidget(self.lbl_sayac)
+        ust.addWidget(self.btn_yenile)
+        for parca in (self.cmb_donem, self.dt_bas, self.lbl_tire, self.dt_bit,
+                      self.cmb_durum, self.chk_iptal_gizle):
+            alt.addWidget(parca)
+        alt.addStretch()
+        kok.addLayout(ust)
+        kok.addLayout(alt)
+        self.setStyleSheet(FILTRE_STILI)
+        return kok
+
+    def _donem_degisti(self, *_):
+        ozel = self.cmb_donem.currentData() == "ozel"
+        for parca in (self.dt_bas, self.lbl_tire, self.dt_bit):
+            parca.setVisible(ozel)
+        self.tabloyu_guncelle()
+
+    def _aralik(self):
+        anahtar = self.cmb_donem.currentData()
+        if anahtar == "ozel":
+            bas, bit = self.dt_bas.date().toPython(), self.dt_bit.date().toPython()
+            return min(bas, bit), max(bas, bit)
+        return donem_araligi(anahtar, datetime.now().date())
+
+    # ------------------------------------------------------------------ veri
+    def _sozluk_cek(self, yol, anahtar, deger, onceki):
         headers = {"Authorization": f"Bearer {self.token}"}
-
-        oda_sozlugu = {}
         try:
-            oda_cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers=headers, timeout=5)
-            if not oturum_hatasi_mi(oda_cevap) and oda_cevap.status_code == 200:
-                for oda in oda_cevap.json():
-                    oda_sozlugu[oda["oda_id"]] = oda["oda_adi"]
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers=headers, timeout=5)
+            if oturum_hatasi_mi(cevap):
+                return onceki
+            if cevap.status_code == 200:
+                return {k[anahtar]: k[deger] for k in cevap.json()}
         except Exception as e:
-            print("Oda isimleri çekilirken hata oluştu:", e)
+            print(f"{yol} çekilirken hata oluştu:", e)
+        return onceki
 
+    def verileri_cek(self, *_):
+        self.oda_adlari = self._sozluk_cek("/api/odalar", "oda_id", "oda_adi", self.oda_adlari)
+        self.psikolog_adlari = self._sozluk_cek("/api/psikologlar", "personel_id", "ad_soyad", self.psikolog_adlari)
+
+        headers = {"Authorization": f"Bearer {self.token}"}
         try:
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
             if oturum_hatasi_mi(cevap):
                 return
-                
             if cevap.status_code == 200:
-                # Veriyi hem self.randevular'a atıyoruz hem de local değişkene bağlıyoruz
                 self.randevular = cevap.json()
-                
-                self.tablo.setRowCount(len(self.randevular))
-                
-                def tarih_bicimlendir(tarih_str):
-                    if not tarih_str: return ""
-                    try:
-                        temiz = tarih_str.split(".")[0] 
-                        dt = QDateTime.fromString(temiz, "yyyy-MM-ddTHH:mm:ss")
-                        if dt.isValid(): return dt.toString("HH.mm dd.MM.yyyy")
-                    except Exception:
-                        pass
-                    return tarih_str.replace("T", " ")
-
-                for satir, r in enumerate(self.randevular):
-                    baslangic = tarih_bicimlendir(r.get("baslangic_zamani", ""))
-                    bitis = tarih_bicimlendir(r.get("bitis_zamani", ""))
-                    
-                    hammadde_tarih = (
-                        r.get("olusturma_tarihi") or 
-                        r.get("created_at") or 
-                        r.get("olusturuldu_at") or 
-                        r.get("kayit_tarihi") or 
-                        ""
-                    )
-                    olusturma = tarih_bicimlendir(hammadde_tarih)
-
-                    item_id = QTableWidgetItem(str(r.get("randevu_id", "")))
-                    item_kod = QTableWidgetItem(r.get("danisan_kod_id", ""))
-                    
-                    oda_id = r.get("oda_id")
-                    oda_adi = oda_sozlugu.get(oda_id, f"Bilinmeyen Oda ({oda_id})")
-                    item_oda = QTableWidgetItem(oda_adi) 
-                    
-                    item_bas = QTableWidgetItem(baslangic)
-                    item_bit = QTableWidgetItem(bitis)
-                    item_olus = QTableWidgetItem(olusturma)
-                    
-                    durum_ham = r.get("durum", "")
-                    if durum_ham == "IPTAL_EDILDI": durum_metni = "İptal Edildi"
-                    elif durum_ham == "PLANLANDI": durum_metni = "Planlandı"
-                    else: durum_metni = durum_ham.capitalize()
-
-                    item_durum = QTableWidgetItem(durum_metni)
-                    
-                    if durum_ham == "IPTAL_EDILDI":
-                        item_durum.setForeground(QColor("#DC2626"))
-                    elif durum_ham == "PLANLANDI":
-                        item_durum.setForeground(QColor("#10B981"))
-                    else:
-                        item_durum.setForeground(QColor("#2563EB"))
-                        
-                    for item in [item_id, item_kod, item_oda, item_bas, item_bit, item_durum, item_olus]:
-                        item.setTextAlignment(Qt.AlignCenter)
-                        
-                    self.tablo.setItem(satir, 0, item_id)
-                    self.tablo.setItem(satir, 1, item_kod)
-                    self.tablo.setItem(satir, 2, item_oda)
-                    self.tablo.setItem(satir, 3, item_bas)
-                    self.tablo.setItem(satir, 4, item_bit)
-                    self.tablo.setItem(satir, 5, item_durum)
-                    self.tablo.setItem(satir, 6, item_olus)
             else:
                 print(f"Hata: {cevap.text}")
         except Exception as e:
             print("Randevular çekilirken hata oluştu:", e)
-                  
+        self.tabloyu_guncelle()
 
+    # ------------------------------------------------------------------ tablo
+    @staticmethod
+    def _hucre(metin):
+        oge = QTableWidgetItem(metin)
+        oge.setTextAlignment(Qt.AlignCenter)
+        return oge
+
+    @staticmethod
+    def _durum_rozeti(durum):
+        etiket = DURUM_ETIKETLERI.get(durum, str(durum or "").capitalize())
+        arka, yazi = DURUM_RENKLERI.get(durum, ("#E2E8F0", "#334155"))
+        rozet = QLabel(etiket)
+        rozet.setAlignment(Qt.AlignCenter)
+        rozet.setStyleSheet(
+            f"background-color: {arka}; color: {yazi}; border-radius: 10px; "
+            "padding: 3px 14px; font-weight: bold; font-size: 12px;"
+        )
+        kap = QWidget()
+        kap.setStyleSheet("background: transparent;")
+        yerlesim = QHBoxLayout(kap)
+        yerlesim.setContentsMargins(6, 4, 6, 4)
+        yerlesim.addStretch()
+        yerlesim.addWidget(rozet)
+        yerlesim.addStretch()
+        return kap, rozet
+
+    def tabloyu_guncelle(self, *_):
+        liste = randevulari_filtrele(
+            self.randevular, self.psikolog_adlari, self.oda_adlari,
+            arama=self.arama.text(), aralik=self._aralik(),
+            durum=self.cmb_durum.currentData(), iptalleri_gizle=self.chk_iptal_gizle.isChecked(),
+        )
+        simdi = datetime.now()
+        liste.sort(key=lambda r: siralama_anahtari(r, simdi))
+
+        # Qt eski hücre bileşenlerini hemen silmez; gizlemezsek yeni satırların arkasında eski rozetlerin hayaleti kalır.
+        for satir in range(self.tablo.rowCount()):
+            eski = self.tablo.cellWidget(satir, 6)
+            if eski is not None:
+                eski.hide()
+        self.tablo.setRowCount(0)
+        self.tablo.setRowCount(len(liste))
+        for satir, r in enumerate(liste):
+            tarih, saat = tarih_saat_metinleri(r.get("baslangic_zamani"), r.get("bitis_zamani"))
+            kimlik = self._hucre(str(r.get("randevu_id", "")))
+            kimlik.setData(Qt.UserRole, r)  # düzenleme ve iptal bu kayıttan okur, sütun sırasına bağlı değildir
+            psikolog = self.psikolog_adlari.get(r.get("psikolog_id"), f"Psikolog #{r.get('psikolog_id')}")
+            oda = self.oda_adlari.get(r.get("oda_id"), f"Oda #{r.get('oda_id')}")
+            durum_hucresi = self._hucre("")
+            durum_hucresi.setToolTip(DURUM_ETIKETLERI.get(r.get("durum"), str(r.get("durum") or "")))
+
+            for sutun, oge in enumerate((kimlik, self._hucre(str(r.get("danisan_kod_id") or "")),
+                                         self._hucre(psikolog), self._hucre(oda),
+                                         self._hucre(tarih), self._hucre(saat), durum_hucresi)):
+                self.tablo.setItem(satir, sutun, oge)
+            kap, _ = self._durum_rozeti(r.get("durum"))
+            self.tablo.setCellWidget(satir, 6, kap)
+            self.tablo.setRowHeight(satir, 40)
+
+        self.lbl_sayac.setText(f"{len(liste)} / {len(self.randevular)} randevu")
+        self.lbl_bos.setVisible(len(liste) == 0)
+        self.tablo.setVisible(len(liste) > 0)
+
+    def secili_randevu(self):
+        secili = self.tablo.selectionModel().selectedRows()
+        if not secili:
+            return None
+        oge = self.tablo.item(secili[0].row(), 0)
+        return oge.data(Qt.UserRole) if oge is not None else None
+
+    # ------------------------------------------------------------------ işlemler
     def duzenle_secilen(self):
-        secili_satirlar = self.tablo.selectionModel().selectedRows()
-        if not secili_satirlar:
+        randevu = self.secili_randevu()
+        if randevu is None:
             QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz randevuyu tablodan seçin.")
             return
-            
-        satir = secili_satirlar[0].row()
-        randevu_id = int(self.tablo.item(satir, 0).text())
-            
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular", headers=headers, timeout=5)
-            if oturum_hatasi_mi(cevap): return
-                
-            if cevap.status_code == 200:
-                secili_randevu = next((r for r in cevap.json() if r["randevu_id"] == randevu_id), None)
-                
-                if secili_randevu:
-                    gercek_durum = str(secili_randevu.get("durum", ""))
-                    
-                    if "iptal" in gercek_durum.lower() or "IPTAL" in gercek_durum:
-                        QMessageBox.warning(
-                            self, 
-                            "İşlem Engellendi", 
-                            "İptal edilmiş randevular üzerinde değişiklik yapılamaz.\n\n"
-                            "Lütfen bu danışan için takvim üzerinden yeni bir randevu oluşturun."
-                        )
-                        return
 
-                    self.duzenle_formu = RandevuDuzenleFormu(
-                        api_url=self.api_url, token=self.token, 
-                        mevcut_psikolog_id=self.mevcut_psikolog_id,
-                        randevu_id=randevu_id, eski_veriler=secili_randevu
-                    )
-                    self.duzenle_formu.veriler_degisti.connect(self.verileri_cek)
-                    self.duzenle_formu.show()
-                    
-        except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Randevu bilgileri alınamadı: {str(e)}")
+        durum = randevu.get("durum")
+        if durum != "PLANLANDI":
+            ek = ("\n\nLütfen bu danışan için yeni bir randevu oluşturun."
+                  if durum == "IPTAL_EDILDI" else "")
+            QMessageBox.warning(
+                self, "İşlem Engellendi",
+                f"'{DURUM_ETIKETLERI.get(durum, durum)}' durumundaki randevular düzenlenemez. "
+                f"Yalnızca planlanmış randevular düzenlenebilir.{ek}",
+            )
+            return
+
+        self.duzenle_formu = RandevuDuzenleFormu(
+            api_url=self.api_url, token=self.token,
+            mevcut_psikolog_id=self.mevcut_psikolog_id,
+            randevu_id=randevu["randevu_id"], eski_veriler=randevu,
+        )
+        self.duzenle_formu.veriler_degisti.connect(self.verileri_cek)
+        self.duzenle_formu.show()
 
     def iptal_et_secilen(self):
-        secili_satirlar = self.tablo.selectionModel().selectedRows()
-        if not secili_satirlar:
+        randevu = self.secili_randevu()
+        if randevu is None:
             QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen iptal etmek istediğiniz randevuyu tablodan seçin.")
             return
-            
-        satir = secili_satirlar[0].row()
-        randevu_id = int(self.tablo.item(satir, 0).text())
-        durum = self.tablo.item(satir, 5).text()
-        
-        if durum == "İptal Edildi" or durum == "IPTAL_EDILDI":
+
+        durum = randevu.get("durum")
+        if durum == "IPTAL_EDILDI":
             QMessageBox.information(self, "Bilgi", "Bu randevu zaten iptal edilmiş.")
             return
-            
-        onay = QMessageBox.question(self, "İptal Onayı", "Seçili randevuyu iptal etmek istediğinize emin misiniz?", 
-                                    QMessageBox.Yes | QMessageBox.No)
-        
-        if onay == QMessageBox.Yes:
-            headers = {"Authorization": f"Bearer {self.token}"}
-            try:
-                cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/randevular/{randevu_id}/iptal", headers=headers, timeout=5)
-                if oturum_hatasi_mi(cevap): return
-                
-                if cevap.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Randevu iptal edildi.")
-                    self.verileri_cek()
-                else:
-                    QMessageBox.warning(self, "Hata", "İşlem başarısız oldu.")
-            except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+        if durum != "PLANLANDI":
+            QMessageBox.information(
+                self, "Bilgi",
+                f"'{DURUM_ETIKETLERI.get(durum, durum)}' durumundaki bir randevu iptal edilemez.",
+            )
+            return
+
+        onay = QMessageBox.question(
+            self, "İptal Onayı", "Seçili randevuyu iptal etmek istediğinize emin misiniz?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if onay != QMessageBox.Yes:
+            return
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            cevap = oturum_kontrollu_istek(
+                "PATCH", f"{self.api_url}/api/randevular/{randevu['randevu_id']}/iptal",
+                headers=headers, timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                QMessageBox.information(self, "Başarılı", "Randevu iptal edildi.")
+                self.verileri_cek()
+            else:
+                try:
+                    mesaj = cevap.json().get("detail")
+                except Exception:
+                    mesaj = None
+                QMessageBox.warning(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")

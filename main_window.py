@@ -186,8 +186,8 @@ MENU = [
         dict(ikon="📊", ad="Ana Kontrol Paneli", izin=None, dashboard=True),
     ]),
     ("KLİNİK OPERASYON", [
-        dict(ikon="📅", ad="Randevu Takvimi", izin="Randevu takvimini görüntüleme",
-             aciklama="Randevu takvimi ve seans planlaması",
+        dict(ikon="📅", ad="Randevu Yönetimi", izin="Randevu takvimini görüntüleme",
+             aciklama="Randevuları listeleme, düzenleme ve iptal etme",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
                       ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
@@ -1639,6 +1639,7 @@ QLabel {
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
         # Oda tablosu ana pencerenin kendi içinde olduğundan ekran yerine None (= ana pencerenin kendisi) yazılır.
         "Oda Yönetimi": (None, "odalari_getir"),
+        "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
     }
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
 
@@ -2117,7 +2118,7 @@ QLabel {
             self.odalari_getir()
             lay.addWidget(ik, 1)
 
-        elif oge["ad"] == "Randevu Takvimi":
+        elif oge["ad"] == "Randevu Yönetimi":
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             il = QVBoxLayout(ik)

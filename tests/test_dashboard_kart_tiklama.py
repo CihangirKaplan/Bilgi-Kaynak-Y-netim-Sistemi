@@ -45,7 +45,7 @@ def kapat(pano):
 
 # --------------------------------------------------------------------------- hedefler
 def test_her_karta_dogru_sayfa_ve_durum_filtresi_atanmis():
-    assert KART_HEDEFLERI["randevu"][:2] == ("Randevu Takvimi", None)
+    assert KART_HEDEFLERI["randevu"][:2] == ("Randevu Yönetimi", None)
     assert KART_HEDEFLERI["rezervasyon"][:2] == ("Cihaz Rezervasyonu", None)
     assert KART_HEDEFLERI["aktif_cihaz"][:2] == ("Cihaz Envanteri", "Kullanima_Hazir")
     assert KART_HEDEFLERI["bakimdaki_cihaz"][:2] == ("Cihaz Envanteri", "Bakimda")
@@ -89,7 +89,7 @@ def test_yetkisiz_sayfanin_karti_tiklanmaz_digerleri_tiklanir(qt_app):
     kart_tikla(pano, "aktif_cihaz")
     assert acilan == []                                             # envanter izni yok
     kart_tikla(pano, "randevu")
-    assert acilan == [("Randevu Takvimi", None)]
+    assert acilan == [("Randevu Yönetimi", None)]
     assert pano.kart_widgetleri[0].property("tiklanabilir") == "true"
     assert pano.kart_widgetleri[-1].property("tiklanabilir") == "false"
     kapat(pano)
@@ -112,7 +112,7 @@ def test_randevu_rolunde_yalnizca_randevu_karti_vardir_ve_tiklanir(qt_app):
     pano = pano_olustur(qt_app, cihaz_ozeti=False, kart_ac=lambda sayfa, durum: acilan.append((sayfa, durum)))
     assert list(pano.kartlar) == ["randevu"]
     kart_tikla(pano, "randevu")
-    assert acilan == [("Randevu Takvimi", None)]
+    assert acilan == [("Randevu Yönetimi", None)]
     kapat(pano)
 
 
@@ -219,8 +219,8 @@ def test_kartan_envantere_gidilince_sayfa_acilir_ve_filtre_uygulanir():
 def test_kartan_baska_sayfaya_gidilince_envanter_filtresine_dokunulmaz():
     ekran = MagicMock()
     ana = ana_pencere_taklidi(ekran)
-    mw.AnaPencere._karttan_sayfaya_git(ana, "Randevu Takvimi", None)
-    ana._bildirimden_sayfaya_git.assert_called_once_with("Randevu Takvimi")
+    mw.AnaPencere._karttan_sayfaya_git(ana, "Randevu Yönetimi", None)
+    ana._bildirimden_sayfaya_git.assert_called_once_with("Randevu Yönetimi")
     ekran.durum_filtrele.assert_not_called()
 
 
