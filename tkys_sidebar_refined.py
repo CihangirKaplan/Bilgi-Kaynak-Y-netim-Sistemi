@@ -38,6 +38,7 @@ CATEGORY_ICONS = {
 PAGE_ICONS = {
     "Ana Kontrol Paneli": "home",
     "Randevu Yönetimi": "calendar",
+    "Danışanlar": "users",
     "Oda Kullanımı": "door",
     "Danışma Masası": "calendar",
     "Danışma Masası Yönetimi": "clipboard",

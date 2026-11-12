@@ -192,6 +192,9 @@ MENU = [
                       ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
+        dict(ikon="👤", ad="Danışanlar", izin="Randevu oluşturma",
+             aciklama="Psikologlara göre danışanlar, bilgileri, randevu özeti ve geçmişi",
+             aksiyon=[("＋  Yeni Danışan", "Randevu oluşturma")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
         dict(ikon="🛎️", ad="Danışma Masası",
@@ -1647,6 +1650,7 @@ QLabel {
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
         # Oda tablosu ana pencerenin kendi içinde olduğundan ekran yerine None (= ana pencerenin kendisi) yazılır.
         "Oda Yönetimi": (None, "odalari_getir"),
+        "Danışanlar": ("danisanlar_ekrani", "verileri_cek"),
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
     }
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
@@ -2142,6 +2146,19 @@ QLabel {
 
             lay.addWidget(ik, 1)
 
+        elif oge["ad"] == "Danışanlar":
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
+
+            from danisanlar_ekrani import DanisanlarEkrani
+            self.danisanlar_ekrani = DanisanlarEkrani(
+                api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
+            )
+            il.addWidget(self.danisanlar_ekrani)
+
+            lay.addWidget(ik, 1)
+
         elif oge["ad"] == "Öğrenciler":
             from ogrenci_yonetim_ekrani import OgrenciYonetimEkrani
 
@@ -2272,6 +2289,8 @@ QLabel {
             # Kullanıcı bizzat pencereyi açıp "Danışanı Oluştur" butonuna basarsa yeni kod üretilir.
             if hasattr(self, 'randevu_ana_ekrani'):
                 self.randevu_ana_ekrani.verileri_cek()
+            if hasattr(self, 'danisanlar_ekrani'):
+                self.danisanlar_ekrani.verileri_cek()
 
     def cihaz_ekle_tetikle(self):
         if hasattr(self, 'aktif_cihaz_ekrani'):

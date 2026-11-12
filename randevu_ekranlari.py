@@ -119,8 +119,10 @@ class DolulukGosterimi:
 
 class RandevuOlusturFormu(DolulukGosterimi, QWidget):
     veriler_degisti = Signal()
-    def __init__(self, api_url, token, mevcut_psikolog_id):
+    def __init__(self, api_url, token, mevcut_psikolog_id, onceden_danisan=None, onceden_psikolog_id=None):
         super().__init__()
+        self._onceden_danisan = onceden_danisan
+        self._onceden_psikolog_id = onceden_psikolog_id
         self.api_url = api_url
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
@@ -131,7 +133,8 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.init_ui()
         
         self.odalari_yukle()
-        self.psikologlari_yukle() 
+        self.psikologlari_yukle()
+        self._onceden_psikolog_sec()
         self.danisan_kodlarini_yukle()
 
     def init_ui(self):
@@ -232,6 +235,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                     self.cmb_psikologlar.addItem(psi["ad_soyad"], psi["personel_id"])
                 
                 self.cmb_psikologlar.currentIndexChanged.connect(self.odalari_filtrele)
+                self.cmb_psikologlar.currentIndexChanged.connect(self.danisan_kodlarini_yukle)
                 
                 # mevcut_psikolog_id, giriş yapan kişinin PERSONEL kimliğidir (login_ekrani: personel_id or kullanici_id).
                 # Psikolog listesinde bu kimlikte biri varsa (yani kendisi psikologsa) kendi adına kilitlenir;
@@ -279,23 +283,49 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
     
-    def danisan_kodlarini_yukle(self):
+    def _onceden_psikolog_sec(self):
+        """Danışanlar sayfasından açıldıysa psikolog önceden seçilir (kilitli psikolog hesabında dokunulmaz)."""
+        if self._onceden_psikolog_id is None or not self.cmb_psikologlar.isEnabled():
+            return
+        index = self.cmb_psikologlar.findData(self._onceden_psikolog_id)
+        if index >= 0:
+            self.cmb_psikologlar.setCurrentIndex(index)
+
+    def danisan_kodlarini_yukle(self, *_):
+        """Danışan listesi seçilen psikologun oluşturduğu danışanlarla sınırlanır.
+
+        Psikolog hesabında sunucu zaten yalnızca kendi danışanlarını döndürür. Psikolog değişince liste yenilenir;
+        seçili danışan yeni listede de varsa korunur.
+        """
+        onceki = self.cmb_danisan_kodu.currentData() or self._onceden_danisan
         self.cmb_danisan_kodu.clear()
-        self.cmb_danisan_kodu.addItem("--- Danışan Seçiniz ---", "") 
-        
+        self.cmb_danisan_kodu.addItem("--- Danışan Seçiniz ---", "")
+
+        params = {}
+        psikolog_id = self.cmb_psikologlar.currentData()
+        if psikolog_id is not None:
+            params["psikolog_id"] = int(psikolog_id)
+
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/danisan-kodlari", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/danisan-kodlari", params=params, headers=headers, timeout=5
+            )
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                danisanlar = cevap.json()
-                for d in danisanlar:
-                    kod = d.get("danisan_kod_id")
+                for danisan in cevap.json():
+                    kod = danisan.get("danisan_kod_id")
                     self.cmb_danisan_kodu.addItem(kod, kod)
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
-            
+
+        if onceki:
+            index = self.cmb_danisan_kodu.findData(onceki)
+            if index >= 0:
+                self.cmb_danisan_kodu.setCurrentIndex(index)
+        self._onceden_danisan = None  # yalnızca ilk yüklemede geçerli
+
     def randevuyu_kaydet(self):
         secilen_danisan_kodu = self.cmb_danisan_kodu.currentData()
         secilen_oda_id = self.cmb_odalar.currentData()

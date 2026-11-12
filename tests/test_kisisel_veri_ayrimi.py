@@ -5,6 +5,7 @@ PostgreSQL ile `test_kisisel_veri_ayrimi_pg_quality.py` dosyasındadır; burada 
 modelleri, yazdığı sütunlar, uçları ve yanıtları denetlenir. Veritabanı taklit edilir.
 """
 import re
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -115,7 +116,7 @@ def test_kod_listesi_yalnizca_kod_ucret_ve_aktiflik_dondurur():
     conn = MagicMock()
     c = conn.cursor.return_value
     c.fetchone.side_effect = [(1,), ("MEMUR",)]
-    c.fetchall.return_value = [("DAN-2026-0001", True, True)]
+    c.fetchall.return_value = [("DAN-2026-0001", True, True, "YOK", datetime(2026, 5, 1, 10, 0), 3)]
     with patch("sunucu.psycopg2.connect", return_value=conn):
         yanit = TestClient(app).get("/api/danisan-kodlari")
     assert yanit.status_code == 200
