@@ -94,7 +94,7 @@ def test_ust_cubuk_acilan_sayfanin_adini_gosterir(pencere_ac):
     assert ana.ust_baslik.text() == "TKYS"
     sayfaya_git(ana, "Randevu Yönetimi")
     assert ana.ust_sayfa.text().endswith("Randevu Yönetimi")
-    assert ana.ust_sayfa.toolTip() == "Randevuları listeleme, düzenleme ve iptal etme"     # açıklama ipucu olarak
+    assert ana.ust_sayfa.toolTip() == ""                                  # sayfa adında ipucu kutusu yok
     sayfaya_git(ana, "Oda Kullanımı")
     assert ana.ust_sayfa.text().endswith("Oda Kullanımı")
 
@@ -106,28 +106,18 @@ def test_sayfalarda_buyuk_baslik_karti_yok(pencere_ac):
     assert not adlar & {"modulBaslik", "modulAlt", "modulIkon", "rozetYetki", "rozetOkunur"}
 
 
-def test_islem_yetkisi_olmayan_sayfada_ust_cubukta_salt_okunur_etiketi_cikar(pencere_ac):
+def test_salt_okunur_etiketi_yok_islem_yetkisi_olmayan_sayfada_dugme_cikmaz(pencere_ac):
     ana = pencere_ac(["TAKVIM_GORUNTULE"])                    # görüntüleyebilir, işlem yetkisi yok
     sayfaya_git(ana, "Randevu Yönetimi")
-    assert ana.ust_salt_okunur.isVisibleTo(ana)
+    assert not hasattr(ana, "ust_salt_okunur")                # üst çubukta "salt okunur" etiketi hiçbir sayfada yok
     assert not ana.stack.currentWidget().findChildren(QPushButton, "aksiyon")
 
 
-def test_islem_yetkisi_olan_sayfada_salt_okunur_etiketi_yok_ve_dugmeler_var(pencere_ac):
+def test_islem_yetkisi_olan_sayfada_dugmeler_var(pencere_ac):
     ana = pencere_ac(["TAKVIM_GORUNTULE", "RANDEVU_OLUSTUR"])
     sayfaya_git(ana, "Randevu Yönetimi")
-    assert not ana.ust_salt_okunur.isVisibleTo(ana)
     etiketler = [b.text() for b in ana.stack.currentWidget().findChildren(QPushButton, "aksiyon")]
     assert any("Yeni Randevu" in e for e in etiketler)
-
-
-def test_salt_okunur_etiketi_sayfa_degisince_kaybolur(pencere_ac):
-    ana = pencere_ac(["TAKVIM_GORUNTULE", "ODA_DURUMU_GORUNTULE"])
-    sayfaya_git(ana, "Randevu Yönetimi")
-    assert ana.ust_salt_okunur.isVisibleTo(ana)
-    ana.nav_btnler["Ana Kontrol Paneli"].click()
-    QApplication.processEvents()
-    assert not ana.ust_salt_okunur.isVisibleTo(ana)
 
 
 def test_islem_dugmeleri_kucuk_ve_sag_yaslidir(pencere_ac):
