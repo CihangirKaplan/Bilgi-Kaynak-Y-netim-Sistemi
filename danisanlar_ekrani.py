@@ -287,8 +287,10 @@ class DanisanlarEkrani(QWidget):
             arka, yazi = DURUM_RENKLERI[durum]
             kart = QFrame()
             kart.setStyleSheet(f"QFrame {{ background-color: {arka}; border-radius: 10px; }}")
+            kart.setMinimumHeight(66)   # sayı ve ad kırpılmasın
             k_yerlesim = QVBoxLayout(kart)
-            k_yerlesim.setContentsMargins(12, 8, 12, 8)
+            k_yerlesim.setContentsMargins(12, 6, 12, 6)
+            k_yerlesim.setSpacing(0)
             sayi = QLabel("0")
             sayi.setAlignment(Qt.AlignCenter)
             sayi.setStyleSheet(f"color: {yazi}; font-size: 22px; font-weight: bold; background: transparent;")

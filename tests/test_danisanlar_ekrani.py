@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 import danisanlar_ekrani as modul
 import main_window as mw
@@ -289,6 +289,21 @@ def test_randevu_formunda_psikolog_degisince_danisan_listesi_yenilenir():
     assert [form.cmb_danisan_kodu.itemData(i) for i in range(form.cmb_danisan_kodu.count())] == ["", "DAN-2026-0003"]
     assert form.cmb_danisan_kodu.currentData() == ""       # eski psikologun danışanı yeni listede yok
     form.close()
+
+
+def test_ozet_kartlarinda_sayi_ve_ad_kirpilmaz():
+    ekran = ekran_ac()
+    ekran.resize(1000, 520)
+    ekran.show()
+    sec(ekran, "DAN-2026-0001")
+    ekran.btn_bolumler["Özet"].click()
+    QApplication.processEvents()
+    for sayi in ekran.ozet_sayilari.values():
+        kart = sayi.parentWidget()
+        assert kart.height() >= 60
+        for etiket in kart.findChildren(QLabel):
+            assert etiket.height() >= etiket.sizeHint().height(), etiket.text()
+    ekran.close()
 
 
 # ------------------------------------------------------------------ sunucu ucu

@@ -369,7 +369,7 @@ QLabel#modulBaslik { font-size: 22px; font-weight: 800; color: #0A1F5C; }
 QLabel#modulAlt { font-size: 13px; color: #6B7FA8; }
 QLabel#rozetYetki { background: #DBEAFE; color: #1D4ED8; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
 QLabel#rozetOkunur { background: #FEF3C7; color: #B45309; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
-QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 10px; padding: 11px 20px; font-size: 13px; font-weight: 700; }
+QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 700; }
 QPushButton#aksiyon:hover { background: #1E40AF; }
 QPushButton#aksiyon:pressed { background: #172554; }
 QLabel#bos { font-size: 40px; }
@@ -552,6 +552,15 @@ class AnaPencere(QMainWindow):
 
         self.ust_baslik = QLabel("TKYS")
         self.gezinme_cubugu.addWidget(self.ust_baslik)
+        self.ust_sayfa = QLabel("")
+        self.ust_sayfa.setStyleSheet("color: #BFD3F2; font-size: 15px; font-weight: 700;")
+        self.gezinme_cubugu.addWidget(self.ust_sayfa)
+        self.ust_salt_okunur = QLabel("SALT OKUNUR")
+        self.ust_salt_okunur.setStyleSheet(
+            "background: #FEF3C7; color: #B45309; border-radius: 9px; font-size: 11px; font-weight: 800; padding: 4px 10px;")
+        # QToolBar içindeki bileşenin görünürlüğü kendi eylemi üzerinden yönetilir
+        self._ust_salt_okunur_eylem = self.gezinme_cubugu.addWidget(self.ust_salt_okunur)
+        self._ust_salt_okunur_eylem.setVisible(False)
 
         self.gezinme_cubugu.addWidget(bosluk)
 
@@ -1359,6 +1368,7 @@ QLabel {
             w.deleteLater()
 
         self.sayfa_bilgi = []
+        self._sayfa_salt_okunur = {}
         self.nav_btnler = {}
 
         ilk_btn = None
@@ -1797,6 +1807,9 @@ QLabel {
 
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
+        self.ust_sayfa.setText(f"›   {ad}")
+        self.ust_sayfa.setToolTip(alt)
+        self._ust_salt_okunur_eylem.setVisible(bool(self._sayfa_salt_okunur.get(ad)))
 
         # Ana panelden gelen durum filtresi yalnızca o geçişe aittir; menüden/bildirimden açılışta temiz başlar.
         envanter = getattr(self, "aktif_cihaz_ekrani", None)
@@ -1969,29 +1982,10 @@ QLabel {
         rol = self.aktif_rol
         govde = QWidget()
         lay = QVBoxLayout(govde)
-        lay.setContentsMargins(4, 4, 4, 20)
-        lay.setSpacing(20)
+        lay.setContentsMargins(4, 0, 4, 16)
+        lay.setSpacing(10)
 
-        # 1. Modül Başlığı ve İkonu
-        bk = kart_olustur()
-        bl = QHBoxLayout(bk)
-        bl.setContentsMargins(15, 10, 15, 10)
-        bl.setSpacing(15)
-
-        ikon = QLabel(oge["ikon"])
-        ikon.setObjectName("modulIkon")
-        ikon.setFixedSize(64, 64)
-        ikon.setAlignment(Qt.AlignCenter)
-
-        mt = QVBoxLayout()
-        mt.setSpacing(2)
-        m1 = QLabel(oge["ad"])
-        m1.setObjectName("modulBaslik")
-        m2 = QLabel(oge["aciklama"])
-        m2.setObjectName("modulAlt")
-        mt.addWidget(m1)
-        mt.addWidget(m2)
-
+        # Sayfa başlığı ve açıklaması üst çubukta (TKYS › Sayfa adı) gösterilir; sayfada ayrıca büyük başlık kartı yoktur.
         yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
 
         if oge["ad"] == "Danışma Masası Yönetimi":
@@ -2004,24 +1998,14 @@ QLabel {
                 if izin_var(rol, a[1])
             )
 
-        if yetkili:
-            rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
-            rozet.setObjectName("rozetYetki")
-        else:
-            rozet = QLabel("●  SALT OKUNUR")
-            rozet.setObjectName("rozetOkunur")
-
-        bl.addWidget(ikon)
-        bl.addLayout(mt)
-        bl.addStretch()
-        if oge["ad"] not in ("Danışma Masası", "Öğrenciler"):
-            bl.addWidget(rozet, 0, Qt.AlignVCenter)
-        lay.addWidget(bk)
+        # İşlem yetkisi olmayan sayfalarda üst çubukta "SALT OKUNUR" etiketi çıkar (bkz. sayfa_ac)
+        self._sayfa_salt_okunur[oge["ad"]] = (not yetkili) and oge["ad"] not in ("Danışma Masası", "Öğrenciler")
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
         if yetkili and oge["ad"] not in ("Danışma Masası", "Danışma Masası Yönetimi"):
             ab = QHBoxLayout()
-            ab.setSpacing(12)
+            ab.setSpacing(8)
+            ab.addStretch()
             for etiket, izin_kodu in yetkili:
                 btn = QPushButton(etiket)
                 btn.setObjectName("aksiyon")
@@ -2096,7 +2080,6 @@ QLabel {
                     btn.clicked.connect(self.izin_duzenle_tetikle)
 
                 ab.addWidget(btn)
-            ab.addStretch()
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
