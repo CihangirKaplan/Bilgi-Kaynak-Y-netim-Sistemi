@@ -87,8 +87,8 @@ def _kod_olustur(sorgu_dizesi=""):
     with patch("sunucu.psycopg2.connect", return_value=conn), \
             patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = TestClient(app).post("/api/danisan-kodlari" + sorgu_dizesi)
-    ekleme = next(x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0])
-    return yanit, ekleme.args[1]
+    ekleme = next((x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
+    return yanit, (ekleme.args[1] if ekleme else None)           # doğrulama reddederse kayıt sorgusu hiç çalışmaz
 
 
 def test_kod_olusturma_fazladan_kisisel_alanlari_yok_sayar_ve_kaydetmez():
@@ -123,10 +123,36 @@ def test_kod_listesi_yalnizca_kod_ucret_ve_aktiflik_dondurur():
         assert set(kayit) <= DANISAN_KODLARI_SUTUNLARI
 
 
-# ------------------------------------------------------------------ bilinen sınır
-@pytest.mark.xfail(strict=True, reason=(
-    "Bilinen sınır (FR-008): sunucu istisna_turu alanına her metni kabul ediyor; arayüz yalnızca YOK, KANSER ve "
-    "SEHIT_GAZI sunuyor. Sunucuda izinli değer listesi olunca bu işaret kalkmalı (strict: düzelince test kırmızı olur)."))
-def test_istisna_turu_serbest_metin_kabul_etmemeli():
-    yanit, _ = _kod_olustur("?ucretli_mi=true&istisna_turu=Ali%20Veli%20-%20depresyon")
+# ------------------------------------------------------------------ istisna_turu izin listesi (FR-008)
+@pytest.mark.parametrize("deger", ["Ali Veli - depresyon", "kanser", "SEHIT GAZI", "ENGELLI", "", " YOK", "YOK; DROP TABLE x"])
+def test_istisna_turu_serbest_metin_kabul_etmez(deger):
+    from urllib.parse import quote
+    yanit, _ = _kod_olustur("?ucretli_mi=false&istisna_turu=" + quote(deger))
     assert yanit.status_code == 422
+
+
+def test_istisna_turu_reddedilince_kayit_yapilmaz_ve_deger_yanita_yazilmaz():
+    yanit, parametreler = _kod_olustur("?ucretli_mi=false&istisna_turu=Ali%20Veli")
+    assert yanit.status_code == 422
+    assert parametreler is None and "Ali" not in yanit.text      # INSERT çalışmadı, girilen metin geri yansıtılmadı
+
+
+@pytest.mark.parametrize("sorgu", ["?ucretli_mi=true&istisna_turu=YOK", "?ucretli_mi=false&istisna_turu=KANSER",
+                                   "?ucretli_mi=false&istisna_turu=SEHIT_GAZI", ""])
+def test_izinli_istisna_turleri_kabul_edilir(sorgu):
+    yanit, _ = _kod_olustur(sorgu)
+    assert yanit.status_code == 201
+
+
+def test_ucretli_danisan_icin_istisna_turu_yok_disinda_olamaz():
+    for tur in ("KANSER", "SEHIT_GAZI"):
+        yanit, _ = _kod_olustur("?ucretli_mi=true&istisna_turu=" + tur)
+        assert yanit.status_code == 422 and "Ücretli" in yanit.json()["detail"]
+
+
+def test_izinli_istisna_listesi_arayuzun_sundugu_degerlerle_ayni():
+    assert sunucu.IZINLI_ISTISNA_TURLERI == ("YOK", "KANSER", "SEHIT_GAZI")
+    kaynak = (Path(__file__).resolve().parent.parent / "danisan_diyalog.py").read_text(encoding="utf-8")
+    for deger in sunucu.IZINLI_ISTISNA_TURLERI:
+        assert f'"{deger}"' in kaynak
+

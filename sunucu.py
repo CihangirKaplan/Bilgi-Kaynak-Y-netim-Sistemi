@@ -2147,8 +2147,17 @@ def randevu_iptal_et(randevu_id: int, kullanici_id: int = Depends(izin_kontrol("
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# istisna_turu yalnızca bu üç değerden biri olabilir; serbest metin (ad, tanı vb.) kişisel veri sızıntısına yol açar.
+IZINLI_ISTISNA_TURLERI = ("YOK", "KANSER", "SEHIT_GAZI")
+
+
 @app.post("/api/danisan-kodlari", status_code=201)
 def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
+    # Doğrulama veritabanına bağlanmadan önce yapılır; gelen metin hata mesajına da yazılmaz.
+    if istisna_turu not in IZINLI_ISTISNA_TURLERI:
+        raise HTTPException(status_code=422, detail="Geçersiz istisna türü. İzinli değerler: " + ", ".join(IZINLI_ISTISNA_TURLERI) + ".")
+    if ucretli_mi and istisna_turu != "YOK":
+        raise HTTPException(status_code=422, detail="Ücretli danışan için istisna türü YOK olmalıdır.")
     conn = None
     cursor = None
     try:
