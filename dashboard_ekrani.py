@@ -157,7 +157,7 @@ QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
 """ + CUBUK_STILI
 # Özet kartı -> (açılacak sayfa, cihaz durumu filtresi, ipucu). Filtre yalnızca Cihaz Envanteri'nde uygulanır.
 KART_HEDEFLERI = {
-    "randevu": ("Randevu Takvimi", None, "Randevu takvimini aç"),
+    "randevu": ("Randevu Yönetimi", None, "Randevuları aç"),
     "rezervasyon": ("Cihaz Rezervasyonu", None, "Cihaz rezervasyonlarını aç"),
     "aktif_cihaz": ("Cihaz Envanteri", "Kullanima_Hazir", "Kullanıma hazır cihazları envanterde göster"),
     "bakimdaki_cihaz": ("Cihaz Envanteri", "Bakimda", "Bakımdaki cihazları envanterde göster"),
