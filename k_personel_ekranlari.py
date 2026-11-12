@@ -16,6 +16,7 @@ from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
+import turkce_mesaj_kutusu as tmk
 
 
 def kayit_tarihi_bicimle(deger):
@@ -160,7 +161,7 @@ class KullaniciPersonelEkrani(QWidget):
         secili_satirlar = self.tablo.selectionModel().selectedRows()
         
         if not secili_satirlar:
-            QMessageBox.warning(self, "Uyarı", "Lütfen tablodan durumunu değiştirmek istediğiniz kullanıcıyı seçin.")
+            tmk.uyari(self, "Uyarı", "Lütfen tablodan durumunu değiştirmek istediğiniz kullanıcıyı seçin.")
             return
 
         satir = secili_satirlar[0].row()
@@ -173,7 +174,7 @@ class KullaniciPersonelEkrani(QWidget):
         ).strip().upper()
 
         if rol_kodu == "ADMIN":
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "İşlem Engellendi",
                 "ADMIN kullanıcısının aktiflik durumu değiştirilemez."
@@ -181,13 +182,13 @@ class KullaniciPersonelEkrani(QWidget):
             return
 
         if not kullanici_id:
-            QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
+            tmk.hata(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
             return
 
         # Dinamik soru sorma mantığı
         islem_sorusu = "aktife almak" if "Pasif" in mevcut_durum_metni else "pasife almak"
         
-        cevap = QMessageBox.question(
+        cevap = tmk.soru(
             self, "Onay",
             f"'{kullanici_adi}' adlı kullanıcıyı {islem_sorusu} istediğinize emin misiniz?",
             QMessageBox.Yes | QMessageBox.No
@@ -204,19 +205,19 @@ class KullaniciPersonelEkrani(QWidget):
                     return
                 if res.status_code == 200:
                     yeni_durum_bilgisi = "Aktif" if res.json().get("yeni_durum") else "Pasif"
-                    QMessageBox.information(self, "Başarılı", f"Kullanıcı başarıyla {yeni_durum_bilgisi} duruma getirildi.")
+                    tmk.bilgi(self, "Başarılı", f"Kullanıcı başarıyla {yeni_durum_bilgisi} duruma getirildi.")
                     self.verileri_cek() 
                 elif res.status_code == 403:
-                    QMessageBox.warning(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))
+                    tmk.uyari(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))
                 else:
-                    QMessageBox.critical(self, "Hata", f"Sunucu hatası: {res.status_code}")
+                    tmk.hata(self, "Hata", f"Sunucu hatası: {res.status_code}")
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+                tmk.hata(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
     def secili_kullanici_rol_degistir(self):
         secili_satirlar = self.tablo.selectionModel().selectedRows()
         
         if not secili_satirlar:
-            QMessageBox.warning(self, "Uyarı", "Lütfen tablodan rolünü değiştirmek istediğiniz kullanıcıyı seçin.")
+            tmk.uyari(self, "Uyarı", "Lütfen tablodan rolünü değiştirmek istediğiniz kullanıcıyı seçin.")
             return
 
         satir = secili_satirlar[0].row()
@@ -225,7 +226,7 @@ class KullaniciPersonelEkrani(QWidget):
         mevcut_rol = self.tablo.item(satir, 3).data(Qt.UserRole) or self.tablo.item(satir, 3).text()
 
         if str(mevcut_rol).strip().upper() == "ADMIN":
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "İşlem Engellendi",
                 "ADMIN kullanıcısının rolü değiştirilemez."
@@ -236,11 +237,11 @@ class KullaniciPersonelEkrani(QWidget):
         # YENİ KONTROL: 4. sütundaki durumu (Aktif/Pasif) oku
         durum = self.tablo.item(satir, 4).text()
         if "Pasif" in durum:
-            QMessageBox.warning(self, "İşlem Reddedildi", "Pasif durumdaki bir kullanıcının rolü değiştirilemez.")
+            tmk.uyari(self, "İşlem Reddedildi", "Pasif durumdaki bir kullanıcının rolü değiştirilemez.")
             return
 
         if not kullanici_id:
-            QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
+            tmk.hata(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
             return
 
         form = RolDegistirFormu(
@@ -254,7 +255,7 @@ class KullaniciPersonelEkrani(QWidget):
         """Seçili psikologun görüşme odalarını düzenleme penceresini açar."""
         secim = self.tablo.selectionModel().selectedRows()
         if not secim:
-            QMessageBox.warning(self, "Kullanıcı Seçilmedi", "Lütfen oda yetkilerini düzenlemek istediğiniz psikoloğu tablodan seçin.")
+            tmk.uyari(self, "Kullanıcı Seçilmedi", "Lütfen oda yetkilerini düzenlemek istediğiniz psikoloğu tablodan seçin.")
             return
 
         satir = secim[0].row()
@@ -264,10 +265,10 @@ class KullaniciPersonelEkrani(QWidget):
         rol_kodu = str((rol_item.data(Qt.UserRole) or rol_item.text()) if rol_item is not None else "")
 
         if rol_kodu.upper() != "PSIKOLOG":
-            QMessageBox.information(self, "Oda Yetkisi", "Oda yetkisi yalnızca psikolog rolündeki kullanıcılar için tanımlanır.")
+            tmk.bilgi(self, "Oda Yetkisi", "Oda yetkisi yalnızca psikolog rolündeki kullanıcılar için tanımlanır.")
             return
         if not kullanici_id:
-            QMessageBox.critical(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
+            tmk.hata(self, "Hata", "Kullanıcı ID'si bulunamadı. Lütfen tabloyu yenileyin.")
             return
 
         OdaYetkileriFormu(self.api_url, self.token, kullanici_id, ad_item.text(), self).exec()
@@ -385,7 +386,7 @@ class KullaniciPersonelEkrani(QWidget):
         if d is None:
             return
         kullanici_adi, talep_id = d.property("kullanici_adi"), d.property("talep_id")
-        onay = QMessageBox.question(
+        onay = tmk.soru(
             self, "Talebi Kapat",
             f"'{kullanici_adi}' kullanıcısının parola sıfırlama talebi, parolası sıfırlanmadan kapatılsın mı?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -402,9 +403,9 @@ class KullaniciPersonelEkrani(QWidget):
                     mesaj = cevap.json().get("detail", "Talep kapatılamadı.")
                 except ValueError:
                     mesaj = "Talep kapatılamadı."
-                QMessageBox.warning(self, "İşlem Başarısız", str(mesaj))
+                tmk.uyari(self, "İşlem Başarısız", str(mesaj))
         except requests.RequestException:
-            QMessageBox.critical(self, "Bağlantı Hatası", "Sunucudan yanıt alınamadı. Lütfen tekrar deneyin.")
+            tmk.hata(self, "Bağlantı Hatası", "Sunucudan yanıt alınamadı. Lütfen tekrar deneyin.")
         self.talepleri_yukle()
 
     def secili_kullanici_parola_sifirla(self):
@@ -413,7 +414,7 @@ class KullaniciPersonelEkrani(QWidget):
         secim = self.tablo.selectionModel().selectedRows()
 
         if not secim:
-            QMessageBox.warning(
+            tmk.uyari(
     self,
     "Kullanıcı Seçilmedi",
     "Lütfen parolasını sıfırlamak istediğiniz kullanıcıyı seçin."
@@ -424,7 +425,7 @@ class KullaniciPersonelEkrani(QWidget):
         kullanici_item = self.tablo.item(satir, 1)
 
         if kullanici_item is None:
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Hata", "Kullanıcı bilgisi bulunamadı."
             )
             return
@@ -433,7 +434,7 @@ class KullaniciPersonelEkrani(QWidget):
         kullanici_adi = kullanici_item.text()
 
         if not kullanici_id:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Hata",
                 "Kullanıcı ID'si bulunamadı."
@@ -444,7 +445,7 @@ class KullaniciPersonelEkrani(QWidget):
 
     def parola_sifirla(self, kullanici_id, kullanici_adi):
         """Verilen kullanıcının parolasını ADMIN aracılığıyla sıfırlar (onay ister, geçici parolayı gösterir)."""
-        onay = QMessageBox.question(
+        onay = tmk.soru(
     self,
     "Parola Sıfırlama Onayı",
     f"'{kullanici_adi}' kullanıcısının parolası sıfırlansın mı?\n\n"
@@ -487,7 +488,7 @@ class KullaniciPersonelEkrani(QWidget):
                 except ValueError:
                     mesaj = "Parola sıfırlanamadı."
 
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "İşlem Başarısız",
                     str(mesaj)
@@ -498,7 +499,7 @@ class KullaniciPersonelEkrani(QWidget):
             gecici_parola = sonuc.get("gecici_parola")
 
             if not gecici_parola:
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "Hata",
                     "İşlem sonucunda geçici parola alınamadı. "
@@ -512,7 +513,7 @@ class KullaniciPersonelEkrani(QWidget):
             self.talepleri_yukle()
 
         except requests.RequestException:
-            QMessageBox.critical(
+            tmk.hata(
                 self,
                 "Bağlantı Hatası",
                 "Sunucudan yanıt alınamadı.\\n\\n"
@@ -949,7 +950,7 @@ def atanabilir_rolleri_yukle(api_url, token, combo, islem):
             combo.addItem(rol_adi, rol_id)
 
     except (ValueError, TypeError, KeyError, OSError) as hata:
-        QMessageBox.warning(
+        tmk.uyari(
             combo.window(),
             "Roller Yüklenemedi",
             str(hata),
@@ -1195,7 +1196,7 @@ class KullaniciOlusturFormu(QDialog):
     def kaydet(self):
         rol_id = self.combo_rol.currentData()
         if rol_id is None:
-            QMessageBox.warning(self, "Uyarı", "Lütfen bir rol seçiniz.")
+            tmk.uyari(self, "Uyarı", "Lütfen bir rol seçiniz.")
             return
 
         rol_adi = self.secili_rol_adi()
@@ -1207,7 +1208,7 @@ class KullaniciOlusturFormu(QDialog):
                 ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
                 hata = ogrenci_bilgisi_dogrula(ogrenci)
                 if hata:
-                    QMessageBox.warning(self, "Uyarı", hata)
+                    tmk.uyari(self, "Uyarı", hata)
                     return
             except NameError:
                 pass
@@ -1223,7 +1224,7 @@ class KullaniciOlusturFormu(QDialog):
                     secilen_oda_idleri.append(item.data(Qt.UserRole))
             
             if not secilen_oda_idleri:
-                QMessageBox.warning(self, "Eksik Seçim", "Psikolog rolü için lütfen en az bir adet görüşme odası seçiniz!")
+                tmk.uyari(self, "Eksik Seçim", "Psikolog rolü için lütfen en az bir adet görüşme odası seçiniz!")
                 return
         # =======================================================
 
@@ -1240,7 +1241,7 @@ class KullaniciOlusturFormu(QDialog):
             kullanici_adi = self.input_kullanici_adi.text().strip()
             
         if not kullanici_adi:
-            QMessageBox.warning(self, "Uyarı", "Kullanıcı adı boş bırakılamaz.")
+            tmk.uyari(self, "Uyarı", "Kullanıcı adı boş bırakılamaz.")
             return
 
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -1282,7 +1283,7 @@ class KullaniciOlusturFormu(QDialog):
                 personel_kodu = sonuc.get("personel_kodu")
 
                 if not personel_kodu:
-                    QMessageBox.critical(
+                    tmk.hata(
                         self,
                         "Eksik Sunucu Yanıtı",
                         "Sunucu personel kodu döndürmedi. "
@@ -1324,7 +1325,7 @@ class KullaniciOlusturFormu(QDialog):
                 self.adjustSize()
                 
             elif cevap.status_code == 409:
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "Hata",
                     sunucu_hata_mesaji(
@@ -1333,10 +1334,10 @@ class KullaniciOlusturFormu(QDialog):
                     ),
                 )
             else:
-                 QMessageBox.critical(self, "Hata", f"Sunucu hatası: Kod {cevap.status_code}")
+                 tmk.hata(self, "Hata", f"Sunucu hatası: Kod {cevap.status_code}")
 
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            tmk.hata(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
 
 class OdaYetkileriFormu(QDialog):
@@ -1405,7 +1406,7 @@ class OdaYetkileriFormu(QDialog):
             if oturum_hatasi_mi(mevcut_cevabi):
                 return
             if oda_cevabi.status_code != 200 or mevcut_cevabi.status_code != 200:
-                QMessageBox.warning(
+                tmk.uyari(
                     self, "Odalar Yüklenemedi",
                     sunucu_hata_mesaji(mevcut_cevabi if mevcut_cevabi.status_code != 200 else oda_cevabi,
                                        "Odalar yüklenemedi."),
@@ -1422,7 +1423,7 @@ class OdaYetkileriFormu(QDialog):
                 self.liste_odalar.addItem(oge)
             self.btn_kaydet.setEnabled(True)
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
 
     def secilen_oda_idleri(self):
         return [
@@ -1434,7 +1435,7 @@ class OdaYetkileriFormu(QDialog):
     def kaydet(self):
         secilen = self.secilen_oda_idleri()
         if not secilen:
-            QMessageBox.warning(self, "Eksik Seçim", "Psikolog için en az bir görüşme odası seçilmelidir.")
+            tmk.uyari(self, "Eksik Seçim", "Psikolog için en az bir görüşme odası seçilmelidir.")
             return
         try:
             cevap = oturum_kontrollu_istek(
@@ -1444,12 +1445,12 @@ class OdaYetkileriFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Oda yetkileri güncellendi.")
+                tmk.bilgi(self, "Başarılı", "Oda yetkileri güncellendi.")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
+                tmk.uyari(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            tmk.hata(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
 
 class RolDegistirFormu(QDialog):
@@ -1687,7 +1688,7 @@ class RolDegistirFormu(QDialog):
         hedef_admin = ROL_ID_ADLARI.get(yeni_rol_id) == "ADMIN"
 
         if mevcut_admin or hedef_admin:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "İşlem Engellendi",
                 "ADMIN rolü atanamaz veya başka bir role dönüştürülemez."
@@ -1695,11 +1696,11 @@ class RolDegistirFormu(QDialog):
             return
 
         if yeni_rol_id is None:
-            QMessageBox.warning(self, "Uyarı", "Lütfen listeden yeni bir rol seçiniz.")
+            tmk.uyari(self, "Uyarı", "Lütfen listeden yeni bir rol seçiniz.")
             return
 
         if ROL_ID_ADLARI.get(yeni_rol_id) == str(self.mevcut_rol).upper():
-            QMessageBox.information(
+            tmk.bilgi(
                 self,
                 "Rol Zaten Atanmış",
                 f"Bu kullanıcı zaten {self.combo_rol.currentText()} rolüne sahip.\n"
@@ -1713,13 +1714,13 @@ class RolDegistirFormu(QDialog):
         if ROL_ID_ADLARI.get(yeni_rol_id) == "PSIKOLOG":
             secilen_odalar = self.secilen_oda_idleri()
             if not secilen_odalar:
-                QMessageBox.warning(self, "Eksik Seçim", "Psikolog rolü için en az bir görüşme odası seçilmelidir.")
+                tmk.uyari(self, "Eksik Seçim", "Psikolog rolü için en az bir görüşme odası seçilmelidir.")
                 return
             veri["oda_idleri"] = secilen_odalar
 
         if ROL_ID_ADLARI.get(yeni_rol_id) == DANISMA_OGRENCISI:
             if self.ogrenci_kaydi_var is None:
-                QMessageBox.warning(
+                tmk.uyari(
                     self, "Uyarı",
                     "Öğrenci kaydı doğrulanamadı."
                 )
@@ -1733,7 +1734,7 @@ class RolDegistirFormu(QDialog):
                 )
                 hata = ogrenci_bilgisi_dogrula(ogrenci)
                 if hata:
-                    QMessageBox.warning(self, "Uyarı", hata)
+                    tmk.uyari(self, "Uyarı", hata)
                     return
                 veri.update(ogrenci)
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -1744,10 +1745,10 @@ class RolDegistirFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
+                tmk.bilgi(self, "Başarılı", "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
                 self.accept()
             elif cevap.status_code == 422:
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "Eksik veya Hatalı Bilgi",
                     sunucu_hata_mesaji(cevap, "Öğrenci bilgilerini kontrol edin.")
@@ -1757,25 +1758,25 @@ class RolDegistirFormu(QDialog):
                     cevap, "Rol güncellemesi tamamlanamadı."
                 )
                 if "zaten seçilen role sahip" in hata:
-                    QMessageBox.information(
+                    tmk.bilgi(
                         self,
                         "Rol Zaten Atanmış",
                         f"Bu kullanıcı zaten {self.combo_rol.currentText()} rolüne sahip.\n"
                         "Herhangi bir değişiklik yapılmadı."
                     )
                 else:
-                    QMessageBox.warning(
+                    tmk.uyari(
                         self, "İşlem Tamamlanamadı", hata
                     )
             elif cevap.status_code == 403:
-                QMessageBox.warning(
+                tmk.uyari(
                     self, "Yetki Hatası",
                     "Bu işlem için yetkiniz yok."
                 )
             else:
-                QMessageBox.critical(
+                tmk.hata(
                     self, "Hata",
                     f"Sunucu hatası: {cevap.text}"
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            tmk.hata(self, "Hata", f"Bağlantı hatası:\n{str(e)}")

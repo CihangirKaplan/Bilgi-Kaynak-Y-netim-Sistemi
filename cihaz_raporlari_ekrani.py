@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import turkce_mesaj_kutusu as tmk
 
 
 class CihazRaporlariEkrani(QWidget):
@@ -340,7 +341,7 @@ class CihazRaporlariEkrani(QWidget):
 
     def excel_aktar(self):
         if self._son_veri is None:
-            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            tmk.bilgi(self, "Excel'e Aktar", "Önce raporu getirin.")
             return
 
         varsayilan = f"cihaz_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -355,7 +356,7 @@ class CihazRaporlariEkrani(QWidget):
         try:
             excel_dosyasi_olustur(self._son_veri, self._son_filtre, dosya_yolu)
         except OSError as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Kaydedilemedi",
                 "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
@@ -363,13 +364,13 @@ class CihazRaporlariEkrani(QWidget):
             )
             return
 
-        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+        tmk.bilgi(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
 
     def yenile(self):
         try:
             params = self._parametreler()
         except ValueError as hata:
-            QMessageBox.warning(self, "Geçersiz Tarih", str(hata))
+            tmk.uyari(self, "Geçersiz Tarih", str(hata))
             return
 
         if not self._cihazlar_yuklendi:
@@ -387,7 +388,7 @@ class CihazRaporlariEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Rapor Hatası", f"Rapor bilgileri alınamadı:\n{hata}"
             )
             return

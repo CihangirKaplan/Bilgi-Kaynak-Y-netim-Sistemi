@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QMessageBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+import turkce_mesaj_kutusu as tmk
 
 
 def rol_etiketi(rol):
@@ -92,7 +93,7 @@ class RolIzinSayfasi(QWidget):
                 timeout=5,
             )
         except requests.exceptions.RequestException as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
             return
 
         if yanit.status_code != 200:
@@ -100,7 +101,7 @@ class RolIzinSayfasi(QWidget):
                 detay = str(yanit.json().get("detail", ""))
             except ValueError:
                 detay = ""
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Hata", f"Matris alınamadı (Kod {yanit.status_code}).\n{detay}"
             )
             return

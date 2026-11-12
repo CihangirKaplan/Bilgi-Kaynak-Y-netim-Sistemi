@@ -17,6 +17,7 @@ from tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, hap, islem_butonlari, metin_item, sayfa_basligi, sayi_cipi,
     sil_onayi, tablo_olustur, tarih_goster, yenile_butonu_olustur,
 )
+import turkce_mesaj_kutusu as tmk
 
 # Sık kullanılan tekrar aralıkları: (görünen ad, gün). "Özel" her zaman en sonda durur.
 HAZIR_PERIYOTLAR = (
@@ -319,7 +320,7 @@ class PlanFormu(QDialog):
         veri = self.veri_olustur()
         hata = self.dogrula(veri)
         if hata:
-            QMessageBox.warning(self, "Uyarı", hata)
+            tmk.uyari(self, "Uyarı", hata)
             return
         yontem = "PUT" if self.plan else "POST"
         adres = f"{self.api_url}/api/bakim-planlari" + (f"/{self.plan['plan_id']}" if self.plan else "")
@@ -331,9 +332,9 @@ class PlanFormu(QDialog):
             if cevap.status_code in (200, 201):
                 self.accept()
             else:
-                QMessageBox.warning(self, "Plan kaydedilemedi", hata_metni(cevap, "Plan kaydedilemedi."))
+                tmk.uyari(self, "Plan kaydedilemedi", hata_metni(cevap, "Plan kaydedilemedi."))
         except Exception:
-            QMessageBox.critical(self, "Bağlantı hatası", "Sunucuya ulaşılamadı. Lütfen tekrar deneyin.")
+            tmk.hata(self, "Bağlantı hatası", "Sunucuya ulaşılamadı. Lütfen tekrar deneyin.")
 
 
 class BakimPlanlariEkrani(QWidget):
@@ -497,6 +498,6 @@ class BakimPlanlariEkrani(QWidget):
             if cevap.status_code == 200:
                 self.verileri_yukle()
             else:
-                QMessageBox.warning(self, "Silinemedi", hata_metni(cevap, "Plan silinemedi."))
+                tmk.uyari(self, "Silinemedi", hata_metni(cevap, "Plan silinemedi."))
         except Exception:
-            QMessageBox.critical(self, "Bağlantı hatası", "Sunucuya ulaşılamadı. Lütfen tekrar deneyin.")
+            tmk.hata(self, "Bağlantı hatası", "Sunucuya ulaşılamadı. Lütfen tekrar deneyin.")

@@ -11,12 +11,13 @@ from main_window import AnaPencere, dinamik_rol_tanimla
 from sifre_degistir_ekrani import SifreDegistirEkrani
 from parola_talebi_dialog import ParolaTalebiDialog
 import faulthandler, traceback
+import turkce_mesaj_kutusu as tmk
 faulthandler.enable()
 
 def hata_yakala(tip, deger, tb):
     metin = "".join(traceback.format_exception(tip, deger, tb))
     print(metin)
-    QMessageBox.critical(None, "Beklenmeyen Hata", metin)
+    tmk.hata(None, "Beklenmeyen Hata", metin)
 
 sys.excepthook = hata_yakala
 
@@ -463,7 +464,7 @@ class LoginEkrani(QWidget):
                 aktif_rol = self.rol_adindan_koda(r_id, veri.get("rol_adi"))
 
                 if not aktif_rol:
-                    QMessageBox.warning(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
+                    tmk.uyari(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
                     return
 
                 # 3. Hataları sıfırla ve ana pencereyi aç
@@ -498,7 +499,7 @@ class LoginEkrani(QWidget):
                 self.kilitle(saniye)
             elif cevap.status_code == 403:
                 hata_mesaji = veri.get("detail", "Erişim reddedildi.")
-                QMessageBox.warning(self, "Giriş Engellendi", hata_mesaji)
+                tmk.uyari(self, "Giriş Engellendi", hata_mesaji)
                 self.sifre_input.clear()
                 self.sifre_input.setFocus()
                 return

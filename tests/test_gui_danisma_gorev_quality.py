@@ -85,14 +85,15 @@ def test_gui_aktif_gorev_yoksa_bitirme(ortam):
         "durum": "AKTIF_DEGIL"
     }
 
-    EKRAN_SINIFI.gorev_bitir(ekran)
+    with patch("danisma_masasi_ekrani.tmk.uyari") as uyari:
+        EKRAN_SINIFI.gorev_bitir(ekran)
 
     ekran._istek.assert_called_once_with(
         "GET",
         "/api/danisma/oturum/aktif",
     )
 
-    mesaj.warning.assert_called_once()
+    uyari.assert_called_once()
     ekran.yenile.assert_called_once_with()
 
 
@@ -141,7 +142,10 @@ def test_gui_gorev_bitir_onayla(ortam):
 
     pencere.clickedButton.return_value = evet
 
-    EKRAN_SINIFI.gorev_bitir(ekran)
+    with patch("danisma_masasi_ekrani.tmk.bilgi") as bilgi:
+        EKRAN_SINIFI.gorev_bitir(ekran)
+
+    bilgi.assert_called_once()
 
     assert ekran._istek.call_args_list == [
         call("GET", "/api/danisma/oturum/aktif"),
@@ -154,8 +158,8 @@ def test_gui_gorev_bitir_onayla(ortam):
 
     ekran.yenile.assert_called_once_with()
 
-    mesaj.information.assert_called_once()
 
-    bilgi_metni = mesaj.information.call_args.args[2]
+
+    bilgi_metni = bilgi.call_args.args[2]
 
     assert "1 saat 1 dakika" in bilgi_metni

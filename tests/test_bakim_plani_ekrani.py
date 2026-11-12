@@ -155,7 +155,7 @@ def test_yeni_plan_post_gonderir_ve_kabul_edilirse_kapanir(yeni_form):
     f.hazir_secildi(3)
     f.spin_uyari.setValue(14)
     with patch.object(modul, "oturum_kontrollu_istek", return_value=cevap(201, {"plan_id": 9})) as istek, \
-         patch.object(QMessageBox, "warning") as uyar:
+         patch.object(modul.tmk, "uyari") as uyar:
         f.kaydet()
     adres = istek.call_args.args
     assert adres == ("POST", "http://x/api/bakim-planlari")
@@ -172,7 +172,7 @@ def test_sunucu_hatasi_mesajini_gosterir_ve_form_acik_kalir(yeni_form):
     doldur(f)
     with patch.object(modul, "oturum_kontrollu_istek",
                       return_value=cevap(409, {"detail": "Bu cihaz için aynı türde aktif bir plan zaten var."})), \
-         patch.object(QMessageBox, "warning") as uyar:
+         patch.object(modul.tmk, "uyari") as uyar:
         f.kaydet()
     assert "aynı türde aktif" in uyar.call_args.args[2]
     assert f.result() != QDialog.Accepted
@@ -182,7 +182,7 @@ def test_bag_lanti_hatasi_cokmez_ve_ayrinti_sizdirmaz(yeni_form):
     f = yeni_form
     doldur(f)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=OSError("GIZLI_ADRES")), \
-         patch.object(QMessageBox, "critical") as kritik:
+         patch.object(modul.tmk, "hata") as kritik:
         f.kaydet()
     assert "GIZLI_ADRES" not in kritik.call_args.args[2]
     assert f.result() != QDialog.Accepted
@@ -190,7 +190,7 @@ def test_bag_lanti_hatasi_cokmez_ve_ayrinti_sizdirmaz(yeni_form):
 
 def test_eksik_bilgiyle_istek_gonderilmez(yeni_form):
     f = yeni_form
-    with patch.object(modul, "oturum_kontrollu_istek") as istek, patch.object(QMessageBox, "warning") as uyar:
+    with patch.object(modul, "oturum_kontrollu_istek") as istek, patch.object(modul.tmk, "uyari") as uyar:
         f.kaydet()                                                       # cihaz seçilmedi
     istek.assert_not_called()
     assert "cihaz" in uyar.call_args.args[2].lower()
@@ -202,7 +202,7 @@ def test_oturum_bitmisse_mesaj_gosterilmez(yeni_form):
     bitmis = cevap(401)
     bitmis._tkys_oturum_reddedildi = True
     with patch.object(modul, "oturum_kontrollu_istek", return_value=bitmis), \
-         patch.object(QMessageBox, "warning") as uyar:
+         patch.object(modul.tmk, "uyari") as uyar:
         f.kaydet()
     uyar.assert_not_called()
 
@@ -334,7 +334,7 @@ def test_silme_reddedilirse_istek_gitmez(ekran):
 def test_silme_basarisizsa_sunucu_mesaji_gosterilir(ekran):
     with patch.object(modul, "sil_onayi", return_value=True), \
          patch.object(modul, "oturum_kontrollu_istek", return_value=cevap(404, {"detail": "Plan bulunamadı."})), \
-         patch.object(QMessageBox, "warning") as uyar:
+         patch.object(modul.tmk, "uyari") as uyar:
         ekran.plan_sil(1)
     assert uyar.call_args.args[2] == "Plan bulunamadı."
 

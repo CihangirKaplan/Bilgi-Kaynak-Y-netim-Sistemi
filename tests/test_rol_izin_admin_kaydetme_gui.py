@@ -1,3 +1,4 @@
+import turkce_mesaj_kutusu as tmk
 import inspect
 from unittest.mock import patch
 
@@ -60,7 +61,7 @@ def test_diger_rol_duzenlenirken_admin_izni_korunur(qt_app):
     pencere.rol_checkboxlar[3].setChecked(False)
 
     with patch.object(modul.requests, "put") as istek:
-        with patch.object(QMessageBox, "information"):
+        with patch.object(tmk, "bilgi"):
             istek.return_value.status_code = 200
             pencere.kaydet()
 
@@ -78,7 +79,7 @@ def test_admin_rolu_yuklenmezse_kaydetme_engellenir(qt_app):
     pencere = diyalog_olustur(roller)
 
     with patch.object(modul.requests, "put") as istek:
-        with patch.object(QMessageBox, "warning") as uyari:
+        with patch.object(tmk, "uyari") as uyari:
             pencere.kaydet()
 
     istek.assert_not_called()

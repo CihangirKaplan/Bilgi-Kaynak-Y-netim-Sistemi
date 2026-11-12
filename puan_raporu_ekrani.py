@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import turkce_mesaj_kutusu as tmk
 
 DONEMLER = ["Bu Yıl", "Geçen Yıl", "Son 6 Ay", "Bu Ay", "Tümü", "Tarih Aralığı"]
 TURLER = [("Tümü", None), ("Gönüllü Öğrenci", "GONULLU"), ("Danışma Masası Öğrencisi", "DANISMA_MASASI")]
@@ -349,7 +350,7 @@ class PuanRaporuEkrani(QWidget):
         try:
             params = self._parametreler()
         except ValueError as hata:
-            QMessageBox.warning(self, "Geçersiz Tarih", str(hata))
+            tmk.uyari(self, "Geçersiz Tarih", str(hata))
             return
 
         self._yukleniyor = True
@@ -364,7 +365,7 @@ class PuanRaporuEkrani(QWidget):
                 yanit.raise_for_status()
                 veri = yanit.json()
             except (requests.RequestException, ValueError) as hata:
-                QMessageBox.warning(self, "Rapor Hatası", f"Puan raporu alınamadı:\n{hata}")
+                tmk.uyari(self, "Rapor Hatası", f"Puan raporu alınamadı:\n{hata}")
                 return
         finally:
             self._yukleniyor = False
@@ -495,7 +496,7 @@ class PuanRaporuEkrani(QWidget):
     # ------------------------------------------------------------------ excel
     def excel_aktar(self):
         if self._son_params is None:
-            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            tmk.bilgi(self, "Excel'e Aktar", "Önce raporu getirin.")
             return
 
         varsayilan = f"puan_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -518,13 +519,13 @@ class PuanRaporuEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{hata}")
+            tmk.uyari(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{hata}")
             return
 
         try:
             excel_dosyasi_olustur(veri, self._son_filtre, dosya_yolu)
         except OSError as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Kaydedilemedi",
                 "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
@@ -532,4 +533,4 @@ class PuanRaporuEkrani(QWidget):
             )
             return
 
-        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+        tmk.bilgi(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")

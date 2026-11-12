@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
+import turkce_mesaj_kutusu as tmk
 
 
 def gecmis_gorev_tarihi_bicimle(deger):
@@ -970,7 +971,7 @@ class DanismaMasasiEkrani(QWidget):
             if isinstance(hata, OturumSonaErdiHatasi):
                 return
 
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Görev Başlatılamadı",
                 str(hata)
@@ -990,7 +991,7 @@ class DanismaMasasiEkrani(QWidget):
             )
 
             if aktif.get("durum") != "AKTIF":
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "Uyarı",
                     "Devam eden bir göreviniz "
@@ -1055,7 +1056,7 @@ class DanismaMasasiEkrani(QWidget):
 
             self.yenile()
 
-            QMessageBox.information(
+            tmk.bilgi(
                 self,
                 "Görev Tamamlandı",
                 "Göreviniz başarıyla bitirildi."
@@ -1074,7 +1075,7 @@ class DanismaMasasiEkrani(QWidget):
             if isinstance(hata, OturumSonaErdiHatasi):
                 return
 
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Görev Bitirilemedi",
                 str(hata)

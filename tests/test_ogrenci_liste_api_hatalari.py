@@ -1,4 +1,5 @@
 """Öğrenci listesi API hata mesajlarının regresyon testleri."""
+import turkce_mesaj_kutusu as tmk
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -23,7 +24,7 @@ def test_ogrenci_listesi_http_hatasi(durum, beklenen):
         _istek=lambda *a, **k: cevap,
     )
 
-    with patch.object(QMessageBox, "warning") as uyari:
+    with patch.object(tmk, "uyari") as uyari:
         modul.OgrenciYonetimEkrani.yenile(ekran)
 
     uyari.assert_called_once()
@@ -40,7 +41,7 @@ def test_ogrenci_listesi_baglanti_hatasi():
     with patch.object(
         modul, "oturum_kontrollu_istek",
         side_effect=requests.exceptions.ConnectionError("Gizli teknik detay"),
-    ), patch.object(QMessageBox, "warning") as uyari:
+    ), patch.object(tmk, "uyari") as uyari:
         sonuc = modul.OgrenciYonetimEkrani._istek(
             ekran, "GET", "/api/ogrenciler-yonetim"
         )

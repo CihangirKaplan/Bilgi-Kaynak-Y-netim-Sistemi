@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 from istemci_modelleri import IstemciRandevu
 from ui_components import StandartButon
+import turkce_mesaj_kutusu as tmk
 
 # ======================================================================
 #  APT-002: YENİ RANDEVU OLUŞTURMA FORMU
@@ -353,7 +354,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
 
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -384,7 +385,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
 
                 self.odalari_filtrele()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
@@ -412,7 +413,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                     self.cmb_odalar.model().item(0).setEnabled(False)
 
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
 
     def _onceden_psikolog_sec(self):
         """Danışanlar sayfasından açıldıysa psikolog önceden seçilir (kilitli psikolog hesabında dokunulmaz)."""
@@ -449,7 +450,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                     kod = danisan.get("danisan_kod_id")
                     self.cmb_danisan_kodu.addItem(kod, kod)
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
 
         if onceki:
             index = self.cmb_danisan_kodu.findData(onceki)
@@ -462,7 +463,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             not getattr(self, "_doluluk_dogrulandi", False)
             or bool(getattr(self, "_form_hatalari", {}))
         ):
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Saat Uygunluğu",
                 "Saat uygunluğu doğrulanamadı. "
@@ -475,19 +476,19 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         secilen_psikolog_id = self.cmb_psikologlar.currentData()
 
         if not secilen_danisan_kodu:
-            QMessageBox.warning(self, "Eksik Veri", "Lütfen bir danışan kodu seçiniz veya yeni oluşturunuz.")
+            tmk.uyari(self, "Eksik Veri", "Lütfen bir danışan kodu seçiniz veya yeni oluşturunuz.")
             return
         if secilen_psikolog_id is None:
-            QMessageBox.warning(self, "Eksik Veri", "Lütfen bir psikolog seçiniz.")
+            tmk.uyari(self, "Eksik Veri", "Lütfen bir psikolog seçiniz.")
             return
         if secilen_oda_id is None:
-            QMessageBox.warning(self, "Eksik Veri", "Lütfen geçerli bir görüşme odası seçiniz.")
+            tmk.uyari(self, "Eksik Veri", "Lütfen geçerli bir görüşme odası seçiniz.")
             return
 
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
         saat_str = self.saat_secimi()
         if saat_str is None:
-            QMessageBox.warning(self, "Saat Seçilemedi", "Seçilen tarih için boş saat yok ya da seçili saat dolu. Lütfen başka bir saat, oda veya tarih seçiniz.")
+            tmk.uyari(self, "Saat Seçilemedi", "Seçilen tarih için boş saat yok ya da seçili saat dolu. Lütfen başka bir saat, oda veya tarih seçiniz.")
             return
         saat_int = int(saat_str.split(":")[0])
 
@@ -509,16 +510,16 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 return
 
             if cevap.status_code in (200, 201):
-                QMessageBox.information(self, "Başarılı", "Randevu başarıyla oluşturuldu!")
+                tmk.bilgi(self, "Başarılı", "Randevu başarıyla oluşturuldu!")
                 self.veriler_degisti.emit()
                 self.close()
             elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Çakışma", "Seçilen psikolog veya oda bu saatlerde dolu!")
+                tmk.uyari(self, "Çakışma", "Seçilen psikolog veya oda bu saatlerde dolu!")
             else:
                 hata_detay = cevap.json().get('detail', 'Bilinmeyen hata') if cevap.headers.get("content-type") == "application/json" else cevap.text
-                QMessageBox.warning(self, "Hata", f"İşlem başarısız: {hata_detay}")
+                tmk.uyari(self, "Hata", f"İşlem başarısız: {hata_detay}")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", str(e))
+            tmk.hata(self, "Bağlantı Hatası", str(e))
 
 # ======================================================================
 #  APT-003 & APT-004: MEVCUT RANDEVUYU DÜZENLEME VE İPTAL FORMU
@@ -629,7 +630,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
 
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -646,7 +647,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 
                 self.odalari_filtrele()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
@@ -674,7 +675,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
                     self.cmb_odalar.model().item(0).setEnabled(False)
 
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
+            tmk.uyari(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
 
     def eski_verileri_arayuze_bas(self):
         self.txt_danisan_kodu.setText(self.eski_veriler["danisan_kod_id"])
@@ -698,7 +699,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             not getattr(self, "_doluluk_dogrulandi", False)
             or bool(getattr(self, "_form_hatalari", {}))
         ):
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Saat Uygunluğu",
                 "Saat uygunluğu doğrulanamadı. "
@@ -708,13 +709,13 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 
         secilen_oda_id = self.cmb_odalar.currentData()
         if secilen_oda_id is None:
-            QMessageBox.warning(self, "Eksik Veri", "Lütfen bir görüşme odası seçiniz.")
+            tmk.uyari(self, "Eksik Veri", "Lütfen bir görüşme odası seçiniz.")
             return
 
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
         saat_str = self.saat_secimi()
         if saat_str is None:
-            QMessageBox.warning(self, "Saat Seçilemedi", "Seçilen tarihte boş saat yok ya da seçili saat dolu. Randevu güncellenemedi; başka bir saat, oda veya tarih seçiniz.")
+            tmk.uyari(self, "Saat Seçilemedi", "Seçilen tarihte boş saat yok ya da seçili saat dolu. Randevu güncellenemedi; başka bir saat, oda veya tarih seçiniz.")
             return
         saat_int = int(saat_str.split(":")[0])
 
@@ -733,15 +734,15 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             if oturum_hatasi_mi(cevap): return
 
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Randevu başarıyla güncellendi!")
+                tmk.bilgi(self, "Başarılı", "Randevu başarıyla güncellendi!")
                 self.veriler_degisti.emit()
                 self.close()
             elif cevap.status_code == 409:
-                QMessageBox.warning(self, "Çakışma", "Seçilen saatte oda veya psikolog dolu!")
+                tmk.uyari(self, "Çakışma", "Seçilen saatte oda veya psikolog dolu!")
             else:
-                QMessageBox.warning(self, "Hata", f"Güncellenemedi: {cevap.json().get('detail')}")
+                tmk.uyari(self, "Hata", f"Güncellenemedi: {cevap.json().get('detail')}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", str(e))
+            tmk.hata(self, "Hata", str(e))
 
 
 # ======================================================================
@@ -1137,14 +1138,14 @@ class RandevuAnaEkrani(QWidget):
     def duzenle_secilen(self):
         randevu = self.secili_randevu()
         if randevu is None:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz randevuyu tablodan seçin.")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz randevuyu tablodan seçin.")
             return
 
         durum = randevu.get("durum")
         if durum != "PLANLANDI":
             ek = ("\n\nLütfen bu danışan için yeni bir randevu oluşturun."
                   if durum == "IPTAL_EDILDI" else "")
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "İşlem Engellendi",
                 f"'{DURUM_ETIKETLERI.get(durum, durum)}' durumundaki randevular düzenlenemez. "
                 f"Yalnızca planlanmış randevular düzenlenebilir.{ek}",
@@ -1162,21 +1163,21 @@ class RandevuAnaEkrani(QWidget):
     def iptal_et_secilen(self):
         randevu = self.secili_randevu()
         if randevu is None:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen iptal etmek istediğiniz randevuyu tablodan seçin.")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen iptal etmek istediğiniz randevuyu tablodan seçin.")
             return
 
         durum = randevu.get("durum")
         if durum == "IPTAL_EDILDI":
-            QMessageBox.information(self, "Bilgi", "Bu randevu zaten iptal edilmiş.")
+            tmk.bilgi(self, "Bilgi", "Bu randevu zaten iptal edilmiş.")
             return
         if durum != "PLANLANDI":
-            QMessageBox.information(
+            tmk.bilgi(
                 self, "Bilgi",
                 f"'{DURUM_ETIKETLERI.get(durum, durum)}' durumundaki bir randevu iptal edilemez.",
             )
             return
 
-        onay = QMessageBox.question(
+        onay = tmk.soru(
             self, "İptal Onayı", "Seçili randevuyu iptal etmek istediğinize emin misiniz?",
             QMessageBox.Yes | QMessageBox.No,
         )
@@ -1192,13 +1193,13 @@ class RandevuAnaEkrani(QWidget):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Randevu iptal edildi.")
+                tmk.bilgi(self, "Başarılı", "Randevu iptal edildi.")
                 self.verileri_cek()
             else:
                 try:
                     mesaj = cevap.json().get("detail")
                 except Exception:
                     mesaj = None
-                QMessageBox.warning(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
+                tmk.uyari(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+            tmk.hata(self, "Hata", f"Bağlantı hatası: {str(e)}")

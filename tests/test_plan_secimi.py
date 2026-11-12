@@ -1,4 +1,5 @@
 """Bakım/kalibrasyon formlarındaki 'Bağlı plan' seçimi. Gerçek API ve açılır pencere kullanılmaz."""
+import turkce_mesaj_kutusu as tmk
 import datetime
 from unittest.mock import MagicMock, patch
 
@@ -132,8 +133,8 @@ def test_plan_listesi_alinamazsa_form_plansiz_calismaya_devam_eder(qt_app):
 def gonderilen(modul_adi, form, **kayit_alanlari):
     """Formu doldurup Kaydet'e basar; sunucuya giden JSON gövdesini döndürür."""
     gonder = MagicMock(return_value=cevap(201, {}))
-    with patch.object(modul_adi, "cakisma_cozumlu_istek", gonder), patch.object(QMessageBox, "information"), \
-         patch.object(QMessageBox, "warning"):
+    with patch.object(modul_adi, "cakisma_cozumlu_istek", gonder), patch.object(tmk, "bilgi"), \
+         patch.object(tmk, "uyari"):
         form.kaydet()
     return gonder.call_args.args[3]
 

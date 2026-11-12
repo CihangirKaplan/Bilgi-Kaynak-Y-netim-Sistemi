@@ -4,6 +4,7 @@ from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
+import turkce_mesaj_kutusu as tmk
 
 class OgrenciEkleDialog(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -74,24 +75,24 @@ class OgrenciEkleDialog(QDialog):
 
         # 1. Boş Alan Kontrolü
         if not ad_soyad or not ogrenci_no:
-            QMessageBox.warning(self, "Uyarı", "Yıldızlı (*) alanların doldurulması zorunludur.")
+            tmk.uyari(self, "Uyarı", "Yıldızlı (*) alanların doldurulması zorunludur.")
             return
 
         # 2. Öğrenci Numarası Kontrolü (Sadece Rakam Olmalı)
         if not ogrenci_no.isdigit():
-            QMessageBox.warning(self, "Uyarı", "Öğrenci numarası sadece rakamlardan oluşmalıdır. Harf giremezsiniz!")
+            tmk.uyari(self, "Uyarı", "Öğrenci numarası sadece rakamlardan oluşmalıdır. Harf giremezsiniz!")
             return
 
         # 3. Telefon Kontrolü (Eğer doldurulduysa kurallara uymak zorunda)
         if telefon:
             if not telefon.isdigit():
-                QMessageBox.warning(self, "Uyarı", "Telefon numarasına harf veya boşluk giremezsiniz. Sadece rakam olmalıdır!")
+                tmk.uyari(self, "Uyarı", "Telefon numarasına harf veya boşluk giremezsiniz. Sadece rakam olmalıdır!")
                 return
             if len(telefon) != 11:
-                QMessageBox.warning(self, "Uyarı", "Telefon numarası tam 11 haneli olmalıdır.\n(Örn: 05551234567)")
+                tmk.uyari(self, "Uyarı", "Telefon numarası tam 11 haneli olmalıdır.\n(Örn: 05551234567)")
                 return
             if not telefon.startswith("0"):
-                QMessageBox.warning(self, "Uyarı", "Telefon numarası '0' ile başlamalıdır.")
+                tmk.uyari(self, "Uyarı", "Telefon numarası '0' ile başlamalıdır.")
                 return
 
         # Her şey kurallara uygunsa veritabanı için paketi hazırla
@@ -111,11 +112,11 @@ class OgrenciEkleDialog(QDialog):
                 return
 
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Öğrenci sisteme başarıyla eklendi!")
+                tmk.bilgi(self, "Başarılı", "Öğrenci sisteme başarıyla eklendi!")
                 self.accept()
             elif res.status_code == 400:
-                QMessageBox.warning(self, "Hata", res.json().get("detail", "Bu öğrenci numarası sistemde zaten var."))
+                tmk.uyari(self, "Hata", res.json().get("detail", "Bu öğrenci numarası sistemde zaten var."))
             else:
-                QMessageBox.critical(self, "Hata", "Öğrenci kaydedilemedi.")
+                tmk.hata(self, "Hata", "Öğrenci kaydedilemedi.")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")

@@ -10,6 +10,7 @@ from api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi
 )
+import turkce_mesaj_kutusu as tmk
 
 
 STIL = """
@@ -200,7 +201,7 @@ class FaaliyetTurleriDialog(QDialog):
             return cevap
 
         except Exception:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Bağlantı Hatası",
                 "Sunucuya bağlanılamadı."
@@ -217,7 +218,7 @@ class FaaliyetTurleriDialog(QDialog):
             return
 
         if cevap.status_code != 200:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Hata",
                 "Faaliyet türleri yüklenemedi."
@@ -250,7 +251,7 @@ class FaaliyetTurleriDialog(QDialog):
         puan = self.puan.value()
 
         if not ad:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Eksik Bilgi",
                 "Faaliyet adı boş olamaz."
@@ -273,7 +274,7 @@ class FaaliyetTurleriDialog(QDialog):
                 return
 
             if cevap.status_code == 201:
-                QMessageBox.information(
+                tmk.bilgi(
                     self,
                     "Başarılı",
                     "Yeni faaliyet türü eklendi."
@@ -292,7 +293,7 @@ class FaaliyetTurleriDialog(QDialog):
                 except ValueError:
                     mesaj = "Faaliyet türü eklenemedi."
 
-                QMessageBox.warning(
+                tmk.uyari(
                     self,
                     "Hata",
                     str(mesaj)
@@ -306,7 +307,7 @@ class FaaliyetTurleriDialog(QDialog):
         secili = self.tablo.selectionModel().selectedRows()
 
         if not secili:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Faaliyet Seç",
                 "Lütfen düzenlemek istediğiniz faaliyet türünü seçin."
@@ -365,7 +366,7 @@ class FaaliyetTurleriDialog(QDialog):
             yeni_puan = puan_alani.value()
 
             if not yeni_ad:
-                QMessageBox.warning(
+                tmk.uyari(
                     pencere,
                     "Eksik Bilgi",
                     "Faaliyet adı boş olamaz."
@@ -450,7 +451,7 @@ class FaaliyetTurleriDialog(QDialog):
                     pencere.accept()
                     self.verileri_yukle()
 
-                    QMessageBox.information(
+                    tmk.bilgi(
                         self,
                         "Başarılı",
                         "Faaliyet türü başarıyla güncellendi."
@@ -464,7 +465,7 @@ class FaaliyetTurleriDialog(QDialog):
                     except ValueError:
                         mesaj = "Faaliyet türü güncellenemedi."
 
-                    QMessageBox.warning(
+                    tmk.uyari(
                         pencere,
                         "Hata",
                         str(mesaj)

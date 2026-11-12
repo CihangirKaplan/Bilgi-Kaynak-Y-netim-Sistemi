@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QAbstractItemView, QInputDialog, QLineEdit
 )
 from PySide6.QtCore import Qt
+import turkce_mesaj_kutusu as tmk
 
 class BirimYonetimDialog(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -111,7 +112,7 @@ class BirimYonetimDialog(QDialog):
                     self.tablo.setItem(i, 0, item_id)
                     self.tablo.setItem(i, 1, item_ad)
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Veriler yüklenemedi: {str(e)}")
+            tmk.hata(self, "Hata", f"Veriler yüklenemedi: {str(e)}")
 
     def birim_ekle(self):
         yeni_ad, ok = QInputDialog.getText(self, "Yeni Birim Ekle", "Eklenecek birim adını girin (Örn: SAAT, KİŞİ):")
@@ -124,18 +125,18 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Yeni birim başarıyla eklendi!")
+                    tmk.bilgi(self, "Başarılı", "Yeni birim başarıyla eklendi!")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Hata", res.json().get("detail", "Eklenemedi."))
+                    tmk.uyari(self, "Hata", res.json().get("detail", "Eklenemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                tmk.hata(self, "Hata", f"Bağlantı hatası: {str(e)}")
 
     def birim_duzenle(self):
         secili = self.tablo.selectionModel().selectedRows()
 
         if not secili:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen güncellemek istediğiniz kutucuğu (birimi) tablodan seçin!")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen güncellemek istediğiniz kutucuğu (birimi) tablodan seçin!")
             return
 
         satir = secili[0].row()
@@ -152,17 +153,17 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Birim başarıyla güncellendi!")
+                    tmk.bilgi(self, "Başarılı", "Birim başarıyla güncellendi!")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Hata", res.json().get("detail", "Güncellenemedi."))
+                    tmk.uyari(self, "Hata", res.json().get("detail", "Güncellenemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                tmk.hata(self, "Hata", f"Bağlantı hatası: {str(e)}")
 
     def birim_sil(self):
         secili = self.tablo.selectionModel().selectedRows()
         if not secili:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen silmek istediğiniz birimi tablodan seçin!")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen silmek istediğiniz birimi tablodan seçin!")
             return
 
         satir = secili[0].row()
@@ -182,9 +183,10 @@ class BirimYonetimDialog(QDialog):
             QPushButton { background-color: #E2E8F0; color: #1E293B; padding: 6px 15px; border-radius: 4px; font-weight: bold; border: 1px solid #CBD5E1; }
             QPushButton:hover { background-color: #CBD5E1; }
             /* Yes butonunu kan kırmızı yapıyoruz */
-            QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; border: none; }
-            QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
+            QPushButton[text="Evet"] { background-color: #E74C3C; color: white; border: none; }
+            QPushButton[text="Evet"]:hover { background-color: #C0392B; }
         """)
+        tmk.butonlari_turkcelestir(soru)
         cevap = soru.exec()
 
         if cevap == QMessageBox.Yes:
@@ -194,9 +196,9 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Birim başarıyla silindi.")
+                    tmk.bilgi(self, "Başarılı", "Birim başarıyla silindi.")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Kritik Uyarı", res.json().get("detail", "Silinemedi."))
+                    tmk.uyari(self, "Kritik Uyarı", res.json().get("detail", "Silinemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                tmk.hata(self, "Hata", f"Bağlantı hatası: {str(e)}")

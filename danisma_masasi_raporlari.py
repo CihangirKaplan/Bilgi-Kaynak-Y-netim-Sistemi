@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import turkce_mesaj_kutusu as tmk
 
 
 class DanismaMasasiRaporlari(QWidget):
@@ -406,7 +407,7 @@ class DanismaMasasiRaporlari(QWidget):
 
     def excel_aktar(self):
         if self._son_veri is None:
-            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            tmk.bilgi(self, "Excel'e Aktar", "Önce raporu getirin.")
             return
 
         varsayilan = f"danisma_masasi_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -421,7 +422,7 @@ class DanismaMasasiRaporlari(QWidget):
         try:
             excel_dosyasi_olustur(self._son_veri, self._son_filtre, dosya_yolu)
         except OSError as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Kaydedilemedi",
                 "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
@@ -429,13 +430,13 @@ class DanismaMasasiRaporlari(QWidget):
             )
             return
 
-        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+        tmk.bilgi(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
 
     def yenile(self):
         try:
             params = self._parametreler()
         except ValueError as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Geçersiz Tarih", str(hata)
             )
             return
@@ -453,7 +454,7 @@ class DanismaMasasiRaporlari(QWidget):
             veri = yanit.json()
 
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Rapor Hatası",
                 f"Rapor bilgileri alınamadı:\n{hata}"

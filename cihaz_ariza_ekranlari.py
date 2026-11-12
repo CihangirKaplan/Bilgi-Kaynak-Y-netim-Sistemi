@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
+import turkce_mesaj_kutusu as tmk
 
 # Ortak form stiline ek: kırmızı "bildir" butonu ve uyarı kutusu
 ARIZA_FORM_STIL = FORM_STIL + """
@@ -106,10 +107,10 @@ class ArizaBildirimFormu(QDialog):
         aciliyet = self.cmb_aciliyet.currentText()
 
         if not cihaz_id:
-            QMessageBox.warning(self, "Hata", "Lütfen geçerli bir cihaz seçin.")
+            tmk.uyari(self, "Hata", "Lütfen geçerli bir cihaz seçin.")
             return
         if not baslik or not aciklama:
-            QMessageBox.warning(self, "Hata", "Lütfen arıza başlığı ve açıklama alanlarını doldurun.")
+            tmk.uyari(self, "Hata", "Lütfen arıza başlığı ve açıklama alanlarını doldurun.")
             return
 
         veri = {
@@ -124,13 +125,13 @@ class ArizaBildirimFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code in [200, 201]:
-                QMessageBox.information(self, "Başarılı", "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
+                tmk.bilgi(self, "Başarılı", "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
                 self.accept()
             else:
                 hata = str(cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.'))
-                QMessageBox.critical(self, "Hata", hata)
+                tmk.hata(self, "Hata", hata)
         except Exception:
-            QMessageBox.critical(self, "Bağlantı Hatası", "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.")
+            tmk.hata(self, "Bağlantı Hatası", "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.")
 
 
 class ArizaYonetimEkrani(QWidget):
@@ -314,7 +315,7 @@ class ArizaDuzenleFormu(QDialog):
         aciklama = self.txt_aciklama.toPlainText().strip()
 
         if not baslik or not aciklama:
-            QMessageBox.warning(self, "Hata", "Başlık ve açıklama boş bırakılamaz.")
+            tmk.uyari(self, "Hata", "Başlık ve açıklama boş bırakılamaz.")
             return
 
         veri = {
@@ -333,9 +334,9 @@ class ArizaDuzenleFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Arıza kaydı başarıyla güncellendi.")
+                tmk.bilgi(self, "Başarılı", "Arıza kaydı başarıyla güncellendi.")
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", f"İşlem reddedildi. Kod: {cevap.status_code}")
+                tmk.uyari(self, "Hata", f"İşlem reddedildi. Kod: {cevap.status_code}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucuya bağlanılamadı: {str(e)}")
+            tmk.hata(self, "Hata", f"Sunucuya bağlanılamadı: {str(e)}")

@@ -23,6 +23,7 @@ from randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani, RandevuOlusturFormu,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
+import turkce_mesaj_kutusu as tmk
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
 DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Ücret", "İstisna", "Randevu", "Durum"]
@@ -567,7 +568,7 @@ class DanisanlarEkrani(QWidget):
         """Seçili danışan ve onu oluşturan psikologla yeni randevu formunu açar."""
         danisan = self.secili_danisan()
         if danisan is None:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen randevu oluşturmak istediğiniz danışanı seçin.")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen randevu oluşturmak istediğiniz danışanı seçin.")
             return
         self.randevu_formu = RandevuOlusturFormu(
             self.api_url, self.token, self.mevcut_psikolog_id,

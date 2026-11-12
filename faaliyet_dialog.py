@@ -7,6 +7,7 @@ from api_yoneticisi import (
 
 # Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
 from PySide6.QtCore import QTimer
+import turkce_mesaj_kutusu as tmk
 
 class FaaliyetEkleDialog(QDialog):
     KISAYOL_GENISLIGI = 170       # "Yeni ... Ekle" düğmelerinin ortak genişliği (px)
@@ -235,7 +236,7 @@ class FaaliyetEkleDialog(QDialog):
         if not hasattr(
             ana_pencere, "ogrenciler_sayfasina_git"
         ):
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Uyarı",
                 "Öğrenciler sayfasına geçilemiyor."
@@ -258,7 +259,7 @@ class FaaliyetEkleDialog(QDialog):
         miktar = self.sb_miktar.value()
 
         if not ogrenci_id or not faaliyet_id or not birim_id:
-            QMessageBox.warning(self, "Uyarı", "Lütfen öğrenci, faaliyet ve birim alanlarını doldurunuz.")
+            tmk.uyari(self, "Uyarı", "Lütfen öğrenci, faaliyet ve birim alanlarını doldurunuz.")
             return
 
         payload = {
@@ -289,13 +290,13 @@ class FaaliyetEkleDialog(QDialog):
                     return
             
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
+                tmk.bilgi(self, "Başarılı", res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
                 self.accept()
             else:
                 try:
                     hata_detayi = res.json().get("detail", res.text)
                 except:
                     hata_detayi = res.text
-                QMessageBox.critical(self, "Hata", f"İşlem başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+                tmk.hata(self, "Hata", f"İşlem başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")

@@ -32,6 +32,7 @@ from k_personel_ekranlari import KullaniciPersonelEkrani
 from faaliyet_dialog import FaaliyetEkleDialog
 from sayfalar_rol_izin import RolIzinSayfasi
 from rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
+import turkce_mesaj_kutusu as tmk
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -1317,7 +1318,7 @@ QLabel {
     def _kisisel_sifre_degisti(self):
         self.sifre_penceresi.close()
 
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Şifre Değiştirildi",
             "Şifreniz başarıyla değiştirildi. Lütfen yeniden giriş yapın."
@@ -1473,13 +1474,12 @@ QLabel {
             else "Oturumunuz geçersiz hâle gelmiştir.\n\n"
         )
 
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Oturum Sona Erdi",
             mesaj + "Uygulamayı kullanmaya devam etmek için "
             "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
-        )
+                    )
 
         self.oturum_kapat()
 
@@ -1581,7 +1581,7 @@ QLabel {
         if acik_sayfa in self.nav_btnler:
             self._bildirimden_sayfaya_git(acik_sayfa)
 
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Yetkileriniz Güncellendi",
             "Yöneticiniz yetkilerinizde değişiklik yaptı. Menü yeni yetkilerinize göre yenilendi.",
@@ -1590,7 +1590,7 @@ QLabel {
     def _rol_degisti_uyarisi(self):
         """Rol değişince yetkilerin tamamı değişir; yeni rol için yeniden giriş yapılır."""
         self._yetki_zamanlayici.stop()
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Rolünüz Değişti",
             "Yöneticiniz rolünüzü değiştirdi.\n\n"
@@ -1628,14 +1628,13 @@ QLabel {
         self._oturum_zamanlayici.stop()
         self._oturum_pencerelerini_temizle()
 
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Oturum Sona Erdi",
             "Oturum süreniz sona ermiştir.\n\n"
             "Uygulamayı kullanmaya devam etmek için "
             "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
-        )
+                    )
 
         self.oturum_kapat()
 
@@ -1677,7 +1676,7 @@ QLabel {
         secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
 
         if not secili_satirlar:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz odayı tablodan seçin.")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen düzenlemek istediğiniz odayı tablodan seçin.")
             return
 
         satir = secili_satirlar[0].row()
@@ -1718,14 +1717,14 @@ QLabel {
 
         secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
         if not secili_satirlar:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen pasife almak istediğiniz odayı tablodan seçin.")
+            tmk.uyari(self, "Seçim Yapılmadı", "Lütfen pasife almak istediğiniz odayı tablodan seçin.")
             return
 
         satir = secili_satirlar[0].row()
         oda_id = int(self.oda_tablosu.item(satir, 0).text())
         oda_adi = self.oda_tablosu.item(satir, 1).text()
 
-        cevap = QMessageBox.question(
+        cevap = tmk.soru(
             self, "Onay",
             f"'{oda_adi}' adlı odayı pasife almak istediğinize emin misiniz?\nBu işlem randevu sistemini etkileyebilir.",
             QMessageBox.Yes | QMessageBox.No
@@ -1744,7 +1743,7 @@ QLabel {
                     return
 
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Oda başarıyla pasife alındı.")
+                    tmk.bilgi(self, "Başarılı", "Oda başarıyla pasife alındı.")
                     self.odalari_getir()
                 else:
                     if res.status_code == 409:
@@ -1752,11 +1751,11 @@ QLabel {
                             mesaj = res.json().get("detail") or "Oda pasife alınamadı."
                         except Exception:
                             mesaj = "Oda pasife alınamadı."
-                        QMessageBox.warning(self, "Oda Pasife Alınamadı", mesaj)
+                        tmk.uyari(self, "Oda Pasife Alınamadı", mesaj)
                     else:
-                        QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
+                        tmk.uyari(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+                tmk.hata(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
 
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
@@ -1814,7 +1813,7 @@ QLabel {
 
     def ogrenciler_sayfasina_git(self, yeni_ekle=False):
         if "Öğrenciler" not in self.nav_btnler:
-            QMessageBox.warning(
+            tmk.uyari(
                 self,
                 "Yetki",
                 "Öğrenciler sayfasına erişim yetkiniz yok."
@@ -2489,7 +2488,7 @@ QLabel {
 
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{str(e)}")
+            tmk.hata(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{str(e)}")
 
     def yeni_faaliyet_ekrani_ac(self):
         from faaliyet_dialog import FaaliyetEkleDialog
@@ -2509,7 +2508,7 @@ QLabel {
         if not hasattr(self, 'tablo_faaliyetler'):
             print("HATA: 'tablo_faaliyetler' adında bir tablo yok! Acaba tablonun adı başka bir şey mi?")
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Hata", "Tablo bulunamadı! Terminale bak.")
+            tmk.hata(self, "Hata", "Tablo bulunamadı! Terminale bak.")
             return
 
         secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
@@ -2525,6 +2524,8 @@ QLabel {
                 QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
                 QPushButton:hover { background-color: #3498DB; }
             """)
+            uyari.setStandardButtons(QMessageBox.Ok)
+            tmk.butonlari_turkcelestir(uyari)
             uyari.exec()
             return
 
@@ -2569,6 +2570,8 @@ QLabel {
                 QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
                 QPushButton:hover { background-color: #3498DB; }
             """)
+            uyari.setStandardButtons(QMessageBox.Ok)
+            tmk.butonlari_turkcelestir(uyari)
             uyari.exec()
             return
 
@@ -2591,10 +2594,11 @@ QLabel {
             QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
             QPushButton { background-color: #BDC3C7; color: black; padding: 6px 15px; border-radius: 4px; }
             QPushButton:hover { background-color: #95A5A6; }
-            QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; }
-            QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
+            QPushButton[text="Evet"] { background-color: #E74C3C; color: white; }
+            QPushButton[text="Evet"]:hover { background-color: #C0392B; }
         """)
 
+        tmk.butonlari_turkcelestir(soru)
         cevap = soru.exec()
 
         if cevap == QMessageBox.Yes:
@@ -2618,6 +2622,8 @@ QLabel {
                         QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; }
                         QPushButton:hover { background-color: #2ECC71; }
                     """)
+                    bilgi.setStandardButtons(QMessageBox.Ok)
+                    tmk.butonlari_turkcelestir(bilgi)
                     bilgi.exec()
 
                     self.faaliyet_tablosunu_guncelle() # Tabloyu yenile ki kayıt ekrandan kaybolsun
@@ -2626,9 +2632,9 @@ QLabel {
                         hata_detayi = res.json().get("detail", res.text)
                     except:
                         hata_detayi = res.text
-                    QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+                    tmk.hata(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
             except Exception as e:
-                QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+                tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
     def faaliyet_turleri_ekrani_ac(self):
         from faaliyet_turleri_dialog import FaaliyetTurleriDialog
@@ -2662,7 +2668,7 @@ QLabel {
         # Sayfanın ve verilerin yüklü olup olmadığını kontrol et
         if not hasattr(self, 'rol_izin_sayfasi') or not hasattr(self.rol_izin_sayfasi, 'roller'):
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Uyarı", "Lütfen önce 'Rol & İzin Yönetimi' sekmesini açın.")
+            tmk.uyari(self, "Uyarı", "Lütfen önce 'Rol & İzin Yönetimi' sekmesini açın.")
             return
             
         from rol_izin_diyaloglari import RolDuzenleDialog
@@ -2680,7 +2686,7 @@ QLabel {
     def izin_duzenle_tetikle(self):
         izin_id = self.rol_izin_sayfasi.secili_izin_id()
         if not izin_id:
-            QMessageBox.warning(self, "Uyarı", "Lütfen düzenlemek istediğiniz izni listeden seçin.")
+            tmk.uyari(self, "Uyarı", "Lütfen düzenlemek istediğiniz izni listeden seçin.")
             return
             
         dialog = IzinDuzenleDialog(

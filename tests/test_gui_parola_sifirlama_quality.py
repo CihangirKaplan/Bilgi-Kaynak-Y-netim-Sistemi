@@ -49,7 +49,7 @@ def sahte_cevap(kod, veri):
 
 def test_kullanici_secilmeden_sifirlama_yapilamaz(ekran):
     with (
-        patch("k_personel_ekranlari.QMessageBox.warning") as uyari,
+        patch("k_personel_ekranlari.tmk.uyari") as uyari,
         patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -63,7 +63,7 @@ def test_islem_iptal_edilince_api_cagrilmaz(ekran):
 
     with (
         patch(
-            "k_personel_ekranlari.QMessageBox.question",
+            "k_personel_ekranlari.tmk.soru",
             return_value=QMessageBox.No,
         ),
         patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
@@ -86,7 +86,7 @@ def test_basarili_sifirlama_dogru_apiyi_cagirir(ekran):
 
     with (
         patch(
-            "k_personel_ekranlari.QMessageBox.question",
+            "k_personel_ekranlari.tmk.soru",
             return_value=QMessageBox.Yes,
         ),
         patch(
@@ -134,7 +134,7 @@ def test_yetki_hatasinda_parola_gosterilmez(ekran):
 
     with (
         patch(
-            "k_personel_ekranlari.QMessageBox.question",
+            "k_personel_ekranlari.tmk.soru",
             return_value=QMessageBox.Yes,
         ),
         patch(
@@ -146,7 +146,7 @@ def test_yetki_hatasinda_parola_gosterilmez(ekran):
             return_value=False,
         ),
         patch(
-            "k_personel_ekranlari.QMessageBox.warning"
+            "k_personel_ekranlari.tmk.uyari"
         ) as uyari,
         patch(
             "k_personel_ekranlari.GeciciParolaDialog"
@@ -163,7 +163,7 @@ def test_baglanti_hatasinda_tekrar_istek_atilmaz(ekran):
 
     with (
         patch(
-            "k_personel_ekranlari.QMessageBox.question",
+            "k_personel_ekranlari.tmk.soru",
             return_value=QMessageBox.Yes,
         ),
         patch(
@@ -171,7 +171,7 @@ def test_baglanti_hatasinda_tekrar_istek_atilmaz(ekran):
             side_effect=requests.Timeout("Test timeout"),
         ) as api,
         patch(
-            "k_personel_ekranlari.QMessageBox.critical"
+            "k_personel_ekranlari.tmk.hata"
         ) as hata,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -190,7 +190,7 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
 
     with (
         patch(
-            "k_personel_ekranlari.QMessageBox.question",
+            "k_personel_ekranlari.tmk.soru",
             return_value=QMessageBox.Yes,
         ),
         patch(
@@ -202,7 +202,7 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
             return_value=False,
         ),
         patch(
-            "k_personel_ekranlari.QMessageBox.warning"
+            "k_personel_ekranlari.tmk.uyari"
         ) as uyari,
         patch(
             "k_personel_ekranlari.GeciciParolaDialog"
@@ -217,7 +217,7 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
 def test_onay_penceresi_kimlik_dogrulamasini_hatirlatir(ekran):
     kullanici_sec(ekran)
     with (
-        patch("k_personel_ekranlari.QMessageBox.question", return_value=QMessageBox.No) as soru,
+        patch("k_personel_ekranlari.tmk.soru", return_value=QMessageBox.No) as soru,
         patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
     ):
         ekran.secili_kullanici_parola_sifirla()

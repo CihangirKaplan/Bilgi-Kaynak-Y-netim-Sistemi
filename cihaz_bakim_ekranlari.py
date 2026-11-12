@@ -16,6 +16,7 @@ from api_yoneticisi import (
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
+import turkce_mesaj_kutusu as tmk
 
 BAKIM_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -167,7 +168,7 @@ class YeniBakimFormu(QDialog):
             veri["plan_id"] = self.plan_secimi.plan_id()
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
-            QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            tmk.uyari(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
             return
 
         try:
@@ -175,14 +176,14 @@ class YeniBakimFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
-                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
+                tmk.bilgi(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
                 self.accept()
             else:
                 # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
                 hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
-                QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
+                tmk.uyari(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            tmk.hata(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimDuzenleFormu(QDialog):
     def __init__(self, api_url, token, bakim_verisi, parent=None):
@@ -272,7 +273,7 @@ class BakimDuzenleFormu(QDialog):
         }
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
-            QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            tmk.uyari(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
             return
 
         try:
@@ -280,13 +281,13 @@ class BakimDuzenleFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
+                tmk.bilgi(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
                 self.accept()
             else:
                 hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
-                QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
+                tmk.uyari(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            tmk.hata(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimYonetimEkrani(QWidget):
     """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
@@ -439,6 +440,6 @@ class BakimYonetimEkrani(QWidget):
                 self.verileri_yukle()
             else:
                 hata = res.json().get("detail", "Bilinmeyen hata")
-                QMessageBox.warning(self, "Silinemedi", hata)
+                tmk.uyari(self, "Silinemedi", hata)
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+            tmk.hata(self, "Hata", f"Sunucuya ulaşılamadı: {e}")

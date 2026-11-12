@@ -1,3 +1,4 @@
+import turkce_mesaj_kutusu as tmk
 
 import base64
 import json
@@ -340,12 +341,11 @@ class SifreDegistirEkrani(QWidget):
             else "Oturumunuz geçersiz hâle gelmiştir.\n\n"
         )
 
-        QMessageBox.information(
+        tmk.bilgi(
             self,
             "Oturum Sona Erdi",
             mesaj + "Uygulamayı kullanmaya devam etmek için "
-            "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
+            "lütfen yeniden giriş yapın."
         )
 
         self.close()

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDateTime
 import requests
+import turkce_mesaj_kutusu as tmk
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
@@ -197,14 +198,14 @@ class YeniRezervasyonFormu(QDialog):
                     self.cmb_oda.addItem("Aktif oda bulunamadı", None)
 
         except Exception as e:
-            QMessageBox.warning(self, "Bağlantı Hatası", "Sunucuya bağlanırken bir sorun oluştu.")
+            tmk.uyari(self, "Bağlantı Hatası", "Sunucuya bağlanırken bir sorun oluştu.")
 
     def kaydet(self):
         cihaz_id = self.cmb_cihaz.currentData()
         oda_id = self.cmb_oda.currentData()
 
         if not cihaz_id or not oda_id:
-            QMessageBox.warning(self, "Uyarı", "Geçerli bir cihaz veya oda seçilemedi. Envanteri kontrol edin.")
+            tmk.uyari(self, "Uyarı", "Geçerli bir cihaz veya oda seçilemedi. Envanteri kontrol edin.")
             return
 
         # Kullanıcının şık UI'dan seçtiği tarih ve saatleri birleştirip Backend'in anladığı formata (ISO 8601) çeviriyoruz
@@ -224,14 +225,14 @@ class YeniRezervasyonFormu(QDialog):
         )
 
         if bas_dt <= QDateTime.currentDateTime():
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Geçersiz Tarih",
                 "Rezervasyon başlangıç zamanı geçmişte olamaz."
             )
             return
 
         if bit_dt <= bas_dt:
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Geçersiz Tarih",
                 "Bitiş zamanı başlangıçtan sonra olmalıdır."
             )
@@ -255,13 +256,15 @@ class YeniRezervasyonFormu(QDialog):
                 basari.setWindowTitle("Başarılı")
                 basari.setText("✅ Rezervasyon başarıyla oluşturuldu!")
                 basari.setStyleSheet("QMessageBox { background-color: #FFFFFF; } QLabel { color: #27AE60; font-size: 13px; font-weight: bold; } QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; font-weight: bold; }")
+                basari.setStandardButtons(QMessageBox.Ok)
+                tmk.butonlari_turkcelestir(basari)
                 basari.exec()
                 self.accept()
             else:
                 hata_detay = res.json().get("detail", "Bilinmeyen bir hata oluştu.")
-                QMessageBox.warning(self, "İşlem Başarısız", hata_detay)
+                tmk.uyari(self, "İşlem Başarısız", hata_detay)
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
 class IptalOnayKutusu(QDialog):
     """Sıkıcı QMessageBox yerine geçen, son derece şık özel iptal onay ekranı"""
@@ -343,7 +346,7 @@ class RezervasyonYonetimEkrani(QWidget):
             if cevap.status_code != 200:
                 from PySide6.QtWidgets import QMessageBox
                 from api_yoneticisi import api_hata_mesaji
-                QMessageBox.warning(
+                tmk.uyari(
                     self, "Rezervasyon Listesi",
                     api_hata_mesaji(cevap),
                 )
@@ -400,7 +403,7 @@ class RezervasyonYonetimEkrani(QWidget):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             from api_yoneticisi import api_hata_mesaji
-            QMessageBox.warning(
+            tmk.uyari(
                 self, "Rezervasyon Listesi",
                 api_hata_mesaji(hata=e),
             )
@@ -429,8 +432,10 @@ class RezervasyonYonetimEkrani(QWidget):
                         msg.setWindowTitle("Başarılı")
                         msg.setText("✅ Rezervasyon başarıyla iptal edildi.")
                         msg.setStyleSheet("QMessageBox { background-color: white; } QLabel { color: #27AE60; font-size: 13px; font-weight: bold; } QPushButton { background-color: #27AE60; color: white; padding: 5px 15px; border-radius: 4px; }")
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        tmk.butonlari_turkcelestir(msg)
                         msg.exec()
                     else:
-                        QMessageBox.warning(self, "Hata", "İptal işlemi reddedildi.")
+                        tmk.uyari(self, "Hata", "İptal işlemi reddedildi.")
                 except:
-                    QMessageBox.critical(self, "Hata", "Sunucuya bağlanılamadı.")
+                    tmk.hata(self, "Hata", "Sunucuya bağlanılamadı.")

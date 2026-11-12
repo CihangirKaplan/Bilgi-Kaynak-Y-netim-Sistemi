@@ -283,7 +283,7 @@ def test_yeni_randevu_secili_danisan_ve_psikologla_acilir():
 
 def test_yeni_randevu_secim_yokken_uyari_verir():
     ekran = ekran_ac()
-    with patch.object(modul.QMessageBox, "warning") as uyari:
+    with patch.object(modul.tmk, "uyari") as uyari:
         ekran.yeni_randevu_ac()
     uyari.assert_called_once()
     assert not hasattr(ekran, "randevu_formu")

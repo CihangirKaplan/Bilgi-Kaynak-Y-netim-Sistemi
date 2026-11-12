@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLay
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
 from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+import turkce_mesaj_kutusu as tmk
 
 OKUNUR_STIL = "background-color: #F1F5F9; color: #64748B; font-weight: bold;"
 
@@ -178,16 +179,16 @@ class DanisanOlusturDialog(QDialog):
                 kod = (cevap.json().get("veri") or {}).get("danisan_kod_id")
                 self.olusan_kod = kod
                 self.txt_kod.setText(kod or "")
-                QMessageBox.information(
+                tmk.bilgi(
                     self, "Başarılı", f"Danışan kodu oluşturuldu:\n\n{kod}"
                 )
                 self.accept()
             else:
-                QMessageBox.warning(
+                tmk.uyari(
                     self, "Hata",
                     f"Danışan oluşturulamadı (Kod {cevap.status_code}).\n{self._detay(cevap)}",
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
         finally:
             self.btn_kaydet.setEnabled(True)
