@@ -674,6 +674,8 @@ FILTRE_STILI = """
         padding: 7px 10px; color: #0F172A; font-size: 13px;
     }
     QLineEdit:focus, QComboBox:focus, QDateEdit:focus { border: 1px solid #3B82F6; }
+    /* Ana pencerenin genel stili her açılır kutuya min-width: 170px verir; filtre çubuğunda geçersiz kılınır. */
+    QComboBox { min-width: 120px; }
     QCheckBox { color: #1E293B; font-size: 13px; font-weight: bold; }
     QPushButton#btn_yenile {
         background-color: white; border: 1px solid #CBD5E1; border-radius: 8px;
@@ -728,13 +730,22 @@ class RandevuAnaEkrani(QWidget):
 
     # ------------------------------------------------------------------ arayüz
     def _filtre_cubugu(self):
-        cubuk = QHBoxLayout()
-        cubuk.setSpacing(8)
+        """İki satır: üstte arama, sayaç ve Yenile; altta dönem, tarih, durum ve iptal filtreleri.
+
+        Tek satıra sığmaz: ana pencerenin genel stili her açılır kutuya min-width: 170px verir ve
+        pencere genişliği sabittir; kutular birbirinin üstüne biner.
+        """
+        kok = QVBoxLayout()
+        kok.setSpacing(8)
+        ust = QHBoxLayout()
+        ust.setSpacing(8)
+        alt = QHBoxLayout()
+        alt.setSpacing(8)
 
         self.arama = QLineEdit()
         self.arama.setPlaceholderText("Ara: danışan kodu, psikolog, oda...")
         self.arama.setClearButtonEnabled(True)
-        self.arama.setMinimumWidth(230)
+        self.arama.setMinimumWidth(200)
         self.arama.textChanged.connect(self.tabloyu_guncelle)
 
         self.cmb_donem = QComboBox()
@@ -748,6 +759,7 @@ class RandevuAnaEkrani(QWidget):
         for kutu in (self.dt_bas, self.dt_bit):
             kutu.setDisplayFormat("dd.MM.yyyy")
             kutu.setCalendarPopup(True)
+            kutu.setMinimumWidth(125)
             kutu.setVisible(False)
             kutu.dateChanged.connect(self.tabloyu_guncelle)
         self.lbl_tire = QLabel("–")
@@ -770,14 +782,17 @@ class RandevuAnaEkrani(QWidget):
         self.lbl_sayac = QLabel("")
         self.lbl_sayac.setObjectName("lbl_sayac")
 
-        for parca in (self.arama, self.cmb_donem, self.dt_bas, self.lbl_tire, self.dt_bit,
+        ust.addWidget(self.arama, 1)
+        ust.addWidget(self.lbl_sayac)
+        ust.addWidget(self.btn_yenile)
+        for parca in (self.cmb_donem, self.dt_bas, self.lbl_tire, self.dt_bit,
                       self.cmb_durum, self.chk_iptal_gizle):
-            cubuk.addWidget(parca)
-        cubuk.addStretch()
-        cubuk.addWidget(self.lbl_sayac)
-        cubuk.addWidget(self.btn_yenile)
+            alt.addWidget(parca)
+        alt.addStretch()
+        kok.addLayout(ust)
+        kok.addLayout(alt)
         self.setStyleSheet(FILTRE_STILI)
-        return cubuk
+        return kok
 
     def _donem_degisti(self, *_):
         ozel = self.cmb_donem.currentData() == "ozel"
