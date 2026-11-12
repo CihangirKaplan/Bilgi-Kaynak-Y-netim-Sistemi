@@ -220,7 +220,6 @@ MENU = [
         dict(ikon="📅", ad="Randevu Yönetimi", izin="Randevu takvimini görüntüleme",
              aciklama="Randevuları listeleme, düzenleme ve iptal etme",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
-                      ("＋  Yeni Danışan", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="👤", ad="Danışanlar", izin="Randevu oluşturma",
@@ -371,9 +370,10 @@ QLabel#modulBaslik { font-size: 22px; font-weight: 800; color: #0A1F5C; }
 QLabel#modulAlt { font-size: 13px; color: #6B7FA8; }
 QLabel#rozetYetki { background: #DBEAFE; color: #1D4ED8; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
 QLabel#rozetOkunur { background: #FEF3C7; color: #B45309; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 7px 14px; }
-QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 10px; padding: 11px 20px; font-size: 13px; font-weight: 700; }
+QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 700; }
 QPushButton#aksiyon:hover { background: #1E40AF; }
 QPushButton#aksiyon:pressed { background: #172554; }
+QToolTip { background-color: #0A1F5C; color: white; border: 1px solid #426BA5; padding: 6px 10px; font-size: 12px; }
 QLabel#bos { font-size: 40px; }
 QLabel#bosBaslik { font-size: 16px; font-weight: 800; color: #0A1F5C; }
 QLabel#bosAlt { font-size: 12px; color: #8A9BC0; }
@@ -554,6 +554,9 @@ class AnaPencere(QMainWindow):
 
         self.ust_baslik = QLabel("TKYS")
         self.gezinme_cubugu.addWidget(self.ust_baslik)
+        self.ust_sayfa = QLabel("")
+        self.ust_sayfa.setStyleSheet("color: #BFD3F2; font-size: 15px; font-weight: 700;")
+        self.gezinme_cubugu.addWidget(self.ust_sayfa)
 
         self.gezinme_cubugu.addWidget(bosluk)
 
@@ -1797,6 +1800,7 @@ QLabel {
 
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
+        self.ust_sayfa.setText(f"›   {ad}")
 
         # Ana panelden gelen durum filtresi yalnızca o geçişe aittir; menüden/bildirimden açılışta temiz başlar.
         envanter = getattr(self, "aktif_cihaz_ekrani", None)
@@ -1969,29 +1973,10 @@ QLabel {
         rol = self.aktif_rol
         govde = QWidget()
         lay = QVBoxLayout(govde)
-        lay.setContentsMargins(4, 4, 4, 20)
-        lay.setSpacing(20)
+        lay.setContentsMargins(4, 0, 4, 16)
+        lay.setSpacing(10)
 
-        # 1. Modül Başlığı ve İkonu
-        bk = kart_olustur()
-        bl = QHBoxLayout(bk)
-        bl.setContentsMargins(15, 10, 15, 10)
-        bl.setSpacing(15)
-
-        ikon = QLabel(oge["ikon"])
-        ikon.setObjectName("modulIkon")
-        ikon.setFixedSize(64, 64)
-        ikon.setAlignment(Qt.AlignCenter)
-
-        mt = QVBoxLayout()
-        mt.setSpacing(2)
-        m1 = QLabel(oge["ad"])
-        m1.setObjectName("modulBaslik")
-        m2 = QLabel(oge["aciklama"])
-        m2.setObjectName("modulAlt")
-        mt.addWidget(m1)
-        mt.addWidget(m2)
-
+        # Sayfa başlığı ve açıklaması üst çubukta (TKYS › Sayfa adı) gösterilir; sayfada ayrıca büyük başlık kartı yoktur.
         yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
 
         if oge["ad"] == "Danışma Masası Yönetimi":
@@ -2004,24 +1989,12 @@ QLabel {
                 if izin_var(rol, a[1])
             )
 
-        if yetkili:
-            rozet = QLabel(f"●  {len(yetkili)} İŞLEM YETKİSİ")
-            rozet.setObjectName("rozetYetki")
-        else:
-            rozet = QLabel("●  SALT OKUNUR")
-            rozet.setObjectName("rozetOkunur")
-
-        bl.addWidget(ikon)
-        bl.addLayout(mt)
-        bl.addStretch()
-        if oge["ad"] not in ("Danışma Masası", "Öğrenciler"):
-            bl.addWidget(rozet, 0, Qt.AlignVCenter)
-        lay.addWidget(bk)
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
         if yetkili and oge["ad"] not in ("Danışma Masası", "Danışma Masası Yönetimi"):
             ab = QHBoxLayout()
-            ab.setSpacing(12)
+            ab.setSpacing(8)
+            ab.addStretch()
             for etiket, izin_kodu in yetkili:
                 btn = QPushButton(etiket)
                 btn.setObjectName("aksiyon")
@@ -2096,7 +2069,6 @@ QLabel {
                     btn.clicked.connect(self.izin_duzenle_tetikle)
 
                 ab.addWidget(btn)
-            ab.addStretch()
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
@@ -2406,7 +2378,15 @@ QLabel {
     def hizli_danisan_kod_olustur(self):
         from danisan_diyalog import DanisanOlusturDialog
 
-        dialog = DanisanOlusturDialog(api_url=self.api_url, token=self.token, ebeveyn=self)
+        # Danışanlar sayfasında seçili psikolog varsa yeni danışan için önerilir
+        onceden = None
+        sayfa = getattr(self, 'danisanlar_ekrani', None)
+        if sayfa is not None:
+            onceden = sayfa.cmb_psikolog.currentData()
+        dialog = DanisanOlusturDialog(
+            api_url=self.api_url, token=self.token, ebeveyn=self,
+            mevcut_psikolog_id=self.kullanici_id, onceden_psikolog_id=onceden,
+        )
         if dialog.exec():
             # Kullanıcı bizzat pencereyi açıp "Danışanı Oluştur" butonuna basarsa yeni kod üretilir.
             if hasattr(self, 'randevu_ana_ekrani'):

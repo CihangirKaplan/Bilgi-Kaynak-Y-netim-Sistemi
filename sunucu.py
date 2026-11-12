@@ -1927,7 +1927,7 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
                 raise HTTPException(status_code=403, detail="Yalnızca kendi adınıza randevu oluşturabilirsiniz.")
 
         # DİKKAT EDİN BURASI DEĞİŞTİ: Artık otomatik kod üretmiyoruz, frontend'den gelen kodu kontrol ediyoruz.
-        cursor.execute("SELECT 1 FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE;", (randevu.danisan_kod_id,))
+        cursor.execute("SELECT 1 FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (randevu.danisan_kod_id,))
         if cursor.fetchone() is None:
             raise HTTPException(status_code=422, detail="Seçilen danışan kodu bulunamadı veya aktif değil.")
 
@@ -2200,7 +2200,17 @@ IZINLI_ISTISNA_TURLERI = ("YOK", "KANSER", "SEHIT_GAZI")
 
 
 @app.post("/api/danisan-kodlari", status_code=201)
-def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
+def danisan_kodu_olustur(
+    ucretli_mi: bool = True,
+    istisna_turu: str = "YOK",
+    psikolog_id: int | None = Query(None, gt=0),
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
+):
+    """Yeni danışan kodu üretir.
+
+    Psikolog hesabında danışan kendi adına açılır (psikolog_id yok sayılır). Diğer roller (admin, danışma vb.)
+    danışanın hangi psikologa ait olduğunu psikolog_id ile belirtmek zorundadır; böylece danışan sahipsiz kalmaz.
+    """
     # Doğrulama veritabanına bağlanmadan önce yapılır; gelen metin hata mesajına da yazılmaz.
     if istisna_turu not in IZINLI_ISTISNA_TURLERI:
         raise HTTPException(status_code=422, detail="Geçersiz istisna türü. İzinli değerler: " + ", ".join(IZINLI_ISTISNA_TURLERI) + ".")
@@ -2212,14 +2222,34 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # 1. İşlemi yapan kullanıcının aktif bir psikolog/personel olup olmadığını kontrol ediyoruz
-        cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
-        pers = cursor.fetchone()
-        
-        if not pers:
-            raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
-        
-        psikolog_id = pers[0]
+        # 1. İşlemi yapanın rolünü ve (varsa) aktif personel kaydını öğreniyoruz
+        cursor.execute(
+            "SELECT p.personel_id, UPPER(r.rol_adi) FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id "
+            "LEFT JOIN personel p ON p.kullanici_id = k.kullanici_id AND p.aktif_mi = TRUE "
+            "WHERE k.kullanici_id = %s;",
+            (kullanici_id,),
+        )
+        kimlik = cursor.fetchone()
+        personel_id, rol_adi = (kimlik[0], kimlik[1]) if kimlik else (None, "")
+
+        if rol_adi == "PSIKOLOG":
+            # Psikolog danışanı yalnızca kendi adına açabilir
+            if personel_id is None:
+                raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
+            olusturan_psikolog_id = personel_id
+        else:
+            # Diğer roller danışanı hangi psikologa açtığını belirtmelidir
+            if psikolog_id is None:
+                raise HTTPException(status_code=422, detail="Danışan için bir psikolog seçilmelidir.")
+            cursor.execute(
+                "SELECT p.personel_id FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id "
+                "JOIN roller r ON k.rol_id = r.rol_id "
+                "WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG';",
+                (psikolog_id,),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=422, detail="Seçilen psikolog bulunamadı.")
+            olusturan_psikolog_id = psikolog_id
 
         # 2. Otomatik danışan kodunu üret
         yeni_kod = otomatik_danisan_kodu_uret(cursor)
@@ -2231,7 +2261,7 @@ def danisan_kodu_olustur(ucretli_mi: bool = True, istisna_turu: str = "YOK", kul
             VALUES (%s, %s, %s, TRUE, %s) 
             RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id;
             """, 
-            (yeni_kod, ucretli_mi, istisna_turu, psikolog_id)
+            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id)
         )
         kayit = cursor.fetchone()
 
@@ -2539,9 +2569,10 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
 @app.get("/api/danisan-kodlari")
 def danisan_kodlari_listele(
     psikolog_id: int | None = Query(None, gt=0),
+    pasifler_dahil: bool = Query(False),
     kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
 ):
-    """Aktif danışan kodlarını (kişisel veri içermez) döndürür.
+    """Aktif danışan kodlarını (kişisel veri içermez) döndürür; pasifler_dahil=true ise pasifleri de ekler.
 
     Psikolog yalnızca kendi oluşturduğu danışanları görür (psikolog_id parametresi yok sayılır). Diğer roller
     tüm danışanları görür; psikolog_id verilirse yalnızca o psikologun (personel_id) oluşturduğu danışanlar döner.
@@ -2558,6 +2589,7 @@ def danisan_kodlari_listele(
         rol_adi = rol_kayit[0].upper() if rol_kayit else ""
 
         sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id"
+        aktif_kosulu = "TRUE" if pasifler_dahil else "aktif_mi = TRUE"
 
         # 2. Psikolog yalnızca kendi oluşturduğu danışan kodlarını görür
         if rol_adi == "PSIKOLOG":
@@ -2567,21 +2599,21 @@ def danisan_kodlari_listele(
                 raise HTTPException(status_code=403, detail="Personel kaydınız bulunamadı.")
             cursor.execute(
                 f"SELECT {sutunlar} FROM danisan_kodlari "
-                "WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
+                f"WHERE {aktif_kosulu} AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
                 (pers[0],),
             )
         elif psikolog_id is not None:
             # 3. Üst roller seçilen psikologun danışanlarını görür
             cursor.execute(
                 f"SELECT {sutunlar} FROM danisan_kodlari "
-                "WHERE aktif_mi = TRUE AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
+                f"WHERE {aktif_kosulu} AND olusturan_psikolog_id = %s ORDER BY olusturulma_tarihi DESC;",
                 (psikolog_id,),
             )
         else:
             # 4. Üst roller psikolog seçmediyse tüm aktif danışan kodlarını görür
             cursor.execute(
                 f"SELECT {sutunlar} FROM danisan_kodlari "
-                "WHERE aktif_mi = TRUE ORDER BY olusturulma_tarihi DESC;"
+                f"WHERE {aktif_kosulu} ORDER BY olusturulma_tarihi DESC;"
             )
 
         return [
@@ -2596,6 +2628,62 @@ def danisan_kodlari_listele(
             for k in cursor.fetchall()
         ]
 
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.patch("/api/danisan-kodlari/{danisan_kod_id}/durum")
+def danisan_durumunu_degistir(
+    danisan_kod_id: str,
+    aktif_mi: bool,
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
+):
+    """Danışanı pasife alır ya da yeniden aktif eder.
+
+    Danışan silinmez; randevu geçmişi korunur. Pasif danışana yeni randevu verilemez. Psikolog yalnızca kendi danışanının
+    durumunu değiştirebilir. Geleceğe dönük planlanmış randevusu olan danışan pasife alınamaz (önce randevular iptal edilir).
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT aktif_mi, olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s FOR UPDATE;",
+            (danisan_kod_id,),
+        )
+        danisan = cursor.fetchone()
+        if danisan is None:
+            raise HTTPException(status_code=404, detail="Danışan bulunamadı.")
+
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        if rol is not None and rol[0].upper() == "PSIKOLOG":
+            cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
+            personel = cursor.fetchone()
+            if personel is None or personel[0] != danisan[1]:
+                raise HTTPException(status_code=403, detail="Yalnızca kendi danışanınızın durumunu değiştirebilirsiniz.")
+
+        if danisan[0] == aktif_mi:
+            return {"durum": "basarili", "aktif_mi": aktif_mi, "mesaj": "Danışan zaten bu durumda."}
+
+        if not aktif_mi:
+            cursor.execute(
+                "SELECT COUNT(*) FROM randevular WHERE danisan_kod_id = %s AND durum = 'PLANLANDI' AND bitis_zamani > %s;",
+                (danisan_kod_id, datetime.now()),
+            )
+            planli = cursor.fetchone()[0]
+            if planli:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu danışanın {planli} planlanmış randevusu var. Pasife almadan önce randevuları iptal edin.",
+                )
+
+        cursor.execute("UPDATE danisan_kodlari SET aktif_mi = %s WHERE danisan_kod_id = %s;", (aktif_mi, danisan_kod_id))
+        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
+        conn.commit()
+        return {"durum": "basarili", "aktif_mi": aktif_mi, "mesaj": "Danışan aktif edildi." if aktif_mi else "Danışan pasife alındı."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 import danisanlar_ekrani as modul
 import main_window as mw
@@ -269,24 +269,14 @@ def test_sayfada_kisisel_veri_alani_yok():
 
 
 # ------------------------------------------------------------------ yeni randevu
-def test_yeni_randevu_secili_danisan_ve_psikologla_acilir():
+def test_danisanlar_sayfasinda_randevu_olusturma_yok():
+    """Randevu oluşturma Randevu Yönetimi'nde; bu sayfa yalnızca danışanları gösterir."""
     ekran = ekran_ac()
-    sec(ekran, "DAN-2026-0003")
-    ekran.yeni_randevu_ac()
-    form = ekran.randevu_formu
-    assert form.cmb_psikologlar.currentData() == 7
-    assert form.cmb_danisan_kodu.currentData() == "DAN-2026-0003"
-    assert [form.cmb_danisan_kodu.itemData(i) for i in range(form.cmb_danisan_kodu.count())] == ["", "DAN-2026-0003"]
-    form.close()
-    ekran.close()
 
+    sec(ekran, "DAN-2026-0001")
+    assert not hasattr(ekran, "yeni_randevu_ac") and not hasattr(ekran, "btn_yeni_randevu")
+    assert not [b for b in ekran.findChildren(QPushButton) if "Randevu" in b.text()]
 
-def test_yeni_randevu_secim_yokken_uyari_verir():
-    ekran = ekran_ac()
-    with patch.object(modul.tmk, "uyari") as uyari:
-        ekran.yeni_randevu_ac()
-    uyari.assert_called_once()
-    assert not hasattr(ekran, "randevu_formu")
     ekran.close()
 
 
@@ -301,6 +291,21 @@ def test_randevu_formunda_psikolog_degisince_danisan_listesi_yenilenir():
     assert [form.cmb_danisan_kodu.itemData(i) for i in range(form.cmb_danisan_kodu.count())] == ["", "DAN-2026-0003"]
     assert form.cmb_danisan_kodu.currentData() == ""       # eski psikologun danışanı yeni listede yok
     form.close()
+
+
+def test_ozet_kartlarinda_sayi_ve_ad_kirpilmaz():
+    ekran = ekran_ac()
+    ekran.resize(1000, 520)
+    ekran.show()
+    sec(ekran, "DAN-2026-0001")
+    ekran.btn_bolumler["Özet"].click()
+    QApplication.processEvents()
+    for sayi in ekran.ozet_sayilari.values():
+        kart = sayi.parentWidget()
+        assert kart.height() >= 60
+        for etiket in kart.findChildren(QLabel):
+            assert etiket.height() >= etiket.sizeHint().height(), etiket.text()
+    ekran.close()
 
 
 # ------------------------------------------------------------------ sunucu ucu

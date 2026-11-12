@@ -304,7 +304,7 @@ def test_durum_rozetleri_yumusak_renkli_ve_iptal_kirmizi_degil():
     assert set(rozetler) == {"Planlandı", "Tamamlandı", "Gelmedi", "İptal Edildi"}
     assert "#DBEAFE" in rozetler["Planlandı"] and "#1D4ED8" in rozetler["Planlandı"]       # mavi
     assert "#DCFCE7" in rozetler["Tamamlandı"]                                              # yeşil
-    assert "#FFEDD5" in rozetler["Gelmedi"]                                                 # turuncu
+    assert "#FCE7F3" in rozetler["Gelmedi"] and "#BE185D" in rozetler["Gelmedi"]            # pembe
     assert "#F1F5F9" in rozetler["İptal Edildi"] and "#64748B" in rozetler["İptal Edildi"]  # nötr gri
     for stil in rozetler.values():
         assert "border-radius" in stil

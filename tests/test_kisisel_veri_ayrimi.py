@@ -78,13 +78,14 @@ def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
     """Yeni bir 'danışan' ucu eklenirse (örn. ad-soyad alan bir uç) bu liste bilerek güncellenmek zorundadır."""
     bulunan = {(metot, yol) for yol_nesnesi in app.routes if hasattr(yol_nesnesi, "methods")
                for yol in [yol_nesnesi.path] if "danisan" in yol.lower() for metot in yol_nesnesi.methods}
-    assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari")}
+    assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari"),
+                       ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/durum")}      # yalnızca aktif/pasif durumu
 
 
 def _kod_olustur(sorgu_dizesi=""):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), (7,), ("DAN-2026-0099", True, "YOK", True, None, 7)]   # izin, personel, kayıt
+    c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7)]   # izin, kimlik, kayıt
     with patch("sunucu.psycopg2.connect", return_value=conn), \
             patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = TestClient(app).post("/api/danisan-kodlari" + sorgu_dizesi)
@@ -109,7 +110,8 @@ def test_kod_olusturma_yaniti_yalnizca_izinli_alanlari_icerir():
 def test_kod_olusturma_ucu_yalnizca_ucret_ve_istisna_parametresi_alir():
     import inspect
     parametreler = set(inspect.signature(sunucu.danisan_kodu_olustur).parameters)
-    assert parametreler == {"ucretli_mi", "istisna_turu", "kullanici_id"}
+    # psikolog_id yalnızca bir personel kimliğidir (kişisel veri değil); admin/danışma danışanın psikoloğunu bununla bildirir
+    assert parametreler == {"ucretli_mi", "istisna_turu", "psikolog_id", "kullanici_id"}
 
 
 def test_kod_listesi_yalnizca_kod_ucret_ve_aktiflik_dondurur():
