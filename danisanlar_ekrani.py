@@ -11,9 +11,10 @@ o psikologun danışanlarını ya da tümünü görür.
 from datetime import datetime
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QPushButton, QSplitter, QStackedWidget,
+    QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
+    QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QSplitter, QStackedWidget,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -100,6 +101,12 @@ SAYFA_STILI = """
     }
     QPushButton#segment:checked { background-color: #0A1F5C; border: 1px solid #0A1F5C; color: white; }
     QLabel#lbl_sayac { color: #64748B; font-size: 12px; font-weight: bold; }
+    QCheckBox { color: #475569; font-weight: bold; }
+    QPushButton#btn_durum {
+        background-color: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 7px 14px;
+        color: #475569; font-weight: bold;
+    }
+    QPushButton#btn_durum:hover { background-color: #F1F5F9; }
     QLabel#lbl_danisan_kodu { color: #0A1F5C; font-size: 18px; font-weight: bold; }
     QLabel#lbl_alt_baslik { color: #64748B; font-size: 12px; }
     QLabel#lbl_secim_yok { color: #64748B; font-size: 14px; font-weight: bold; }
@@ -169,6 +176,9 @@ class DanisanlarEkrani(QWidget):
         self.lbl_sayac = QLabel("")
         self.lbl_sayac.setObjectName("lbl_sayac")
 
+        self.chk_pasif = QCheckBox("Pasifleri göster")
+        self.chk_pasif.toggled.connect(lambda *_: self._danisanlari_yukle())
+
         self.btn_yenile = QPushButton("⟳  Yenile")
         self.btn_yenile.setObjectName("btn_yenile")
         self.btn_yenile.setCursor(Qt.PointingHandCursor)
@@ -176,6 +186,7 @@ class DanisanlarEkrani(QWidget):
 
         cubuk.addWidget(self.cmb_psikolog)
         cubuk.addWidget(self.arama, 1)
+        cubuk.addWidget(self.chk_pasif)
         cubuk.addWidget(self.lbl_sayac)
         cubuk.addWidget(self.btn_yenile)
         return cubuk
@@ -226,6 +237,11 @@ class DanisanlarEkrani(QWidget):
         basliklar.addWidget(self.lbl_kod)
         basliklar.addWidget(self.lbl_alt)
         baslik.addLayout(basliklar, 1)
+        self.btn_durum = QPushButton("Pasife Al")
+        self.btn_durum.setObjectName("btn_durum")
+        self.btn_durum.setCursor(Qt.PointingHandCursor)
+        self.btn_durum.clicked.connect(self.durum_degistir)
+        baslik.addWidget(self.btn_durum, 0, Qt.AlignTop)
         icerik.addLayout(baslik)
 
         dugmeler = QHBoxLayout()
@@ -430,6 +446,9 @@ class DanisanlarEkrani(QWidget):
         if psikolog_id is not None:
             params["psikolog_id"] = int(psikolog_id)
 
+        if self.chk_pasif.isChecked():
+            params["pasifler_dahil"] = "true"
+
         liste = self._api_liste_getir(
             "/api/danisan-kodlari", params=params
         )
@@ -492,6 +511,8 @@ class DanisanlarEkrani(QWidget):
                 self._hucre("Aktif" if danisan.get("aktif_mi", True) else "Pasif"),
             )
             for sutun, oge in enumerate(hucreler):
+                if not danisan.get("aktif_mi", True):
+                    oge.setForeground(QColor("#94A3B8"))     # pasif danışanlar sönük görünür
                 self.tablo.setItem(satir, sutun, oge)
             self.tablo.setRowHeight(satir, 38)
             if kod == onceki:
@@ -503,6 +524,47 @@ class DanisanlarEkrani(QWidget):
 
     def _secim_degisti(self):
         self._detay_goster(self.secili_danisan())
+
+    # ------------------------------------------------------------------ işlemler
+    @staticmethod
+    def _hata_metni(cevap):
+        try:
+            detay = cevap.json().get("detail")
+        except Exception:
+            detay = None
+        if isinstance(detay, str) and cevap.status_code in (403, 404, 409):
+            return detay
+        return api_hata_mesaji(cevap)
+
+    def durum_degistir(self):
+        """Seçili danışanı pasife alır / yeniden aktif eder (silme yoktur; randevu geçmişi korunur)."""
+        danisan = self.secili_danisan()
+        if danisan is None:
+            return
+        kod = danisan.get("danisan_kod_id")
+        aktif_olacak = not danisan.get("aktif_mi", True)
+        if aktif_olacak:
+            soru = f"{kod} yeniden aktif edilsin mi?"
+        else:
+            soru = f"{kod} pasife alınsın mı?\n\nPasif danışana yeni randevu verilemez. Geçmiş randevuları korunur."
+        if QMessageBox.question(self, "Onay", soru, QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        try:
+            cevap = oturum_kontrollu_istek(
+                "PATCH",
+                f"{self.api_url}/api/danisan-kodlari/{kod}/durum",
+                params={"aktif_mi": "true" if aktif_olacak else "false"},
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                self.verileri_cek()
+                return
+            QMessageBox.warning(self, "İşlem Yapılamadı", self._hata_metni(cevap))
+        except Exception as hata:
+            QMessageBox.warning(self, "Bağlantı Hatası", api_hata_mesaji(hata=hata))
 
     # ------------------------------------------------------------------ ayrıntı
     def _detay_goster(self, danisan):
@@ -516,6 +578,7 @@ class DanisanlarEkrani(QWidget):
         psikolog = self._psikolog_adi(danisan.get("olusturan_psikolog_id"))
         self.lbl_kod.setText(str(kod))
         self.lbl_alt.setText(f"Oluşturan psikolog: {psikolog}")
+        self.btn_durum.setText("Pasife Al" if danisan.get("aktif_mi", True) else "Aktife Al")
 
         self.bilgi_alanlari["kod"].setText(str(kod))
         self.bilgi_alanlari["ucret"].setText("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz")

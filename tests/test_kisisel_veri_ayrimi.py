@@ -78,7 +78,8 @@ def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
     """Yeni bir 'danışan' ucu eklenirse (örn. ad-soyad alan bir uç) bu liste bilerek güncellenmek zorundadır."""
     bulunan = {(metot, yol) for yol_nesnesi in app.routes if hasattr(yol_nesnesi, "methods")
                for yol in [yol_nesnesi.path] if "danisan" in yol.lower() for metot in yol_nesnesi.methods}
-    assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari")}
+    assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari"),
+                       ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/durum")}      # yalnızca aktif/pasif durumu
 
 
 def _kod_olustur(sorgu_dizesi=""):

@@ -372,6 +372,7 @@ QLabel#rozetOkunur { background: #FEF3C7; color: #B45309; border-radius: 10px; f
 QPushButton#aksiyon { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: 700; }
 QPushButton#aksiyon:hover { background: #1E40AF; }
 QPushButton#aksiyon:pressed { background: #172554; }
+QToolTip { background-color: #0A1F5C; color: white; border: 1px solid #426BA5; padding: 6px 10px; font-size: 12px; }
 QLabel#bos { font-size: 40px; }
 QLabel#bosBaslik { font-size: 16px; font-weight: 800; color: #0A1F5C; }
 QLabel#bosAlt { font-size: 12px; color: #8A9BC0; }
@@ -555,12 +556,6 @@ class AnaPencere(QMainWindow):
         self.ust_sayfa = QLabel("")
         self.ust_sayfa.setStyleSheet("color: #BFD3F2; font-size: 15px; font-weight: 700;")
         self.gezinme_cubugu.addWidget(self.ust_sayfa)
-        self.ust_salt_okunur = QLabel("SALT OKUNUR")
-        self.ust_salt_okunur.setStyleSheet(
-            "background: #FEF3C7; color: #B45309; border-radius: 9px; font-size: 11px; font-weight: 800; padding: 4px 10px;")
-        # QToolBar içindeki bileşenin görünürlüğü kendi eylemi üzerinden yönetilir
-        self._ust_salt_okunur_eylem = self.gezinme_cubugu.addWidget(self.ust_salt_okunur)
-        self._ust_salt_okunur_eylem.setVisible(False)
 
         self.gezinme_cubugu.addWidget(bosluk)
 
@@ -1368,7 +1363,6 @@ QLabel {
             w.deleteLater()
 
         self.sayfa_bilgi = []
-        self._sayfa_salt_okunur = {}
         self.nav_btnler = {}
 
         ilk_btn = None
@@ -1808,8 +1802,6 @@ QLabel {
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
         self.ust_sayfa.setText(f"›   {ad}")
-        self.ust_sayfa.setToolTip(alt)
-        self._ust_salt_okunur_eylem.setVisible(bool(self._sayfa_salt_okunur.get(ad)))
 
         # Ana panelden gelen durum filtresi yalnızca o geçişe aittir; menüden/bildirimden açılışta temiz başlar.
         envanter = getattr(self, "aktif_cihaz_ekrani", None)
@@ -1998,8 +1990,6 @@ QLabel {
                 if izin_var(rol, a[1])
             )
 
-        # İşlem yetkisi olmayan sayfalarda üst çubukta "SALT OKUNUR" etiketi çıkar (bkz. sayfa_ac)
-        self._sayfa_salt_okunur[oge["ad"]] = (not yetkili) and oge["ad"] not in ("Danışma Masası", "Öğrenciler")
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
         if yetkili and oge["ad"] not in ("Danışma Masası", "Danışma Masası Yönetimi"):

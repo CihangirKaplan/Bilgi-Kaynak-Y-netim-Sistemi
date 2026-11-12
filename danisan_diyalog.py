@@ -159,7 +159,8 @@ class DanisanOlusturDialog(QDialog):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             cevap = oturum_kontrollu_istek(
-                "GET", f"{self.api_url}/api/danisan-kodlari", headers=headers, timeout=5
+                "GET", f"{self.api_url}/api/danisan-kodlari", params={"pasifler_dahil": "true"},
+                headers=headers, timeout=5
             )
             if cevap.status_code == 200:
                 danisanlar = cevap.json()
