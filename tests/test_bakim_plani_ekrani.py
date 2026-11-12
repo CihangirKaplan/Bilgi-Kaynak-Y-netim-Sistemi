@@ -359,10 +359,10 @@ def test_menu_bakim_planlari_sayfasini_dogru_izinle_ve_ikonla_icerir():
     import tkys_sidebar_refined as yan
     kategori = dict(mw.MENU)["CİHAZ YAŞAM DÖNGÜSÜ"]
     oge = next(o for o in kategori if o["ad"] == "Bakım Planları")
-    assert oge["izin"] == "Bakım kayıtlarını yönetme"
-    assert ("＋  Yeni Plan", "Bakım kayıtlarını yönetme") in oge["aksiyon"]
+    assert oge["izin"] == "Bakım/kalibrasyon planlarını yönetme"
+    assert ("＋  Yeni Plan", "Bakım/kalibrasyon planlarını yönetme") in oge["aksiyon"]
     assert yan.PAGE_ICONS["Bakım Planları"] in yan.PATHS
-    assert mw.IZIN_KODLARI["Bakım kayıtlarını yönetme"] == ("CIHAZ_ENVANTER_YONET",)   # API izniyle aynı
+    assert mw.IZIN_KODLARI["Bakım kayıtlarını yönetme"] == ("BAKIM_KAYITLARI_YONET",)   # API izniyle aynı
 
 
 def test_sayfa_yalniz_cihaz_envanteri_izni_olan_rollere_acilir():
@@ -370,7 +370,7 @@ def test_sayfa_yalniz_cihaz_envanteri_izni_olan_rollere_acilir():
     mw._SUNUCU_YETKILERI.clear()
     gorunen = {rol for rol in mw.ROLLER if mw.izin_var(rol, "Bakım kayıtlarını yönetme")}
     assert gorunen == {"memur", "mudur", "admin"}                        # psikolog/öğrenci/asistan göremez
-    mw.yetkileri_ayarla("memur", ["CIHAZ_ENVANTER_YONET"])
+    mw.yetkileri_ayarla("memur", ["BAKIM_KAYITLARI_YONET"])
     mw.yetkileri_ayarla("psikolog", ["TAKVIM_GORUNTULE"])
     try:
         assert mw.izin_var("memur", "Bakım kayıtlarını yönetme")
@@ -385,3 +385,19 @@ def test_ana_pencere_yeni_plan_dugmesini_ve_sayfayi_baglar():
     assert 'oge["ad"] == "Bakım Planları"' in kaynak and "BakimPlanlariEkrani(" in kaynak
     import main_window as mw
     assert callable(mw.AnaPencere.yeni_bakim_plani_ac)
+
+
+def test_planlar_bakim_veya_kalibrasyon_izniyle_acilir():
+    import main_window as mw
+
+    mw.yetkileri_ayarla("memur", ["BAKIM_KAYITLARI_YONET"])
+    mw.yetkileri_ayarla("mudur", ["KALIBRASYON_KAYITLARI_YONET"])
+    mw.yetkileri_ayarla("psikolog", ["CIHAZ_ENVANTER_YONET"])
+
+    try:
+        izin = "Bakım/kalibrasyon planlarını yönetme"
+        assert mw.izin_var("memur", izin)
+        assert mw.izin_var("mudur", izin)
+        assert not mw.izin_var("psikolog", izin)
+    finally:
+        mw._SUNUCU_YETKILERI.clear()

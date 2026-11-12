@@ -142,8 +142,23 @@ def qt_app():
 
 
 @pytest.fixture
-def form(qt_app):
-    pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
+def form(qt_app, monkeypatch):
+    def sahte_roller(api_url, token, combo, islem):
+        assert islem == "olusturma"
+        combo.addItem("Psikolog", 1)
+        combo.addItem("Memur", 2)
+        combo.addItem("Müdür", 3)
+        combo.addItem("Danışma Masası Öğrencisi", 4)
+        combo.addItem("Proje Asistanı", 5)
+
+    monkeypatch.setattr(
+        modul,
+        "atanabilir_rolleri_yukle",
+        sahte_roller,
+    )
+
+    with patch.object(KullaniciOlusturFormu, "odalari_yukle"):
+        pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
     yield pencere
     pencere.close()
     # Qt nesnesi hemen ve ana iş parçacığında silinsin: sahipsiz kalıp sonradan başka bir
@@ -247,15 +262,11 @@ def test_rol_secimi_kaldirilinca_bos_metne_donulur(form):
 
 # ------------------------------------------------- liste gerçekten görünüyor mu (yükseklik)
 @pytest.fixture
-def gorunen_form(qt_app):
-    pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
-    pencere.show()
-    yerlesimi_tamamla(pencere)
-    yield pencere
-    pencere.close()
-    pencere.deleteLater()
-    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-    gc.collect()
+def gorunen_form(form):
+    """Dinamik rolleri taklit eden ortak form fixture'ını kullan."""
+    form.show()
+    yerlesimi_tamamla(form)
+    yield form
 
 
 def yerlesimi_tamamla(form):
@@ -330,7 +341,15 @@ def test_pencere_silinince_bekleyen_boyutlandirma_hata_pencereleri_acmaz(qt_app)
     eski = sys.excepthook
     sys.excepthook = lambda tip, deger, tb: hatalar.append(deger)
     try:
-        pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
+        def sahte_roller(api_url, token, combo, islem):
+            combo.addItem("Memur", 2)
+
+        with (
+            patch.object(modul, "atanabilir_rolleri_yukle",
+                         side_effect=sahte_roller),
+            patch.object(KullaniciOlusturFormu, "odalari_yukle"),
+        ):
+            pencere = KullaniciOlusturFormu("http://testserver", "TOKEN")
         with patch.object(modul, "yetki_ozeti_getir", return_value=(ozet("MEMUR", ["ODA_EKLE"]), None)):
             rol_sec(pencere, 2)                    # boyutlandırma zamanlayıcısı başladı
         assert pencere._boyut_zamanlayici.isActive()

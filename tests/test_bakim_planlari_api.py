@@ -19,6 +19,19 @@ from sunucu import (
 D = datetime.date
 
 
+@pytest.fixture(autouse=True)
+def varsayilan_plan_yetkileri():
+    with patch(
+        "sunucu._plan_yetkileri",
+        return_value={
+            "BAKIM_KAYITLARI_YONET",
+            "KALIBRASYON_KAYITLARI_YONET",
+        },
+    ):
+        yield
+
+
+
 def baglanti(fetchone=None, fetchall=None):
     conn = MagicMock()
     cursor = conn.cursor.return_value
@@ -226,7 +239,7 @@ def test_tur_degisince_yeni_turle_cakisma_aranir_ve_kendi_plani_haric_tutulur():
 
 # --------------------------------------------------------------------------- silme
 def test_silme_basarili_ve_denetlenir():
-    conn, cursor = baglanti(fetchone=[(7,)])
+    conn, cursor = baglanti(fetchone=[("Yıllık bakım",), (7,)])
     with patch("sunucu.psycopg2.connect", return_value=conn):
         assert bakim_plani_sil(7, 5)["durum"] == "basarili"
     assert olay_turleri(cursor) == ["DELETE"]
@@ -251,29 +264,108 @@ UCLAR = [
 ]
 
 
-def istek(yontem, yol, govde, izin_var):
+def istek(yontem, yol, govde, izinler):
     app.dependency_overrides[mevcut_kullanici_id] = lambda: 5
-    conn, cursor = baglanti(fetchone=[(izin_var,)])
+
+    if yontem == "post":
+        cevaplar = [(1,), None, (11,)]
+    elif yontem == "put":
+        cevaplar = [MEVCUT, None]
+    elif yontem == "delete":
+        cevaplar = [("Yıllık bakım",), (1,)]
+    else:
+        cevaplar = []
+
+    conn, cursor = baglanti(fetchone=cevaplar)
+
     try:
-        with patch("sunucu.psycopg2.connect", return_value=conn):
+        with (
+            patch("sunucu.psycopg2.connect", return_value=conn),
+            patch("sunucu._plan_yetkileri", return_value=set(izinler)),
+        ):
             with TestClient(app) as istemci:
-                yanit = getattr(istemci, yontem)(yol, **({"json": govde} if govde else {}))
+                yanit = getattr(istemci, yontem)(
+                    yol, **({"json": govde} if govde else {})
+                )
     finally:
         app.dependency_overrides.pop(mevcut_kullanici_id, None)
+
     return yanit, cursor
 
 
 @pytest.mark.parametrize("yontem, yol, govde", UCLAR)
-def test_izni_olmayan_rol_403_alir_ve_veriye_dokunulmaz(yontem, yol, govde):
-    yanit, cursor = istek(yontem, yol, govde, izin_var=0)
+def test_izni_olmayan_rol_403_alir_ve_veriye_dokunulmaz(
+    yontem, yol, govde
+):
+    yanit, cursor = istek(yontem, yol, govde, izinler=set())
     assert yanit.status_code == 403
-    assert all("izin_adi" in s for s in (c.args[0] for c in cursor.execute.call_args_list))
+
+    assert not any(
+        sql.startswith((
+            "INSERT INTO CIHAZ_BAKIM_PLANLARI",
+            "UPDATE CIHAZ_BAKIM_PLANLARI",
+            "DELETE FROM CIHAZ_BAKIM_PLANLARI",
+        ))
+        for sql in sorgular(cursor)
+    )
 
 
-@pytest.mark.parametrize("yontem, yol, govde", UCLAR)
-def test_uclar_cihaz_envanter_iznini_ister(yontem, yol, govde):
-    _, cursor = istek(yontem, yol, govde, izin_var=0)
-    assert cursor.execute.call_args_list[0].args[1][1] == "CIHAZ_ENVANTER_YONET"
+@pytest.mark.parametrize("yontem, yol, govde, izinler, durum", [
+    ("get", "/api/bakim-planlari", None,
+     {"BAKIM_KAYITLARI_YONET"}, 200),
+
+    ("get", "/api/bakim-planlari", None,
+     {"KALIBRASYON_KAYITLARI_YONET"}, 200),
+
+    ("post", "/api/bakim-planlari",
+     {"cihaz_id": 1, "gorev_turu": "Bakım", "periyot_gun": 30},
+     {"BAKIM_KAYITLARI_YONET"}, 201),
+
+    ("post", "/api/bakim-planlari",
+     {"cihaz_id": 1, "gorev_turu": "Kalibrasyon", "periyot_gun": 30},
+     {"BAKIM_KAYITLARI_YONET"}, 403),
+
+    ("post", "/api/bakim-planlari",
+     {"cihaz_id": 1, "gorev_turu": "Kalibrasyon", "periyot_gun": 30},
+     {"KALIBRASYON_KAYITLARI_YONET"}, 201),
+
+    ("put", "/api/bakim-planlari/1",
+     {"periyot_gun": 180},
+     {"KALIBRASYON_KAYITLARI_YONET"}, 403),
+
+    ("put", "/api/bakim-planlari/1",
+     {"gorev_turu": "Kalibrasyon"},
+     {"BAKIM_KAYITLARI_YONET"}, 403),
+
+    ("put", "/api/bakim-planlari/1",
+     {"gorev_turu": "Kalibrasyon"},
+     {"BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"}, 200),
+
+    ("delete", "/api/bakim-planlari/1", None,
+     {"KALIBRASYON_KAYITLARI_YONET"}, 403),
+
+    ("delete", "/api/bakim-planlari/1", None,
+     {"BAKIM_KAYITLARI_YONET"}, 200),
+
+    ("post", "/api/bakim-planlari",
+     {"cihaz_id": 1, "gorev_turu": "Bakım", "periyot_gun": 30},
+     {"CIHAZ_ENVANTER_YONET"}, 403),
+])
+def test_plan_turune_gore_yetki(
+    yontem, yol, govde, izinler, durum
+):
+    yanit, cursor = istek(yontem, yol, govde, izinler)
+    assert yanit.status_code == durum, yanit.text
+
+    if durum == 403:
+        assert not any(
+            sql.startswith((
+                "INSERT INTO CIHAZ_BAKIM_PLANLARI",
+                "UPDATE CIHAZ_BAKIM_PLANLARI",
+                "DELETE FROM CIHAZ_BAKIM_PLANLARI",
+            ))
+            for sql in sorgular(cursor)
+        )
 
 
 @pytest.mark.parametrize("yontem, yol, govde", UCLAR)
@@ -284,6 +376,6 @@ def test_tokensiz_istek_reddedilir(yontem, yol, govde):
 
 def test_api_beklenmeyen_alani_422_ile_reddeder():
     yanit, cursor = istek("post", "/api/bakim-planlari",
-                          {"cihaz_id": 1, "gorev_turu": "Bakım", "periyot_gun": 30, "plan_id": 9}, izin_var=1)
+                          {"cihaz_id": 1, "gorev_turu": "Bakım", "periyot_gun": 30, "plan_id": 9}, izinler={"BAKIM_KAYITLARI_YONET"})
     assert yanit.status_code == 422
     assert not any("INSERT INTO cihaz_bakim_planlari" in c.args[0] for c in cursor.execute.call_args_list)
