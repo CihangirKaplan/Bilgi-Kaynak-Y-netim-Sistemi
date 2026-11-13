@@ -464,7 +464,7 @@ class LoginEkrani(QWidget):
                 aktif_rol = self.rol_adindan_koda(r_id, veri.get("rol_adi"))
 
                 if not aktif_rol:
-                    tmk.uyari(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
+                    QMessageBox.warning(self, "Yetki Hatası", "Sisteme erişim yetkiniz veya tanımlı bir rolünüz bulunmamaktadır.")
                     return
 
                 # 3. Hataları sıfırla ve ana pencereyi aç
@@ -499,7 +499,7 @@ class LoginEkrani(QWidget):
                 self.kilitle(saniye)
             elif cevap.status_code == 403:
                 hata_mesaji = veri.get("detail", "Erişim reddedildi.")
-                tmk.uyari(self, "Giriş Engellendi", hata_mesaji)
+                QMessageBox.warning(self, "Giriş Engellendi", hata_mesaji)
                 self.sifre_input.clear()
                 self.sifre_input.setFocus()
                 return

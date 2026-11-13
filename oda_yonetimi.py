@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from ui_components import StandartButon, StandartGirdi
-import turkce_mesaj_kutusu as tmk
 
 # ======================================================================
 #  ROOM-001: YENİ ODA EKLEME / DÜZENLEME FORMU
@@ -179,11 +178,11 @@ class OdaFormu(QWidget):
         kapasite_str = self.in_kapasite.text().strip()
         
         if not oda_adi:
-            tmk.uyari(self, "Eksik Veri", "Oda adı boş bırakılamaz!")
+            QMessageBox.warning(self, "Eksik Veri", "Oda adı boş bırakılamaz!")
             return
             
         if not kapasite_str.isdigit() or int(kapasite_str) < 1:
-            tmk.uyari(self, "Hatalı Veri", "Kapasite 1 veya daha büyük bir sayı olmalıdır!")
+            QMessageBox.warning(self, "Hatalı Veri", "Kapasite 1 veya daha büyük bir sayı olmalıdır!")
             return
 
         oda_verisi = {
@@ -205,17 +204,17 @@ class OdaFormu(QWidget):
                     return
 
             if cevap.status_code in [200, 201]:
-                tmk.bilgi(self, "Başarılı", "Oda bilgileri başarıyla kaydedildi!")
+                QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla kaydedildi!")
                 self.close()
             elif cevap.status_code == 409:
-                tmk.uyari(self, "Çakışma", _409_mesaji(cevap))
+                QMessageBox.warning(self, "Çakışma", _409_mesaji(cevap))
             else:
-                tmk.uyari(self, "Hata", f"İşlem başarısız (Kod: {cevap.status_code})")
+                QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {cevap.status_code})")
                 
         except requests.exceptions.Timeout:
-            tmk.uyari(self, "Zaman Aşımı", "Sunucuya bağlanılamadı.")
+            QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı.")
         except Exception as e:
-            tmk.hata(self, "Hata", str(e))
+            QMessageBox.critical(self, "Hata", str(e))
 
 
 if __name__ == "__main__":
