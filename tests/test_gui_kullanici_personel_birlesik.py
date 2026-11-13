@@ -1,4 +1,3 @@
-import turkce_mesaj_kutusu as tmk
 """TKYS - Kullanıcı oluşturma ve personel atama birleşik ekranı (PySide6 GUI testleri).
 
 Gerçek API veya PostgreSQL kullanılmaz.
@@ -256,14 +255,14 @@ def test_basarili_olusturmadan_sonra_kapatirken_uyari_yok(form):
     with patch.object(modul.requests, "post", return_value=yanit):
         form.kaydet()
 
-    with patch.object(tmk, "soru") as soru:
+    with patch.object(modul.QMessageBox, "question") as soru:
         form.reject()
 
     soru.assert_not_called()
 
 
 def test_hesap_olusturulmadan_kapatirken_uyari_yok(form):
-    with patch.object(tmk, "soru") as soru:
+    with patch.object(modul.QMessageBox, "question") as soru:
         form.reject()
 
     soru.assert_not_called()
