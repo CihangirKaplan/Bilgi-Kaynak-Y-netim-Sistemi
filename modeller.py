@@ -1,13 +1,44 @@
-from typing import Literal
+from typing import Annotated, Literal
 import datetime
 from datetime import date
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+
+def _zaman_coz(deger):
+    """Tarih-saat girdisini çözer. Yalnızca ISO 8601 metni (ör. 2026-11-17T10:00:00) ya da datetime kabul edilir.
+
+    Sayı (Unix zamanı) reddedilir: Pydantic sayıyı saat dilimli (UTC) zamana çevirir; başlangıç saat dilimli,
+    bitiş saat dilimsiz kalınca sunucuda karşılaştırma hatası (500) oluşuyordu."""
+    if isinstance(deger, datetime.datetime):
+        return deger
+    if isinstance(deger, str):
+        return datetime.datetime.fromisoformat(deger.strip().replace("Z", ""))
+    raise ValueError("Tarih ve saat metin olarak (YYYY-AA-GGTSS:DD) gönderilmelidir.")
+
+
+def _naif_zaman(deger):
+    """Saat dilimsiz (yerel) zaman: saat dilimi bilgisi taşıyan değer reddedilir."""
+    sonuc = _zaman_coz(deger)
+    if sonuc.tzinfo is not None:
+        raise ValueError("Tarih ve saat, saat dilimi bilgisi içermemelidir.")
+    return sonuc
+
+
+def _ayni_dilim_denetle(*zamanlar):
+    """Başlangıç ve bitiş ya ikisi de saat dilimli ya da ikisi de saat dilimsiz olmalı (karıştırılınca karşılaştırılamaz)."""
+    dolu = [z for z in zamanlar if z is not None]
+    if len({z.tzinfo is None for z in dolu}) > 1:
+        raise ValueError("Başlangıç ve bitiş aynı biçimde (ikisi de saat dilimli ya da ikisi de saat dilimsiz) olmalıdır.")
+
+
+NaifZaman = Annotated[datetime.datetime, BeforeValidator(_naif_zaman)]
+ZamanDamgasi = Annotated[datetime.datetime, BeforeValidator(_zaman_coz)]
 
 # ROOM-001: Oda Veritabanı Modeli (SQL Şeması ile Birebir Uyumlu)
 class Oda(Base):
@@ -134,7 +165,7 @@ class SifreDegistirModeli(BaseModel):
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
     rol_id: Optional[int] = None
-    rol_adi: str
+    rol_adi: str = Field(min_length=1, max_length=50)
 
 # ADM-API-002: Kullanıcı Rol Değiştirme İstek Modeli
 class RolDegistirModeli(BaseModel):
@@ -228,8 +259,8 @@ class RandevuOlusturModeli(BaseModel):
     danisan_kod_id: str
     psikolog_id: int = Field(gt=0)
     oda_id: int = Field(gt=0)
-    baslangic_zamani: datetime.datetime
-    bitis_zamani: datetime.datetime
+    baslangic_zamani: NaifZaman
+    bitis_zamani: NaifZaman
 
 # APT-API-001 / SEC-APT-002: Randevu Güncelleme Modeli
 class RandevuGuncelleModeli(BaseModel):
@@ -240,8 +271,8 @@ class RandevuGuncelleModeli(BaseModel):
 )
     psikolog_id: Optional[int] = Field(default=None, gt=0)
     oda_id: Optional[int] = Field(default=None, gt=0)
-    baslangic_zamani: Optional[datetime.datetime] = None
-    bitis_zamani: Optional[datetime.datetime] = None
+    baslangic_zamani: Optional[NaifZaman] = None
+    bitis_zamani: Optional[NaifZaman] = None
 
 def _oda_adini_temizle(deger):
     """Oda adının baş ve sonundaki boşlukları atar; yalnızca boşluktan oluşan ad reddedilir.
@@ -318,17 +349,15 @@ class CihazGuncelleModeli(BaseModel):
 class RezervasyonOlusturModeli(BaseModel):
     cihaz_id: int = Field(gt=0)
     kullanilacak_oda_id: Optional[int] = Field(default=None, gt=0)
-    baslangic_zamani: datetime.datetime
-    bitis_zamani: datetime.datetime
+    baslangic_zamani: ZamanDamgasi
+    bitis_zamani: ZamanDamgasi
     proje_turu: Optional[str] = Field(default=None, max_length=50)
     proje_adi_aciklamasi: Optional[str] = Field(default=None, max_length=255)
 
-    @field_validator("baslangic_zamani", "bitis_zamani", mode="before")
-    @classmethod
-    def tarih_formati(cls, deger):
-        if isinstance(deger, str):
-            return datetime.datetime.fromisoformat(deger.replace("Z", ""))
-        return deger
+    @model_validator(mode="after")
+    def ayni_dilim(self):
+        _ayni_dilim_denetle(self.baslangic_zamani, self.bitis_zamani)
+        return self
 
 # FAIL-001: Arıza Bildirim Modeli
 class ArizaBildirimModeli(BaseModel):
@@ -360,19 +389,19 @@ class PersonelGuncelleModeli(BaseModel):
 # KALİBRASYON YÖNETİMİ MODELLERİ (CALB)
 # ==========================================
 class KalibrasyonOlusturModeli(BaseModel):
-    cihaz_id: int
-    kalibrasyon_yapan_kurum: str
+    cihaz_id: int = Field(gt=0)
+    kalibrasyon_yapan_kurum: str = Field(min_length=1, max_length=100)
     gecerlilik_tarihi: date
-    sertifika_no: str
+    sertifika_no: str = Field(min_length=1, max_length=100)
     kalibrasyon_baslangic_tarihi: date  # YENİ EKLENDİ
     kalibrasyon_bitis_tarihi: date      # YENİ EKLENDİ
     uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
     plan_id: Optional[int] = Field(default=None, gt=0)       # bu kaydın yerine getirdiği kalibrasyon planı
 
 class KalibrasyonGuncelleModeli(BaseModel):
-    kalibrasyon_yapan_kurum: Optional[str] = None
+    kalibrasyon_yapan_kurum: Optional[str] = Field(default=None, min_length=1, max_length=100)
     gecerlilik_tarihi: Optional[date] = None
-    sertifika_no: Optional[str] = None
+    sertifika_no: Optional[str] = Field(default=None, min_length=1, max_length=100)
     kalibrasyon_baslangic_tarihi: Optional[date] = None # YENİ EKLENDİ
     kalibrasyon_bitis_tarihi: Optional[date] = None     # YENİ EKLENDİ
     uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
@@ -467,10 +496,10 @@ class YaklasanIslemModeli(BaseModel):
     durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
 
 class FaaliyetKayitModeli(BaseModel):
-    ogrenci_id: int
-    faaliyet_id: int
-    birim_id: int
-    miktar: int
+    ogrenci_id: int = Field(gt=0)
+    faaliyet_id: int = Field(gt=0)
+    birim_id: int = Field(gt=0)
+    miktar: int = Field(ge=1, le=10000)             # arayüzdeki giriş kutusuyla aynı sınır
 
 class OgrenciEkleModeli(BaseModel):
     ad_soyad: str
@@ -486,16 +515,16 @@ class OgrenciEkleModeli(BaseModel):
 
 class DanismaGorevOlusturModeli(BaseModel):
     ogrenci_id: int = Field(gt=0)
-    baslangic_zamani: datetime.datetime
-    bitis_zamani: datetime.datetime
+    baslangic_zamani: NaifZaman
+    bitis_zamani: NaifZaman
 
 
 class DanismaGorevDuzenleModeli(BaseModel):
     """Tamamlanmış danışma masası görevinin saatlerini düzenleme."""
     model_config = ConfigDict(extra="forbid")
 
-    baslangic_zamani: datetime.datetime
-    bitis_zamani: datetime.datetime
+    baslangic_zamani: NaifZaman
+    bitis_zamani: NaifZaman
 
 # ==========================================
 # SİSTEM YÖNETİMİ MODELLERİ (SYS)

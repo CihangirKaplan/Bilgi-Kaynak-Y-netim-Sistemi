@@ -145,6 +145,7 @@ Bunlar `D02` içindeki FR maddeleri değildir; Proje Detayları belgesindeki gü
 | Yeni şifre kuralları | Canlı kural listesi ve güç göstergesi; düğme kurallar sağlanınca açılır | `parola_kurallari.py`, `sifre_degistir_ekrani.py` | `test_gecici_parola_ve_sifre_kurallari.py` |
 | Yönetici parola kurtarma | Tek yönetici şifresini unutursa sunucu bilgisayarında kurtarma aracı | `scripts/admin_parola_kurtar.py`, `scripts/windows/admin_parola_kurtar.bat` | `test_admin_parola_kurtar.py` (gerçek PostgreSQL'de elle doğrulandı) |
 | Ek yönetici oluşturma | Uygulamadan yönetici açılamadığı için ikinci yönetici sunucuda açılır | `scripts/ilk_admin_olustur.py --ek-yonetici` | `test_ilk_admin_olustur.py` (gerçek PostgreSQL'de elle doğrulandı) |
+| Bozuk girdi koruması | Taşan sayı, NUL karakteri, çok büyük gövde, hatalı saat dilimi, sınırsız metin gibi girdiler "500 sunucu hatası" yerine anlamlı 409/422/413 ile reddedilir; tekrar eden kayıt 409 olur; hata ayrıntısı istemciye sızmaz; JWT_SECRET en az 32 karakter olmalıdır | `girdi_korumasi.py`, `modeller.py`, `guvenlik.py`, `sunucu.py` | `test_girdi_korumasi.py`, `test_girdi_fuzz_pg_quality.py` (gerçek PostgreSQL, tüm yazma uçlarına bozuk girdi) |
 | Test güvenilirliği | Testlerde "bugün" modül yüklenirken sabitlenemez; gece yarısını geçen CI'da sebepsiz kırılma önlenir | — | `test_zaman_bagimsizligi.py` |
 
 Proje Detayları belgesindeki güvenlik testi SEC-005 (çok sayıda hatalı parola → geçici kilitleme) `giris_yap` içindeki
