@@ -1,8 +1,8 @@
+import turkce_mesaj_kutusu as tmk
 """Parola sıfırlama talebi arayüzü: giriş penceresi, yöneticinin talepler paneli, zil ve ana panel bildirimi.
 
 Gerçek sunucu kullanılmaz; ağ istekleri taklit edilir.
 """
-import turkce_mesaj_kutusu as tmk
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -269,7 +269,7 @@ def kapat_istek(e, onay, cevap=None, hata=None):
     with patch("k_personel_ekranlari.oturum_kontrollu_istek", side_effect=istek), \
          patch("k_personel_ekranlari.oturum_hatasi_mi", return_value=False), \
          patch.object(tmk, "soru", return_value=onay), \
-         patch.object(tmk, "uyari") as uyari, patch.object(tmk, "hata") as kritik:
+         patch("k_personel_ekranlari.QMessageBox.warning") as uyari, patch("k_personel_ekranlari.QMessageBox.critical") as kritik:
         paneldeki_dugmeler(e, "talepKapat")[0].click()
     return cagrilar, uyari, kritik
 

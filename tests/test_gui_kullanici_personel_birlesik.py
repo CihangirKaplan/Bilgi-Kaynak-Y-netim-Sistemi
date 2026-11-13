@@ -1,8 +1,8 @@
+import turkce_mesaj_kutusu as tmk
 """TKYS - Kullanıcı oluşturma ve personel atama birleşik ekranı (PySide6 GUI testleri).
 
 Gerçek API veya PostgreSQL kullanılmaz.
 """
-import turkce_mesaj_kutusu as tmk
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -126,7 +126,7 @@ def test_ogrenci_alanlari_yalnizca_danisma_ogrencisinde_gorunur(form):
 def test_danisma_ogrencisi_ad_ve_numarasiz_olusturulamaz(form):
     form.input_kullanici_adi.setText("yeni_ogrenci")
     rol_sec(form, 4)
-    with patch.object(modul.requests, "post") as post, patch.object(tmk, "uyari") as uyari:
+    with patch.object(modul.requests, "post") as post, patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     post.assert_not_called()
     uyari.assert_called_once()
@@ -173,7 +173,7 @@ def test_ayni_kullanici_adi_409_pencereyi_kilitlemez(form):
 
     with (
         patch.object(modul.requests, "post", return_value=cevap(409, {"detail": "Bu kullanıcı adı zaten kullanılıyor."})),
-        patch.object(tmk, "uyari") as uyari,
+        patch.object(modul.QMessageBox, "warning") as uyari,
     ):
         form.kaydet()
 
@@ -185,7 +185,7 @@ def test_psikolog_odasiz_olusturulamaz(form):
     form.input_kullanici_adi.setText("doktor_y")
     rol_sec(form, 1)
     with patch.object(modul.requests, "post") as post, \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     post.assert_not_called()
     uyari.assert_called_once()
@@ -317,7 +317,7 @@ def test_gecersiz_telefonla_hesap_olusturulmaz(form):
     form.input_ad_soyad.setText("Veli Kaya")
     form.input_ogrenci_no.setText("2021002")
     form.input_telefon.setText("555 123")  # eksik hane
-    with patch.object(modul.requests, "post") as post, patch.object(tmk, "uyari") as uyari:
+    with patch.object(modul.requests, "post") as post, patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     post.assert_not_called()
     assert "10 haneli" in uyari.call_args.args[2]
@@ -550,7 +550,7 @@ def test_elle_yazilan_ad_409_alirsa_yeniden_denenmez_uyari_verir(form):
     form.input_kullanici_adi.textEdited.emit("var_olan")
     form.input_kullanici_adi.setText("var_olan")
     with patch.object(modul.requests, "post", return_value=cevap(409)) as post, \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     assert post.call_count == 1
     uyari.assert_called_once()
@@ -581,7 +581,7 @@ def test_hesap_olustururken_oturum_biterse_form_degismez_ve_uyari_cikmaz(form):
     rol_sec(form, 1)
     oda_sec(form)
     with patch.object(modul.requests, "post", return_value=oturum_bitti_yaniti()), \
-            patch.object(tmk, "uyari") as uyari, patch.object(tmk, "hata") as hata:
+            patch.object(modul.QMessageBox, "warning") as uyari, patch.object(modul.QMessageBox, "critical") as hata:
         form.kaydet()
     uyari.assert_not_called()
     hata.assert_not_called()
@@ -604,7 +604,7 @@ def test_personel_kodu_eksikse_basarili_gosterilmez(form):
         patch.object(
             modul.requests, "post", return_value=eksik_yanit
         ) as post,
-        patch.object(tmk, "hata") as hata,
+        patch.object(modul.QMessageBox, "critical") as hata,
     ):
         form.kaydet()
 
@@ -671,7 +671,7 @@ def test_olustur_hemen_basilirsa_bos_kullanici_adi_uyarisi_cikmaz_ad_turetilir(f
             patch.object(modul.requests, "post",
                          side_effect=lambda u, **k: (gonderilen.append(k["json"]),
                                                      cevap(201, {"kullanici_id": 70, "personel_id": 170, "personel_kodu": "PER-TEST-001", "gecici_parola": "Pw"}))[1]), \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     uyari.assert_not_called()
     assert gonderilen == [{
@@ -705,7 +705,7 @@ def test_ogrenci_numarasi_cakismasinda_yeniden_istek_gonderilmez(form):
                 {"detail": "Bu öğrenci numarası zaten kullanılıyor."},
             ),
         ) as post,
-        patch.object(tmk, "uyari") as uyari,
+        patch.object(modul.QMessageBox, "warning") as uyari,
     ):
         form.kaydet()
 

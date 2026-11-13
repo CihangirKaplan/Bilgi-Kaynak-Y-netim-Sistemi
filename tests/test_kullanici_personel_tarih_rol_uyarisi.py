@@ -84,7 +84,7 @@ def test_ayni_rol_seciminde_api_cagrilmaz(qt_app):
 
     try:
         with (
-            patch("k_personel_ekranlari.tmk.bilgi") as bilgi,
+            patch("k_personel_ekranlari.QMessageBox.information") as bilgi,
             patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
         ):
             form.kaydet()
@@ -118,7 +118,7 @@ def test_api_409_mesaji_bilgilendirme_olarak_gosterilir(qt_app):
                 "k_personel_ekranlari.oturum_hatasi_mi",
                 return_value=False,
             ),
-            patch("k_personel_ekranlari.tmk.bilgi") as bilgi,
+            patch("k_personel_ekranlari.QMessageBox.information") as bilgi,
         ):
             form.kaydet()
 

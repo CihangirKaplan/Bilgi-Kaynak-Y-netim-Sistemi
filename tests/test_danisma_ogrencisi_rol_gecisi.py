@@ -54,7 +54,7 @@ def test_yeni_ogrenci_bilgileri_apiye_gonderilir(qt_app):
             "k_personel_ekranlari.oturum_hatasi_mi",
             return_value=False,
         ),
-        patch("k_personel_ekranlari.tmk.bilgi"),
+        patch("k_personel_ekranlari.QMessageBox.information"),
     ):
         form = form_olustur()
 
@@ -100,7 +100,7 @@ def test_mevcut_ogrenci_kaydi_korunur(qt_app):
             "k_personel_ekranlari.oturum_hatasi_mi",
             return_value=False,
         ),
-        patch("k_personel_ekranlari.tmk.bilgi"),
+        patch("k_personel_ekranlari.QMessageBox.information"),
     ):
         form = form_olustur()
 

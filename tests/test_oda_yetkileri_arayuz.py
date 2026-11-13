@@ -6,7 +6,6 @@ Psikolog oda yetkileri arayüzü.
 - Randevu formu: atanmış oda yoksa bilgi satırı; odası olan psikologda ilk oda seçili gelir
 - Oda Yönetimi: Psikologlar sütunu verisi, 409 mesajı
 """
-import turkce_mesaj_kutusu as tmk
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -86,7 +85,7 @@ def test_en_az_bir_oda_secilmeden_kaydedilmez():
     assert isaretli(form) == []
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
 
     uyari.assert_called_once()
@@ -101,7 +100,7 @@ def test_kaydet_secilen_odalari_sunucuya_gonderir():
     form.liste_odalar.item(2).setCheckState(Qt.Checked)  # Görüşme Odası-2'yi de ekle
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "bilgi"):
+            patch.object(modul.QMessageBox, "information"):
         form.kaydet()
 
     (url, govde), = sunucu.put_istekleri
@@ -116,7 +115,7 @@ def test_sunucunun_reddi_kullaniciya_gosterilir():
     form = pencere_ac(sunucu)
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
 
     assert "aktif değil" in uyari.call_args.args[2]
@@ -125,7 +124,7 @@ def test_sunucunun_reddi_kullaniciya_gosterilir():
 
 
 def test_odalar_yuklenemezse_kaydet_kapali_kalir():
-    with patch.object(tmk, "uyari") as uyari:
+    with patch.object(modul.QMessageBox, "warning") as uyari:
         form = pencere_ac(Sunucu(mevcut_durumu=422))
     uyari.assert_called_once()
     assert not form.btn_kaydet.isEnabled()
@@ -175,7 +174,7 @@ def test_admin_rol_degistirme_penceresi_acilmaz_uyari_gosterilir():
     satir_sec(ekran, "admin")
 
     with (
-        patch.object(tmk, "uyari") as uyari,
+        patch.object(modul.QMessageBox, "warning") as uyari,
         patch.object(modul, "RolDegistirFormu") as form_sinifi,
     ):
         ekran.secili_kullanici_rol_degistir()
@@ -188,7 +187,7 @@ def test_admin_rol_degistirme_penceresi_acilmaz_uyari_gosterilir():
 
 def test_oda_yetkileri_secim_yoksa_uyarir():
     ekran = personel_ekrani()
-    with patch.object(tmk, "uyari") as uyari, patch.object(modul, "OdaYetkileriFormu") as form_sinifi:
+    with patch.object(modul.QMessageBox, "warning") as uyari, patch.object(modul, "OdaYetkileriFormu") as form_sinifi:
         ekran.secili_kullanici_oda_yetkileri()
     uyari.assert_called_once()
     form_sinifi.assert_not_called()
@@ -199,7 +198,7 @@ def test_oda_yetkileri_secim_yoksa_uyarir():
 def test_oda_yetkileri_psikolog_olmayana_acilmaz(kullanici_adi):
     ekran = personel_ekrani()
     satir_sec(ekran, kullanici_adi)
-    with patch.object(tmk, "bilgi") as bilgi, patch.object(modul, "OdaYetkileriFormu") as form_sinifi:
+    with patch.object(modul.QMessageBox, "information") as bilgi, patch.object(modul, "OdaYetkileriFormu") as form_sinifi:
         ekran.secili_kullanici_oda_yetkileri()
     bilgi.assert_called_once()
     assert "psikolog" in bilgi.call_args.args[2]

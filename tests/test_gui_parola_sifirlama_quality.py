@@ -49,7 +49,7 @@ def sahte_cevap(kod, veri):
 
 def test_kullanici_secilmeden_sifirlama_yapilamaz(ekran):
     with (
-        patch("k_personel_ekranlari.tmk.uyari") as uyari,
+        patch("k_personel_ekranlari.QMessageBox.warning") as uyari,
         patch("k_personel_ekranlari.oturum_kontrollu_istek") as api,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -146,7 +146,7 @@ def test_yetki_hatasinda_parola_gosterilmez(ekran):
             return_value=False,
         ),
         patch(
-            "k_personel_ekranlari.tmk.uyari"
+            "k_personel_ekranlari.QMessageBox.warning"
         ) as uyari,
         patch(
             "k_personel_ekranlari.GeciciParolaDialog"
@@ -171,7 +171,7 @@ def test_baglanti_hatasinda_tekrar_istek_atilmaz(ekran):
             side_effect=requests.Timeout("Test timeout"),
         ) as api,
         patch(
-            "k_personel_ekranlari.tmk.hata"
+            "k_personel_ekranlari.QMessageBox.critical"
         ) as hata,
     ):
         ekran.secili_kullanici_parola_sifirla()
@@ -202,7 +202,7 @@ def test_basarili_yanit_gecici_parola_icermiyorsa_uyar(ekran):
             return_value=False,
         ),
         patch(
-            "k_personel_ekranlari.tmk.uyari"
+            "k_personel_ekranlari.QMessageBox.warning"
         ) as uyari,
         patch(
             "k_personel_ekranlari.GeciciParolaDialog"
