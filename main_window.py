@@ -226,6 +226,29 @@ MENU = [
              aksiyon=[("＋  Yeni Danışan", "Randevu oluşturma")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
+    ]),
+    ("ÖĞRENCİ & FAALİYET YÖNETİMİ", [
+        dict(
+            ikon="👥",
+            ad="Öğrenciler",
+            izin="Faaliyet kayıtlarını düzenleme",
+            aciklama="Öğrenci kayıtları ve aktiflik yönetimi",
+            aksiyon=[]
+        ),
+        dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
+             aciklama="Faaliyet kayıtlarının düzenlenmesi",
+             aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
+                      ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
+                      ("🏢  Faaliyet Birimleri", "Faaliyet birimlerini yönetme"),
+                      ("📋  Faaliyet Türleri", "Faaliyet kayıtlarını düzenleme"),
+                      ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
+        dict(
+            ikon="🏆",
+            ad="Puan Raporu",
+            izin="Faaliyet kayıtlarını düzenleme",
+            aciklama="Öğrencilerin faaliyet puanlarına göre sıralaması ve Excel raporu",
+            aksiyon=[]
+        ),
         dict(ikon="🛎️", ad="Danışma Masası",
              izin="Danışma masası oturumunu yönetme",
              aciklama="Görev başlatma, bitirme ve geçmiş görevler",
@@ -238,27 +261,6 @@ MENU = [
              izin="Danışma masası raporlarını görüntüleme",
              aciklama="Öğrencilerin çalışma süreleri ve görev raporları",
              aksiyon=[]),
-        dict(ikon="📝", ad="Faaliyet Kayıtları", izin="Faaliyet kayıtlarını düzenleme",
-             aciklama="Faaliyet kayıtlarının düzenlenmesi",
-             aksiyon=[("＋  Yeni Faaliyet Ekle", "Faaliyet kayıtlarını düzenleme"),
-                      ("✎  Faaliyet Düzenle", "Faaliyet kayıtlarını düzenleme"),
-                      ("🏢  Faaliyet Birimleri", "Faaliyet birimlerini yönetme"),
-                      ("📋  Faaliyet Türleri", "Faaliyet kayıtlarını düzenleme"),
-                      ("🗑️ Faaliyet Sil", "Faaliyet kayıtlarını düzenleme")]),
-        dict(
-            ikon="👥",
-            ad="Öğrenciler",
-            izin="Faaliyet kayıtlarını düzenleme",
-            aciklama="Öğrenci kayıtları ve aktiflik yönetimi",
-            aksiyon=[]
-        ),
-        dict(
-            ikon="🏆",
-            ad="Puan Raporu",
-            izin="Faaliyet kayıtlarını düzenleme",
-            aciklama="Öğrencilerin faaliyet puanlarına göre sıralaması ve Excel raporu",
-            aksiyon=[]
-        ),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
