@@ -19,6 +19,8 @@ from modeller import (
     SifreDegistirModeli,
     RandevuOlusturModeli,
     RandevuGuncelleModeli,
+    RandevuIptalModeli,
+    RandevuDurumModeli,
     BakimPlaniGuncelleModeli,
     BakimPlaniOlusturModeli,
     DanisanKoduModeli,
@@ -2043,7 +2045,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         # 1. DURUM: Psikolog ise yalnızca kendi randevularını görür
         if "psikolog" in rol_adi:
             sorgu = """
-                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi 
+                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu 
                 FROM randevular r
                 JOIN personel p ON p.personel_id = r.psikolog_id
                 WHERE p.kullanici_id = %s
@@ -2054,7 +2056,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         # 2. DURUM: Diğer roller (Admin vb.)
         else:
             cursor.execute(
-                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi "
+                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi, iptal_nedeni, iptal_notu "
                 "FROM randevular ORDER BY baslangic_zamani;"
             )
             
@@ -2069,7 +2071,9 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
                 "baslangic_zamani": kayit[4], 
                 "bitis_zamani": kayit[5], 
                 "durum": kayit[6],
-                "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None
+                "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None,
+                "iptal_nedeni": kayit[8] if len(kayit) > 8 else None,
+                "iptal_notu": kayit[9] if len(kayit) > 9 else None
             } for kayit in kayitlar
         ]
     finally:
@@ -2202,7 +2206,7 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         if conn is not None: conn.close()
 
 @app.patch("/api/randevular/{randevu_id}/iptal")
-def randevu_iptal_et(randevu_id: int, kullanici_id: int = Depends(izin_kontrol("RANDEVU_IPTAL"))):
+def randevu_iptal_et(randevu_id: int, iptal: RandevuIptalModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_IPTAL"))):
     conn = None
     cursor = None
     try:
@@ -2226,10 +2230,54 @@ def randevu_iptal_et(randevu_id: int, kullanici_id: int = Depends(izin_kontrol("
         if randevu[1] != "PLANLANDI":
             raise HTTPException(status_code=409, detail="Bu randevu iptal edilemez.")
 
-        cursor.execute("UPDATE randevular SET durum = 'IPTAL_EDILDI' WHERE randevu_id = %s;", (randevu_id,))
+        cursor.execute("UPDATE randevular SET durum = 'IPTAL_EDILDI', iptal_nedeni = %s, iptal_notu = %s WHERE randevu_id = %s;", (iptal.iptal_nedeni, iptal.iptal_notu, randevu_id))
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CANCEL", "randevular", randevu_id))
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu iptal edildi.", "randevu_id": randevu_id}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.patch("/api/randevular/{randevu_id}/durum")
+def randevu_durumunu_isaretle(
+    randevu_id: int,
+    isaret: RandevuDurumModeli,
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_DUZENLE")),
+):
+    """Başlangıcı geçmiş randevuyu Tamamlandı ya da Gelmedi olarak işaretler (ikisi arasında düzeltme yapılabilir).
+
+    Psikolog yalnızca kendi randevusunu işaretler. İptal edilmiş ve henüz başlamamış randevu işaretlenemez.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT psikolog_id, durum, baslangic_zamani FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
+        randevu = cursor.fetchone()
+        if randevu is None:
+            raise HTTPException(status_code=404, detail="Randevu bulunamadı.")
+
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        if rol is not None and rol[0].upper() == "PSIKOLOG":
+            cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
+            personel = cursor.fetchone()
+            if personel is None or personel[0] != randevu[0]:
+                raise HTTPException(status_code=403, detail="Yalnızca kendi randevunuzun durumunu işaretleyebilirsiniz.")
+
+        if randevu[1] == "IPTAL_EDILDI":
+            raise HTTPException(status_code=409, detail="İptal edilmiş randevu Tamamlandı ya da Gelmedi olarak işaretlenemez.")
+        if randevu[2] > datetime.now():
+            raise HTTPException(status_code=409, detail="Henüz başlamamış randevu işaretlenemez. Randevu saatinden sonra tekrar deneyin.")
+        if randevu[1] == isaret.durum:
+            return {"durum": "basarili", "randevu_id": randevu_id, "randevu_durumu": isaret.durum, "mesaj": "Randevu zaten bu durumda."}
+
+        cursor.execute("UPDATE randevular SET durum = %s WHERE randevu_id = %s;", (isaret.durum, randevu_id))
+        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "UPDATE", "randevular", randevu_id))
+        conn.commit()
+        return {"durum": "basarili", "randevu_id": randevu_id, "randevu_durumu": isaret.durum, "mesaj": "Randevu durumu güncellendi."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

@@ -274,6 +274,49 @@ class RandevuGuncelleModeli(BaseModel):
     baslangic_zamani: Optional[NaifZaman] = None
     bitis_zamani: Optional[NaifZaman] = None
 
+# Randevu iptal nedenleri (kod -> görünen ad). İstemcideki liste ile aynı olmalıdır (test denetler).
+IPTAL_NEDENLERI = {
+    "DANISAN_TALEBI": "Danışan talebi",
+    "PSIKOLOG_MAZERETI": "Psikolog mazereti",
+    "ODA_EKIPMAN_SORUNU": "Oda / ekipman sorunu",
+    "HATALI_KAYIT": "Hatalı kayıt",
+    "DIGER": "Diğer",
+}
+IPTAL_NOTU_MAX = 100
+
+
+class RandevuIptalModeli(BaseModel):
+    """İptal nedeni (hazır liste) + isteğe bağlı kısa not ('Diğer' için zorunlu).
+
+    Bilinmeyen alan reddedilir: danışan koduna bağlı kayıtta serbest içerik yalnızca bu kısa not olabilir (FR-008).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    iptal_nedeni: Literal["DANISAN_TALEBI", "PSIKOLOG_MAZERETI", "ODA_EKIPMAN_SORUNU", "HATALI_KAYIT", "DIGER"]
+    iptal_notu: Optional[str] = Field(default=None, max_length=IPTAL_NOTU_MAX)
+
+    @field_validator("iptal_notu")
+    @classmethod
+    def _notu_temizle(cls, deger):
+        if deger is None:
+            return None
+        deger = deger.strip()
+        return deger or None
+
+    @model_validator(mode="after")
+    def _diger_icin_not_zorunlu(self):
+        if self.iptal_nedeni == "DIGER" and not self.iptal_notu:
+            raise ValueError("'Diğer' nedeni için kısa bir açıklama girilmelidir.")
+        return self
+
+
+class RandevuDurumModeli(BaseModel):
+    """Başlangıcı geçmiş randevuyu Tamamlandı ya da Gelmedi olarak işaretler."""
+    model_config = ConfigDict(extra="forbid")
+
+    durum: Literal["TAMAMLANDI", "GELMEDI"]
+
+
 def _oda_adini_temizle(deger):
     """Oda adının baş ve sonundaki boşlukları atar; yalnızca boşluktan oluşan ad reddedilir.
 

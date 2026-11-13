@@ -210,7 +210,7 @@ def test_bolum_dugmeleri_ayni_anda_tek_sayfa_gosterir():
     ekran.btn_bolumler["Özet"].click()
     assert ekran.bolumler.currentIndex() == 1 and ekran.btn_bolumler["Özet"].isChecked()
     assert not ekran.btn_bolumler["Bilgiler"].isChecked()
-    ekran.btn_bolumler["Geçmiş"].click()
+    ekran.btn_bolumler["Randevular"].click()
     assert ekran.bolumler.currentIndex() == 2
     ekran.close()
 
@@ -275,7 +275,8 @@ def test_danisanlar_sayfasinda_randevu_olusturma_yok():
 
     sec(ekran, "DAN-2026-0001")
     assert not hasattr(ekran, "yeni_randevu_ac") and not hasattr(ekran, "btn_yeni_randevu")
-    assert not [b for b in ekran.findChildren(QPushButton) if "Randevu" in b.text()]
+    # "Randevular" sekmesi (segment düğmesi) bir randevu OLUŞTURMA düğmesi değildir
+    assert not [b for b in ekran.findChildren(QPushButton) if "Randevu" in b.text() and b.objectName() != "segment"]
 
     ekran.close()
 

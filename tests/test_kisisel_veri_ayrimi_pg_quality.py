@@ -19,8 +19,11 @@ IZINLI_SUTUNLAR = {
     "danisan_kodlari": {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
                         "olusturan_psikolog_id"},
     "randevular": {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
-                   "durum", "olusturulma_tarihi"},
+                   "durum", "olusturulma_tarihi", "iptal_nedeni", "iptal_notu"},
 }
+# FR-008 İSTİSNASI (PR2): iptal notu, danışan kodlu tabloda bilinçli olarak açılmış TEK kısa serbest metin alanıdır.
+# En çok 100 karakter; arayüz "kişisel bilgi yazmayın" uyarısı verir. Başka bir sütun bu listeye ancak bilerek eklenir.
+KISA_SERBEST_METIN_ISTISNALARI = {("randevular", "iptal_notu"): 100}
 # Danışan koduna başvuran tek tablo randevudur.
 DANISAN_KODUNA_BASVURANLAR = {"randevular"}
 
@@ -73,6 +76,8 @@ def test_izinli_sutunlarin_hicbiri_kisisel_veri_adi_tasimaz():
     """İzinli liste yanlışlıkla kişisel bir sütunla genişletilirse yakalanır."""
     for tablo, sutunlar in IZINLI_SUTUNLAR.items():
         for sutun in sutunlar:
+            if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI:
+                continue
             parcalar = set(sutun.split("_"))
             assert not (parcalar & KISISEL_PARCALAR), f"{tablo}.{sutun} kişisel veri gibi görünüyor"
 
@@ -137,7 +142,8 @@ def test_danisan_tablolarinda_serbest_metin_sutunu_yok_metin_sutunlari_kisa_sini
                                 "WHERE table_schema = 'public' AND table_name = %s", (tablo,)):
                     assert tur not in ("text", "json", "jsonb", "xml", "bytea"), f"{tablo}.{sutun} serbest içerik tutabilir"
                     if tur == "character varying":
-                        assert uzunluk is not None and uzunluk <= 50, f"{tablo}.{sutun} uzun metin tutabilir ({uzunluk})"
+                        sinir = KISA_SERBEST_METIN_ISTISNALARI.get((tablo, sutun), 50)
+                        assert uzunluk is not None and uzunluk <= sinir, f"{tablo}.{sutun} uzun metin tutabilir ({uzunluk})"
     finally:
         conn.close()
 
@@ -154,6 +160,23 @@ def test_hicbir_tabloda_danisan_koduyla_birlikte_kisisel_sutun_yok():
             for tablo in tablolar:
                 for (sutun,) in _sorgu(cursor, "SELECT column_name FROM information_schema.columns "
                                                "WHERE table_schema = 'public' AND table_name = %s", (tablo,)):
+                    if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI:
+                        continue
                     assert not (set(re.split(r"_", sutun)) & KISISEL_PARCALAR), f"{tablo}.{sutun}"
+    finally:
+        conn.close()
+
+
+def test_serbest_metin_istisnasi_yalnizca_iptal_notu_ve_siniri_ayni():
+    """Danışan kodlu tablolarda kısa serbest metne yalnızca iptal notu için izin var; veritabanındaki sınır beklenenle aynı."""
+    assert KISA_SERBEST_METIN_ISTISNALARI == {("randevular", "iptal_notu"): 100}
+    conn = _baglan()
+    try:
+        with conn.cursor() as cursor:
+            _dogru_veritabani(cursor)
+            (uzunluk,) = _sorgu(
+                cursor, "SELECT character_maximum_length FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'randevular' AND column_name = 'iptal_notu'")[0]
+            assert uzunluk == 100
     finally:
         conn.close()

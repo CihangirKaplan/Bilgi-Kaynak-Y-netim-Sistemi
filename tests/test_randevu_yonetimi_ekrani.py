@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from PySide6.QtCore import QDate, Qt
-from PySide6.QtWidgets import QLabel, QMessageBox
+from PySide6.QtWidgets import QDialog, QLabel, QMessageBox
 
 import dashboard_ekrani
 import main_window as mw
@@ -379,13 +379,29 @@ def test_planli_olmayan_randevu_duzenlenemez(durum):
     ekran.close()
 
 
+class SahtePencere:
+    """İptal nedeni penceresinin yerine geçer: kabul edilmiş (ya da vazgeçilmiş) bir sonuç döndürür."""
+    def __init__(self, kabul=True, neden="DANISAN_TALEBI", notu=None):
+        self.kabul, self._sonuc = kabul, (neden, notu)
+
+    def exec(self):
+        return QDialog.Accepted if self.kabul else QDialog.Rejected
+
+    def sonuc(self):
+        return self._sonuc
+
+
+def iptal_penceresi_yamasi(**kw):
+    return patch.object(modul, "IptalNedeniDialog", side_effect=lambda *a, **k: SahtePencere(**kw))
+
+
 def test_planli_randevu_onayla_iptal_edilir_ve_liste_yenilenir():
     sunucu = Sunucu(ornek_liste())
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.Yes), \
-            patch.object(modul.QMessageBox, "information") as bilgi:
+            iptal_penceresi_yamasi(), \
+            patch.object(QMessageBox, "information") as bilgi:
         ekran.iptal_et_secilen()
     assert ("PATCH", "http://testserver/api/randevular/3/iptal") in sunucu.istekler
     bilgi.assert_called_once()
@@ -398,7 +414,7 @@ def test_iptal_onaylanmazsa_istek_atilmaz():
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.No):
+            iptal_penceresi_yamasi(kabul=False):
         ekran.iptal_et_secilen()
     assert not any(y == "PATCH" for y, _ in sunucu.istekler)
     ekran.close()
@@ -409,8 +425,8 @@ def test_iptal_reddedilirse_sunucunun_mesaji_gosterilir():
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.Yes), \
-            patch.object(modul.QMessageBox, "warning") as uyari:
+            iptal_penceresi_yamasi(), \
+            patch.object(QMessageBox, "warning") as uyari:
         ekran.iptal_et_secilen()
     assert uyari.call_args.args[2] == "Bu randevu iptal edilemez."
     ekran.close()

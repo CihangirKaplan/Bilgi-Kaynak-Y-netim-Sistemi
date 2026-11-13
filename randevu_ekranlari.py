@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
 
 from istemci_modelleri import IstemciRandevu
+from iptal_nedeni_diyalog import IPTAL_NEDENLERI, IptalNedeniDialog
 from ui_components import StandartButon
 
 # ======================================================================
@@ -897,6 +898,18 @@ FILTRE_STILI = """
 """
 
 
+def iptal_bilgisi_metni(randevu):
+    """İptal edilmiş randevu için 'İptal nedeni: ...' metni; iptal edilmemişse boş metin."""
+    if not randevu or randevu.get("durum") != "IPTAL_EDILDI":
+        return ""
+    kod = randevu.get("iptal_nedeni")
+    if not kod:
+        return "İptal nedeni:  kaydedilmemiş (neden zorunlu olmadan önce iptal edilmiş)"
+    metin = dict(IPTAL_NEDENLERI).get(kod, str(kod))
+    notu = randevu.get("iptal_notu")
+    return f"İptal nedeni:  {metin}" + (f" — {notu}" if notu else "")
+
+
 class RandevuAnaEkrani(QWidget):
     """Randevu Yönetimi: randevuları listeler; arama, tarih aralığı ve durum filtresi; düzenleme ve iptal."""
 
@@ -945,6 +958,18 @@ class RandevuAnaEkrani(QWidget):
         """)
         self.tablo.cellDoubleClicked.connect(lambda *_: self.duzenle_secilen())
         layout.addWidget(self.tablo, 1)
+
+        # Seçili iptal edilmiş randevunun nedeni tablonun altında ince bir satırda gösterilir
+        self.lbl_iptal_bilgisi = QLabel()
+        self.lbl_iptal_bilgisi.setObjectName("iptalBilgisi")
+        self.lbl_iptal_bilgisi.setWordWrap(True)
+        self.lbl_iptal_bilgisi.setStyleSheet(
+            "background-color: #F1F5F9; color: #334155; border: 1px solid #D0D7E5; border-radius: 8px; "
+            "padding: 8px 12px; font-size: 12px; font-weight: 600;"
+        )
+        self.lbl_iptal_bilgisi.hide()
+        layout.addWidget(self.lbl_iptal_bilgisi)
+        self.tablo.itemSelectionChanged.connect(self._iptal_bilgisini_guncelle)
 
         self.verileri_cek()
 
@@ -1151,6 +1176,12 @@ class RandevuAnaEkrani(QWidget):
         self.lbl_sayac.setText(f"{len(liste)} / {len(self.randevular)} randevu")
         self.lbl_bos.setVisible(len(liste) == 0)
         self.tablo.setVisible(len(liste) > 0)
+        self._iptal_bilgisini_guncelle()
+
+    def _iptal_bilgisini_guncelle(self, *_):
+        metin = iptal_bilgisi_metni(self.secili_randevu())
+        self.lbl_iptal_bilgisi.setText(metin)
+        self.lbl_iptal_bilgisi.setVisible(bool(metin))
 
     def secili_randevu(self):
         secili = self.tablo.selectionModel().selectedRows()
@@ -1185,6 +1216,54 @@ class RandevuAnaEkrani(QWidget):
         self.duzenle_formu.veriler_degisti.connect(self.verileri_cek)
         self.duzenle_formu.show()
 
+    def durum_isaretle(self, yeni_durum):
+        """Seçili randevuyu Tamamlandı ya da Gelmedi olarak işaretler (yalnızca başlangıcı geçmiş randevular)."""
+        randevu = self.secili_randevu()
+        if randevu is None:
+            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen durumunu işaretlemek istediğiniz randevuyu tablodan seçin.")
+            return
+
+        durum = randevu.get("durum")
+        if durum == "IPTAL_EDILDI":
+            QMessageBox.information(self, "Bilgi", "İptal edilmiş randevu Tamamlandı ya da Gelmedi olarak işaretlenemez.")
+            return
+        zaman = randevu_zamani(randevu.get("baslangic_zamani"))
+        if zaman is not None and zaman > datetime.now():
+            QMessageBox.information(
+                self, "Bilgi", "Henüz başlamamış randevu işaretlenemez. Randevu saatinden sonra tekrar deneyin."
+            )
+            return
+        if durum == yeni_durum:
+            QMessageBox.information(self, "Bilgi", f"Bu randevu zaten '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretli.")
+            return
+
+        onay = QMessageBox.question(
+            self, "Onay",
+            f"{randevu.get('danisan_kod_id')} randevusu '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretlensin mi?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if onay != QMessageBox.Yes:
+            return
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            cevap = oturum_kontrollu_istek(
+                "PATCH", f"{self.api_url}/api/randevular/{randevu['randevu_id']}/durum",
+                json={"durum": yeni_durum}, headers=headers, timeout=5,
+            )
+            if oturum_hatasi_mi(cevap):
+                return
+            if cevap.status_code == 200:
+                self.verileri_cek()
+            else:
+                try:
+                    mesaj = cevap.json().get("detail")
+                except Exception:
+                    mesaj = None
+                QMessageBox.warning(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+
     def iptal_et_secilen(self):
         randevu = self.secili_randevu()
         if randevu is None:
@@ -1202,19 +1281,16 @@ class RandevuAnaEkrani(QWidget):
             )
             return
 
-        onay = QMessageBox.question(
-            self, "İptal Onayı", "Seçili randevuyu iptal etmek istediğinize emin misiniz?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if onay != QMessageBox.Yes:
+        pencere = IptalNedeniDialog(self, randevu_kodu=randevu.get("danisan_kod_id"))
+        if pencere.exec() != QDialog.Accepted:
             return
+        nedeni, notu = pencere.sonuc()
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             cevap = oturum_kontrollu_istek(
                 "PATCH", f"{self.api_url}/api/randevular/{randevu['randevu_id']}/iptal",
-                headers=headers, timeout=5,
+                json={"iptal_nedeni": nedeni, "iptal_notu": notu}, headers=headers, timeout=5,
             )
             if oturum_hatasi_mi(cevap):
                 return
