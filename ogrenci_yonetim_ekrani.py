@@ -35,7 +35,6 @@ from api_yoneticisi import (
 )
 
 from ogrenci_dialog import OgrenciEkleDialog
-import turkce_mesaj_kutusu as tmk
 
 
 STIL = """
@@ -614,7 +613,7 @@ class OgrenciYonetimEkrani(QWidget):
             return cevap
 
         except Exception as hata:
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Bağlantı Hatası",
                 api_hata_mesaji(hata=hata)
@@ -646,7 +645,7 @@ class OgrenciYonetimEkrani(QWidget):
             return
 
         if cevap.status_code != 200:
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Öğrenci Listesi",
                 api_hata_mesaji(cevap)
@@ -669,7 +668,7 @@ class OgrenciYonetimEkrani(QWidget):
         ):
             self._on_yil_uyarisi_gosterildi = True
 
-            tmk.bilgi(
+            QMessageBox.information(
                 self,
                 "10 Yıllık Kayıt Uyarısı",
                 f"{bekleyen} gönüllü öğrencinin "
@@ -806,7 +805,7 @@ class OgrenciYonetimEkrani(QWidget):
         satir = self.tablo.currentRow()
 
         if satir < 0:
-            tmk.bilgi(
+            QMessageBox.information(
                 self,
                 "Öğrenci Seç",
                 "Önce listeden bir öğrenci seçin."
@@ -868,7 +867,7 @@ class OgrenciYonetimEkrani(QWidget):
             ogrenci["tur"] == "DANISMA_MASASI"
             and not yeni_durum
         ):
-            tmk.bilgi(
+            QMessageBox.information(
                 self,
                 "Aktiflik Düzenle",
                 "Danışma Masası Öğrencileri "
@@ -882,7 +881,7 @@ class OgrenciYonetimEkrani(QWidget):
             else "pasife almak"
         )
 
-        onay = tmk.soru(
+        onay = QMessageBox.question(
             self,
             "Öğrenci Aktiflik Düzenle",
             f"{ogrenci['ad_soyad']} adlı öğrenciyi "
@@ -907,7 +906,7 @@ class OgrenciYonetimEkrani(QWidget):
             return
 
         if cevap.status_code != 200:
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Aktiflik Düzenlenemedi",
                 self.hata(cevap)
@@ -1024,7 +1023,7 @@ class OgrenciYonetimEkrani(QWidget):
 
         def puanlari_hesapla():
             if baslangic.date() > bitis.date():
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Tarih Aralığı",
                     "Bitiş tarihi başlangıç tarihinden önce olamaz. "
@@ -1052,7 +1051,7 @@ class OgrenciYonetimEkrani(QWidget):
                 return
 
             if cevap.status_code != 200:
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Puanlar",
                     self.hata(cevap)
@@ -1214,7 +1213,7 @@ class OgrenciYonetimEkrani(QWidget):
             satir = tablo.currentRow()
 
             if satir < 0 or satir >= len(kayitlar):
-                tmk.bilgi(
+                QMessageBox.information(
                     pencere,
                     "Öğrenci Seç",
                     "Önce öğrenci seçin."
@@ -1286,7 +1285,7 @@ class OgrenciYonetimEkrani(QWidget):
                 return
 
             if cevap.status_code != 200:
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Erteleme",
                     self.hata(cevap)
@@ -1302,7 +1301,7 @@ class OgrenciYonetimEkrani(QWidget):
                 return
 
             if ogrenci.get("ertelendi_mi"):
-                tmk.bilgi(
+                QMessageBox.information(
                     pencere,
                     "Kayıt Ertelendi",
                     "Erteleme tarihi gelmeden "
@@ -1310,7 +1309,7 @@ class OgrenciYonetimEkrani(QWidget):
                 )
                 return
 
-            cevap = tmk.mesaj_kutusu(
+            cevap = QMessageBox.warning(
                 pencere,
                 "Kalıcı Silme Onayı",
                 f"{ogrenci['ad_soyad']} adlı "
@@ -1320,7 +1319,6 @@ class OgrenciYonetimEkrani(QWidget):
                 "kayıtları da kalıcı olarak silinecek.\n\n"
                 "Bu işlem geri alınamaz.\n\n"
                 "Emin misiniz?",
-                QMessageBox.Warning,
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
@@ -1341,14 +1339,14 @@ class OgrenciYonetimEkrani(QWidget):
                 return
 
             if yanit.status_code != 200:
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Kayıt Silinemedi",
                     self.hata(yanit)
                 )
                 return
 
-            tmk.bilgi(
+            QMessageBox.information(
                 pencere,
                 "Başarılı",
                 "Öğrenci kaydı silindi."

@@ -1,5 +1,4 @@
 """Rezervasyon listesi API hata yönetimi regresyon testleri."""
-import turkce_mesaj_kutusu as tmk
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -31,7 +30,7 @@ def test_rezervasyon_listesi_http_hatasi(qt_app, durum, beklenen):
     with patch.object(
         modul, "oturum_kontrollu_istek",
         return_value=yanit(durum),
-    ), patch.object(tmk, "uyari") as uyari:
+    ), patch("cihaz_rezervasyon_ekranlari.QMessageBox.warning") as uyari:
         ekran = modul.RezervasyonYonetimEkrani(
             "http://testserver", "TOKEN"
         )
@@ -45,7 +44,7 @@ def test_rezervasyon_listesi_baglanti_hatasi(qt_app):
     with patch.object(
         modul, "oturum_kontrollu_istek",
         side_effect=requests.exceptions.ConnectionError("Gizli detay"),
-    ), patch.object(tmk, "uyari") as uyari:
+    ), patch("cihaz_rezervasyon_ekranlari.QMessageBox.warning") as uyari:
         ekran = modul.RezervasyonYonetimEkrani(
             "http://testserver", "TOKEN"
         )
@@ -60,7 +59,7 @@ def test_rezervasyon_listesi_bos_yanit(qt_app):
     with patch.object(
         modul, "oturum_kontrollu_istek",
         return_value=yanit(200, []),
-    ), patch.object(tmk, "uyari") as uyari:
+    ), patch("cihaz_rezervasyon_ekranlari.QMessageBox.warning") as uyari:
         ekran = modul.RezervasyonYonetimEkrani(
             "http://testserver", "TOKEN"
         )
@@ -84,7 +83,7 @@ def test_yenileme_hatasinda_mevcut_rezervasyonlar_korunur(qt_app):
     with patch.object(
         modul, "oturum_kontrollu_istek",
         return_value=yanit(500),
-    ), patch.object(tmk, "uyari") as uyari:
+    ), patch("cihaz_rezervasyon_ekranlari.QMessageBox.warning") as uyari:
         ekran.verileri_yukle()
 
     assert ekran.tablo.rowCount() == 1
