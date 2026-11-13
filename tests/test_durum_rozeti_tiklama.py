@@ -2,7 +2,8 @@
 Tamamlandı / Gelmedi işaretleme durum rozetinden yapılır (düğme yok).
 
 - Başlangıcı geçmiş ve iptal edilmemiş randevuların rozetinde ▾ vardır; tıklayınca rozetin hemen altında iki seçenekli liste açılır.
-- Seçim doğrudan sunucuya gider (onay penceresi yok); mevcut durum listede kapalıdır; iptal/gelecek randevuda tıklanmaz.
+- Seçimden sonra onay penceresi çıkar (varsayılan Hayır); onaylanırsa sunucuya gider; mevcut durum listede kapalıdır;
+  iptal/gelecek randevuda tıklanmaz. Durum hücresinde ipucu kutusu yoktur.
 - "Randevu düzenleme" yetkisi olmayan kullanıcıda rozet tıklanmaz.
 - Üst düğme sırası: Yeni Randevu, Randevu Düzenle, Randevu İptal Et.
 
@@ -160,17 +161,44 @@ def test_tiklayinca_liste_rozetin_hemen_altinda_acilir_mevcut_durum_kapali(ekran
 
 
 @pytest.mark.parametrize("yeni", ["TAMAMLANDI", "GELMEDI"])
-def test_secim_dogrudan_sunucuya_gider_onay_penceresi_yok(ekran_ac, yeni):
+def test_secim_onaylaninca_sunucuya_gider(ekran_ac, yeni):
     sunucu = Sunucu(LISTE)
     ekran = ekran_ac(sunucu)
     r = rozet(ekran, 2)
     with patch.object(RandevuAnaEkrani, "_menuyu_goster", return_value=secenek(yeni)), \
-            patch.object(QMessageBox, "question") as soru:
+            patch.object(QMessageBox, "question", return_value=QMessageBox.Yes) as soru:
         QTest.mouseClick(r, Qt.LeftButton)
-    soru.assert_not_called()
+    soru.assert_called_once()
     assert ("PATCH", "http://testserver/api/randevular/2/durum") in sunucu.istekler
     assert sunucu.govdeler == [{"durum": yeni}]
     assert sunucu.istekler[-1][1].endswith("/api/randevular")       # sonra liste yenilenir
+
+
+def test_onay_verilmezse_istek_gitmez(ekran_ac):
+    sunucu = Sunucu(LISTE)
+    ekran = ekran_ac(sunucu)
+    with patch.object(RandevuAnaEkrani, "_menuyu_goster", return_value=secenek("GELMEDI")), \
+            patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+        QTest.mouseClick(rozet(ekran, 2), Qt.LeftButton)
+    assert not any(y == "PATCH" for y, _ in sunucu.istekler)
+
+
+def test_onay_penceresi_danisani_yeni_durumu_ve_varsa_mevcut_durumu_soyler_varsayilan_hayir(ekran_ac):
+    ekran = ekran_ac(Sunucu(LISTE))
+    with patch.object(RandevuAnaEkrani, "_menuyu_goster", return_value=secenek("GELMEDI")), \
+            patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru:
+        QTest.mouseClick(rozet(ekran, 3), Qt.LeftButton)                 # 3: şu an Tamamlandı
+        QTest.mouseClick(rozet(ekran, 2), Qt.LeftButton)                 # 2: şu an Planlandı
+    duzeltme, ilk = soru.call_args_list[0].args, soru.call_args_list[1].args
+    assert "DAN-2026-0003" in duzeltme[2] and "'Gelmedi' olarak işaretlensin mi?" in duzeltme[2]
+    assert "Şu an 'Tamamlandı' olarak işaretli." in duzeltme[2]         # düzeltme: mevcut durum da yazılır
+    assert "Şu an" not in ilk[2]                                         # ilk işaretleme: yazılmaz
+    assert duzeltme[4] == QMessageBox.No                                 # varsayılan düğme Hayır
+
+
+def test_durum_hucresinde_ipucu_yok(ekran_ac):
+    ekran = ekran_ac(Sunucu(LISTE))
+    assert all(ekran.tablo.item(s, 6).toolTip() == "" for s in range(ekran.tablo.rowCount()))
 
 
 def test_liste_kapatilirsa_istek_gitmez(ekran_ac):
@@ -192,7 +220,9 @@ def test_gelecek_ve_iptal_edilmis_rozet_tiklanmaz(ekran_ac, id_):
 def test_sunucu_reddederse_mesaji_gosterilir(ekran_ac):
     ret = cevap({"detail": "Yalnızca kendi randevunuzun durumunu işaretleyebilirsiniz."}, 403)
     ekran = ekran_ac(Sunucu(LISTE, patch_cevabi=ret))
-    with patch.object(RandevuAnaEkrani, "_menuyu_goster", return_value=secenek("GELMEDI")), patch.object(QMessageBox, "warning") as uyari:
+    with patch.object(RandevuAnaEkrani, "_menuyu_goster", return_value=secenek("GELMEDI")), \
+            patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+            patch.object(QMessageBox, "warning") as uyari:
         QTest.mouseClick(rozet(ekran, 2), Qt.LeftButton)
     assert uyari.call_args.args[2] == "Yalnızca kendi randevunuzun durumunu işaretleyebilirsiniz."
 
