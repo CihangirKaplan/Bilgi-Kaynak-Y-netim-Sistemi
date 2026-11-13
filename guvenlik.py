@@ -15,6 +15,15 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET ortam değişkeni tanımlı değil.")
 
+# Kısa anahtar tahmin edilerek sahte oturum anahtarı (token) üretilmesine yol açar; belgelerdeki asgari uzunluk uygulanır.
+JWT_SECRET_ASGARI_UZUNLUK = 32
+if len(JWT_SECRET) < JWT_SECRET_ASGARI_UZUNLUK:
+    raise RuntimeError(
+        f"JWT_SECRET en az {JWT_SECRET_ASGARI_UZUNLUK} karakter olmalıdır (şu an {len(JWT_SECRET)}). "
+        "Yenisini üretmek için: python -c \"import secrets; print(secrets.token_urlsafe(48))\" "
+        "ve çıkan değeri .env dosyasındaki JWT_SECRET satırına yazın."
+    )
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "45"))
 

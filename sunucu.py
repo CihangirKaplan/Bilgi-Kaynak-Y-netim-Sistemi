@@ -46,12 +46,16 @@ from guvenlik import (
     token_parola_gecerli
 )
 from denetim import denetim_kaydi_olustur
+from girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
 import psycopg2.errors
 from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
 load_dotenv()
 app = FastAPI()
+# Bozuk girdi (NUL karakter, taşan sayı) ve veritabanı kural hataları 500 yerine anlamlı hata döndürür.
+app.add_middleware(NulVeSayiKorumasi)
+merkezi_hata_yakalayicilari_kur(app)
 bearer_scheme = HTTPBearer()
 
 # Öğrenci listelerinde her öğrencinin türünü belirtmek için kullanılan etiketler.
@@ -6830,6 +6834,9 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
 # --- 1. YENİ İZİN EKLEME (POST) ---
 @app.post("/api/izinler", status_code=201)
 def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE"))):
+    izin_adi = izin_verisi.get("izin_adi")
+    if not isinstance(izin_adi, str) or not izin_adi.strip() or len(izin_adi) > 100:
+        raise HTTPException(status_code=422, detail="İzin adı zorunludur ve en fazla 100 karakter olabilir.")
     conn = None
     cursor = None
     try:
@@ -6838,7 +6845,7 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
         
         cursor.execute(
             "INSERT INTO izinler (izin_adi) VALUES (%s) RETURNING izin_id",
-            (izin_verisi.get("izin_adi"),)
+            (izin_adi,)
         )
         yeni_id = cursor.fetchone()[0]
         # Yeni izin "kimsede yok" durumunda kalmasın: ADMIN otomatik sahip olur, diğer roller kapalı başlar.
