@@ -218,7 +218,10 @@ class OdaFormu(QWidget):
 
 
 if __name__ == "__main__":
+    from qt_dil import turkce_ceviriyi_yukle
     app = QApplication(sys.argv)
+    if not turkce_ceviriyi_yukle(app):
+        print("Uyarı: Qt Türkçe çevirisi yüklenemedi.")
     pencere = OdaFormu(api_url="http://127.0.0.1:8000", token="TEST_TOKEN")
     pencere.show()
     sys.exit(app.exec())

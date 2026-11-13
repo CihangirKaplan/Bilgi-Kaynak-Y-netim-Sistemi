@@ -218,7 +218,7 @@ def test_psikolog_icin_oda_secmeden_kaydedilmez():
     sunucu, form = Sunucu(), form_ac()
     rol_sec(form, sunucu, 1)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "warning") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     uyari.assert_called_once()
     assert "en az bir" in uyari.call_args.args[2]
@@ -231,7 +231,7 @@ def test_psikolog_icin_secilen_odalar_sunucuya_gider():
     rol_sec(form, sunucu, 1)
     isaretle(form, 2, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "information"):
+            patch.object(modul.QMessageBox, "information"):
         form.kaydet()
     (url, govde), = sunucu.patch_istekleri
     assert url.endswith("/api/kullanicilar/5/rol")
@@ -246,7 +246,7 @@ def test_psikolog_olmayan_rol_oda_gondermez():
     isaretle(form, 2)             # psikolog seçilip odası işaretlendi...
     rol_sec(form, sunucu, 3)      # ...sonra Müdür'e dönüldü: oda gitmemeli
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "information"):
+            patch.object(modul.QMessageBox, "information"):
         form.kaydet()
     assert sunucu.patch_istekleri[0][1] == {"rol_id": 3}
     form.close()
@@ -257,7 +257,7 @@ def test_odalar_yuklenemezse_bilgi_gosterilir_ve_kaydedilmez():
     rol_sec(form, sunucu, 1)
     assert "yüklenemedi" in form.oda_bilgi.text()
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "warning") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.kaydet()
     uyari.assert_called_once()
     assert sunucu.patch_istekleri == []

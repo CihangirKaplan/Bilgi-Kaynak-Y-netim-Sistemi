@@ -182,8 +182,8 @@ class BirimYonetimDialog(QDialog):
             QPushButton { background-color: #E2E8F0; color: #1E293B; padding: 6px 15px; border-radius: 4px; font-weight: bold; border: 1px solid #CBD5E1; }
             QPushButton:hover { background-color: #CBD5E1; }
             /* Yes butonunu kan kırmızı yapıyoruz */
-            QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; border: none; }
-            QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
+            QPushButton[text="Evet"] { background-color: #E74C3C; color: white; border: none; }
+            QPushButton[text="Evet"]:hover { background-color: #C0392B; }
         """)
         cevap = soru.exec()
 

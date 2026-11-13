@@ -1481,8 +1481,7 @@ QLabel {
             "Oturum Sona Erdi",
             mesaj + "Uygulamayı kullanmaya devam etmek için "
             "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
-        )
+                    )
 
         self.oturum_kapat()
 
@@ -1637,8 +1636,7 @@ QLabel {
             "Oturum süreniz sona ermiştir.\n\n"
             "Uygulamayı kullanmaya devam etmek için "
             "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
-        )
+                    )
 
         self.oturum_kapat()
 
@@ -1731,7 +1729,8 @@ QLabel {
         cevap = QMessageBox.question(
             self, "Onay",
             f"'{oda_adi}' adlı odayı pasife almak istediğinize emin misiniz?\nBu işlem randevu sistemini etkileyebilir.",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
 
         if cevap == QMessageBox.Yes:
@@ -2505,6 +2504,7 @@ QLabel {
                 QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
                 QPushButton:hover { background-color: #3498DB; }
             """)
+            uyari.setStandardButtons(QMessageBox.Ok)
             uyari.exec()
             return
 
@@ -2549,6 +2549,7 @@ QLabel {
                 QPushButton { background-color: #2980B9; color: white; padding: 6px 15px; border-radius: 4px; }
                 QPushButton:hover { background-color: #3498DB; }
             """)
+            uyari.setStandardButtons(QMessageBox.Ok)
             uyari.exec()
             return
 
@@ -2571,8 +2572,8 @@ QLabel {
             QLabel { color: #2C3E50; font-size: 13px; font-weight: bold; }
             QPushButton { background-color: #BDC3C7; color: black; padding: 6px 15px; border-radius: 4px; }
             QPushButton:hover { background-color: #95A5A6; }
-            QPushButton[text="&Yes"] { background-color: #E74C3C; color: white; }
-            QPushButton[text="&Yes"]:hover { background-color: #C0392B; }
+            QPushButton[text="Evet"] { background-color: #E74C3C; color: white; }
+            QPushButton[text="Evet"]:hover { background-color: #C0392B; }
         """)
 
         cevap = soru.exec()
@@ -2598,6 +2599,7 @@ QLabel {
                         QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; }
                         QPushButton:hover { background-color: #2ECC71; }
                     """)
+                    bilgi.setStandardButtons(QMessageBox.Ok)
                     bilgi.exec()
 
                     self.faaliyet_tablosunu_guncelle() # Tabloyu yenile ki kayıt ekrandan kaybolsun
@@ -2706,7 +2708,10 @@ QLabel {
 
 
 if __name__ == "__main__":
+    from qt_dil import turkce_ceviriyi_yukle
     app = QApplication(sys.argv)
+    if not turkce_ceviriyi_yukle(app):
+        print("Uyarı: Qt Türkçe çevirisi yüklenemedi.")
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
     pencere = AnaPencere(aktif_rol=rol, rol_onizleme=True)
     pencere.showMaximized()

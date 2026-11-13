@@ -344,8 +344,7 @@ class SifreDegistirEkrani(QWidget):
             self,
             "Oturum Sona Erdi",
             mesaj + "Uygulamayı kullanmaya devam etmek için "
-            "lütfen yeniden giriş yapın.",
-            QMessageBox.StandardButton.Ok
+            "lütfen yeniden giriş yapın."
         )
 
         self.close()

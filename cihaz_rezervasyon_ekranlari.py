@@ -255,6 +255,7 @@ class YeniRezervasyonFormu(QDialog):
                 basari.setWindowTitle("Başarılı")
                 basari.setText("✅ Rezervasyon başarıyla oluşturuldu!")
                 basari.setStyleSheet("QMessageBox { background-color: #FFFFFF; } QLabel { color: #27AE60; font-size: 13px; font-weight: bold; } QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; font-weight: bold; }")
+                basari.setStandardButtons(QMessageBox.Ok)
                 basari.exec()
                 self.accept()
             else:
@@ -429,6 +430,7 @@ class RezervasyonYonetimEkrani(QWidget):
                         msg.setWindowTitle("Başarılı")
                         msg.setText("✅ Rezervasyon başarıyla iptal edildi.")
                         msg.setStyleSheet("QMessageBox { background-color: white; } QLabel { color: #27AE60; font-size: 13px; font-weight: bold; } QPushButton { background-color: #27AE60; color: white; padding: 5px 15px; border-radius: 4px; }")
+                        msg.setStandardButtons(QMessageBox.Ok)
                         msg.exec()
                     else:
                         QMessageBox.warning(self, "Hata", "İptal işlemi reddedildi.")

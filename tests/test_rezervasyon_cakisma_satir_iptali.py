@@ -229,7 +229,7 @@ def test_pencere_her_rezervasyonu_ayri_satirda_ve_devam_kapali_baslar(pencere):
 
 
 def test_onaylanan_iptal_satiri_kaldirir_hepsi_bitince_devam_acilir(pencere):
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with patch.object(uyari.QMessageBox, "question", return_value=QMessageBox.Yes), \
          patch.object(uyari, "rezervasyonu_iptal_et", return_value=(True, None)) as iptal:
         iptal_dugmeleri(pencere)[0].click()
         assert pencere.kalan() == 1 and not pencere.btn_devam.isEnabled()
@@ -241,7 +241,7 @@ def test_onaylanan_iptal_satiri_kaldirir_hepsi_bitince_devam_acilir(pencere):
 
 
 def test_onay_sorusuna_hayir_denirse_iptal_edilmez(pencere):
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+    with patch.object(uyari.QMessageBox, "question", return_value=QMessageBox.No), \
          patch.object(uyari, "rezervasyonu_iptal_et") as iptal:
         iptal_dugmeleri(pencere)[0].click()
     iptal.assert_not_called()
@@ -249,16 +249,16 @@ def test_onay_sorusuna_hayir_denirse_iptal_edilmez(pencere):
 
 
 def test_iptal_basarisizsa_satir_kalir_ve_hata_gosterilir(pencere):
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with patch.object(uyari.QMessageBox, "question", return_value=QMessageBox.Yes), \
          patch.object(uyari, "rezervasyonu_iptal_et", return_value=(False, "yetkiniz yok")), \
-         patch.object(QMessageBox, "warning") as uyar:
+         patch.object(uyari.QMessageBox, "warning") as uyar:
         iptal_dugmeleri(pencere)[0].click()
     assert pencere.kalan() == 2
     assert "yetkiniz yok" in uyar.call_args.args[2]
 
 
 def test_onay_sorusu_kimin_hangi_rezervasyonu_oldugunu_soyler(pencere):
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru:
+    with patch.object(uyari.QMessageBox, "question", return_value=QMessageBox.No) as soru:
         iptal_dugmeleri(pencere)[1].click()
     metin = soru.call_args.args[2]
     assert "ayse" in metin and "11.11.2026 14:00 – 15:00" in metin and "denetim" in metin

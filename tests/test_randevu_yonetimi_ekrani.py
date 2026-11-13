@@ -346,7 +346,7 @@ def sec(ekran, randevu_id):
 
 def test_secim_yoksa_duzenle_ve_iptal_uyarir():
     ekran = ekran_ac(Sunucu(ornek_liste()))
-    with patch.object(QMessageBox, "warning") as uyari, patch.object(modul, "RandevuDuzenleFormu") as form:
+    with patch.object(modul.QMessageBox, "warning") as uyari, patch.object(modul, "RandevuDuzenleFormu") as form:
         ekran.duzenle_secilen()
         ekran.iptal_et_secilen()
     assert uyari.call_count == 2
@@ -372,7 +372,7 @@ def test_planli_olmayan_randevu_duzenlenemez(durum):
     ekran = ekran_ac(Sunucu([randevu(1, durum=durum)]))
     ekran.chk_iptal_gizle.setChecked(False)
     sec(ekran, 1)
-    with patch.object(QMessageBox, "warning") as uyari, patch.object(modul, "RandevuDuzenleFormu") as form:
+    with patch.object(modul.QMessageBox, "warning") as uyari, patch.object(modul, "RandevuDuzenleFormu") as form:
         ekran.duzenle_secilen()
     uyari.assert_called_once()
     form.assert_not_called()
@@ -384,8 +384,8 @@ def test_planli_randevu_onayla_iptal_edilir_ve_liste_yenilenir():
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
-            patch.object(QMessageBox, "information") as bilgi:
+            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.Yes), \
+            patch.object(modul.QMessageBox, "information") as bilgi:
         ekran.iptal_et_secilen()
     assert ("PATCH", "http://testserver/api/randevular/3/iptal") in sunucu.istekler
     bilgi.assert_called_once()
@@ -398,7 +398,7 @@ def test_iptal_onaylanmazsa_istek_atilmaz():
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.No):
         ekran.iptal_et_secilen()
     assert not any(y == "PATCH" for y, _ in sunucu.istekler)
     ekran.close()
@@ -409,8 +409,8 @@ def test_iptal_reddedilirse_sunucunun_mesaji_gosterilir():
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
-            patch.object(QMessageBox, "warning") as uyari:
+            patch.object(modul.QMessageBox, "question", return_value=QMessageBox.Yes), \
+            patch.object(modul.QMessageBox, "warning") as uyari:
         ekran.iptal_et_secilen()
     assert uyari.call_args.args[2] == "Bu randevu iptal edilemez."
     ekran.close()
@@ -423,7 +423,7 @@ def test_planli_olmayan_randevu_iptal_edilemez(durum, parca):
     ekran.chk_iptal_gizle.setChecked(False)
     sec(ekran, 1)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(QMessageBox, "information") as bilgi, patch.object(QMessageBox, "question") as soru:
+            patch.object(modul.QMessageBox, "information") as bilgi, patch.object(modul.QMessageBox, "question") as soru:
         ekran.iptal_et_secilen()
     bilgi.assert_called_once()
     assert parca in bilgi.call_args.args[2]

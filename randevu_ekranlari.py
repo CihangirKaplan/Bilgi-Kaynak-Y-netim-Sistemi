@@ -1205,6 +1205,7 @@ class RandevuAnaEkrani(QWidget):
         onay = QMessageBox.question(
             self, "İptal Onayı", "Seçili randevuyu iptal etmek istediğinize emin misiniz?",
             QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
         )
         if onay != QMessageBox.Yes:
             return

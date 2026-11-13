@@ -272,9 +272,11 @@ def test_sayfada_kisisel_veri_alani_yok():
 def test_danisanlar_sayfasinda_randevu_olusturma_yok():
     """Randevu oluşturma Randevu Yönetimi'nde; bu sayfa yalnızca danışanları gösterir."""
     ekran = ekran_ac()
+
     sec(ekran, "DAN-2026-0001")
     assert not hasattr(ekran, "yeni_randevu_ac") and not hasattr(ekran, "btn_yeni_randevu")
     assert not [b for b in ekran.findChildren(QPushButton) if "Randevu" in b.text()]
+
     ekran.close()
 
 

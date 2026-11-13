@@ -190,7 +190,8 @@ class KullaniciPersonelEkrani(QWidget):
         cevap = QMessageBox.question(
             self, "Onay",
             f"'{kullanici_adi}' adlı kullanıcıyı {islem_sorusu} istediğinize emin misiniz?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
 
         if cevap == QMessageBox.Yes:
