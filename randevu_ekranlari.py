@@ -5,9 +5,9 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
                                QAbstractItemView, QPushButton, QLineEdit,
                                QDateEdit)
-from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer
-from PySide6.QtGui import QColor, QTextCharFormat
-from PySide6.QtWidgets import QStyledItemDelegate
+from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer, QPoint
+from PySide6.QtGui import QColor, QTextCharFormat, QPixmap, QPainter, QIcon
+from PySide6.QtWidgets import QStyledItemDelegate, QMenu
 from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
 
@@ -910,11 +910,57 @@ def iptal_bilgisi_metni(randevu):
     return f"İptal nedeni:  {metin}" + (f" — {notu}" if notu else "")
 
 
+def durum_isaretlenebilir(randevu, simdi):
+    """Başlangıcı geçmiş ve iptal edilmemiş randevu Tamamlandı / Gelmedi olarak işaretlenebilir (ya da düzeltilebilir)."""
+    if not randevu or randevu.get("durum") not in ("PLANLANDI", "TAMAMLANDI", "GELMEDI"):
+        return False
+    zaman = randevu_zamani(randevu.get("baslangic_zamani"))
+    return zaman is not None and zaman <= simdi
+
+
+def menu_konumu(rozet_sol_alt, rozet_genislik, menu_genislik, ekran_sag):
+    """Liste rozetin hemen altında, sol kenarları hizalı açılır; ekranın sağına sığmıyorsa sağ kenarlar hizalanır."""
+    x, y = rozet_sol_alt.x(), rozet_sol_alt.y()
+    if x + menu_genislik > ekran_sag:
+        x = x + rozet_genislik - menu_genislik
+    return QPoint(x, y)
+
+
+def _renkli_nokta(renk):
+    """Liste satırlarının başında görünen küçük renkli daire."""
+    resim = QPixmap(12, 12)
+    resim.fill(Qt.transparent)
+    cizici = QPainter(resim)
+    cizici.setRenderHint(QPainter.Antialiasing)
+    cizici.setBrush(QColor(renk))
+    cizici.setPen(Qt.NoPen)
+    cizici.drawEllipse(1, 1, 10, 10)
+    cizici.end()
+    return QIcon(resim)
+
+
+class DurumRozeti(QLabel):
+    """Durum rozeti; tiklanabilir ise sol tıkta `tiklandi` sinyalini gönderir."""
+    tiklandi = Signal()
+
+    def __init__(self, metin, tiklanabilir=False):
+        super().__init__(metin)
+        self.tiklanabilir = tiklanabilir
+
+    def mousePressEvent(self, olay):
+        if self.tiklanabilir and olay.button() == Qt.LeftButton:
+            self.tiklandi.emit()
+            olay.accept()
+            return
+        super().mousePressEvent(olay)
+
+
 class RandevuAnaEkrani(QWidget):
     """Randevu Yönetimi: randevuları listeler; arama, tarih aralığı ve durum filtresi; düzenleme ve iptal."""
 
-    def __init__(self, api_url, token, mevcut_psikolog_id, rol=""):
+    def __init__(self, api_url, token, mevcut_psikolog_id, rol="", duzenleme_yetkisi=True):
         super().__init__()
+        self.duzenleme_yetkisi = duzenleme_yetkisi      # yoksa durum rozeti tıklanmaz (sunucu da reddeder)
         self.api_url = api_url
         self.token = token
         self.mevcut_psikolog_id = mevcut_psikolog_id
@@ -1122,15 +1168,18 @@ class RandevuAnaEkrani(QWidget):
         return oge
 
     @staticmethod
-    def _durum_rozeti(durum):
+    def _durum_rozeti(durum, tiklanabilir=False):
         etiket = DURUM_ETIKETLERI.get(durum, str(durum or "").capitalize())
         arka, yazi = DURUM_RENKLERI.get(durum, ("#E2E8F0", "#334155"))
-        rozet = QLabel(etiket)
+        rozet = DurumRozeti(etiket + ("  ▾" if tiklanabilir else ""), tiklanabilir)
         rozet.setAlignment(Qt.AlignCenter)
         rozet.setStyleSheet(
-            f"background-color: {arka}; color: {yazi}; border-radius: 10px; "
-            "padding: 3px 14px; font-weight: bold; font-size: 12px;"
+            f"QLabel {{ background-color: {arka}; color: {yazi}; border-radius: 10px; "
+            "padding: 3px 14px; font-weight: bold; font-size: 12px; border: 1px solid transparent; }"
+            f"QLabel:hover {{ border: 1px solid {yazi if tiklanabilir else 'transparent'}; }}"
         )
+        if tiklanabilir:
+            rozet.setCursor(Qt.PointingHandCursor)
         kap = QWidget()
         kap.setStyleSheet("background: transparent;")
         yerlesim = QHBoxLayout(kap)
@@ -1169,7 +1218,10 @@ class RandevuAnaEkrani(QWidget):
                                          self._hucre(psikolog), self._hucre(oda),
                                          self._hucre(tarih), self._hucre(saat), durum_hucresi)):
                 self.tablo.setItem(satir, sutun, oge)
-            kap, _ = self._durum_rozeti(r.get("durum"))
+            tiklanabilir = self.duzenleme_yetkisi and durum_isaretlenebilir(r, simdi)
+            kap, rozet = self._durum_rozeti(r.get("durum"), tiklanabilir)
+            if tiklanabilir:
+                rozet.tiklandi.connect(lambda r=r, rozet=rozet: self._durum_menusu_ac(r, rozet))
             self.tablo.setCellWidget(satir, 6, kap)
             self.tablo.setRowHeight(satir, 40)
 
@@ -1216,9 +1268,35 @@ class RandevuAnaEkrani(QWidget):
         self.duzenle_formu.veriler_degisti.connect(self.verileri_cek)
         self.duzenle_formu.show()
 
-    def durum_isaretle(self, yeni_durum):
-        """Seçili randevuyu Tamamlandı ya da Gelmedi olarak işaretler (yalnızca başlangıcı geçmiş randevular)."""
-        randevu = self.secili_randevu()
+    def _menuyu_goster(self, liste, konum):
+        """Listeyi konumda açar ve seçilen eylemi döndürür (etkileşimli; testlerde değiştirilir)."""
+        return liste.exec(konum)
+
+    def _durum_menusu_ac(self, randevu, rozet):
+        """Rozetin hemen altında Tamamlandı / Gelmedi listesini açar; seçim doğrudan sunucuya gider."""
+        liste = QMenu(self)
+        liste.setStyleSheet(
+            "QMenu { background: white; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px; } "
+            "QMenu::item { padding: 8px 22px 8px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; color: #0F172A; } "
+            "QMenu::item:selected { background: #F1F5F9; } QMenu::item:disabled { color: #94A3B8; }"
+        )
+        for kod in ("TAMAMLANDI", "GELMEDI"):
+            eylem = liste.addAction(_renkli_nokta(DURUM_RENKLERI[kod][1]), DURUM_ETIKETLERI[kod])
+            eylem.setData(kod)
+            eylem.setEnabled(randevu.get("durum") != kod)          # mevcut durum seçilemez
+        liste.setMinimumWidth(rozet.width())                       # en az rozet kadar geniş: yazının hemen altında durur
+        sol_alt = rozet.mapToGlobal(QPoint(0, rozet.height() + 2))
+        ekran = rozet.screen()
+        ekran_sag = ekran.availableGeometry().right() if ekran is not None else sol_alt.x() + 100000
+        konum = menu_konumu(sol_alt, rozet.width(), max(liste.sizeHint().width(), rozet.width()), ekran_sag)
+        secim = self._menuyu_goster(liste, konum)
+        if secim is not None:
+            self.durum_isaretle(secim.data(), randevu=randevu)
+
+    def durum_isaretle(self, yeni_durum, randevu=None):
+        """Randevuyu (verilmezse seçili randevuyu) Tamamlandı ya da Gelmedi olarak işaretler; yalnızca başlangıcı geçmiş randevular."""
+        if randevu is None:
+            randevu = self.secili_randevu()
         if randevu is None:
             QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen durumunu işaretlemek istediğiniz randevuyu tablodan seçin.")
             return
@@ -1235,14 +1313,6 @@ class RandevuAnaEkrani(QWidget):
             return
         if durum == yeni_durum:
             QMessageBox.information(self, "Bilgi", f"Bu randevu zaten '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretli.")
-            return
-
-        onay = QMessageBox.question(
-            self, "Onay",
-            f"{randevu.get('danisan_kod_id')} randevusu '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretlensin mi?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if onay != QMessageBox.Yes:
             return
 
         headers = {"Authorization": f"Bearer {self.token}"}

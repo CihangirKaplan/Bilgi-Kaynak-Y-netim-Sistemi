@@ -300,7 +300,7 @@ def test_durum_rozetleri_yumusak_renkli_ve_iptal_kirmizi_degil():
     rozetler = {}
     for satir in range(ekran.tablo.rowCount()):
         etiket = ekran.tablo.cellWidget(satir, 6).findChild(QLabel)
-        rozetler[etiket.text()] = etiket.styleSheet()
+        rozetler[etiket.text().replace("  ▾", "")] = etiket.styleSheet()     # geçmiş randevularda tıklanabilir rozet ▾ taşır
     assert set(rozetler) == {"Planlandı", "Tamamlandı", "Gelmedi", "İptal Edildi"}
     assert "#DBEAFE" in rozetler["Planlandı"] and "#1D4ED8" in rozetler["Planlandı"]       # mavi
     assert "#DCFCE7" in rozetler["Tamamlandı"]                                              # yeşil
