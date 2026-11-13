@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from modeller import RandevuIptalModeli
 from sunucu import randevu_guncelle, randevu_iptal_et
 
 
@@ -168,6 +169,7 @@ def test_quality_randevu_iptal_hata_senaryolari(
         with pytest.raises(HTTPException) as hata:
             randevu_iptal_et(
                 randevu_id=10,
+                iptal=RandevuIptalModeli(iptal_nedeni="DANISAN_TALEBI"),
                 kullanici_id=1,
             )
 
@@ -197,6 +199,7 @@ def test_quality_psikolog_kendi_randevusunu_iptal_edebilir():
     with patch("sunucu.psycopg2.connect", return_value=conn):
         sonuc = randevu_iptal_et(
             randevu_id=10,
+            iptal=RandevuIptalModeli(iptal_nedeni="DANISAN_TALEBI"),
             kullanici_id=1,
         )
 

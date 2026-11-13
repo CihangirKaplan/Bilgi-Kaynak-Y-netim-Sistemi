@@ -220,6 +220,8 @@ MENU = [
              aciklama="Randevuları listeleme, düzenleme ve iptal etme",
              aksiyon=[("＋  Yeni Randevu", "Randevu oluşturma"),
                       ("✎  Randevu Düzenle", "Randevu düzenleme"),
+                      ("✓  Tamamlandı", "Randevu düzenleme"),
+                      ("✗  Gelmedi", "Randevu düzenleme"),
                       ("✕  Randevu İptal Et", "Randevu iptal etme")]),
         dict(ikon="👤", ad="Danışanlar", izin="Randevu oluşturma",
              aciklama="Psikologlara göre danışanlar, bilgileri, randevu özeti ve geçmişi",
@@ -2010,6 +2012,10 @@ QLabel {
                     btn.clicked.connect(self.hizli_danisan_kod_olustur)
                 elif izin_kodu == "Arıza kayıtlarını yönetme":
                     btn.clicked.connect(self.yeni_ariza_bildirimi_ac)
+                elif etiket == "✓  Tamamlandı":
+                    btn.clicked.connect(lambda: self.randevu_ana_ekrani.durum_isaretle("TAMAMLANDI") if hasattr(self, 'randevu_ana_ekrani') else None)
+                elif etiket == "✗  Gelmedi":
+                    btn.clicked.connect(lambda: self.randevu_ana_ekrani.durum_isaretle("GELMEDI") if hasattr(self, 'randevu_ana_ekrani') else None)
                 elif izin_kodu == "Randevu düzenleme":
                     btn.clicked.connect(lambda: self.randevu_ana_ekrani.duzenle_secilen() if hasattr(self, 'randevu_ana_ekrani') else None)
                 elif izin_kodu == "Randevu iptal etme":

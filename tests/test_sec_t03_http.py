@@ -27,7 +27,7 @@ from sunucu import app
         ),
         (
             "/api/randevular/5/iptal",
-            None,
+            {"iptal_nedeni": "DANISAN_TALEBI"},
             [
                 (2, "PLANLANDI"),
                 ("PSIKOLOG",),

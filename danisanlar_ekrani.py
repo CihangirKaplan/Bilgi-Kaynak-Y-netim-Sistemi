@@ -28,7 +28,7 @@ from randevu_ekranlari import (
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
 DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Ücret", "İstisna", "Randevu", "Durum"]
 GECMIS_TABLO_BASLIKLARI = ["Tarih", "Saat", "Oda", "Durum"]
-BOLUMLER = [("Bilgiler", 0), ("Özet", 1), ("Geçmiş", 2)]
+BOLUMLER = [("Bilgiler", 0), ("Özet", 1), ("Randevular", 2)]
 
 
 # ------------------------------------------------------------------ saf yardımcılar

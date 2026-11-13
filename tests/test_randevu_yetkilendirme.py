@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from fastapi import HTTPException
 
-from modeller import RandevuGuncelleModeli, RandevuOlusturModeli
+from modeller import RandevuGuncelleModeli, RandevuIptalModeli, RandevuOlusturModeli
 from sunucu import (
     randevu_guncelle,
     randevu_iptal_et,
@@ -74,6 +74,7 @@ def test_psikolog_baskasinin_randevusunu_iptal_edemez():
         with pytest.raises(HTTPException) as hata:
             randevu_iptal_et(
                 randevu_id=5,
+                iptal=RandevuIptalModeli(iptal_nedeni="DANISAN_TALEBI"),
                 kullanici_id=10,
             )
 

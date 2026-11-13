@@ -126,7 +126,7 @@ def test_islem_dugmeleri_kucuk_ve_sag_yaslidir(pencere_ac):
     sayfaya_git(ana, "Randevu Yönetimi")
     sayfa = ana.stack.currentWidget()
     dugmeler = sayfa.findChildren(QPushButton, "aksiyon")
-    assert len(dugmeler) == 3
+    assert len(dugmeler) == 5            # Yeni Randevu, Düzenle, Tamamlandı, Gelmedi, İptal Et
     sag = max(d.mapTo(sayfa, d.rect().topRight()).x() for d in dugmeler)
     sol = min(d.mapTo(sayfa, d.rect().topLeft()).x() for d in dugmeler)
-    assert sol > sayfa.width() // 2 and sag <= sayfa.width()
+    assert sag > sayfa.width() - 60 and sag <= sayfa.width()          # sağa yaslı: son düğme sayfanın sağ kenarında
