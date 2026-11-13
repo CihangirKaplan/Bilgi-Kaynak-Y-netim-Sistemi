@@ -572,12 +572,64 @@ class IzinDuzenleDialog(QDialog):
         izin_listesi = rol_izin_map.get(str(rol_id)) or rol_izin_map.get(rol_id, [])
         return self.izin_id in izin_listesi
 
+    def _rolun_izin_kodlari(self, rol_id):
+        """Rolün şu an sahip olduğu izinlerin kodları (matris verisinden)."""
+        harita = self.matris_verisi.get("rol_izin_map", {})
+        idler = set(harita.get(str(rol_id)) or harita.get(rol_id, []))
+        id_kod = {izin["izin_id"]: izin["izin_adi"] for izin in self.matris_verisi.get("izinler", [])}
+        return {id_kod[i] for i in idler if i in id_kod}
+
+    def onkosul_engeli(self):
+        """Bu izin, ön koşulu olmayan bir role YENİ verilmek isteniyorsa açıklayıcı uyarı metni; sorun yoksa None.
+
+        Ön koşul: izin bir sayfanın içindeki düğmeyi açıyorsa o sayfayı açan izin (örn. Rol atama için Kullanıcı
+        oluşturma). Zaten verilmiş olanlara dokunulmaz; yalnızca bu kayıtta yeni işaretlenen roller denetlenir."""
+        if not self.secilen_izin:
+            return None
+        kod = self.secilen_izin["izin_adi"]
+        tablo = izin_bagimliliklari.onkosullari_getir()
+        etiketler = izin_bagimliliklari.etiketler_matristen(self.matris_verisi)
+        harita = self.matris_verisi.get("rol_izin_map", {})
+
+        eksik_roller = []
+        secenekler = None
+        for rol in self.roller:
+            rol_id = rol["rol_id"]
+            kutu = self.rol_checkboxlar.get(rol_id)
+            if kutu is None or not kutu.isChecked() or self.izin_bu_rolde_var_mi(rol_id, harita):
+                continue                                           # yalnızca bu kayıtta yeni verilen roller
+            eksik = izin_bagimliliklari.eksik_onkosullar(kod, self._rolun_izin_kodlari(rol_id), tablo)
+            if not eksik:
+                continue
+            if not any(k in etiketler for _, kodlar in eksik for k in kodlar):
+                continue                                           # ön koşul izni sistemde tanımsız: engellenemez
+            secenekler = eksik
+            eksik_roller.append(rol.get("gorunen_ad") or rol["rol_adi"])
+
+        if not eksik_roller:
+            return None
+        gerekli = izin_bagimliliklari.onkosul_metni(secenekler, etiketler)
+        sayfalar = ", ".join(f"'{sayfa}'" for sayfa, _ in secenekler)
+        roller = "\n".join(f"  •  {ad}" for ad in eksik_roller)
+        return (
+            f"Bu iznin verilebilmesi için önce {gerekli} izninin olması gerekiyor.\n\n"
+            f"Bu izin {sayfalar} sayfasının içinde çalışır; o sayfa {gerekli} izni olmadan görünmez.\n\n"
+            f"Bu izne sahip olmayan roller:\n{roller}\n\n"
+            f"Önce ilgili rollere {gerekli} iznini verin, sonra bu izni verebilirsiniz."
+        )
+
     def verileri_doldur(self):
         if self.secilen_izin:
             ad = self.secilen_izin.get("gorunen_ad") or self.secilen_izin["izin_adi"]
             self.input_izin_adi.setText(ad)
 
     def kaydet(self):
+        # 0. Ön koşulu olmayan bir role bağlı izin verilmek isteniyorsa kaydetmeden önce uyar
+        engel = self.onkosul_engeli()
+        if engel:
+            QMessageBox.warning(self, "Önce bağlı izin gerekli", engel)
+            return
+
         # 1. Hangi rollerin tikli olduğunu bulalım
         verilen_rol_idleri = []
         for rol_id, chk in self.rol_checkboxlar.items():

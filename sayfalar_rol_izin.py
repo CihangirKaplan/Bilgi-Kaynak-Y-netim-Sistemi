@@ -1,10 +1,11 @@
+import functools
 import os
 
 import requests
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QLabel, QMessageBox,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QFontMetrics
+from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+                               QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 import izin_bagimliliklari
 
@@ -66,8 +67,8 @@ class RolIzinSayfasi(QWidget):
 
         # Tek başına sekme açmayan izinler "ⓘ" ile işaretlenir; ayrıntı satırın üzerine gelince ve İzin Düzenle'de görünür.
         self.lbl_aciklama = QLabel(
-            "ⓘ işaretli izinler tek başına yeni bir sekme açmaz. Ayrıntı için satırın üzerine gelin "
-            "ya da İzin Düzenle'yi açın."
+            "Yanında mavi \"i\" düğmesi olan izinler tek başına yeni bir sekme açmaz. "
+            "Açıklamayı görmek için düğmeye tıklayın."
         )
         self.lbl_aciklama.setStyleSheet("color: #7A5200; font-size: 12px; padding: 2px 4px 8px 4px;")
         self.lbl_aciklama.setWordWrap(True)
@@ -141,13 +142,18 @@ class RolIzinSayfasi(QWidget):
             izin_id = izin["izin_id"]
 
             izin_notu = notlar.get(izin["izin_adi"])
-            izin_item = QTableWidgetItem(izin_etiketi(izin) + ("  ⓘ" if izin_notu else ""))
+            izin_item = QTableWidgetItem(izin_etiketi(izin))
             izin_item.setData(Qt.ItemDataRole.UserRole, izin_id)
             izin_item.setToolTip(izin["izin_adi"] + (f"\n\n{izin_notu}" if izin_notu else ""))  # teknik ad + not
             yazi = izin_item.font()
             yazi.setBold(True)
             izin_item.setFont(yazi)
+            if izin_notu:
+                # Metnin sağında "i" düğmesine yer aç; sütun genişliği bu ölçüye göre ayarlanır.
+                izin_item.setSizeHint(QSize(QFontMetrics(yazi).horizontalAdvance(izin_item.text()) + 56, 40))
             self.tablo.setItem(satir, 0, izin_item)
+            if izin_notu:
+                self.tablo.setCellWidget(satir, 0, self._bilgi_dugmesi(izin, izin_notu))
 
             for sutun, rol in enumerate(roller, start=1):
                 verilmis = izin_id in rol_izin_map.get(str(rol["rol_id"]), [])
@@ -169,6 +175,31 @@ class RolIzinSayfasi(QWidget):
         baslik.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         for i in range(1, len(roller) + 1):
             baslik.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+
+    def _bilgi_dugmesi(self, izin, izin_notu):
+        """Satırın sağ kenarında duran, tıklayınca açıklamayı gösteren yuvarlak "i" düğmesi."""
+        kap = QWidget()
+        duzen = QHBoxLayout(kap)
+        duzen.setContentsMargins(0, 0, 12, 0)
+        duzen.addStretch(1)
+
+        dugme = QToolButton()
+        dugme.setObjectName("bilgiDugmesi")
+        dugme.setText("i")
+        dugme.setFixedSize(24, 24)
+        dugme.setCursor(Qt.CursorShape.PointingHandCursor)
+        dugme.setToolTip("Açıklamayı görmek için tıklayın")
+        dugme.setStyleSheet(
+            "QToolButton#bilgiDugmesi { background: #EAF1FF; color: #1D4ED8; border: 2px solid #93B4F5; "
+            "border-radius: 12px; font-size: 13px; font-weight: 900; } "
+            "QToolButton#bilgiDugmesi:hover { background: #2563EB; color: white; border-color: #2563EB; }"
+        )
+        dugme.clicked.connect(functools.partial(self._notu_goster, izin_etiketi(izin), izin_notu))
+        duzen.addWidget(dugme, 0, Qt.AlignmentFlag.AlignVCenter)
+        return kap
+
+    def _notu_goster(self, izin_adi, izin_notu, tiklandi=False):
+        QMessageBox.information(self, "İzin Hakkında", f"{izin_adi}\n\n{izin_notu}")
 
     def secili_izin_id(self):
         """Tabloda seçili satırdaki iznin ID'si; seçim yoksa None."""

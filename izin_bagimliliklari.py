@@ -30,16 +30,16 @@ def _liste(adlar):
     return adlar[0] if len(adlar) == 1 else ", ".join(adlar[:-1]) + " ve " + adlar[-1]
 
 
-def bagimlilik_notlari(menu, izin_kodlari, etiketler=None):
-    """Her izin kodu için, o izin tek başına sekme açmıyorsa nedenini anlatan not üretir.
+def _analiz(menu, izin_kodlari):
+    """Menüyü tarar: hangi izin hangi sayfanın düğmesini açıyor, hangi sayfa birden çok izin istiyor.
 
-    menu: main_window.MENU ([(bölüm, [sayfa sözlüğü])]); izin_kodlari: main_window.IZIN_KODLARI.
-    etiketler: {izin kodu: matriste görünen ad}; verilirse notlardaki izin adları matristekiyle aynı olur.
-    Dönüş: {izin kodu: not metni}. Kendi başına bir sayfayı açan izinler için not yoktur.
+    Dönüş: (sayfa_gerektirenler, birlikte_gerekenler, tek_basina_acanlar)
+      sayfa_gerektirenler: {kod: [(sayfa adı, (sayfayı açan izin kodları))]}   -> düğme izinleri
+      birlikte_gerekenler: {kod: [(sayfa adı, (diğer izin kodları))]}          -> sayfa birden çok izin ister
+      tek_basina_acanlar: kendi başına bir sayfayı açan izin kodları
     """
-    adlar = {**_kod_adlari(izin_kodlari), **(etiketler or {})}
-    sayfa_gerektirenler = {}      # kod -> [(sayfa, gereken izin adı)]  (düğme izinleri)
-    birlikte_gerekenler = {}      # kod -> [(sayfa, diğer izin adları)]  (sayfa birden çok izin ister)
+    sayfa_gerektirenler = {}
+    birlikte_gerekenler = {}
     tek_basina_acanlar = set()
 
     for _, ogeler in menu:
@@ -52,22 +52,33 @@ def bagimlilik_notlari(menu, izin_kodlari, etiketler=None):
                 tek_basina_acanlar.add(sayfa_kodlari[0])
             else:
                 for kod in sayfa_kodlari:
-                    digerleri = [adlar.get(k, k) for k in sayfa_kodlari if k != kod]
+                    digerleri = tuple(k for k in sayfa_kodlari if k != kod)
                     birlikte_gerekenler.setdefault(kod, []).append((oge["ad"], digerleri))
 
             for _, aksiyon_izni in oge.get("aksiyon", []):
                 for kod in izin_kodlari.get(aksiyon_izni, ()):
                     if kod not in sayfa_kodlari:
-                        gereken = " ve ".join(adlar.get(k, k) for k in sayfa_kodlari)
-                        sayfa_gerektirenler.setdefault(kod, []).append((oge["ad"], gereken))
+                        sayfa_gerektirenler.setdefault(kod, []).append((oge["ad"], tuple(sayfa_kodlari)))
+    return sayfa_gerektirenler, birlikte_gerekenler, tek_basina_acanlar
+
+
+def bagimlilik_notlari(menu, izin_kodlari, etiketler=None):
+    """Her izin kodu için, o izin tek başına sekme açmıyorsa nedenini anlatan not üretir.
+
+    menu: main_window.MENU ([(bölüm, [sayfa sözlüğü])]); izin_kodlari: main_window.IZIN_KODLARI.
+    etiketler: {izin kodu: matriste görünen ad}; verilirse notlardaki izin adları matristekiyle aynı olur.
+    Dönüş: {izin kodu: not metni}. Kendi başına bir sayfayı açan izinler için not yoktur.
+    """
+    adlar = {**_kod_adlari(izin_kodlari), **(etiketler or {})}
+    sayfa_gerektirenler, birlikte_gerekenler, tek_basina_acanlar = _analiz(menu, izin_kodlari)
 
     notlar = {}
     for kod, sayfalar in sayfa_gerektirenler.items():
         if kod in tek_basina_acanlar:
             continue                                      # bu izin zaten başka bir sayfayı tek başına açıyor
         benzersiz = list(dict.fromkeys(sayfalar))
-        sayfa_adlari = _liste([s for s, _ in benzersiz])
-        gerekenler = _liste(list(dict.fromkeys(i for _, i in benzersiz)))
+        sayfa_adlari = _liste([sayfa for sayfa, _ in benzersiz])
+        gerekenler = _liste(list(dict.fromkeys(" ve ".join(adlar.get(k, k) for k in kodlar) for _, kodlar in benzersiz)))
         notlar[kod] = (
             f"Bu izin tek başına yeni bir sekme açmaz; {sayfa_adlari} sayfasının içindeki düğmeleri açar. "
             f"Kişinin o sayfayı görebilmesi için {gerekenler} izni de verilmelidir."
@@ -76,12 +87,58 @@ def bagimlilik_notlari(menu, izin_kodlari, etiketler=None):
         for sayfa, digerleri in sayfalar:
             notlar.setdefault(
                 kod,
-                f"'{sayfa}' sayfası, bu izin ile birlikte {_liste(digerleri)} izni de verildiğinde görünür. "
-                f"Tek başına sekme açmaz.",
+                f"'{sayfa}' sayfası, bu izin ile birlikte {_liste([adlar.get(k, k) for k in digerleri])} izni de verildiğinde "
+                f"görünür. Tek başına sekme açmaz.",
             )
     for kod, metin in SABIT_NOTLAR.items():
         notlar.setdefault(kod, metin)
     return notlar
+
+
+# Menüden çıkarılamayan ön koşullar (izin kodu -> [(sayfa adı, (önce gereken izin kodları))]).
+SABIT_ONKOSULLAR = {
+    "PERSONEL_TANIMLA": [("Kullanıcı & Personel", ("KULLANICI_OLUSTUR",))],
+}
+
+
+def onkosullar(menu, izin_kodlari):
+    """Bir izin ancak şu izin(ler) varken işe yarar: {kod: [(sayfa adı, (gereken kodlar))]}.
+
+    Köşeli liste 'seçenekler'dir: seçeneklerden BİRİNİN tamamı varsa ön koşul sağlanmış sayılır (bir düğme izni
+    birden çok sayfada kullanılıyorsa, o sayfalardan herhangi biri yeter). Birlikte verilmesi gereken izinler
+    (örn. Oda ekleme + Oda düzenleme) ön koşul sayılmaz; hangisinin önce geleceği belli olmadığı için karşılıklı
+    kilitlenirdi, onlar yalnızca not olarak gösterilir.
+    """
+    sayfa_gerektirenler, _, tek_basina_acanlar = _analiz(menu, izin_kodlari)
+    sonuc = {
+        kod: list(dict.fromkeys(sayfalar))
+        for kod, sayfalar in sayfa_gerektirenler.items()
+        if kod not in tek_basina_acanlar
+    }
+    for kod, secenekler in SABIT_ONKOSULLAR.items():
+        sonuc.setdefault(kod, list(secenekler))
+    return sonuc
+
+
+def eksik_onkosullar(izin_kodu, rolun_izin_kodlari, onkosul_tablosu):
+    """Rolde olmayan ön koşulları döndürür (ön koşul sağlanmışsa ya da yoksa boş liste).
+
+    rolun_izin_kodlari: o rolün şu an sahip olduğu izin kodları. Dönüş: [(sayfa adı, (gereken kodlar))] seçenekleri.
+    """
+    secenekler = onkosul_tablosu.get(izin_kodu)
+    if not secenekler:
+        return []
+    sahip = set(rolun_izin_kodlari)
+    if any(set(kodlar) <= sahip for _, kodlar in secenekler):
+        return []
+    return list(secenekler)
+
+
+def onkosul_metni(secenekler, etiketler=None):
+    """Eksik ön koşulu insan diliyle yazar: "'Kullanıcı oluşturma'" ya da "'A' ya da 'B'"."""
+    etiketler = etiketler or {}
+    parcalar = [" ve ".join(f"'{etiketler.get(k, k)}'" for k in kodlar) for _, kodlar in secenekler]
+    return " ya da ".join(dict.fromkeys(parcalar))
 
 
 def etiketler_matristen(matris_verisi):
@@ -102,3 +159,9 @@ def izin_notlari(matris_verisi=None):
 def not_getir(izin_kodu, matris_verisi=None):
     """Verilen izin kodu için not metni; not gerekmiyorsa None."""
     return izin_notlari(matris_verisi).get(izin_kodu)
+
+
+def onkosullari_getir():
+    """Uygulamanın gerçek menüsünden üretilmiş ön koşul tablosu."""
+    import main_window                                    # tembel içe aktarma: dairesel bağımlılığı önler
+    return onkosullar(main_window.MENU, main_window.IZIN_KODLARI)
