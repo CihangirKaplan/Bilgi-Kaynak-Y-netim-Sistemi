@@ -35,6 +35,7 @@ ISTISNALAR = {
                                                "yanıt kullanıcının var olup olmadığını belli etmez, kullanıcı başına tek açık talep tutulur.",
     ("POST", "/api/sifre-degistir"): "İlk girişte şifre değiştirmek için yalnızca token yeterli olmalı.",
     ("GET", "/api/korumali-test"): "Token doğrulama deneme ucu; veri döndürmez.",
+    ("GET", "/api/saglik"): "Sunucunun ayakta olduğunu gösterir; veri döndürmez, veritabanına bağlanmaz.",
     ("GET", "/api/yetkilerim"): "Kullanıcı yalnızca kendi rolünün izinlerini görür; ayrıca izin gerektirmez.",
 }
 

@@ -116,7 +116,7 @@ def _denemeler(sema, islem):
 
 def test_bozuk_girdi_hicbir_uçta_500_uretmez(yonetici_basligi):
     istemci = TestClient(app, raise_server_exceptions=False)
-    sema = istemci.get("/openapi.json").json()
+    sema = app.openapi()   # /openapi.json adresi varsayılan kapalı olduğundan şema doğrudan alınır
 
     sayac = 0
     bulgular = []

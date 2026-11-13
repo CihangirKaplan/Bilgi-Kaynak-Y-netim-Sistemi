@@ -52,10 +52,32 @@ import psycopg2.errors
 from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
 load_dotenv()
-app = FastAPI()
+
+
+def api_belgeleri_acik_mi() -> bool:
+    """/docs, /redoc ve /openapi.json yalnızca TKYS_API_DOCS=1 ise açılır (varsayılan kapalı)."""
+    return os.getenv("TKYS_API_DOCS", "").strip() == "1"
+
+
+def fastapi_olustur(belgeler_acik: bool) -> FastAPI:
+    return FastAPI(
+        docs_url="/docs" if belgeler_acik else None,
+        redoc_url="/redoc" if belgeler_acik else None,
+        openapi_url="/openapi.json" if belgeler_acik else None,
+    )
+
+
+app = fastapi_olustur(api_belgeleri_acik_mi())
 # Bozuk girdi (NUL karakter, taşan sayı) ve veritabanı kural hataları 500 yerine anlamlı hata döndürür.
 app.add_middleware(NulVeSayiKorumasi)
 merkezi_hata_yakalayicilari_kur(app)
+
+
+@app.get("/api/saglik")
+def saglik_kontrolu():
+    """Sunucunun ayakta olduğunu gösterir (kimlik doğrulama ve veritabanı gerektirmez)."""
+    return {"durum": "calisiyor"}
+
 bearer_scheme = HTTPBearer()
 
 # Öğrenci listelerinde her öğrencinin türünü belirtmek için kullanılan etiketler.

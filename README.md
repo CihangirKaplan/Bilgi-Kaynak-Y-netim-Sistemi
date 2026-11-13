@@ -70,7 +70,7 @@ Bu betik her rol için (psikolog, memur, müdür, danışma öğrencisi, proje a
 ```powershell
 uvicorn sunucu:app --reload
 ```
-API dokümantasyonu: http://127.0.0.1:8000/docs
+API dokümantasyonu (varsayılan kapalıdır; açmak için `.env` dosyasına `TKYS_API_DOCS=1` yazıp sunucuyu yeniden başlatın): http://127.0.0.1:8000/docs
 
 **İstemci** (başka bir terminalde):
 ```powershell
