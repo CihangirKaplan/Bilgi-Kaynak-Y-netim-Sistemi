@@ -371,26 +371,55 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT parola_hash, aktif_mi FROM kullanicilar WHERE kullanici_id = %s FOR UPDATE;", (kullanici_id,))
+        cursor.execute(
+            "SELECT parola_hash, aktif_mi FROM kullanicilar WHERE kullanici_id = %s FOR UPDATE;",
+            (kullanici_id,)
+        )
         kullanici = cursor.fetchone()
 
         if kullanici is None:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         if not kullanici[1]:
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
+
         if not parola_dogrula(veri.eski_parola, kullanici[0]):
+            conn.rollback()
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari
+                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (kullanici_id, "PASSWORD_CHANGE_FAILED", "kullanicilar", kullanici_id)
+            )
+            conn.commit()
             raise HTTPException(status_code=401, detail="Eski şifre hatalı.")
 
         yeni_hash = parola_hashle(veri.yeni_parola)
-        cursor.execute("UPDATE kullanicilar SET parola_hash = %s, ilk_giris_mi = FALSE WHERE kullanici_id = %s;", (yeni_hash, kullanici_id))
+        cursor.execute(
+            "UPDATE kullanicilar SET parola_hash = %s, ilk_giris_mi = FALSE WHERE kullanici_id = %s;",
+            (yeni_hash, kullanici_id)
+        )
+        cursor.execute(
+            """
+            INSERT INTO denetim_kayitlari
+                (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
+            VALUES (%s, %s, %s, %s);
+            """,
+            (kullanici_id, "PASSWORD_CHANGE", "kullanicilar", kullanici_id)
+        )
         conn.commit()
         return {"durum": "basarili", "mesaj": "Şifreniz başarıyla değiştirildi."}
     except Exception:
-        if conn is not None: conn.rollback()
+        if conn is not None:
+            conn.rollback()
         raise
     finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 
 # ==========================================
 # ADM MODÜLÜ (Kullanıcı, Rol ve Personel)

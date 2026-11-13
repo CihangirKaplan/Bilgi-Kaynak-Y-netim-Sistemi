@@ -53,8 +53,24 @@ def test_eski_sifre_yanlissa_reddedilir():
     assert hata.value.status_code == 401
     assert hata.value.detail == "Eski şifre hatalı."
 
-    # Yanlış eski şifreyle değişiklik kaydedilmemeli
-    mock_conn.commit.assert_not_called()
+    # Şifre güncellenmemeli, yalnızca başarısız deneme kaydedilmeli.
+    sorgular = mock_cursor.execute.call_args_list
+
+    assert not any(
+        "UPDATE kullanicilar" in c.args[0]
+        for c in sorgular
+    )
+
+    audit = [
+        c for c in sorgular
+        if "INSERT INTO denetim_kayitlari" in c.args[0]
+    ]
+    assert len(audit) == 1
+    assert audit[0].args[1] == (
+        10, "PASSWORD_CHANGE_FAILED", "kullanicilar", 10
+    )
+
+    mock_conn.commit.assert_called_once()
 
 def test_sifre_basarili_degistirilir():
     mock_conn = MagicMock()
@@ -103,7 +119,17 @@ def test_sifre_basarili_degistirilir():
     assert "ilk_giris_mi = FALSE" in sorgu
     assert parametreler == ("yeni_hash", 10)
 
-    # İşlem kaydedilmeli
+    # Başarılı şifre değişikliği audit kaydına da yazılmalı.
+    audit = [
+        c for c in mock_cursor.execute.call_args_list
+        if "INSERT INTO denetim_kayitlari" in c.args[0]
+    ]
+    assert len(audit) == 1
+    assert audit[0].args[1] == (
+        10, "PASSWORD_CHANGE", "kullanicilar", 10
+    )
+
+    # Şifre güncellemesi ve audit tek commit ile kaydedilmeli.
     mock_conn.commit.assert_called_once()
     
 def test_ilk_giriste_diger_api_erisimleri_engellenir():
