@@ -3,8 +3,10 @@ import os
 import requests
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QMessageBox,
+from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QLabel, QMessageBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+
+import izin_bagimliliklari
 
 
 def rol_etiketi(rol):
@@ -61,6 +63,16 @@ class RolIzinSayfasi(QWidget):
 
         self.ana_layout = QVBoxLayout(self)
         self.ana_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Tek başına sekme açmayan izinler "ⓘ" ile işaretlenir; ayrıntı satırın üzerine gelince ve İzin Düzenle'de görünür.
+        self.lbl_aciklama = QLabel(
+            "ⓘ işaretli izinler tek başına yeni bir sekme açmaz. Ayrıntı için satırın üzerine gelin "
+            "ya da İzin Düzenle'yi açın."
+        )
+        self.lbl_aciklama.setStyleSheet("color: #7A5200; font-size: 12px; padding: 2px 4px 8px 4px;")
+        self.lbl_aciklama.setWordWrap(True)
+        self.lbl_aciklama.hide()
+        self.ana_layout.addWidget(self.lbl_aciklama)
 
         self.tablo = QTableWidget()
         self.ana_layout.addWidget(self.tablo)
@@ -122,12 +134,16 @@ class RolIzinSayfasi(QWidget):
             ["İzin Adı / Roller"] + [rol_etiketi(rol) for rol in roller]
         )
 
+        notlar = izin_bagimliliklari.izin_notlari(matris_verisi)
+        self.lbl_aciklama.setVisible(any(izin["izin_adi"] in notlar for izin in izinler))
+
         for satir, izin in enumerate(izinler):
             izin_id = izin["izin_id"]
 
-            izin_item = QTableWidgetItem(izin_etiketi(izin))
+            izin_notu = notlar.get(izin["izin_adi"])
+            izin_item = QTableWidgetItem(izin_etiketi(izin) + ("  ⓘ" if izin_notu else ""))
             izin_item.setData(Qt.ItemDataRole.UserRole, izin_id)
-            izin_item.setToolTip(izin["izin_adi"])  # teknik ad
+            izin_item.setToolTip(izin["izin_adi"] + (f"\n\n{izin_notu}" if izin_notu else ""))  # teknik ad + not
             yazi = izin_item.font()
             yazi.setBold(True)
             izin_item.setFont(yazi)
