@@ -90,7 +90,7 @@ def test_ariza_bildirim_formu_yalniz_uygun_cihazlari_listeler_ve_gonderir(qt_app
     f.txt_aciklama.setPlainText("Açıklama")
     f.cmb_aciliyet.setCurrentText("Yüksek")
     with patch.object(ariza, "oturum_kontrollu_istek", return_value=cevap(201, {})) as istek, \
-         patch.object(ariza.tmk, "bilgi"):
+         patch.object(ariza.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("POST", "http://x/api/arizalar")
     assert istek.call_args.kwargs["json"] == {"cihaz_id": 1, "ariza_baslik": "Başlık",
@@ -112,7 +112,7 @@ def test_ariza_duzenle_cozuldu_isareti_gonderilir(qt_app):
     assert f.cmb_durum.currentIndex() == 0 and f.cmb_aciliyet.currentText() == "Kritik"
     f.cmb_durum.setCurrentIndex(1)
     with patch.object(ariza, "oturum_kontrollu_istek", return_value=cevap(200, {})) as istek, \
-         patch.object(ariza.tmk, "bilgi"):
+         patch.object(ariza.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("PUT", "http://x/api/arizalar/1")
     assert istek.call_args.kwargs["json"]["cozuldu_mu"] is True

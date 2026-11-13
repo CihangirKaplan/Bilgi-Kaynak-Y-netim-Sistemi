@@ -16,7 +16,6 @@ from api_yoneticisi import (
 from tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
-import turkce_mesaj_kutusu as tmk
 
 KALIBRASYON_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -148,7 +147,7 @@ class YeniKalibrasyonFormu(QDialog):
         if self.plan_secimi.plan_id() is not None:
             veri["plan_id"] = self.plan_secimi.plan_id()
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
-            tmk.uyari(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
+            QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
             return
 
         try:
@@ -156,14 +155,14 @@ class YeniKalibrasyonFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
-                tmk.bilgi(self, "Başarılı", "Kalibrasyon kaydı başarıyla eklendi.")
+                QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla eklendi.")
                 self.accept()
             else:
                 # Hatayı gizlemiyoruz, ekrana basıyoruz!
                 hata_mesaji = res.json().get("detail", "Kayıt yapılamadı.")
-                tmk.uyari(self, "Hata", f"Sebep: {hata_mesaji}")
+                QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
-            tmk.hata(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class KalibrasyonDuzenleFormu(QDialog):
     def __init__(self, api_url, token, veri, parent=None):
@@ -226,7 +225,7 @@ class KalibrasyonDuzenleFormu(QDialog):
             "uyari_suresi_gun": self.tekrar.uyari_suresi()
         }
         if not veri["kalibrasyon_yapan_kurum"] or not veri["sertifika_no"]:
-            tmk.uyari(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
+            QMessageBox.warning(self, "Uyarı", "Kurum ve Sertifika No zorunludur.")
             return
 
         try:
@@ -234,13 +233,13 @@ class KalibrasyonDuzenleFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 200:
-                tmk.bilgi(self, "Başarılı", "Kalibrasyon kaydı başarıyla güncellendi.")
+                QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla güncellendi.")
                 self.accept()
             else:
                 hata_mesaji = res.json().get("detail", "Güncelleme yapılamadı.")
-                tmk.uyari(self, "Hata", f"Sebep: {hata_mesaji}")
+                QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
-            tmk.hata(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class KalibrasyonYonetimEkrani(QWidget):
     """Kalibrasyon kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
@@ -373,6 +372,6 @@ class KalibrasyonYonetimEkrani(QWidget):
                 self.yukle()
             else:
                 hata = res.json().get("detail", "Bilinmeyen hata")
-                tmk.uyari(self, "Silinemedi", hata)
+                QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
-            tmk.hata(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
