@@ -31,6 +31,8 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_api_audit_rollback_quality.py",
     "test_admin_tum_izinler_pg_quality.py",
     "test_kisisel_veri_ayrimi_pg_quality.py",
+    "test_girdi_fuzz_pg_quality.py",
+    "test_yabanci_anahtar_indeks_pg_quality.py",
 }
 
 
