@@ -2,7 +2,6 @@
 
 Gerçek sunucu kullanılmaz; ağ istekleri taklit edilir.
 """
-import turkce_mesaj_kutusu as tmk
 import base64
 import functools
 import json
@@ -201,7 +200,7 @@ def test_menu_yenilenince_acik_sayfa_hala_yetkiliyse_ona_donulur_ve_bilgi_verili
     ana = SimpleNamespace(stack=MagicMock(), sayfa_bilgi=[("Ana Kontrol Paneli", ""), ("Cihaz Envanteri", "")], nav_btnler={"Cihaz Envanteri": 1},
                           aktif_rol="memur", rol_uygula=MagicMock(), _bildirimden_sayfaya_git=MagicMock())
     ana.stack.currentIndex.return_value = 1
-    with patch.object(tmk, "bilgi") as bilgi:
+    with patch.object(mw.QMessageBox, "information") as bilgi:
         AnaPencere._menuyu_yeniden_kur(ana)
     ana.rol_uygula.assert_called_once_with("memur")
     ana._bildirimden_sayfaya_git.assert_called_once_with("Cihaz Envanteri")
@@ -212,14 +211,14 @@ def test_menu_yenilenince_acik_sayfanin_yetkisi_gittiyse_oraya_gidilmez():
     ana = SimpleNamespace(stack=MagicMock(), sayfa_bilgi=[("Ana Kontrol Paneli", ""), ("Cihaz Envanteri", "")], nav_btnler={},
                           aktif_rol="memur", rol_uygula=MagicMock(), _bildirimden_sayfaya_git=MagicMock())
     ana.stack.currentIndex.return_value = 1
-    with patch.object(tmk, "bilgi"):
+    with patch.object(mw.QMessageBox, "information"):
         AnaPencere._menuyu_yeniden_kur(ana)
     assert not ana._bildirimden_sayfaya_git.called
 
 
 def test_rol_degisti_uyarisi_zamanlayiciyi_durdurur_mesaj_verir_ve_oturumu_kapatir():
     ana = SimpleNamespace(_yetki_zamanlayici=MagicMock(), oturum_kapat=MagicMock())
-    with patch.object(tmk, "bilgi") as bilgi:
+    with patch.object(mw.QMessageBox, "information") as bilgi:
         AnaPencere._rol_degisti_uyarisi(ana)
     assert ana._yetki_zamanlayici.stop.called and ana.oturum_kapat.called
     assert bilgi.call_args.args[1] == "Rolünüz Değişti" and "yeniden giriş" in bilgi.call_args.args[2]
@@ -238,8 +237,8 @@ def gercek_pencere(qt_app):
     def sahte_istek(self, method=None, url=None, *a, **k):
         return Yanit(durum if str(url).endswith("/api/yetkilerim") else {})
 
-    with patch("requests.sessions.Session.request", sahte_istek), patch.object(tmk, "bilgi") as bilgi, \
-            patch.object(tmk, "uyari"), patch.object(tmk, "hata"):
+    with patch("requests.sessions.Session.request", sahte_istek), patch.object(mw.QMessageBox, "information") as bilgi, \
+            patch.object(mw.QMessageBox, "warning"), patch.object(mw.QMessageBox, "critical"):
         ana = AnaPencere(aktif_rol="memur", kullanici_adi="m", token=sahte_token(), kullanici_id=2)
         yield ana, durum, bilgi
         ana._yetki_zamanlayici.stop()

@@ -16,7 +16,6 @@ from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
-import turkce_mesaj_kutusu as tmk
 
 
 def kayit_tarihi_bicimle(deger):
@@ -188,10 +187,11 @@ class KullaniciPersonelEkrani(QWidget):
         # Dinamik soru sorma mantığı
         islem_sorusu = "aktife almak" if "Pasif" in mevcut_durum_metni else "pasife almak"
         
-        cevap = tmk.soru(
+        cevap = QMessageBox.question(
             self, "Onay",
             f"'{kullanici_adi}' adlı kullanıcıyı {islem_sorusu} istediğinize emin misiniz?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
 
         if cevap == QMessageBox.Yes:
@@ -386,7 +386,7 @@ class KullaniciPersonelEkrani(QWidget):
         if d is None:
             return
         kullanici_adi, talep_id = d.property("kullanici_adi"), d.property("talep_id")
-        onay = tmk.soru(
+        onay = QMessageBox.question(
             self, "Talebi Kapat",
             f"'{kullanici_adi}' kullanıcısının parola sıfırlama talebi, parolası sıfırlanmadan kapatılsın mı?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -445,7 +445,7 @@ class KullaniciPersonelEkrani(QWidget):
 
     def parola_sifirla(self, kullanici_id, kullanici_adi):
         """Verilen kullanıcının parolasını ADMIN aracılığıyla sıfırlar (onay ister, geçici parolayı gösterir)."""
-        onay = tmk.soru(
+        onay = QMessageBox.question(
     self,
     "Parola Sıfırlama Onayı",
     f"'{kullanici_adi}' kullanıcısının parolası sıfırlansın mı?\n\n"

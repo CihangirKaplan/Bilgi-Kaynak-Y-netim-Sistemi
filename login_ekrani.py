@@ -11,13 +11,12 @@ from main_window import AnaPencere, dinamik_rol_tanimla
 from sifre_degistir_ekrani import SifreDegistirEkrani
 from parola_talebi_dialog import ParolaTalebiDialog
 import faulthandler, traceback
-import turkce_mesaj_kutusu as tmk
 faulthandler.enable()
 
 def hata_yakala(tip, deger, tb):
     metin = "".join(traceback.format_exception(tip, deger, tb))
     print(metin)
-    tmk.hata(None, "Beklenmeyen Hata", metin)
+    QMessageBox.critical(None, "Beklenmeyen Hata", metin)
 
 sys.excepthook = hata_yakala
 

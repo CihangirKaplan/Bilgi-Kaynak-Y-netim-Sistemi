@@ -1,4 +1,3 @@
-import turkce_mesaj_kutusu as tmk
 """Parola sıfırlama talebi arayüzü: giriş penceresi, yöneticinin talepler paneli, zil ve ana panel bildirimi.
 
 Gerçek sunucu kullanılmaz; ağ istekleri taklit edilir.
@@ -268,7 +267,7 @@ def kapat_istek(e, onay, cevap=None, hata=None):
         return cevap if cevap is not None and yontem == "PATCH" else yanit(200, [])
     with patch("k_personel_ekranlari.oturum_kontrollu_istek", side_effect=istek), \
          patch("k_personel_ekranlari.oturum_hatasi_mi", return_value=False), \
-         patch.object(tmk, "soru", return_value=onay), \
+         patch("k_personel_ekranlari.QMessageBox.question", return_value=onay), \
          patch("k_personel_ekranlari.QMessageBox.warning") as uyari, patch("k_personel_ekranlari.QMessageBox.critical") as kritik:
         paneldeki_dugmeler(e, "talepKapat")[0].click()
     return cagrilar, uyari, kritik
