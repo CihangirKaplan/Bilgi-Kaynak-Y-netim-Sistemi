@@ -34,7 +34,7 @@ def dialog(qt_app):
 def test_gui_zorunlu_alanlar_bos(dialog):
     with (
         patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
-        patch("ogrenci_dialog.tmk.uyari") as uyari,
+        patch("ogrenci_dialog.QMessageBox.warning") as uyari,
     ):
         dialog.kaydet_tiklandi()
 
@@ -48,7 +48,7 @@ def test_gui_ogrenci_numarasi_harf_iceremez(dialog):
 
     with (
         patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
-        patch("ogrenci_dialog.tmk.uyari") as uyari,
+        patch("ogrenci_dialog.QMessageBox.warning") as uyari,
     ):
         dialog.kaydet_tiklandi()
 
@@ -64,7 +64,7 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
 
     with (
         patch("ogrenci_dialog.oturum_kontrollu_istek") as post,
-        patch("ogrenci_dialog.tmk.bilgi") as bilgi,
+        patch("ogrenci_dialog.QMessageBox.information") as bilgi,
     ):
         post.return_value = Response()
         post.return_value.status_code = 200

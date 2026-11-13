@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
 from PySide6.QtGui import QColor, QPainter
-import turkce_mesaj_kutusu as tmk
 
 
 def golge_ekle(widget, blur=20, alpha=30, dy=5):
@@ -131,7 +130,7 @@ class RolOlusturDialog(QDialog):
     def kaydet_tetikle(self):
         rol_adi = self.rol_adi_input.text().strip()
         if not rol_adi:
-            tmk.uyari(self, "Eksik Bilgi", "Lütfen rol adını giriniz.")
+            QMessageBox.warning(self, "Eksik Bilgi", "Lütfen rol adını giriniz.")
             return
             
         payload = {"rol_adi": rol_adi}
@@ -141,12 +140,12 @@ class RolOlusturDialog(QDialog):
         try:
             res = requests.post(hedef_url, json=payload, headers=headers)
             if res.status_code in (200, 201):
-                tmk.bilgi(self, "Başarılı", f"'{rol_adi}' rolü başarıyla oluşturuldu.")
+                QMessageBox.information(self, "Başarılı", f"'{rol_adi}' rolü başarıyla oluşturuldu.")
                 self.accept()
             else:
-                tmk.hata(self, "Sunucu Hatası", f"Kayıt başarısız:\n{res.text}")
+                QMessageBox.critical(self, "Sunucu Hatası", f"Kayıt başarısız:\n{res.text}")
         except Exception as e:
-            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{str(e)}")
 
 
 def golge_ekle(widget, blur=15, alpha=15, dy=3):
@@ -382,10 +381,10 @@ class RolDuzenleDialog(QDialog):
         yeni_ad = self.input_ad.text().strip()
         
         if not yeni_ad:
-            tmk.uyari(self, "Uyarı", "Rol adı boş olamaz.")
+            QMessageBox.warning(self, "Uyarı", "Rol adı boş olamaz.")
             return
         if self.rol_var_mi(yeni_ad, rol_id):
-            tmk.uyari(self, "Uyarı", f"'{yeni_ad}' isminde başka bir rol var.")
+            QMessageBox.warning(self, "Uyarı", f"'{yeni_ad}' isminde başka bir rol var.")
             return
     
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -398,9 +397,9 @@ class RolDuzenleDialog(QDialog):
             if yanit.status_code == 200:
                 self.accept()
             else:
-                tmk.uyari(self, "Hata", f"Güncellenemedi. Kod: {yanit.status_code}")
+                QMessageBox.warning(self, "Hata", f"Güncellenemedi. Kod: {yanit.status_code}")
         except Exception as e:
-            tmk.hata(self, "Hata", f"Sunucu hatası:\n{e}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası:\n{e}")
 
 class IzinDuzenleDialog(QDialog):
     def __init__(self, api_url, token, izin_id, roller, matris_verisi, ebeveyn=None):
@@ -574,7 +573,7 @@ class IzinDuzenleDialog(QDialog):
         ]
 
         if not admin_rol_idleri:
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Hata",
                 "ADMIN rolü yüklenemedi. İzinler kaydedilemedi."
@@ -598,11 +597,11 @@ class IzinDuzenleDialog(QDialog):
             yanit = requests.put(f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers)
             
             if yanit.status_code == 200:
-                tmk.bilgi(self, "Başarılı", "İzin yetkileri başarıyla güncellendi.")
+                QMessageBox.information(self, "Başarılı", "İzin yetkileri başarıyla güncellendi.")
                 self.accept()
             else:
                 # Sunucudan gelen hata mesajını detaylı gösterelim
                 hata_detayi = yanit.json().get("detail", f"Sunucu Kodu: {yanit.status_code}")
-                tmk.uyari(self, "Hata", f"Güncellenemedi:\n{hata_detayi}")
+                QMessageBox.warning(self, "Hata", f"Güncellenemedi:\n{hata_detayi}")
         except Exception as e:
-            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
