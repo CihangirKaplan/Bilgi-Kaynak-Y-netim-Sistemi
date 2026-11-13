@@ -4,7 +4,10 @@ Notlar menü tanımından otomatik üretilir; bu testler hem üretim mantığın
 matristeki görünümü doğrular. Gerçek sunucu kullanılmaz.
 """
 import pytest
-from PySide6.QtWidgets import QApplication
+from unittest.mock import MagicMock, patch
+
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtWidgets import QApplication, QMessageBox, QToolButton
 
 import izin_bagimliliklari as ib
 import main_window as mw
@@ -179,12 +182,13 @@ def matris_sayfasi(qt_app, matris=MATRIS):
     return s
 
 
-def test_matriste_notlu_izinler_bilgi_isaretiyle_ve_ipucuyla_gosterilir(qt_app):
+def test_matriste_notlu_izinlerin_yaninda_bilgi_dugmesi_ve_ipucu_vardir(qt_app):
     s = matris_sayfasi(qt_app)
     normal, notlu = s.tablo.item(0, 0), s.tablo.item(1, 0)
-    assert not normal.text().endswith("ⓘ") and normal.toolTip() == "TAKVIM_GORUNTULE"
-    assert notlu.text() == "Rol atama veya değiştirme  ⓘ"
+    assert normal.text() == "Randevu takvimini görüntüleme" and normal.toolTip() == "TAKVIM_GORUNTULE"
+    assert notlu.text() == "Rol atama veya değiştirme"                              # ad metni değişmez; işaret düğmedir
     assert notlu.toolTip().startswith("ROL_ATAMA_DEGISTIRME\n\n") and "tek başına yeni bir sekme açmaz" in notlu.toolTip()
+    assert s.tablo.cellWidget(0, 0) is None and s.tablo.cellWidget(1, 0).findChild(QToolButton, "bilgiDugmesi") is not None
 
 
 def test_matriste_secili_satirin_izin_kimligi_isaretten_etkilenmez(qt_app):
@@ -199,10 +203,12 @@ def test_matriste_aciklama_satiri_yalnizca_notlu_izin_varsa_gorunur(qt_app):
     assert matris_sayfasi(qt_app, sadece_sekme_acan).lbl_aciklama.isHidden()
 
 
-def test_matris_yeniden_dolunca_isaretler_cogalmaz(qt_app):
+def test_matris_yeniden_dolunca_dugmeler_cogalmaz(qt_app):
     s = matris_sayfasi(qt_app)
     s.matris_tablosunu_doldur(MATRIS)
-    assert s.tablo.item(1, 0).text().count("ⓘ") == 1 and s.tablo.rowCount() == 3
+    s.matris_tablosunu_doldur(MATRIS)
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)              # silinmeye bırakılan eski düğmeler gerçekten silinsin
+    assert len(s.tablo.findChildren(QToolButton, "bilgiDugmesi")) == 1 and s.tablo.rowCount() == 3
 
 
 # ================================================================ görünen adların matristen geldiğini doğrulayan testler
@@ -223,3 +229,184 @@ def test_dialog_notta_matristeki_gorunen_adi_kullanir(qt_app):
 def test_matris_sayfasi_notlarda_ayni_gorunen_adi_kullanir(qt_app):
     s = matris_sayfasi(qt_app, OZEL_MATRIS)
     assert "'Yeni kullanıcı kaydı açma'" in s.tablo.item(1, 0).toolTip()
+
+
+# ================================================================ tıklanabilir "i" düğmesi
+def test_bilgi_dugmesine_tiklaninca_aciklama_penceresi_acilir(qt_app):
+    s = matris_sayfasi(qt_app)
+    dugme = s.tablo.cellWidget(1, 0).findChild(QToolButton, "bilgiDugmesi")
+    with patch.object(QMessageBox, "information") as bilgi:
+        dugme.click()
+    assert bilgi.call_args.args[1] == "İzin Hakkında"
+    assert "Rol atama veya değiştirme" in bilgi.call_args.args[2] and "tek başına yeni bir sekme açmaz" in bilgi.call_args.args[2]
+
+
+def test_bilgi_dugmesi_yuvarlak_mavi_tiklanabilir_gorunur(qt_app):
+    dugme = matris_sayfasi(qt_app).tablo.cellWidget(1, 0).findChild(QToolButton, "bilgiDugmesi")
+    assert dugme.text() == "i" and dugme.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    assert dugme.width() == dugme.height() == 24 and "border-radius: 12px" in dugme.styleSheet() and "hover" in dugme.styleSheet()
+    assert "tıklayın" in dugme.toolTip()
+
+
+def test_her_satirin_dugmesi_kendi_notunu_gosterir(qt_app):
+    veri = {**MATRIS, "izinler": IZINLER + [{"izin_id": 4, "izin_adi": "CIHAZ_EKLE", "gorunen_ad": "Cihaz ekleme"}]}
+    s = matris_sayfasi(qt_app, veri)
+    with patch.object(QMessageBox, "information") as bilgi:
+        s.tablo.cellWidget(3, 0).findChild(QToolButton).click()
+        s.tablo.cellWidget(1, 0).findChild(QToolButton).click()
+    ilk, ikinci = bilgi.call_args_list
+    assert "Cihaz ekleme" in ilk.args[2] and "'Cihaz Envanteri'" in ilk.args[2]
+    assert "Rol atama veya değiştirme" in ikinci.args[2] and "'Kullanıcı & Personel'" in ikinci.args[2]
+
+
+def test_bilgi_dugmesi_satir_secimini_ve_izin_kimligini_bozmaz(qt_app):
+    s = matris_sayfasi(qt_app)
+    s.tablo.selectRow(1)
+    assert s.secili_izin_id() == 2 and s.tablo.item(1, 0).data(Qt.ItemDataRole.UserRole) == 2
+
+
+def test_notlu_satirin_sutunu_dugmeye_yer_acar(qt_app):
+    s = matris_sayfasi(qt_app)
+    assert s.tablo.item(1, 0).sizeHint().width() > s.tablo.fontMetrics().horizontalAdvance("Rol atama veya değiştirme")
+
+
+def test_aciklama_satiri_dugmeye_gondermede_bulunur(qt_app):
+    assert "düğmeye tıklayın" in matris_sayfasi(qt_app).lbl_aciklama.text()
+
+
+# ================================================================ ön koşul mantığı (sahte menü)
+def test_onkosullar_dugme_izinleri_icin_sayfanin_iznini_verir_sekme_acanlar_ve_birlikte_gerekenler_icin_vermez():
+    t = ib.onkosullar(MENU, KODLAR)
+    assert t["K_PASIF"] == [("Kullanıcılar", ("K_OLUSTUR",))]
+    assert "K_OLUSTUR" not in t and "RAPOR" not in t
+    assert "ODA_EKLE" not in t and "ODA_DUZENLE" not in t                       # birlikte gerekenler: karşılıklı kilitlenmesin
+
+
+def test_ayni_izin_iki_sayfanin_dugmesiyse_secenek_olarak_ikisi_de_listelenir_biri_yeter():
+    t = ib.onkosullar(MENU, KODLAR)
+    assert t["AKTAR"] == [("Raporlar", ("RAPOR",)), ("Arşiv", ("ARSIV",))]
+    assert ib.eksik_onkosullar("AKTAR", {"ARSIV"}, t) == []                      # seçeneklerden biri yeterli
+    assert ib.eksik_onkosullar("AKTAR", {"BASKA"}, t) == t["AKTAR"]
+
+
+def test_eksik_onkosullar_sagliyorsa_ya_da_onkosul_yoksa_bos_doner():
+    t = ib.onkosullar(MENU, KODLAR)
+    assert ib.eksik_onkosullar("K_PASIF", {"K_OLUSTUR", "X"}, t) == []
+    assert ib.eksik_onkosullar("K_PASIF", set(), t) == t["K_PASIF"]
+    assert ib.eksik_onkosullar("YOK_BOYLE_IZIN", set(), t) == [] and ib.eksik_onkosullar("K_OLUSTUR", set(), t) == []
+
+
+def test_sabit_onkosul_personel_tanimla_kullanici_olusturmaya_baglidir():
+    t = ib.onkosullari_getir()
+    assert t["PERSONEL_TANIMLA"] == [("Kullanıcı & Personel", ("KULLANICI_OLUSTUR",))]
+
+
+def test_onkosul_metni_tek_secenek_birden_cok_kod_ve_alternatifler():
+    etiket = {"A": "Birinci", "B": "İkinci"}
+    assert ib.onkosul_metni([("S", ("A",))], etiket) == "'Birinci'"
+    assert ib.onkosul_metni([("S", ("A", "B"))], etiket) == "'Birinci' ve 'İkinci'"
+    assert ib.onkosul_metni([("S", ("A",)), ("T", ("B",))], etiket) == "'Birinci' ya da 'İkinci'"
+    assert ib.onkosul_metni([("S", ("X",))]) == "'X'"
+
+
+def test_gercek_menude_onkosulu_olan_her_izin_notu_da_vardir():
+    t, notlar = ib.onkosullari_getir(), ib.izin_notlari()
+    assert set(t) <= set(notlar) and {"ROL_ATAMA_DEGISTIRME", "CIHAZ_EKLE", "RANDEVU_DUZENLE"} <= set(t)
+
+
+# ================================================================ İzin Düzenle: ön koşulu olmayan role izin verilirken uyarı
+ROLLER3 = [
+    {"rol_id": 1, "rol_adi": "PSIKOLOG", "gorunen_ad": "Psikolog"},
+    {"rol_id": 2, "rol_adi": "MEMUR", "gorunen_ad": "Memur"},
+    {"rol_id": 6, "rol_adi": "ADMIN", "gorunen_ad": "Sistem Admin"},
+]
+# Memur "Kullanıcı oluşturma"ya sahip; Psikolog değil. Rol atama (id 2) kimsede yok.
+MATRIS3 = {"roller": ROLLER3, "izinler": IZINLER, "rol_izin_map": {"1": [1], "2": [1, 3], "6": [1, 2, 3]}}
+
+
+def dialog3(izin_id, matris=MATRIS3):
+    return rid.IzinDuzenleDialog("http://s", "t", izin_id, ROLLER3, matris)
+
+
+def isaretle(d, *rol_idleri):
+    for rol_id, kutu in d.rol_checkboxlar.items():
+        kutu.setChecked(rol_id in rol_idleri)
+
+
+def test_onkosulu_olmayan_role_bagli_izin_verilmek_istenirse_aciklayici_uyari_olusur(qt_app):
+    d = dialog3(2)
+    isaretle(d, 1)                                                                # Psikolog: Kullanıcı oluşturma yok
+    mesaj = d.onkosul_engeli()
+    assert "önce 'Kullanıcı oluşturma' izninin olması gerekiyor" in mesaj
+    assert "'Kullanıcı & Personel' sayfasının içinde çalışır" in mesaj and "•  Psikolog" in mesaj
+    assert "Memur" not in mesaj and "sonra bu izni verebilirsiniz" in mesaj
+
+
+def test_onkosulu_olan_role_verilirken_uyari_cikmaz(qt_app):
+    d = dialog3(2)
+    isaretle(d, 2)                                                                # Memur: Kullanıcı oluşturma var
+    assert d.onkosul_engeli() is None
+
+
+def test_birden_cok_role_verilirken_yalnizca_onkosulu_olmayanlar_listelenir(qt_app):
+    d = dialog3(2)
+    isaretle(d, 1, 2)
+    mesaj = d.onkosul_engeli()
+    assert "•  Psikolog" in mesaj and "•  Memur" not in mesaj
+
+
+def test_zaten_verilmis_olan_izne_dokunulmaz_eski_tutarsizlik_yeni_kaydi_engellemez(qt_app):
+    matris = {**MATRIS3, "rol_izin_map": {"1": [1, 2], "2": [1, 3], "6": [1, 2, 3]}}      # Psikolog'da rol atama zaten var
+    d = dialog3(2, matris)
+    assert d.rol_checkboxlar[1].isChecked()
+    assert d.onkosul_engeli() is None
+
+
+def test_onkosulu_olmayan_izinler_hicbir_zaman_engellenmez(qt_app):
+    d = dialog3(1)                                                                # Takvim: sekme açan izin
+    isaretle(d, 1, 2)
+    assert d.onkosul_engeli() is None
+
+
+def test_onkosul_izni_sistemde_tanimsizsa_engellenmez(qt_app):
+    matris = {**MATRIS3, "izinler": [IZINLER[0], IZINLER[1]]}                      # KULLANICI_OLUSTUR listede yok
+    d = dialog3(2, matris)
+    isaretle(d, 1)
+    assert d.onkosul_engeli() is None
+
+
+def test_bilinmeyen_izinde_onkosul_engeli_yoktur(qt_app):
+    assert dialog3(999).onkosul_engeli() is None
+
+
+def test_uyarida_gorunen_ad_matristeki_adla_yazilir(qt_app):
+    ozel = {**MATRIS3, "izinler": [IZINLER[0], IZINLER[1], {"izin_id": 3, "izin_adi": "KULLANICI_OLUSTUR", "gorunen_ad": "Yeni kullanıcı kaydı açma"}]}
+    d = dialog3(2, ozel)
+    isaretle(d, 1)
+    assert "'Yeni kullanıcı kaydı açma'" in d.onkosul_engeli()
+
+
+def test_kaydet_onkosul_eksikse_uyari_verir_ve_sunucuya_hicbir_sey_gondermez(qt_app):
+    d = dialog3(2)
+    isaretle(d, 1)
+    with patch.object(QMessageBox, "warning") as uyari, patch.object(rid.requests, "put") as put:
+        d.kaydet()
+    assert uyari.call_args.args[1] == "Önce bağlı izin gerekli" and "olması gerekiyor" in uyari.call_args.args[2]
+    assert not put.called and d.result() == 0
+
+
+def test_kaydet_onkosul_tamsa_normal_kaydeder(qt_app):
+    d = dialog3(2)
+    isaretle(d, 2)
+    yanit = MagicMock(status_code=200)
+    with patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "information"), patch.object(rid.requests, "put", return_value=yanit) as put:
+        d.kaydet()
+    assert not uyari.called and put.call_count == 1
+    gonderilen = put.call_args.kwargs["json"]["verilen_rol_idleri"]
+    assert sorted(gonderilen) == [2, 6]                                            # Memur + korunan Admin
+
+
+def test_izin_kaldirmak_ya_da_degistirmeden_kaydetmek_engellenmez(qt_app):
+    d = dialog3(2)
+    isaretle(d)                                                                    # hiçbir role verilmiyor
+    assert d.onkosul_engeli() is None
