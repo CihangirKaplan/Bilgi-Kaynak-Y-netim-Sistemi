@@ -6,7 +6,6 @@ Randevu formlarında dolu saatlerin gösterimi.
 - Sunucuya ulaşılamazsa hiçbir saat kapatılmaz (son karar sunucudadır).
 - Düzenleme formu kendi randevusunu "dolu" saymaz.
 """
-import turkce_mesaj_kutusu as tmk
 
 from unittest.mock import MagicMock, patch
 
@@ -158,7 +157,7 @@ def test_hic_bos_saat_yoksa_secim_bos_ve_kaydedilmez():
 
     form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0001"))
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.randevuyu_kaydet()
 
     uyari.assert_called_once()
@@ -172,7 +171,7 @@ def test_bos_saatle_kayit_sunucuya_dogru_saatle_gider():
     form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0001"))
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "bilgi"):
+            patch.object(modul.QMessageBox, "information"):
         form.randevuyu_kaydet()
 
     (yontem, url, kwargs), = sunucu.diger_istekler
@@ -252,7 +251,7 @@ def test_duzenleme_formu_dolu_saate_kaydetmez():
     assert form.saat_secimi() is None
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
-            patch.object(tmk, "uyari") as uyari:
+            patch.object(modul.QMessageBox, "warning") as uyari:
         form.randevuyu_guncelle()
 
     uyari.assert_called_once()
@@ -292,7 +291,7 @@ def test_doluluk_dogrulanmadan_post_gonderilmez():
     sunucu = Sunucu([], doluluk_durumu=500)
     form = olustur_formu(sunucu)
 
-    with patch.object(tmk, "uyari") as uyari, \
+    with patch.object(modul.QMessageBox, "warning") as uyari, \
          patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
         form.randevuyu_kaydet()
 
@@ -398,7 +397,7 @@ def test_form_listesi_hatasinda_dogrudan_post_engellenir():
     assert form._doluluk_dogrulandi
     assert form._form_hatalari
 
-    with patch.object(tmk, "uyari") as uyari, \
+    with patch.object(modul.QMessageBox, "warning") as uyari, \
          patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
         form.randevuyu_kaydet()
 
@@ -425,7 +424,7 @@ def test_duzenleme_formu_liste_hatasinda_patch_engellenir(durum):
     assert not form.btn_guncelle.isEnabled()
     assert not form.lbl_form_hatasi.isHidden()
 
-    with patch.object(tmk, "uyari") as uyari, \
+    with patch.object(modul.QMessageBox, "warning") as uyari, \
          patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
         form.randevuyu_guncelle()
 

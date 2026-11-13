@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
 )
 
 from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
-import turkce_mesaj_kutusu as tmk
 
 CAKISMA_KODU = "REZERVASYON_CAKISMASI"
 EN_FAZLA_DENEME = 5
@@ -174,12 +173,12 @@ class CakisanRezervasyonlarDialog(QDialog):
             f"{zaman_araligi(r['baslangic'], r['bitis'])} rezervasyonu iptal edilsin mi?\n\n"
             "Bu işlem denetim kayıtlarına yazılır."
         )
-        if tmk.soru(self, "Rezervasyonu iptal et", soru,
+        if QMessageBox.question(self, "Rezervasyonu iptal et", soru,
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         basarili, hata = rezervasyonu_iptal_et(self.api_url, self.token, r["rezervasyon_id"])
         if not basarili:
-            tmk.uyari(self, "İptal edilemedi", hata)
+            QMessageBox.warning(self, "İptal edilemedi", hata)
             return
         satir = self.satirlar.pop(r["rezervasyon_id"], None)
         if satir is not None:
