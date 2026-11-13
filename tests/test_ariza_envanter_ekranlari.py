@@ -175,7 +175,7 @@ def test_duzenleme_formu_arizali_cihazi_arizali_gosterir_ve_ezmez(qt_app):
     f = form_ac(CIHAZLAR[1])
     assert f.cmb_durum.currentText() == "Arızalı" and f.cmb_durum.currentData() == "Arizali"
     with patch.object(envanter, "oturum_kontrollu_istek", return_value=cevap(200, {})) as istek, \
-         patch.object(envanter.tmk, "bilgi"):
+         patch.object(envanter.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("PATCH", "http://x/api/cihazlar/2")
     assert istek.call_args.kwargs["json"]["durum"] == "Arizali"
@@ -195,7 +195,7 @@ def test_yeni_cihaz_kullanima_hazir_olarak_eklenir(qt_app):
     f.txt_envanter.setText("E-9")
     f.txt_ad.setText("Yeni")
     with patch.object(envanter, "oturum_kontrollu_istek", return_value=cevap(201, {})) as istek, \
-         patch.object(envanter.tmk, "bilgi"):
+         patch.object(envanter.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("POST", "http://x/api/cihazlar")
     assert istek.call_args.kwargs["json"]["durum"] == "Kullanima_Hazir"

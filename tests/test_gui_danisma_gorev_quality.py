@@ -85,7 +85,7 @@ def test_gui_aktif_gorev_yoksa_bitirme(ortam):
         "durum": "AKTIF_DEGIL"
     }
 
-    with patch("danisma_masasi_ekrani.tmk.uyari") as uyari:
+    with patch("danisma_masasi_ekrani.QMessageBox.warning") as uyari:
         EKRAN_SINIFI.gorev_bitir(ekran)
 
     ekran._istek.assert_called_once_with(
@@ -142,7 +142,7 @@ def test_gui_gorev_bitir_onayla(ortam):
 
     pencere.clickedButton.return_value = evet
 
-    with patch("danisma_masasi_ekrani.tmk.bilgi") as bilgi:
+    with patch("danisma_masasi_ekrani.QMessageBox.information") as bilgi:
         EKRAN_SINIFI.gorev_bitir(ekran)
 
     bilgi.assert_called_once()

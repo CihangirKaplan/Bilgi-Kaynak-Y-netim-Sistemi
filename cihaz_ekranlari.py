@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
 from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
-import turkce_mesaj_kutusu as tmk
 
 # Sunucu cihaz durumunu veritabanı değeriyle verir; ekranda okunaklı Türkçe adı gösterilir.
 # veritabanı değeri -> (görünen ad, yazı rengi, arka plan)
@@ -110,7 +109,7 @@ class CihazIslemFormu(QDialog):
 
     def kaydet(self):
         if not self.txt_envanter.text().strip() or not self.txt_ad.text().strip():
-            tmk.uyari(self, "Hata", "Envanter kodu ve cihaz adı zorunludur!")
+            QMessageBox.warning(self, "Hata", "Envanter kodu ve cihaz adı zorunludur!")
             return
 
         db_durumu = self.cmb_durum.currentData() or "Kullanima_Hazir"
@@ -140,14 +139,14 @@ class CihazIslemFormu(QDialog):
                     return
             
             if cevap.status_code in [200, 201]:
-                tmk.bilgi(self, "Başarılı", "İşlem başarıyla kaydedildi.")
+                QMessageBox.information(self, "Başarılı", "İşlem başarıyla kaydedildi.")
                 self.accept()
             else:
                 # Gelen hatayı ne olursa olsun zorla düz metne (str) çeviriyoruz ki PySide6 çökmesin!
                 hata_detay = str(cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.'))
-                tmk.hata(self, "Hata", hata_detay)
+                QMessageBox.critical(self, "Hata", hata_detay)
         except Exception as e:
-            tmk.hata(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
 DURUM_ROLU = Qt.UserRole + 1      # tablo satırında cihazın veritabanı durumu (filtre için)
 

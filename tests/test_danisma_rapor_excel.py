@@ -182,7 +182,7 @@ def ekran_ac(qt_app, veri=VERI, yanit_yok=False):
     istek = MagicMock(side_effect=hata) if yanit_yok else MagicMock(return_value=yanit(veri))
     with patch.object(ekran_modulu, "oturum_kontrollu_istek", istek), \
             patch.object(ekran_modulu, "oturum_hatasi_mi", return_value=False), \
-            patch.object(ekran_modulu.tmk, "uyari"):
+            patch.object(ekran_modulu.QMessageBox, "warning"):
         return ekran_modulu.DanismaMasasiRaporlari("http://s", "t")
 
 
@@ -211,7 +211,7 @@ def test_excel_aktar_son_veriyle_dosyayi_yazar_ve_uzantiyi_tamamlar(qt_app, tmp_
     e = ekran_ac(qt_app)
     hedef = str(tmp_path / "rapor")                                   # uzantısız verildi
     with patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
-            patch.object(ekran_modulu.tmk, "bilgi") as bilgi:
+            patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
     dosya = Path(hedef + ".xlsx")
     assert dosya.exists() and bilgi.called
@@ -228,7 +228,7 @@ def test_excel_aktar_kaydetme_penceresi_iptal_edilirse_dosya_yazilmaz(qt_app):
 
 def test_excel_aktar_rapor_yokken_uyari_verir_ve_yazmaz(qt_app):
     e = ekran_ac(qt_app, yanit_yok=True)
-    with patch.object(ekran_modulu.tmk, "bilgi") as bilgi, \
+    with patch.object(ekran_modulu.QMessageBox, "information") as bilgi, \
             patch.object(ekran_modulu, "excel_dosyasi_olustur") as uretici:
         e.excel_aktar()
     assert bilgi.called and not uretici.called
@@ -238,8 +238,8 @@ def test_excel_aktar_yazma_hatasinda_kullaniciya_anlasilir_uyari_verir(qt_app, t
     e = ekran_ac(qt_app)
     with patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
             patch.object(ekran_modulu, "excel_dosyasi_olustur", side_effect=OSError("kilitli")), \
-            patch.object(ekran_modulu.tmk, "uyari") as uyari, \
-            patch.object(ekran_modulu.tmk, "bilgi") as bilgi:
+            patch.object(ekran_modulu.QMessageBox, "warning") as uyari, \
+            patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
     assert uyari.called and "Excel'de açık" in uyari.call_args.args[2] and not bilgi.called
 
