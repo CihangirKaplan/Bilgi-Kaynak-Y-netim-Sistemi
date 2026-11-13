@@ -1908,6 +1908,8 @@ def randevu_deadlock_yeniden_dene(fonksiyon):
 def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR"))):
     if randevu.baslangic_zamani >= randevu.bitis_zamani:
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+    if hafta_sonuna_denk_mi(randevu.baslangic_zamani, randevu.bitis_zamani):
+        raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
 
     conn = None
     cursor = None
@@ -2048,6 +2050,14 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+HAFTA_SONU_MESAJI = "Hafta sonu randevu verilemez. Lütfen hafta içi bir gün seçin."
+
+
+def hafta_sonuna_denk_mi(*zamanlar) -> bool:
+    """Verilen zamanlardan biri cumartesi ya da pazara denk geliyorsa True (kurum hafta sonu kapalıdır)."""
+    return any(z.weekday() >= 5 for z in zamanlar)
+
+
 @app.get("/api/randevular/doluluk")
 def randevu_doluluk(
     tarih: date,
@@ -2144,6 +2154,9 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
             raise HTTPException(status_code=403, detail="Randevuyu başka psikoloğa devredemezsiniz.")
         if baslangic >= bitis:
             raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+        # Zaman değişiyorsa hafta sonuna alınamaz (eskiden kalan hafta sonu randevusunun yalnızca oda/danışanı değişebilir)
+        if ("baslangic_zamani" in degisiklikler or "bitis_zamani" in degisiklikler) and hafta_sonuna_denk_mi(baslangic, bitis):
+            raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
         if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 

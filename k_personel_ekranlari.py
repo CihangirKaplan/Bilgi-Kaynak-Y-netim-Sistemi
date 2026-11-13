@@ -515,7 +515,7 @@ class KullaniciPersonelEkrani(QWidget):
             QMessageBox.critical(
                 self,
                 "Bağlantı Hatası",
-                "Sunucudan yanıt alınamadı.\\n\\n"
+                "Sunucudan yanıt alınamadı.\n\n"
                 "İşlem gerçekleşmiş olabilir. "
                 "Durumu kontrol etmeden tekrar denemeyin."
             )

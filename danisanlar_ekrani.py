@@ -355,10 +355,10 @@ class DanisanlarEkrani(QWidget):
         else:
             self._yukleme_hatalari.pop(yol, None)
 
-        metin = "\\n".join(self._yukleme_hatalari.values())
+        metin = "\n".join(self._yukleme_hatalari.values())
         if metin:
             metin += (
-                "\\nListe yenilenemedi; gösterilen bilgiler "
+                "\nListe yenilenemedi; gösterilen bilgiler "
                 "güncel olmayabilir."
             )
 
