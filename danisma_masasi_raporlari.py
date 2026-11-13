@@ -119,6 +119,12 @@ class DanismaMasasiRaporlari(QWidget):
             }
         """)
         self.setObjectName("danismaRaporlari")
+        self.setStyleSheet(self.styleSheet() + '''
+            QComboBox#danismaDonem,
+            QComboBox#danismaOgrenci {
+                min-width: 0px;
+            }
+        ''')
 
         ana = QVBoxLayout(self)
         ana.setContentsMargins(20, 16, 20, 20)
@@ -126,6 +132,7 @@ class DanismaMasasiRaporlari(QWidget):
 
         # Filtreler
         filtre_satiri = QHBoxLayout()
+        filtre_satiri.setSpacing(10)
 
         filtre_satiri.addWidget(QLabel("Dönem:"))
         self.donem = QComboBox()
@@ -139,6 +146,8 @@ class DanismaMasasiRaporlari(QWidget):
         self.donem.currentIndexChanged.connect(
             self._tarih_alanlari
         )
+        self.donem.setObjectName("danismaDonem")
+        self.donem.setFixedWidth(160)
         filtre_satiri.addWidget(self.donem)
 
         filtre_satiri.addWidget(QLabel("Başlangıç:"))
@@ -148,6 +157,7 @@ class DanismaMasasiRaporlari(QWidget):
         self.baslangic.setDate(
             QDate.currentDate().addDays(-7)
         )
+        self.baslangic.setFixedWidth(135)
         filtre_satiri.addWidget(self.baslangic)
 
         filtre_satiri.addWidget(QLabel("Bitiş:"))
@@ -155,11 +165,14 @@ class DanismaMasasiRaporlari(QWidget):
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         self.bitis.setDate(QDate.currentDate())
+        self.bitis.setFixedWidth(135)
         filtre_satiri.addWidget(self.bitis)
 
         filtre_satiri.addWidget(QLabel("Öğrenci:"))
         self.ogrenci_sec = QComboBox()
         self.ogrenci_sec.addItem("Tüm Öğrenciler", None)
+        self.ogrenci_sec.setObjectName("danismaOgrenci")
+        self.ogrenci_sec.setMinimumWidth(170)
         filtre_satiri.addWidget(self.ogrenci_sec, 1)
 
         yenile_btn = QPushButton("↻ Raporu Getir")
@@ -175,7 +188,6 @@ class DanismaMasasiRaporlari(QWidget):
             "QPushButton:disabled { background: #AEB9CC; }"
         )
         self.excel_btn.clicked.connect(self.excel_aktar)
-        filtre_satiri.addWidget(self.excel_btn)
 
         ana.addLayout(filtre_satiri)
         self._tarih_alanlari()
@@ -229,6 +241,12 @@ class DanismaMasasiRaporlari(QWidget):
             kart_satiri.addWidget(kart, 1)
 
         ana.addLayout(kart_satiri)
+
+        # Excel aktarımı her iki rapor sekmesi için ortak.
+        excel_satiri = QHBoxLayout()
+        excel_satiri.addStretch()
+        excel_satiri.addWidget(self.excel_btn)
+        ana.addLayout(excel_satiri)
 
         # İki sekmeli raporlama alanı
         self.rapor_sekmeleri = QTabWidget()
