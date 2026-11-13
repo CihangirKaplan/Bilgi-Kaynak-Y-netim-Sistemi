@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
-import turkce_mesaj_kutusu as tmk
 
 
 
@@ -487,7 +486,7 @@ class DanismaMasasiYonetimi(QWidget):
                 return
 
             if not sessiz:
-                tmk.uyari(
+                QMessageBox.warning(
                     self,
                     "Bağlantı Hatası",
                     f"Görev kayıtları alınamadı:\n{hata}"
@@ -565,7 +564,7 @@ class DanismaMasasiYonetimi(QWidget):
             )
             yanit.raise_for_status()
 
-            tmk.bilgi(
+            QMessageBox.information(
                 self,
                 "Başarılı",
                 "Görev başarıyla onaylandı."
@@ -576,7 +575,7 @@ class DanismaMasasiYonetimi(QWidget):
             if oturum_hatasi_mi(hata):
                 return
 
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Onay Hatası",
                 f"Görev onaylanamadı:\n{hata}"
@@ -600,14 +599,14 @@ class DanismaMasasiYonetimi(QWidget):
             if oturum_hatasi_mi(hata):
                 return
 
-            tmk.uyari(
+            QMessageBox.warning(
                 self, "Bağlantı Hatası",
                 f"Öğrenci listesi alınamadı:\n{hata}"
             )
             return
 
         if not ogrenciler:
-            tmk.bilgi(
+            QMessageBox.information(
                 self, "Öğrenci Bulunamadı",
                 "Görev eklemek için aktif öğrenci bulunamadı."
             )
@@ -673,14 +672,14 @@ class DanismaMasasiYonetimi(QWidget):
             bit = bitis.dateTime().toPython()
 
             if bit <= bas:
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere, "Geçersiz Zaman",
                     "Bitiş zamanı başlangıçtan sonra olmalıdır."
                 )
                 return
 
             if bit > datetime.now():
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere, "Geçersiz Zaman",
                     "Gelecekte biten görev kaydı oluşturulamaz."
                 )
@@ -708,20 +707,20 @@ class DanismaMasasiYonetimi(QWidget):
                     mesaj = yanit.json().get("detail", "Kayıt oluşturulamadı.")
                 except ValueError:
                     mesaj = "Kayıt oluşturulamadı."
-                tmk.uyari(pencere, "Kayıt Hatası", str(mesaj))
+                QMessageBox.warning(pencere, "Kayıt Hatası", str(mesaj))
                 return
             except requests.RequestException as hata:
                 if oturum_hatasi_mi(hata):
                     return
 
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere, "Bağlantı Hatası", str(hata)
                 )
                 return
 
             pencere.accept()
             self.yenile()
-            tmk.bilgi(
+            QMessageBox.information(
                 self, "Başarılı",
                 "Yeni danışma masası görevi oluşturuldu."
             )
@@ -752,7 +751,7 @@ class DanismaMasasiYonetimi(QWidget):
             return
 
         if oturum.get("onaylandi_mi") or not oturum.get("bitis_zamani"):
-            tmk.uyari(
+            QMessageBox.warning(
                 self,
                 "Düzenleme Yapılamaz",
                 "Yalnızca tamamlanmış ve onay bekleyen görevler düzenlenebilir."
@@ -827,7 +826,7 @@ class DanismaMasasiYonetimi(QWidget):
             bit = bitis.dateTime().toPython()
 
             if bit <= bas:
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Geçersiz Zaman",
                     "Bitiş zamanı başlangıçtan sonra olmalıdır."
@@ -835,7 +834,7 @@ class DanismaMasasiYonetimi(QWidget):
                 return
 
             if bit > datetime.now():
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere,
                     "Geçersiz Zaman",
                     "Gelecekte biten görev kaydı düzenlenemez."
@@ -868,7 +867,7 @@ class DanismaMasasiYonetimi(QWidget):
                 except ValueError:
                     mesaj = "Görev düzenlenemedi."
 
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere, "Düzenleme Hatası", str(mesaj)
                 )
                 return
@@ -877,7 +876,7 @@ class DanismaMasasiYonetimi(QWidget):
                 if oturum_hatasi_mi(hata):
                     return
 
-                tmk.uyari(
+                QMessageBox.warning(
                     pencere, "Bağlantı Hatası", str(hata)
                 )
                 return
@@ -885,7 +884,7 @@ class DanismaMasasiYonetimi(QWidget):
             pencere.accept()
             self.yenile()
 
-            tmk.bilgi(
+            QMessageBox.information(
                 self,
                 "Başarılı",
                 "Görev başarıyla güncellendi."
