@@ -9,6 +9,7 @@ PATHS = {
     "calendar": '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m5 6 2 2 4-4"/>',
     "chip": '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/>',
     "users": '<circle cx="9" cy="8" r="3"/><path d="M2 20v-2a7 7 0 0 1 14 0v2M17 5a3 3 0 0 1 0 6m2 3a6 6 0 0 1 3 6"/>',
+    "graduation-cap": '<path d="m2 10 10-5 10 5-10 5z"/><path d="M6 12v5c3.5 3 8.5 3 12 0v-5M22 10v7"/>',
     "settings": '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/>',
     "door": '<path d="M5 21V3h14v18M3 21h18M15 12h.01"/>',
     "clipboard": '<rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 11h6m-6 4h6"/>',
@@ -30,9 +31,9 @@ PATHS = {
 CATEGORY_ICONS = {
     "GENEL": "grid",
     "KLİNİK OPERASYON": "calendar",
-    "ÖĞRENCİ & FAALİYET YÖNETİMİ": "users",
+    "ÖĞRENCİ & FAALİYET YÖNETİMİ": "graduation-cap",
     "CİHAZ YAŞAM DÖNGÜSÜ": "chip",
-    "YÖNETİM & DENETİM": "users",
+    "YÖNETİM & DENETİM": "shield",
     "SİSTEM": "settings",
 }
 
