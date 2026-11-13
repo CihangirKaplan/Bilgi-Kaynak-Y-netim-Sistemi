@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
 from PySide6.QtGui import QColor, QPainter
 
+import izin_bagimliliklari
+
 
 def golge_ekle(widget, blur=20, alpha=30, dy=5):
     eff = QGraphicsDropShadowEffect(widget)
@@ -402,6 +404,8 @@ class RolDuzenleDialog(QDialog):
             QMessageBox.critical(self, "Hata", f"Sunucu hatası:\n{e}")
 
 class IzinDuzenleDialog(QDialog):
+    NOT_EK_YUKSEKLIK = 110       # not kutusu görününce pencerenin uzayacağı miktar (px)
+
     def __init__(self, api_url, token, izin_id, roller, matris_verisi, ebeveyn=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
@@ -417,8 +421,13 @@ class IzinDuzenleDialog(QDialog):
                 self.secilen_izin = izin
                 break
 
+        # Bu izin tek başına sekme açmıyorsa (örn. bir sayfanın içindeki düğmeyi açıyorsa) yöneticiye not gösterilir.
+        self.bagimlilik_notu = None
+        if self.secilen_izin:
+            self.bagimlilik_notu = izin_bagimliliklari.not_getir(self.secilen_izin["izin_adi"], matris_verisi)
+
         self.setWindowTitle("TKYS — İzin ve Rol Yetki Düzenleme")
-        self.setFixedSize(480, 550)
+        self.setFixedSize(480, 550 + (self.NOT_EK_YUKSEKLIK if self.bagimlilik_notu else 0))
         self.setStyleSheet("QDialog { background-color: #F8FAFC; }")
         
         self.rol_checkboxlar = {} # Hangi rolde hangi checkbox var tutmak için
@@ -470,6 +479,17 @@ class IzinDuzenleDialog(QDialog):
         form_layout.addWidget(lbl_ad)
         form_layout.addWidget(self.input_izin_adi)
         layout.addLayout(form_layout)
+
+        # --- BAĞIMLILIK NOTU (yalnızca gerekiyorsa) ---
+        self.lbl_bagimlilik_notu = QLabel(f"ⓘ  {self.bagimlilik_notu}" if self.bagimlilik_notu else "")
+        self.lbl_bagimlilik_notu.setObjectName("bagimlilikNotu")
+        self.lbl_bagimlilik_notu.setWordWrap(True)
+        self.lbl_bagimlilik_notu.setStyleSheet(
+            "QLabel#bagimlilikNotu { background-color: #FFF7E0; color: #7A5200; border: 1px solid #F2D58A; "
+            "border-radius: 10px; padding: 10px 12px; font-size: 12px; }"
+        )
+        self.lbl_bagimlilik_notu.setVisible(bool(self.bagimlilik_notu))
+        layout.addWidget(self.lbl_bagimlilik_notu)
 
         # --- ROLLER VE KUTUCUKLAR (KAYDIRILABİLİR ALAN) ---
         lbl_roller_baslik = QLabel("BU İZNİN GEÇERLİ OLACAĞI ROLLER")
