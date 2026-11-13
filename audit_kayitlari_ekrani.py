@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 
 OLAY_ADLARI = {
     "PASSWORD_RESET": "Parola Sıfırlama",
+    "PASSWORD_CHANGE": "Parola Değiştirme",
+    "PASSWORD_CHANGE_FAILED": "Başarısız Parola Değiştirme",
     "LOGIN": "Giriş Başarılı",
     "LOGIN_FAILED": "Başarısız Giriş",
     "CREATE": "Oluşturma",
@@ -47,6 +49,8 @@ HEDEF_TABLO_ADLARI = {
 }
 
 OLAY_RENKLERI = {
+    "PASSWORD_CHANGE": ("#17634F", "#E8F6EF"),
+    "PASSWORD_CHANGE_FAILED": ("#9B3048", "#FCEBF0"),
     "LOGIN": ("#17634F", "#E8F6EF"),
     "LOGIN_FAILED": ("#9B3048", "#FCEBF0"),
     "CREATE": ("#2457A2", "#E9F1FF"),

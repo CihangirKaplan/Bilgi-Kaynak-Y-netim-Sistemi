@@ -190,7 +190,45 @@ def test_parola_sifirlama_gercek_postgresql():
             )
             assert degistirme.status_code == 200, degistirme.text
 
-            # Son girişte parola değiştirme zorunluluğu kalkmalı.
+            # Başarılı parola değişikliği audit kaydı oluşturmalı.
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM denetim_kayitlari
+                    WHERE kullanici_id = %s
+                      AND hedef_tablo = 'kullanicilar'
+                      AND hedef_kayit_id = %s
+                      AND olay_turu = 'PASSWORD_CHANGE'
+                """, (hedef["id"], hedef["id"]))
+                assert cursor.fetchone()[0] == 1
+
+            # Yanlış eski parola ile değişiklik reddedilmeli.
+            yanlis = client.post(
+                "/api/sifre-degistir",
+                headers=baslik(
+                    giris(hedef, yeni_parola)["access_token"]
+                ),
+                json={
+                    "eski_parola": "YanlisParola123!",
+                    "yeni_parola": f"Farkli!{kod}Cc",
+                    "yeni_parola_tekrar": f"Farkli!{kod}Cc",
+                },
+            )
+            assert yanlis.status_code == 401, yanlis.text
+
+            # Başarısız parola değişikliği audit kaydı oluşturmalı.
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM denetim_kayitlari
+                    WHERE kullanici_id = %s
+                      AND hedef_tablo = 'kullanicilar'
+                      AND hedef_kayit_id = %s
+                      AND olay_turu = 'PASSWORD_CHANGE_FAILED'
+                """, (hedef["id"], hedef["id"]))
+                assert cursor.fetchone()[0] == 1
+
+            # Yanlış denemeden sonra doğru parola hâlâ çalışmalı.
             son_giris = giris(hedef, yeni_parola)
             assert son_giris["sifre_degistirme_gerekli"] is False
 
