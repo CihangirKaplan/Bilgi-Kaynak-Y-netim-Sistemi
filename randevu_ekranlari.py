@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QAbstractItemView, QPushButton, QLineEdit,
                                QDateEdit)
 from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QTextCharFormat
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
@@ -41,6 +41,30 @@ def dolu_saatleri_hesapla(dolu_araliklar, tarih_str):
         if oda or psikolog:
             dolu[saat] = "oda_ve_psikolog" if (oda and psikolog) else ("oda" if oda else "psikolog")
     return dolu
+
+
+HAFTA_SONU_MESAJI = "Hafta sonu randevu verilmez. Lütfen hafta içi bir gün seçin."
+
+
+def hafta_sonu_mu(tarih):
+    """QDate cumartesi ya da pazara denk geliyor mu (kurum hafta sonu kapalıdır)."""
+    return tarih.dayOfWeek() >= 6
+
+
+def siradaki_is_gunu(tarih):
+    """Hafta sonuna denk gelen tarih için sonraki pazartesiyi, değilse aynı tarihi döndürür."""
+    while hafta_sonu_mu(tarih):
+        tarih = tarih.addDays(1)
+    return tarih
+
+
+def hafta_sonunu_soluklastir(dt_tarih):
+    """Takvim açılırken cumartesi ve pazar günleri sönük gösterilir."""
+    takvim = dt_tarih.calendarWidget()
+    bicim = QTextCharFormat()
+    bicim.setForeground(QColor("#94A3B8"))
+    takvim.setWeekdayTextFormat(Qt.Saturday, bicim)
+    takvim.setWeekdayTextFormat(Qt.Sunday, bicim)
 
 
 class DolulukGosterimi:
@@ -80,6 +104,7 @@ class DolulukGosterimi:
         self.dt_tarih.dateChanged.connect(self.doluluk_yenilemeyi_planla)
         self.cmb_odalar.currentIndexChanged.connect(self.doluluk_yenilemeyi_planla)
         self.cmb_psikologlar.currentIndexChanged.connect(self.doluluk_yenilemeyi_planla)
+        hafta_sonunu_soluklastir(self.dt_tarih)
         self.doluluk_yenilemeyi_planla()
 
     def doluluk_yenilemeyi_planla(self, *_):
@@ -106,7 +131,7 @@ class DolulukGosterimi:
         else:
             self._form_hatalari.pop(kaynak, None)
 
-        metin = "\\n".join(dict.fromkeys(self._form_hatalari.values()))
+        metin = "\n".join(dict.fromkeys(self._form_hatalari.values()))
         self.lbl_form_hatasi.setText(metin)
         self.lbl_form_hatasi.setVisible(bool(metin))
 
@@ -167,6 +192,11 @@ class DolulukGosterimi:
         self._doluluk_durumunu_ayarla(
             False, "Saat uygunluğu kontrol ediliyor..."
         )
+
+        if hafta_sonu_mu(self.dt_tarih.date()):
+            self.saat_kutusunu_kapat()
+            self._doluluk_durumunu_ayarla(False, HAFTA_SONU_MESAJI)
+            return
 
         if oda_id is None and psikolog_id is None:
             self._doluluk_durumunu_ayarla(
@@ -236,6 +266,14 @@ class DolulukGosterimi:
         if self.saat_secimi() is None:
             ilk_bos = next((i for i in range(self.cmb_saat.count()) if model.item(i).isEnabled()), -1)
             self.cmb_saat.setCurrentIndex(ilk_bos)
+
+    def saat_kutusunu_kapat(self):
+        """Seçilebilir saat bırakmaz (örn. hafta sonu)."""
+        model = self.cmb_saat.model()
+        for i in range(self.cmb_saat.count()):
+            model.item(i).setEnabled(False)
+            model.item(i).setForeground(QColor("#94A3B8"))
+        self.cmb_saat.setCurrentIndex(-1)
 
     def saat_secimi(self):
         """Seçili saat ("HH:MM"); seçim yoksa ya da seçili saat doluysa None."""
@@ -311,7 +349,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.cmb_odalar = QComboBox()
         form_layout.addRow("Görüşme Odası:", self.cmb_odalar)
 
-        self.dt_tarih = QDateEdit(QDate.currentDate())
+        self.dt_tarih = QDateEdit(siradaki_is_gunu(QDate.currentDate()))
         self.dt_tarih.setDisplayFormat("dd.MM.yyyy")
         self.dt_tarih.setCalendarPopup(True)
         form_layout.addRow("Randevu Tarihi:", self.dt_tarih)
