@@ -158,7 +158,7 @@ Hemen denemek için (bilgisayarı yeniden başlatmadan):
 
     schtasks /Run /TN TKYS_Sunucu
 
-Sunucunun çalıştığını `http://SUNUCU_ADRESI:8000/docs` adresini tarayıcıda açarak görebilirsiniz.
+Sunucunun çalıştığını `http://SUNUCU_ADRESI:8000/api/saglik` adresini tarayıcıda açarak görebilirsiniz (`{"durum":"calisiyor"}` yazmalı).
 Sunucunun çıktıları ve hataları `logs\sunucu.log` dosyasına yazılır (5 MB'ı aşınca yeni dosyaya geçilir).
 
 Sorun çıkarsa:
@@ -182,7 +182,7 @@ PostgreSQL gerekmez). Sunucu adresini verip uygulamayı açın:
     $env:TKYS_API_URL = "http://192.168.1.20:8000"
     python login_ekrani.py
 
-Bağlanamazsa önce istemci bilgisayarın tarayıcısından `http://192.168.1.20:8000/docs`
+Bağlanamazsa önce istemci bilgisayarın tarayıcısından `http://192.168.1.20:8000/api/saglik`
 adresini açmayı deneyin. Açılmıyorsa sorun ağ/güvenlik duvarındadır, uygulamada değil.
 
 ## 10. Yedekleme
