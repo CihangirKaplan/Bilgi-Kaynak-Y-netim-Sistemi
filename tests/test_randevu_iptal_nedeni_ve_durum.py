@@ -364,21 +364,12 @@ def test_gecmis_randevu_isaretlenir(ekran_ac, yeni):
     sunucu = Sunucu([randevu(5, gun=-2)])
     ekran = ekran_ac(sunucu)
     sec(ekran, 5)
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes) as soru:
+    with patch.object(QMessageBox, "question") as soru:
         ekran.durum_isaretle(yeni)
-    assert {"TAMAMLANDI": "Tamamlandı", "GELMEDI": "Gelmedi"}[yeni] in soru.call_args.args[2]
+    soru.assert_not_called()                                                         # onay penceresi yok
     assert ("PATCH", "http://testserver/api/randevular/5/durum") in sunucu.istekler
     assert sunucu.govdeler == [{"durum": yeni}]
     assert sunucu.istekler[-1][1].endswith("/api/randevular")                       # sonra liste yenilenir
-
-
-def test_isaretleme_onaylanmazsa_istek_gitmez(ekran_ac):
-    sunucu = Sunucu([randevu(5, gun=-2)])
-    ekran = ekran_ac(sunucu)
-    sec(ekran, 5)
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
-        ekran.durum_isaretle("GELMEDI")
-    assert not any(y == "PATCH" for y, _ in sunucu.istekler)
 
 
 @pytest.mark.parametrize("liste, parca", [
@@ -414,15 +405,11 @@ def test_sunucu_reddederse_mesaji_gosterilir(ekran_ac):
 
 
 # ------------------------------------------------------------------ menü ve adlar
-def test_menude_tamamlandi_ve_gelmedi_dugmeleri_duzenleme_yetkisine_bagli():
+def test_menude_ust_dugmeler_ve_yeni_danisan_yok():
     ogeler = {o["ad"]: o for _, liste in mw.MENU for o in liste}
     aksiyonlar = dict(ogeler["Randevu Yönetimi"]["aksiyon"])
-    assert aksiyonlar["✓  Tamamlandı"] == "Randevu düzenleme" and aksiyonlar["✗  Gelmedi"] == "Randevu düzenleme"
     assert "Yeni Danışan" not in " ".join(aksiyonlar)
-    kaynak = open(mw.__file__, encoding="utf-8").read()
-    assert 'durum_isaretle("TAMAMLANDI")' in kaynak and 'durum_isaretle("GELMEDI")' in kaynak
-    # yeni düğmeler 'Randevu düzenleme' dalından ÖNCE bağlanmalı (yoksa düzenleme penceresini açarlardı)
-    assert kaynak.index('elif etiket == "✓  Tamamlandı"') < kaynak.index('elif izin_kodu == "Randevu düzenleme"')
+    assert not any("Tamamlandı" in e or "Gelmedi" in e for e in aksiyonlar)            # işaretleme rozetten yapılır
 
 
 def test_danisanlar_sayfasinda_sekme_adi_randevular():
