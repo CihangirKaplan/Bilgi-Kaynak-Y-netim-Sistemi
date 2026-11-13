@@ -583,7 +583,10 @@ class LoginEkrani(QWidget):
 
 
 if __name__ == "__main__":
+    from qt_dil import turkce_ceviriyi_yukle
     app = QApplication(sys.argv)
+    if not turkce_ceviriyi_yukle(app):
+        print("Uyarı: Qt Türkçe çevirisi yüklenemedi.")
     app.setStyle("Fusion")
     pencere = LoginEkrani()
     pencere.show()

@@ -2712,7 +2712,10 @@ QLabel {
 
 
 if __name__ == "__main__":
+    from qt_dil import turkce_ceviriyi_yukle
     app = QApplication(sys.argv)
+    if not turkce_ceviriyi_yukle(app):
+        print("Uyarı: Qt Türkçe çevirisi yüklenemedi.")
     rol = sys.argv[1] if len(sys.argv) > 1 else "admin"
     pencere = AnaPencere(aktif_rol=rol, rol_onizleme=True)
     pencere.showMaximized()
