@@ -1212,7 +1212,6 @@ class RandevuAnaEkrani(QWidget):
             psikolog = self.psikolog_adlari.get(r.get("psikolog_id"), f"Psikolog #{r.get('psikolog_id')}")
             oda = self.oda_adlari.get(r.get("oda_id"), f"Oda #{r.get('oda_id')}")
             durum_hucresi = self._hucre("")
-            durum_hucresi.setToolTip(DURUM_ETIKETLERI.get(r.get("durum"), str(r.get("durum") or "")))
 
             for sutun, oge in enumerate((kimlik, self._hucre(str(r.get("danisan_kod_id") or "")),
                                          self._hucre(psikolog), self._hucre(oda),
@@ -1313,6 +1312,17 @@ class RandevuAnaEkrani(QWidget):
             return
         if durum == yeni_durum:
             QMessageBox.information(self, "Bilgi", f"Bu randevu zaten '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretli.")
+            return
+
+        # Tamamlandı ⇄ Gelmedi geçişi kolay yapıldığı için her işaretleme onay ister (varsayılan düğme "Hayır")
+        mevcut = f"\n\nŞu an '{DURUM_ETIKETLERI[durum]}' olarak işaretli." if durum in ("TAMAMLANDI", "GELMEDI") else ""
+        onay = QMessageBox.question(
+            self, "Onay",
+            f"{randevu.get('danisan_kod_id')} randevusu '{DURUM_ETIKETLERI[yeni_durum]}' olarak işaretlensin mi?{mevcut}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if onay != QMessageBox.Yes:
             return
 
         headers = {"Authorization": f"Bearer {self.token}"}
