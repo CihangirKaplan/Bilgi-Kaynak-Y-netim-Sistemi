@@ -30,6 +30,7 @@ PATHS = {
 CATEGORY_ICONS = {
     "GENEL": "grid",
     "KLİNİK OPERASYON": "calendar",
+    "ÖĞRENCİ & FAALİYET YÖNETİMİ": "users",
     "CİHAZ YAŞAM DÖNGÜSÜ": "chip",
     "YÖNETİM & DENETİM": "users",
     "SİSTEM": "settings",
