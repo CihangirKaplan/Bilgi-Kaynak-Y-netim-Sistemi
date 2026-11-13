@@ -24,7 +24,6 @@ from randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
-import turkce_mesaj_kutusu as tmk
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
 DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Ücret", "İstisna", "Randevu", "Durum"]
