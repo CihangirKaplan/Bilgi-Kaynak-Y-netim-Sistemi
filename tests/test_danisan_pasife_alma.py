@@ -208,7 +208,7 @@ def test_pasifler_varsayilan_gizli_secenekle_gorunur_ve_soluk(ekran_ac):
     pasif = ekran.tablo.item(1, 0)
     assert pasif.foreground().color().name().lower() == "#94a3b8"
     assert ekran.tablo.item(0, 0).foreground().color().name().lower() != "#94a3b8"
-    assert ekran.tablo.item(1, 5).text() == "Pasif"
+    assert ekran.tablo.item(1, 6).text() == "Pasif"
 
 
 def test_dugme_metni_durumu_gosterir(ekran_ac):

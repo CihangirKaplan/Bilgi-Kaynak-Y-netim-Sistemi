@@ -21,6 +21,11 @@ from modeller import (
     RandevuGuncelleModeli,
     RandevuIptalModeli,
     RandevuDurumModeli,
+    DanisanBilgiModeli,
+    YAS_GRUPLARI,
+    TERAPI_TURLERI,
+    danisan_terapisini_belirle,
+    randevu_terapisini_belirle,
     BakimPlaniGuncelleModeli,
     BakimPlaniOlusturModeli,
     DanisanKoduModeli,
@@ -1986,9 +1991,15 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
                 raise HTTPException(status_code=403, detail="Yalnızca kendi adınıza randevu oluşturabilirsiniz.")
 
         # DİKKAT EDİN BURASI DEĞİŞTİ: Artık otomatik kod üretmiyoruz, frontend'den gelen kodu kontrol ediyoruz.
-        cursor.execute("SELECT 1 FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (randevu.danisan_kod_id,))
-        if cursor.fetchone() is None:
+        cursor.execute("SELECT yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (randevu.danisan_kod_id,))
+        danisan_kaydi = cursor.fetchone()
+        if danisan_kaydi is None:
             raise HTTPException(status_code=422, detail="Seçilen danışan kodu bulunamadı veya aktif değil.")
+        # Randevunun terapi türü danışanın yaş grubuna uymalıdır (yetişkin: bireysel terapi; çocuk: seçilmeli)
+        try:
+            terapi_turu = randevu_terapisini_belirle(danisan_kaydi[0], getattr(randevu, "terapi_turu", None))
+        except ValueError as hata:
+            raise HTTPException(status_code=422, detail=str(hata))
 
         # 2. Psikolog kontrolü
         cursor.execute(
@@ -2016,8 +2027,8 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
 
         # 5. Randevuyu kaydetme (ARTIK randevu.danisan_kod_id KULLANILIYOR)
         cursor.execute(
-            "INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'PLANLANDI') RETURNING randevu_id;", 
-            (randevu.danisan_kod_id, randevu.psikolog_id, randevu.oda_id, randevu.baslangic_zamani, randevu.bitis_zamani)
+            "INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, gorusme_tipi, terapi_turu) VALUES (%s, %s, %s, %s, %s, 'PLANLANDI', %s, %s) RETURNING randevu_id;", 
+            (randevu.danisan_kod_id, randevu.psikolog_id, randevu.oda_id, randevu.baslangic_zamani, randevu.bitis_zamani, getattr(randevu, 'gorusme_tipi', 'YUZ_YUZE'), terapi_turu)
         )
         randevu_id = cursor.fetchone()[0]
 
@@ -2074,7 +2085,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         # 1. DURUM: Psikolog ise yalnızca kendi randevularını görür
         if "psikolog" in rol_adi:
             sorgu = """
-                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu 
+                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu, r.gorusme_tipi, r.terapi_turu 
                 FROM randevular r
                 JOIN personel p ON p.personel_id = r.psikolog_id
                 WHERE p.kullanici_id = %s
@@ -2085,7 +2096,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         # 2. DURUM: Diğer roller (Admin vb.)
         else:
             cursor.execute(
-                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi, iptal_nedeni, iptal_notu "
+                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi, iptal_nedeni, iptal_notu, gorusme_tipi, terapi_turu "
                 "FROM randevular ORDER BY baslangic_zamani;"
             )
             
@@ -2102,7 +2113,9 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
                 "durum": kayit[6],
                 "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None,
                 "iptal_nedeni": kayit[8] if len(kayit) > 8 else None,
-                "iptal_notu": kayit[9] if len(kayit) > 9 else None
+                "iptal_notu": kayit[9] if len(kayit) > 9 else None,
+                "gorusme_tipi": kayit[10] if len(kayit) > 10 else "YUZ_YUZE",
+                "terapi_turu": kayit[11] if len(kayit) > 11 else None
             } for kayit in kayitlar
         ]
     finally:
@@ -2183,7 +2196,7 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
+        cursor.execute("SELECT danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, gorusme_tipi, terapi_turu FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
         mevcut = cursor.fetchone()
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Randevu bulunamadı.")
@@ -2223,7 +2236,23 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         if cursor.fetchone() is not None:
             raise HTTPException(status_code=409, detail="Seçilen psikolog veya oda bu saatlerde dolu.")
 
+        # Görüşme tipi / terapi türü değişiyorsa: terapi, danışanın yaş grubuna uymalıdır
+        yeni_gorusme = yeni_terapi = None
+        siniflar_degisiyor = "gorusme_tipi" in degisiklikler or "terapi_turu" in degisiklikler
+        if siniflar_degisiyor:
+            yeni_gorusme = degisiklikler.get("gorusme_tipi", mevcut[6] if len(mevcut) > 6 else "YUZ_YUZE")
+            yeni_terapi = degisiklikler.get("terapi_turu", mevcut[7] if len(mevcut) > 7 else None)
+            if "terapi_turu" in degisiklikler:
+                cursor.execute("SELECT yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s;", (danisan_kod_id,))
+                yas_kaydi = cursor.fetchone()
+                try:
+                    yeni_terapi = randevu_terapisini_belirle(yas_kaydi[0] if yas_kaydi else None, yeni_terapi)
+                except ValueError as hata:
+                    raise HTTPException(status_code=422, detail=str(hata))
+
         cursor.execute("UPDATE randevular SET danisan_kod_id = %s, psikolog_id = %s, oda_id = %s, baslangic_zamani = %s, bitis_zamani = %s WHERE randevu_id = %s;", (danisan_kod_id, psikolog_id, oda_id, baslangic, bitis, randevu_id))
+        if siniflar_degisiyor:
+            cursor.execute("UPDATE randevular SET gorusme_tipi = %s, terapi_turu = %s WHERE randevu_id = %s;", (yeni_gorusme, yeni_terapi, randevu_id))
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "UPDATE", "randevular", randevu_id))
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu güncellendi.", "randevu_id": randevu_id}
@@ -2320,6 +2349,8 @@ def danisan_kodu_olustur(
     ucretli_mi: bool = True,
     istisna_turu: str = "YOK",
     psikolog_id: int | None = Query(None, gt=0),
+    yas_grubu: str = Query(...),
+    terapi_turu: str | None = Query(None),
     kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
 ):
     """Yeni danışan kodu üretir.
@@ -2332,6 +2363,15 @@ def danisan_kodu_olustur(
         raise HTTPException(status_code=422, detail="Geçersiz istisna türü. İzinli değerler: " + ", ".join(IZINLI_ISTISNA_TURLERI) + ".")
     if ucretli_mi and istisna_turu != "YOK":
         raise HTTPException(status_code=422, detail="Ücretli danışan için istisna türü YOK olmalıdır.")
+    # Kapalı listeler: gelen metin doğrulanır ve hata mesajına yazılmaz (FR-008)
+    if yas_grubu not in YAS_GRUPLARI:
+        raise HTTPException(status_code=422, detail="Geçersiz yaş grubu. İzinli değerler: " + ", ".join(YAS_GRUPLARI) + ".")
+    if terapi_turu is not None and terapi_turu not in TERAPI_TURLERI:
+        raise HTTPException(status_code=422, detail="Geçersiz terapi türü. İzinli değerler: " + ", ".join(TERAPI_TURLERI) + ".")
+    try:
+        terapi_turu = danisan_terapisini_belirle(yas_grubu, terapi_turu)      # yetişkinde otomatik bireysel terapi
+    except ValueError as hata:
+        raise HTTPException(status_code=422, detail=str(hata))
     conn = None
     cursor = None
     try:
@@ -2373,11 +2413,11 @@ def danisan_kodu_olustur(
         # 3. Veritabanına oluşturan psikoloğun ID'siyle birlikte kaydediyoruz
         cursor.execute(
             """
-            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturan_psikolog_id) 
-            VALUES (%s, %s, %s, TRUE, %s) 
-            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id;
+            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturan_psikolog_id, yas_grubu, terapi_turu) 
+            VALUES (%s, %s, %s, TRUE, %s, %s, %s) 
+            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu, terapi_turu;
             """, 
-            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id)
+            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id, yas_grubu, terapi_turu)
         )
         kayit = cursor.fetchone()
 
@@ -2393,7 +2433,9 @@ def danisan_kodu_olustur(
                 "istisna_turu": kayit[2],
                 "aktif_mi": kayit[3],
                 "olusturulma_tarihi": kayit[4],
-                "olusturan_psikolog_id": kayit[5]
+                "olusturan_psikolog_id": kayit[5],
+                "yas_grubu": kayit[6] if len(kayit) > 6 else yas_grubu,
+                "terapi_turu": kayit[7] if len(kayit) > 7 else terapi_turu
             }
         }
     finally:
@@ -2704,7 +2746,7 @@ def danisan_kodlari_listele(
         rol_kayit = cursor.fetchone()
         rol_adi = rol_kayit[0].upper() if rol_kayit else ""
 
-        sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id"
+        sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu, terapi_turu"
         aktif_kosulu = "TRUE" if pasifler_dahil else "aktif_mi = TRUE"
 
         # 2. Psikolog yalnızca kendi oluşturduğu danışan kodlarını görür
@@ -2740,6 +2782,8 @@ def danisan_kodlari_listele(
                 "istisna_turu": k[3],
                 "olusturulma_tarihi": k[4].isoformat() if hasattr(k[4], "isoformat") else k[4],
                 "olusturan_psikolog_id": k[5],
+                "yas_grubu": k[6] if len(k) > 6 else None,
+                "terapi_turu": k[7] if len(k) > 7 else None,
             }
             for k in cursor.fetchall()
         ]
@@ -2800,6 +2844,46 @@ def danisan_durumunu_degistir(
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
         conn.commit()
         return {"durum": "basarili", "aktif_mi": aktif_mi, "mesaj": "Danışan aktif edildi." if aktif_mi else "Danışan pasife alındı."}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.patch("/api/danisan-kodlari/{danisan_kod_id}/bilgiler")
+def danisan_bilgilerini_guncelle(
+    danisan_kod_id: str,
+    bilgi: DanisanBilgiModeli,
+    kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
+):
+    """Danışanın yaş grubunu ve terapi türünü günceller (ikisi de kapalı listedir; serbest metin yoktur).
+
+    Psikolog yalnızca kendi danışanını güncelleyebilir. Önceki randevuların terapi türü değişmez (geçmiş korunur).
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s FOR UPDATE;", (danisan_kod_id,))
+        danisan = cursor.fetchone()
+        if danisan is None:
+            raise HTTPException(status_code=404, detail="Danışan bulunamadı.")
+
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        if rol is not None and rol[0].upper() == "PSIKOLOG":
+            cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
+            personel = cursor.fetchone()
+            if personel is None or personel[0] != danisan[0]:
+                raise HTTPException(status_code=403, detail="Yalnızca kendi danışanınızın bilgilerini güncelleyebilirsiniz.")
+
+        cursor.execute(
+            "UPDATE danisan_kodlari SET yas_grubu = %s, terapi_turu = %s WHERE danisan_kod_id = %s;",
+            (bilgi.yas_grubu, bilgi.terapi_turu, danisan_kod_id),
+        )
+        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
+        conn.commit()
+        return {"durum": "basarili", "yas_grubu": bilgi.yas_grubu, "terapi_turu": bilgi.terapi_turu, "mesaj": "Danışan bilgileri güncellendi."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

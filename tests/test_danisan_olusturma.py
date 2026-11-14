@@ -18,7 +18,7 @@ import main_window as mw
 from danisan_diyalog import DanisanOlusturDialog
 from sunucu import app, mevcut_kullanici_id
 
-KAYIT = ("DAN-2026-0099", True, "YOK", True, None, 7)
+KAYIT = ("DAN-2026-0099", True, "YOK", True, None, 7, "YETISKIN", "BIREYSEL_TERAPI")
 
 
 # ------------------------------------------------------------------ menü
@@ -61,7 +61,7 @@ def _olustur(istemci, kimlik, sorgu="", psikolog_kaydi=(7,)):
     c.fetchone.side_effect = sirali
     with patch("sunucu.psycopg2.connect", return_value=conn), \
             patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
-        yanit = istemci.post("/api/danisan-kodlari" + sorgu)
+        yanit = istemci.post("/api/danisan-kodlari" + sorgu + ("&" if sorgu else "?") + "yas_grubu=YETISKIN")
     ekleme = next((x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
     return yanit, (ekleme.args[1] if ekleme else None)
 
@@ -86,7 +86,7 @@ def test_admin_psikolog_secmeden_danisan_olusturamaz(istemci):
 def test_admin_secilen_psikolog_adina_danisan_olusturur_kendi_personel_kaydi_kullanilmaz(istemci):
     yanit, parametreler = _olustur(istemci, (22, "ADMIN"), "?psikolog_id=7")
     assert yanit.status_code == 201
-    assert parametreler == ("DAN-2026-0099", True, "YOK", 7)
+    assert parametreler == ("DAN-2026-0099", True, "YOK", 7, "YETISKIN", "BIREYSEL_TERAPI")
 
 
 def test_danisma_ogrencisi_personel_kaydi_olmasa_da_psikolog_secerek_olusturur(istemci):
@@ -154,6 +154,7 @@ def test_psikolog_hesabinda_psikolog_kutusu_kendi_adina_kilitli(sunucu_taklidi):
 def test_yetkili_rolde_psikolog_secmeden_kaydedilemez(sunucu_taklidi):
     p = pencere(mevcut_psikolog_id=22)
     assert p.cmb_psikolog.isEnabled() and p.cmb_psikolog.currentData() is None
+    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
     p.kaydet()
     sunucu_taklidi.uyari.assert_called_once()
     assert sunucu_taklidi.postlar == []
@@ -168,16 +169,21 @@ def test_ucretsiz_ve_istisna_secimi_ile_psikolog_sunucuya_sorgu_parametresi_olar
     p = pencere(mevcut_psikolog_id=22, onceden_psikolog_id=7)
     p.cmb_ucret.setCurrentIndex(p.cmb_ucret.findData(False))
     p.cmb_istisna.setCurrentIndex(p.cmb_istisna.findData("KANSER"))
+    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("COCUK"))
+    p.cmb_terapi.setCurrentIndex(p.cmb_terapi.findData("OYUN_TERAPISI"))
     with patch.object(p, "accept"):
         p.kaydet()
     gonderilen = sunucu_taklidi.postlar[0]
-    assert gonderilen["params"] == {"ucretli_mi": "false", "istisna_turu": "KANSER", "psikolog_id": 7}
+    assert gonderilen["params"] == {"ucretli_mi": "false", "istisna_turu": "KANSER", "yas_grubu": "COCUK",
+                                    "terapi_turu": "OYUN_TERAPISI", "psikolog_id": 7}
     assert "json" not in gonderilen
     assert p.olusan_kod == "DAN-2026-0050"
 
 
 def test_psikolog_hesabi_kendi_kimligiyle_gonderir(sunucu_taklidi):
     p = pencere(mevcut_psikolog_id=3)
+    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
     with patch.object(p, "accept"):
         p.kaydet()
-    assert sunucu_taklidi.postlar[0]["params"] == {"ucretli_mi": "true", "istisna_turu": "YOK", "psikolog_id": 3}
+    assert sunucu_taklidi.postlar[0]["params"] == {"ucretli_mi": "true", "istisna_turu": "YOK", "yas_grubu": "YETISKIN",
+                                                   "terapi_turu": "BIREYSEL_TERAPI", "psikolog_id": 3}

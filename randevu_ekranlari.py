@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QCheckBox
 from datetime import datetime, timedelta
 
 from istemci_modelleri import IstemciRandevu
+from siniflandirma import (GORUSME_TIPLERI, gorusme_etiketi, terapi_etiketi, terapi_kutusunu_doldur)
 from iptal_nedeni_diyalog import IPTAL_NEDENLERI, IptalNedeniDialog
 from ui_components import StandartButon
 
@@ -350,6 +351,17 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.cmb_odalar = QComboBox()
         form_layout.addRow("Görüşme Odası:", self.cmb_odalar)
 
+        # Görüşme tipi (yüz yüze / online; online da oda ister) ve terapi türü (danışanın yaş grubuna göre)
+        self.cmb_gorusme = QComboBox()
+        for kod, etiket in GORUSME_TIPLERI:
+            self.cmb_gorusme.addItem(etiket, kod)
+        form_layout.addRow("Görüşme Tipi:", self.cmb_gorusme)
+        self.cmb_terapi = QComboBox()
+        form_layout.addRow("Terapi Türü:", self.cmb_terapi)
+        self._danisan_siniflari = {}
+        terapi_kutusunu_doldur(self.cmb_terapi, None, bos_metin="--- Önce danışan seçiniz ---")
+        self.cmb_danisan_kodu.currentIndexChanged.connect(self._terapiyi_danisana_gore_ayarla)
+
         self.dt_tarih = QDateEdit(siradaki_is_gunu(QDate.currentDate()))
         self.dt_tarih.setDisplayFormat("dd.MM.yyyy")
         self.dt_tarih.setCalendarPopup(True)
@@ -476,6 +488,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 for danisan in cevap.json():
                     kod = danisan.get("danisan_kod_id")
                     self.cmb_danisan_kodu.addItem(kod, kod)
+                    self._danisan_siniflari[kod] = (danisan.get("yas_grubu"), danisan.get("terapi_turu"))
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
 
@@ -483,6 +496,15 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             index = self.cmb_danisan_kodu.findData(onceki)
             if index >= 0:
                 self.cmb_danisan_kodu.setCurrentIndex(index)
+
+    def _terapiyi_danisana_gore_ayarla(self, *_):
+        """Terapi türü danışanın yaş grubundan gelir: yetişkinde otomatik bireysel terapi, çocukta seçilir."""
+        kod = self.cmb_danisan_kodu.currentData()
+        yas, terapi = self._danisan_siniflari.get(kod, (None, None))
+        terapi_kutusunu_doldur(
+            self.cmb_terapi, yas, secili=terapi, yas_bilinmiyor_secenekli=bool(kod),
+            bos_metin="--- Önce danışan seçiniz ---",
+        )
 
     def randevuyu_kaydet(self):
         if (
@@ -526,8 +548,11 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             "psikolog_id": int(secilen_psikolog_id),
             "oda_id": int(secilen_oda_id),
             "baslangic_zamani": baslangic_str,
-            "bitis_zamani": bitis_str
+            "bitis_zamani": bitis_str,
+            "gorusme_tipi": self.cmb_gorusme.currentData(),
         }
+        if self.cmb_terapi.currentData() is not None:
+            payload["terapi_turu"] = self.cmb_terapi.currentData()
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
@@ -569,6 +594,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         self.odalari_yukle()
         self.psikologlari_yukle()
         self.eski_verileri_arayuze_bas()
+        self._siniflari_doldur()
 
     def init_ui(self):
         self.setStyleSheet("""
@@ -623,6 +649,13 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 
         self.cmb_odalar = QComboBox()
         form_layout.addRow("Görüşme Odası:", self.cmb_odalar)
+
+        self.cmb_gorusme = QComboBox()
+        for kod, etiket in GORUSME_TIPLERI:
+            self.cmb_gorusme.addItem(etiket, kod)
+        form_layout.addRow("Görüşme Tipi:", self.cmb_gorusme)
+        self.cmb_terapi = QComboBox()
+        form_layout.addRow("Terapi Türü:", self.cmb_terapi)
 
         self.dt_tarih = QDateEdit()
         self.dt_tarih.setDisplayFormat("dd.MM.yyyy")
@@ -720,6 +753,15 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         if index >= 0:
             self.cmb_saat.setCurrentIndex(index)
 
+    def _siniflari_doldur(self):
+        """Görüşme tipi ve terapi türünü mevcut randevudan doldurur (yaş grubuna uygunluğu sunucu denetler)."""
+        gorusme = self.cmb_gorusme.findData(self.eski_veriler.get("gorusme_tipi") or "YUZ_YUZE")
+        if gorusme >= 0:
+            self.cmb_gorusme.setCurrentIndex(gorusme)
+        terapi_kutusunu_doldur(
+            self.cmb_terapi, None, secili=self.eski_veriler.get("terapi_turu"), yas_bilinmiyor_secenekli=True
+        )
+
     def randevuyu_guncelle(self):
         if (
             not getattr(self, "_doluluk_dogrulandi", False)
@@ -750,8 +792,11 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             "psikolog_id": self.cmb_psikologlar.currentData(),
             "oda_id": secilen_oda_id,
             "baslangic_zamani": f"{tarih_str}T{saat_str}:00",
-            "bitis_zamani": f"{tarih_str}T{saat_int + 1:02d}:00:00"
+            "bitis_zamani": f"{tarih_str}T{saat_int + 1:02d}:00:00",
+            "gorusme_tipi": self.cmb_gorusme.currentData(),
         }
+        if self.cmb_terapi.currentData() is not None:
+            guncel_veriler["terapi_turu"] = self.cmb_terapi.currentData()
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
@@ -798,7 +843,8 @@ DURUM_SECENEKLERI = [
     (None, "Tüm durumlar"), ("PLANLANDI", "Planlandı"), ("TAMAMLANDI", "Tamamlandı"),
     ("GELMEDI", "Gelmedi"), ("IPTAL_EDILDI", "İptal Edildi"),
 ]
-RANDEVU_TABLO_BASLIKLARI = ["Randevu ID", "Danışan Kodu", "Psikolog", "Oda", "Tarih", "Saat", "Durum"]
+RANDEVU_TABLO_BASLIKLARI = ["Randevu ID", "Danışan Kodu", "Psikolog", "Oda", "Tarih", "Saat", "Görüşme", "Terapi", "Durum"]
+DURUM_SUTUNU = RANDEVU_TABLO_BASLIKLARI.index("Durum")
 
 _TR_KATLA = str.maketrans("çğıöşü", "cgiosu")
 
@@ -993,6 +1039,10 @@ class RandevuAnaEkrani(QWidget):
         self.tablo.setColumnCount(len(RANDEVU_TABLO_BASLIKLARI))
         self.tablo.setHorizontalHeaderLabels(RANDEVU_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # Durum rozeti (▾ ile) kırpılmasın: sabit genişlik; kimlik sütunu içeriğe göre
+        self.tablo.horizontalHeader().setSectionResizeMode(DURUM_SUTUNU, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(DURUM_SUTUNU, 150)
+        self.tablo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tablo.verticalHeader().setVisible(False)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -1200,7 +1250,7 @@ class RandevuAnaEkrani(QWidget):
 
         # Qt eski hücre bileşenlerini hemen silmez; gizlemezsek yeni satırların arkasında eski rozetlerin hayaleti kalır.
         for satir in range(self.tablo.rowCount()):
-            eski = self.tablo.cellWidget(satir, 6)
+            eski = self.tablo.cellWidget(satir, DURUM_SUTUNU)
             if eski is not None:
                 eski.hide()
         self.tablo.setRowCount(0)
@@ -1215,13 +1265,15 @@ class RandevuAnaEkrani(QWidget):
 
             for sutun, oge in enumerate((kimlik, self._hucre(str(r.get("danisan_kod_id") or "")),
                                          self._hucre(psikolog), self._hucre(oda),
-                                         self._hucre(tarih), self._hucre(saat), durum_hucresi)):
+                                         self._hucre(tarih), self._hucre(saat),
+                                         self._hucre(gorusme_etiketi(r.get("gorusme_tipi"))),
+                                         self._hucre(terapi_etiketi(r.get("terapi_turu"), "-")), durum_hucresi)):
                 self.tablo.setItem(satir, sutun, oge)
             tiklanabilir = self.duzenleme_yetkisi and durum_isaretlenebilir(r, simdi)
             kap, rozet = self._durum_rozeti(r.get("durum"), tiklanabilir)
             if tiklanabilir:
                 rozet.tiklandi.connect(lambda r=r, rozet=rozet: self._durum_menusu_ac(r, rozet))
-            self.tablo.setCellWidget(satir, 6, kap)
+            self.tablo.setCellWidget(satir, DURUM_SUTUNU, kap)
             self.tablo.setRowHeight(satir, 40)
 
         self.lbl_sayac.setText(f"{len(liste)} / {len(self.randevular)} randevu")

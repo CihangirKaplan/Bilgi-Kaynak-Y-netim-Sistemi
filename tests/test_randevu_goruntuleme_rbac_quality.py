@@ -87,7 +87,7 @@ def test_quality_izni_olan_rol_danisan_kodu_olusturur():
     ]
 
     with patch("sunucu.psycopg2.connect", return_value=conn):
-        yanit = istek_at("post", "/api/danisan-kodlari")
+        yanit = istek_at("post", "/api/danisan-kodlari?yas_grubu=YETISKIN")
 
     assert yanit.status_code == 201
     assert yanit.json()["durum"] == "basarili"

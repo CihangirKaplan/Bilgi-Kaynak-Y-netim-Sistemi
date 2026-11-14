@@ -17,13 +17,22 @@ from sunucu import VT_AYARLARI
 # Danışan koduyla ilgili tabloların TÜM sütunları (başka sütun eklenirse test kırılır).
 IZINLI_SUTUNLAR = {
     "danisan_kodlari": {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
-                        "olusturan_psikolog_id"},
+                        "olusturan_psikolog_id", "yas_grubu", "terapi_turu"},
     "randevular": {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
-                   "durum", "olusturulma_tarihi", "iptal_nedeni", "iptal_notu"},
+                   "durum", "olusturulma_tarihi", "iptal_nedeni", "iptal_notu", "gorusme_tipi", "terapi_turu"},
 }
 # FR-008 İSTİSNASI (PR2): iptal notu, danışan kodlu tabloda bilinçli olarak açılmış TEK kısa serbest metin alanıdır.
 # En çok 100 karakter; arayüz "kişisel bilgi yazmayın" uyarısı verir. Başka bir sütun bu listeye ancak bilerek eklenir.
 KISA_SERBEST_METIN_ISTISNALARI = {("randevular", "iptal_notu"): 100}
+# FR-008 İSTİSNASI (görüşme/terapi): kapalı listeli (serbest metin OLMAYAN) sütunlar ve izinli değerleri. Veritabanında CHECK
+# kısıtıyla sınırlıdır (bkz. test_kapali_liste_sutunlari_check_kisitlidir). "terapi" sözcüğü klinik terim sayıldığı için
+# terapi_turu bu listedeki sütunlar adı üzerinden denetimden muaftır; başka bir sütun buraya ancak bilerek eklenir.
+KAPALI_LISTE_SUTUNLARI = {
+    ("danisan_kodlari", "yas_grubu"): {"COCUK", "YETISKIN"},
+    ("danisan_kodlari", "terapi_turu"): {"OYUN_TERAPISI", "BIREYSEL_TERAPI"},
+    ("randevular", "gorusme_tipi"): {"YUZ_YUZE", "ONLINE"},
+    ("randevular", "terapi_turu"): {"OYUN_TERAPISI", "BIREYSEL_TERAPI"},
+}
 # Danışan koduna başvuran tek tablo randevudur.
 DANISAN_KODUNA_BASVURANLAR = {"randevular"}
 
@@ -76,7 +85,7 @@ def test_izinli_sutunlarin_hicbiri_kisisel_veri_adi_tasimaz():
     """İzinli liste yanlışlıkla kişisel bir sütunla genişletilirse yakalanır."""
     for tablo, sutunlar in IZINLI_SUTUNLAR.items():
         for sutun in sutunlar:
-            if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI:
+            if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI or (tablo, sutun) in KAPALI_LISTE_SUTUNLARI:
                 continue
             parcalar = set(sutun.split("_"))
             assert not (parcalar & KISISEL_PARCALAR), f"{tablo}.{sutun} kişisel veri gibi görünüyor"
@@ -160,7 +169,7 @@ def test_hicbir_tabloda_danisan_koduyla_birlikte_kisisel_sutun_yok():
             for tablo in tablolar:
                 for (sutun,) in _sorgu(cursor, "SELECT column_name FROM information_schema.columns "
                                                "WHERE table_schema = 'public' AND table_name = %s", (tablo,)):
-                    if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI:
+                    if (tablo, sutun) in KISA_SERBEST_METIN_ISTISNALARI or (tablo, sutun) in KAPALI_LISTE_SUTUNLARI:
                         continue
                     assert not (set(re.split(r"_", sutun)) & KISISEL_PARCALAR), f"{tablo}.{sutun}"
     finally:
@@ -178,5 +187,21 @@ def test_serbest_metin_istisnasi_yalnizca_iptal_notu_ve_siniri_ayni():
                 cursor, "SELECT character_maximum_length FROM information_schema.columns "
                         "WHERE table_schema = 'public' AND table_name = 'randevular' AND column_name = 'iptal_notu'")[0]
             assert uzunluk == 100
+    finally:
+        conn.close()
+
+
+def test_kapali_liste_sutunlari_check_kisitlidir():
+    """Kapalı liste istisnası yalnızca veritabanında CHECK kısıtıyla sınırlı sütunlar için geçerlidir (serbest metin girilemez)."""
+    conn = _baglan()
+    try:
+        with conn.cursor() as cursor:
+            _dogru_veritabani(cursor)
+            for (tablo, sutun), degerler in KAPALI_LISTE_SUTUNLARI.items():
+                tanimlar = [r[0] for r in _sorgu(
+                    cursor, "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE contype = 'c' AND conrelid = %s::regclass", (tablo,))]
+                uygun = [t for t in tanimlar if sutun in t and all(f"'{d}'" in t for d in degerler)]
+                assert uygun, f"{tablo}.{sutun} için izinli değerleri sınırlayan CHECK kısıtı bulunamadı"
     finally:
         conn.close()
