@@ -2845,7 +2845,8 @@ def danisan_bilgilerini_guncelle(
 ):
     """Danışanın yaş grubunu günceller (kapalı liste; serbest metin yoktur). Terapi türü randevuda tutulur.
 
-    Psikolog yalnızca kendi danışanını güncelleyebilir. Önceki randevuların terapi türü değişmez (geçmiş korunur).
+    Psikolog yalnızca kendi danışanını güncelleyebilir. Geçmiş randevuların terapi türü değişmez; yetişkin olarak kaydedilince
+    gelecekteki planlı randevulardaki oyun terapisi bireysel terapiye çevrilir.
     """
     conn = None
     cursor = None
@@ -2871,8 +2872,21 @@ def danisan_bilgilerini_guncelle(
             (bilgi.yas_grubu, danisan_kod_id),
         )
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
+        guncellenen = 0
+        if bilgi.yas_grubu == "YETISKIN":
+            # Yetişkinde oyun terapisi yoktur: GELECEKTEKİ planlı randevular bireysel terapiye çevrilir.
+            # Geçmiş (tamamlanan, gelmedi, iptal) randevular seansta yapılanın kaydı olduğu için değişmez.
+            cursor.execute(
+                "UPDATE randevular SET terapi_turu = 'BIREYSEL_TERAPI' WHERE danisan_kod_id = %s AND durum = 'PLANLANDI' "
+                "AND baslangic_zamani > NOW() AND terapi_turu = 'OYUN_TERAPISI';",
+                (danisan_kod_id,),
+            )
+            guncellenen = cursor.rowcount if isinstance(cursor.rowcount, int) and cursor.rowcount > 0 else 0
+            if guncellenen:
+                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "randevular"))
         conn.commit()
-        return {"durum": "basarili", "yas_grubu": bilgi.yas_grubu, "mesaj": "Danışan bilgileri güncellendi."}
+        return {"durum": "basarili", "yas_grubu": bilgi.yas_grubu, "guncellenen_randevu_sayisi": guncellenen,
+                "mesaj": "Danışan bilgileri güncellendi."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

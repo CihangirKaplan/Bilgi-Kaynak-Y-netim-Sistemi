@@ -513,6 +513,87 @@ def test_duzenleme_formunda_terapi_secenekleri_danisanin_yas_grubuna_gore_ve_bas
     cocuk.close()
 
 
+def test_yetiskin_yapilinca_gelecekteki_planli_oyun_randevulari_guncellenir(istemci):
+    def calistir(yas):
+        yanit, _, conn = _bilgi(istemci, {"yas_grubu": yas})
+        sorgular = [x.args[0] for x in conn.cursor.return_value.execute.call_args_list]
+        return yanit, [s for s in sorgular if s.startswith("UPDATE randevular")]
+    yanit, guncellemeler = calistir("YETISKIN")
+    assert yanit.status_code == 200 and yanit.json()["guncellenen_randevu_sayisi"] == 0       # sahte imleçte satır sayısı yok
+    assert len(guncellemeler) == 1
+    for kosul in ("durum = 'PLANLANDI'", "baslangic_zamani > NOW()", "terapi_turu = 'OYUN_TERAPISI'"):
+        assert kosul in guncellemeler[0]                                                      # geçmiş randevulara dokunmaz
+    assert calistir("COCUK")[1] == []                                                         # çocuk yapılınca randevulara dokunulmaz
+
+
+def test_bilgi_penceresi_yetiskin_secilince_planli_randevulari_icin_onay_ister(qt_app):
+    sunucu = Sunucu()
+    AKTIF["s"] = sunucu
+    p = DanisanBilgiDialog("http://x", "T", DANISANLAR[1], planli_oyun_randevu_sayisi=2)
+    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question", return_value=QMessageBox.No) as soru:
+        p.kaydet()
+    assert "2 planlı randevusunun" in soru.call_args.args[2] and not any(y == "PATCH" for y, _ in sunucu.istekler)
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question", return_value=QMessageBox.Yes), patch.object(p, "accept"):
+        p.kaydet()
+    assert any(y == "PATCH" for y, _ in sunucu.istekler)
+    p2 = DanisanBilgiDialog("http://x", "T", DANISANLAR[1], planli_oyun_randevu_sayisi=0)       # planlı randevu yoksa soru çıkmaz
+    p2.cmb_yas.setCurrentIndex(p2.cmb_yas.findData("YETISKIN"))
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question") as soru2, patch.object(p2, "accept"):
+        p2.kaydet()
+    soru2.assert_not_called()
+
+
+def test_danisanlar_sayfasi_bilgi_penceresine_planli_gelecek_oyun_randevu_sayisini_verir(qt_app):
+    gelecek = (datetime.now() + timedelta(days=5)).isoformat()
+    gecmis = (datetime.now() - timedelta(days=5)).isoformat()
+    kayit = lambda no, bas, durum, terapi: {"randevu_id": no, "danisan_kod_id": "DAN-2026-0002", "psikolog_id": 3, "oda_id": 2,
+                                           "durum": durum, "baslangic_zamani": bas, "bitis_zamani": bas, "terapi_turu": terapi}
+    AKTIF["s"] = Sunucu([kayit(1, gelecek, "PLANLANDI", "OYUN_TERAPISI"), kayit(2, gecmis, "TAMAMLANDI", "OYUN_TERAPISI"),
+                         kayit(3, gelecek, "PLANLANDI", "BIREYSEL_TERAPI")])
+    ekran = dmodul.DanisanlarEkrani("http://x", "T", 11)
+    satir = {ekran.tablo.item(i, 0).text(): i for i in range(ekran.tablo.rowCount())}
+    ekran.tablo.selectRow(satir["DAN-2026-0002"])
+    sahte = MagicMock()
+    sahte.exec.return_value = dmodul.QDialog.Rejected
+    with patch.object(dmodul, "DanisanBilgiDialog", return_value=sahte) as sinif:
+        ekran.btn_bilgi_duzenle.click()
+    assert sinif.call_args.kwargs["planli_oyun_randevu_sayisi"] == 1
+    ekran.close()
+
+
+def test_arama_tabloda_gorunen_tum_sutunlari_kapsar_yeni_sutun_otomatik_aranabilir(qt_app):
+    # Satır metinleri tabloyla aynı kaynaktan gelir; sütun sayısı başlıklarla eşleşmek zorundadır.
+    r = {"randevu_id": 5, "danisan_kod_id": "DAN-2026-0002", "psikolog_id": 3, "oda_id": 2, "durum": "TAMAMLANDI",
+         "baslangic_zamani": "2026-12-07T10:00:00", "bitis_zamani": "2026-12-07T11:00:00", "gorusme_tipi": "ONLINE", "terapi_turu": "OYUN_TERAPISI"}
+    metinler = rmodul.randevu_satir_metinleri(r, {3: "Ayşe"}, {2: "Oda-2"})
+    assert len(metinler) == len(rmodul.RANDEVU_TABLO_BASLIKLARI)
+    for aranan in ("online", "oyun terapisi", "07.12.2026", "10:00", "tamamlandi", "ayse", "oda-2", "0002", "5"):
+        assert rmodul.randevulari_filtrele([r], {3: "Ayşe"}, {2: "Oda-2"}, arama=aranan) == [r], aranan
+    assert rmodul.randevulari_filtrele([r], {3: "Ayşe"}, {2: "Oda-2"}, arama="bireysel") == []
+    d = DANISANLAR[1]
+    assert len(dmodul.danisan_satir_metinleri(d, "Ayşe", 3)) == len(dmodul.DANISAN_TABLO_BASLIKLARI)
+    for aranan, beklenen in (("cocuk", 1), ("ucretli", 3), ("aktif", 3), ("0002", 1), ("belirtilmedi", 1)):
+        assert len(dmodul.danisanlari_filtrele(DANISANLAR, {3: "Ayşe"}, aranan)) == beklenen, aranan
+
+
+def test_randevu_formu_uyari_kapaninca_pencere_kucuk_boyuta_doner(qt_app):
+    AKTIF["s"] = Sunucu()
+    eski = {"danisan_kod_id": "DAN-2026-0001", "psikolog_id": 3, "oda_id": 2, "durum": "PLANLANDI", "gorusme_tipi": "YUZ_YUZE",
+            "baslangic_zamani": "2026-12-07T10:00:00", "bitis_zamani": "2026-12-07T11:00:00", "terapi_turu": "BIREYSEL_TERAPI"}
+    form = RandevuDuzenleFormu("http://x", "T", 11, 7, eski)
+    form.show()
+    isle()
+    form._doluluk_zamanlayici.stop()                                                          # bekleyen otomatik doğrulama karışmasın
+    form._doluluk_durumunu_ayarla(False, "Saat uygunluğu henüz doğrulanmadı.")
+    isle()
+    yuksek, genislik = form.height(), form.width()
+    form._doluluk_durumunu_ayarla(True)
+    isle()
+    assert form.height() < yuksek and form.height() <= form.sizeHint().height() + 2 and form.width() == genislik
+    form.close()
+
+
 # ------------------------------------------------------------------ Randevu Yönetimi tablosu
 def test_randevu_tablosu_gorusme_ve_terapi_sutunlari(qt_app):
     simdi = datetime.now()

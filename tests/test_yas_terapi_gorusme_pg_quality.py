@@ -179,11 +179,20 @@ def test_uclar_gercek_veritabaninda(gercek_kayitlar):
     assert istemci.patch(f"/api/danisan-kodlari/T-{etiket}-ESKI/bilgiler", json={"yas_grubu": "YETISKIN"}).status_code == 200
     c.execute("SELECT yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s", (f"T-{etiket}-ESKI",))
     assert c.fetchone() == ("YETISKIN",)
-    assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN"}).status_code == 200
+    gecmis = datetime(2020, 1, 6, 10, 0)
+    c.execute("INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, terapi_turu) "
+              "VALUES (%s, %s, %s, %s, %s, 'TAMAMLANDI', 'OYUN_TERAPISI') RETURNING randevu_id",
+              (cocuk, pid, oda, gecmis, gecmis + timedelta(hours=1)))
+    gecmis_id = c.fetchone()[0]
+    yanit = istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN"})
+    assert yanit.status_code == 200 and yanit.json()["guncellenen_randevu_sayisi"] == 1
     c.execute("SELECT terapi_turu FROM randevular WHERE randevu_id = %s", (rid,))
-    assert c.fetchone() == ("OYUN_TERAPISI",)
+    assert c.fetchone() == ("BIREYSEL_TERAPI",)                                                  # gelecekteki planlı randevu çevrildi
+    c.execute("SELECT terapi_turu FROM randevular WHERE randevu_id = %s", (gecmis_id,))
+    assert c.fetchone() == ("OYUN_TERAPISI",)                                                    # geçmiş randevu değişmedi
+    assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN"}).json()["guncellenen_randevu_sayisi"] == 0
     assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN", "terapi_turu": "OYUN_TERAPISI"}).status_code == 422
 
     # randevu listesi yeni alanları döndürür
     kayit = {k["randevu_id"]: k for k in istemci.get("/api/randevular").json()}
-    assert (kayit[rid]["gorusme_tipi"], kayit[rid]["terapi_turu"]) == ("YUZ_YUZE", "OYUN_TERAPISI")
+    assert (kayit[rid]["gorusme_tipi"], kayit[rid]["terapi_turu"]) == ("YUZ_YUZE", "BIREYSEL_TERAPI")
