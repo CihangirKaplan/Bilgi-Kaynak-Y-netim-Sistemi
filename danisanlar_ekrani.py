@@ -72,15 +72,33 @@ def danisan_ozeti(randevular, simdi):
     }
 
 
-def danisanlari_filtrele(danisanlar, psikolog_adlari, arama=""):
-    """Arama: danışan kodu ve oluşturan psikolog (Türkçe karakter ve büyük/küçük harf duyarsız)."""
+def danisan_satir_metinleri(danisan, psikolog_adi, randevu_sayisi):
+    """Tablodaki bir satırın görünen metinleri, sütun sırasıyla (DANISAN_TABLO_BASLIKLARI).
+
+    Tablo bu metinlerle çizilir ve arama bu metinler üzerinden yapılır: yeni bir sütun buraya eklenince aranabilir olur.
+    """
+    return (
+        str(danisan.get("danisan_kod_id") or ""),
+        psikolog_adi,
+        yas_etiketi(danisan.get("yas_grubu")),
+        "Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz",
+        str(randevu_sayisi),
+        "Aktif" if danisan.get("aktif_mi", True) else "Pasif",
+    )
+
+
+def danisanlari_filtrele(danisanlar, psikolog_adlari, arama="", randevu_sayilari=None):
+    """Arama: tabloda görünen tüm sütunlar (Türkçe karakter ve büyük/küçük harf duyarsız)."""
     aranan = ara_normalle(arama).strip()
     if not aranan:
         return list(danisanlar)
+    sayilar = randevu_sayilari or {}
     sonuc = []
     for danisan in danisanlar:
-        metin = f"{danisan.get('danisan_kod_id', '')} {psikolog_adlari.get(danisan.get('olusturan_psikolog_id'), '')}"
-        if aranan in ara_normalle(metin):
+        psikolog_id = danisan.get("olusturan_psikolog_id")
+        psikolog = psikolog_adlari.get(psikolog_id, f"Psikolog #{psikolog_id}" if psikolog_id is not None else "-")
+        metinler = danisan_satir_metinleri(danisan, psikolog, sayilar.get(danisan.get("danisan_kod_id"), 0))
+        if aranan in ara_normalle(" ".join(m for m in metinler if m != "-")):
             sonuc.append(danisan)
     return sonuc
 
@@ -171,7 +189,7 @@ class DanisanlarEkrani(QWidget):
         self.cmb_psikolog.currentIndexChanged.connect(self._psikolog_degisti)
 
         self.arama = QLineEdit()
-        self.arama.setPlaceholderText("Ara: danışan kodu, psikolog...")
+        self.arama.setPlaceholderText("Ara: kod, psikolog, yaş grubu, durum...")
         self.arama.setClearButtonEnabled(True)
         self.arama.setMinimumWidth(160)
         self.arama.textChanged.connect(self.tabloyu_guncelle)
@@ -503,24 +521,19 @@ class DanisanlarEkrani(QWidget):
 
     def tabloyu_guncelle(self, *_):
         onceki = (self.secili_danisan() or {}).get("danisan_kod_id")
-        liste = danisanlari_filtrele(self.danisanlar, self.psikolog_adlari, self.arama.text())
+        liste = danisanlari_filtrele(self.danisanlar, self.psikolog_adlari, self.arama.text(),
+                                     {k: len(v) for k, v in self.randevu_gruplari.items()})
 
         self.tablo.blockSignals(True)
         self.tablo.setRowCount(0)
         self.tablo.setRowCount(len(liste))
         for satir, danisan in enumerate(liste):
             kod = danisan.get("danisan_kod_id")
-            kod_hucresi = self._hucre(str(kod))
-            kod_hucresi.setData(Qt.UserRole, danisan)
             randevu_sayisi = len(self.randevu_gruplari.get(kod, []))
-            hucreler = (
-                kod_hucresi,
-                self._hucre(self._psikolog_adi(danisan.get("olusturan_psikolog_id"))),
-                self._hucre(yas_etiketi(danisan.get("yas_grubu"))),
-                self._hucre("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz"),
-                self._hucre(str(randevu_sayisi)),
-                self._hucre("Aktif" if danisan.get("aktif_mi", True) else "Pasif"),
-            )
+            metinler = danisan_satir_metinleri(danisan, self._psikolog_adi(danisan.get("olusturan_psikolog_id")), randevu_sayisi)
+            kod_hucresi = self._hucre(metinler[0])
+            kod_hucresi.setData(Qt.UserRole, danisan)
+            hucreler = (kod_hucresi, *(self._hucre(m) for m in metinler[1:]))
             for sutun, oge in enumerate(hucreler):
                 if not danisan.get("aktif_mi", True):
                     oge.setForeground(QColor("#94A3B8"))     # pasif danışanlar sönük görünür
@@ -552,7 +565,13 @@ class DanisanlarEkrani(QWidget):
         danisan = self.secili_danisan()
         if danisan is None:
             return
-        pencere = DanisanBilgiDialog(self.api_url, self.token, danisan, self)
+        simdi = datetime.now()
+        planli_oyun = sum(
+            1 for r in self.randevu_gruplari.get(danisan.get("danisan_kod_id"), [])
+            if r.get("durum") == "PLANLANDI" and r.get("terapi_turu") == "OYUN_TERAPISI"
+            and (randevu_zamani(r.get("baslangic_zamani")) or simdi) > simdi
+        )
+        pencere = DanisanBilgiDialog(self.api_url, self.token, danisan, self, planli_oyun_randevu_sayisi=planli_oyun)
         if pencere.exec() == QDialog.Accepted:
             self.verileri_cek()
 

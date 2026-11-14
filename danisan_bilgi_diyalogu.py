@@ -9,8 +9,9 @@ from siniflandirma import YAS_GRUPLARI
 class DanisanBilgiDialog(QDialog):
     """Seçili danışanın yaş grubunu günceller (eski danışanlar "Belirtilmedi" ile başlar)."""
 
-    def __init__(self, api_url, token, danisan, ebeveyn=None):
+    def __init__(self, api_url, token, danisan, ebeveyn=None, planli_oyun_randevu_sayisi=0):
         super().__init__(ebeveyn)
+        self.planli_oyun_randevu_sayisi = planli_oyun_randevu_sayisi
         self.api_url = api_url.rstrip("/")
         self.token = token
         self.danisan_kodu = danisan.get("danisan_kod_id")
@@ -71,6 +72,11 @@ class DanisanBilgiDialog(QDialog):
         if yas is None:
             QMessageBox.warning(self, "Yaş Grubu Seçilmedi", "Lütfen danışanın yaş grubunu seçin.")
             return
+        if yas == "YETISKIN" and self.planli_oyun_randevu_sayisi:
+            soru = (f"Bu danışanın {self.planli_oyun_randevu_sayisi} planlı randevusunun terapi türü Oyun terapisinden "
+                    "Bireysel terapiye çevrilecek.\n\nGeçmiş randevular değişmez. Devam edilsin mi?")
+            if QMessageBox.question(self, "Onay", soru, QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                return
         self.btn_kaydet.setEnabled(False)
         try:
             cevap = oturum_kontrollu_istek(

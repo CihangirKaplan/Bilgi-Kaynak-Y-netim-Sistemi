@@ -126,6 +126,9 @@ class DolulukGosterimi:
 
         self.lbl_doluluk_hatasi.setText(mesaj)
         self.lbl_doluluk_hatasi.setVisible(bool(mesaj))
+        if self.isVisible():
+            # Uyarı satırı kapanınca pencere eski (büyük) boyutta kalıp düğmenin üstünde boşluk bırakmasın.
+            QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
 
     def _form_hata_durumu(self, kaynak, mesaj=None):
         if mesaj:
@@ -917,9 +920,28 @@ def siralama_anahtari(randevu, simdi):
     return (1, -bas.timestamp())
 
 
+def randevu_satir_metinleri(r, psikolog_adlari, oda_adlari):
+    """Tablodaki bir satırın görünen metinleri, sütun sırasıyla (RANDEVU_TABLO_BASLIKLARI).
+
+    Tablo bu metinlerle çizilir ve arama bu metinler üzerinden yapılır: yeni bir sütun buraya eklenince aranabilir olur.
+    """
+    tarih, saat = tarih_saat_metinleri(r.get("baslangic_zamani"), r.get("bitis_zamani"))
+    return (
+        str(r.get("randevu_id", "")),
+        str(r.get("danisan_kod_id") or ""),
+        psikolog_adlari.get(r.get("psikolog_id"), f"Psikolog #{r.get('psikolog_id')}"),
+        oda_adlari.get(r.get("oda_id"), f"Oda #{r.get('oda_id')}"),
+        tarih,
+        saat,
+        gorusme_etiketi(r.get("gorusme_tipi")),
+        terapi_etiketi(r.get("terapi_turu"), "-"),
+        DURUM_ETIKETLERI.get(r.get("durum"), str(r.get("durum") or "")),
+    )
+
+
 def randevulari_filtrele(randevular, psikolog_adlari, oda_adlari, arama="", aralik=None,
                          durum=None, iptalleri_gizle=False):
-    """Arama (ID, danışan kodu, psikolog, oda), tarih aralığı (başlangıç günü) ve durum filtresi.
+    """Arama (tabloda görünen tüm sütunlar), tarih aralığı (başlangıç günü) ve durum filtresi.
 
     Durum açıkça seçilmişse iptal gizleme dikkate alınmaz (İptal Edildi seçilince iptaller görünür).
     """
@@ -937,10 +959,7 @@ def randevulari_filtrele(randevular, psikolog_adlari, oda_adlari, arama="", aral
             if bas is None or not (aralik[0] <= bas.date() <= aralik[1]):
                 continue
         if aranan:
-            metin = " ".join(str(x) for x in (
-                r.get("randevu_id"), r.get("danisan_kod_id"),
-                psikolog_adlari.get(r.get("psikolog_id"), ""), oda_adlari.get(r.get("oda_id"), ""),
-            ))
+            metin = " ".join(m for m in randevu_satir_metinleri(r, psikolog_adlari, oda_adlari) if m != "-")
             if aranan not in ara_normalle(metin):
                 continue
         sonuc.append(r)
@@ -1104,7 +1123,7 @@ class RandevuAnaEkrani(QWidget):
         alt.setSpacing(8)
 
         self.arama = QLineEdit()
-        self.arama.setPlaceholderText("Ara: danışan kodu, psikolog, oda...")
+        self.arama.setPlaceholderText("Ara: danışan kodu, psikolog, oda, tarih, terapi, durum...")
         self.arama.setClearButtonEnabled(True)
         self.arama.setMinimumWidth(200)
         self.arama.textChanged.connect(self.tabloyu_guncelle)
@@ -1276,19 +1295,12 @@ class RandevuAnaEkrani(QWidget):
         self.tablo.setRowCount(0)
         self.tablo.setRowCount(len(liste))
         for satir, r in enumerate(liste):
-            tarih, saat = tarih_saat_metinleri(r.get("baslangic_zamani"), r.get("bitis_zamani"))
-            kimlik = self._hucre(str(r.get("randevu_id", "")))
-            kimlik.setData(Qt.UserRole, r)  # düzenleme ve iptal bu kayıttan okur, sütun sırasına bağlı değildir
-            psikolog = self.psikolog_adlari.get(r.get("psikolog_id"), f"Psikolog #{r.get('psikolog_id')}")
-            oda = self.oda_adlari.get(r.get("oda_id"), f"Oda #{r.get('oda_id')}")
-            durum_hucresi = self._hucre("")
-
-            for sutun, oge in enumerate((kimlik, self._hucre(str(r.get("danisan_kod_id") or "")),
-                                         self._hucre(psikolog), self._hucre(oda),
-                                         self._hucre(tarih), self._hucre(saat),
-                                         self._hucre(gorusme_etiketi(r.get("gorusme_tipi"))),
-                                         self._hucre(terapi_etiketi(r.get("terapi_turu"), "-")), durum_hucresi)):
+            metinler = randevu_satir_metinleri(r, self.psikolog_adlari, self.oda_adlari)
+            hucreler = [self._hucre(m) for m in metinler[:DURUM_SUTUNU]]
+            hucreler[0].setData(Qt.UserRole, r)  # düzenleme ve iptal bu kayıttan okur, sütun sırasına bağlı değildir
+            for sutun, oge in enumerate(hucreler):
                 self.tablo.setItem(satir, sutun, oge)
+            self.tablo.setItem(satir, DURUM_SUTUNU, self._hucre(""))   # durum rozeti hücre bileşeni olarak aşağıda konur
             tiklanabilir = self.duzenleme_yetkisi and durum_isaretlenebilir(r, simdi)
             kap, rozet = self._durum_rozeti(r.get("durum"), tiklanabilir)
             if tiklanabilir:
