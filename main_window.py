@@ -877,6 +877,10 @@ QLabel {
         sag_l.addWidget(self.stack, 1)
         ana.addWidget(sag, 1)
 
+        # Açılan ikinci pencereler (form, uyarı, iletişim kutusu) sağ içerik alanının ortasında açılır.
+        from pencere_konumu import ana_pencereyi_tanit
+        ana_pencereyi_tanit(self, lambda: self.stack)
+
         self.nav_grup = QButtonGroup(self)
         self.nav_grup.setExclusive(True)
         self.sayfa_bilgi = []

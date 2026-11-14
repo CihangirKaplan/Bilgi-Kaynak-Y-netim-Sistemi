@@ -7,7 +7,7 @@ Kural: yetişkinde terapi türü yalnızca bireysel terapidir (otomatik); çocuk
 
 YAS_GRUPLARI = [("COCUK", "Çocuk"), ("YETISKIN", "Yetişkin")]
 TERAPI_TURLERI = [("OYUN_TERAPISI", "Oyun terapisi"), ("BIREYSEL_TERAPI", "Bireysel terapi")]
-GORUSME_TIPLERI = [("YUZ_YUZE", "Yüz yüze"), ("ONLINE", "Online")]
+GORUSME_TIPLERI = [("YUZ_YUZE", "Yüz yüze"), ("ONLINE", "Çevrimiçi")]
 
 YAS_ETIKETLERI = dict(YAS_GRUPLARI)
 TERAPI_ETIKETLERI = dict(TERAPI_TURLERI)

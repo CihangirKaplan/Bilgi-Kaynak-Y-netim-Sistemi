@@ -332,7 +332,7 @@ def test_etiketler():
     assert siniflandirma.yas_etiketi("COCUK") == "Çocuk" and siniflandirma.yas_etiketi(None) == "Belirtilmedi"
     assert siniflandirma.terapi_etiketi("OYUN_TERAPISI") == "Oyun terapisi" and siniflandirma.terapi_etiketi(None) == "Belirtilmedi"
     assert siniflandirma.terapi_etiketi(None, "-") == "-"
-    assert siniflandirma.gorusme_etiketi("ONLINE") == "Online" and siniflandirma.gorusme_etiketi(None) == "Yüz yüze"
+    assert siniflandirma.gorusme_etiketi("ONLINE") == "Çevrimiçi" and siniflandirma.gorusme_etiketi(None) == "Yüz yüze"
 
 
 # ------------------------------------------------------------------ Yeni Danışan penceresi
@@ -361,8 +361,9 @@ def test_bilgi_penceresi_mevcut_degerle_acilir_ve_yalnizca_yas_grubunu_kaydeder(
     p = DanisanBilgiDialog("http://x", "T", DANISANLAR[1])
     assert p.cmb_yas.currentData() == "COCUK" and not hasattr(p, "cmb_terapi")
     p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
-    with patch.object(p, "accept") as kabul:
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question", return_value=QMessageBox.Yes) as soru, patch.object(p, "accept") as kabul:
         p.kaydet()
+    assert "Çocuk yerine Yetişkin" in soru.call_args.args[2] and "Emin misiniz" in soru.call_args.args[2]   # yaş grubu geçişinde onay
     assert ("PATCH", "http://x/api/danisan-kodlari/DAN-2026-0002/bilgiler") in sunucu.istekler
     assert sunucu.govdeler == [{"yas_grubu": "YETISKIN"}]
     kabul.assert_called_once()
@@ -537,11 +538,15 @@ def test_bilgi_penceresi_yetiskin_secilince_planli_randevulari_icin_onay_ister(q
     with patch("danisan_bilgi_diyalogu.QMessageBox.question", return_value=QMessageBox.Yes), patch.object(p, "accept"):
         p.kaydet()
     assert any(y == "PATCH" for y, _ in sunucu.istekler)
-    p2 = DanisanBilgiDialog("http://x", "T", DANISANLAR[1], planli_oyun_randevu_sayisi=0)       # planlı randevu yoksa soru çıkmaz
+    p2 = DanisanBilgiDialog("http://x", "T", DANISANLAR[1], planli_oyun_randevu_sayisi=0)       # planlı randevu yoksa yalnızca geçiş sorulur
     p2.cmb_yas.setCurrentIndex(p2.cmb_yas.findData("YETISKIN"))
-    with patch("danisan_bilgi_diyalogu.QMessageBox.question") as soru2, patch.object(p2, "accept"):
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question", return_value=QMessageBox.Yes) as soru2, patch.object(p2, "accept"):
         p2.kaydet()
-    soru2.assert_not_called()
+    assert "planlı randevusunun" not in soru2.call_args.args[2] and "Emin misiniz" in soru2.call_args.args[2]
+    p3 = DanisanBilgiDialog("http://x", "T", DANISANLAR[1])                                      # yaş grubu değişmiyorsa soru çıkmaz
+    with patch("danisan_bilgi_diyalogu.QMessageBox.question") as soru3, patch.object(p3, "accept"):
+        p3.kaydet()
+    soru3.assert_not_called()
 
 
 def test_danisanlar_sayfasi_bilgi_penceresine_planli_gelecek_oyun_randevu_sayisini_verir(qt_app):
@@ -568,7 +573,7 @@ def test_arama_tabloda_gorunen_tum_sutunlari_kapsar_yeni_sutun_otomatik_aranabil
          "baslangic_zamani": "2026-12-07T10:00:00", "bitis_zamani": "2026-12-07T11:00:00", "gorusme_tipi": "ONLINE", "terapi_turu": "OYUN_TERAPISI"}
     metinler = rmodul.randevu_satir_metinleri(r, {3: "Ayşe"}, {2: "Oda-2"})
     assert len(metinler) == len(rmodul.RANDEVU_TABLO_BASLIKLARI)
-    for aranan in ("online", "oyun terapisi", "07.12.2026", "10:00", "tamamlandi", "ayse", "oda-2", "0002", "5"):
+    for aranan in ("cevrimici", "oyun terapisi", "07.12.2026", "10:00", "tamamlandi", "ayse", "oda-2", "0002", "5"):
         assert rmodul.randevulari_filtrele([r], {3: "Ayşe"}, {2: "Oda-2"}, arama=aranan) == [r], aranan
     assert rmodul.randevulari_filtrele([r], {3: "Ayşe"}, {2: "Oda-2"}, arama="bireysel") == []
     d = DANISANLAR[1]
@@ -608,6 +613,6 @@ def test_randevu_tablosu_gorusme_ve_terapi_sutunlari(qt_app):
     t = ekran.tablo
     assert [t.horizontalHeaderItem(i).text() for i in (6, 7, 8)] == ["Görüşme", "Terapi", "Durum"]
     satir = {t.item(i, 0).text(): i for i in range(t.rowCount())}
-    assert [t.item(satir["1"], c).text() for c in (6, 7)] == ["Online", "Oyun terapisi"]
+    assert [t.item(satir["1"], c).text() for c in (6, 7)] == ["Çevrimiçi", "Oyun terapisi"]
     assert [t.item(satir["2"], c).text() for c in (6, 7)] == ["Yüz yüze", "-"]
     ekran.close()

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLay
                                QVBoxLayout)
 
 from api_yoneticisi import api_hata_mesaji, oturum_hatasi_mi, oturum_kontrollu_istek
-from siniflandirma import YAS_GRUPLARI
+from siniflandirma import YAS_GRUPLARI, yas_etiketi
 
 
 class DanisanBilgiDialog(QDialog):
@@ -12,6 +12,7 @@ class DanisanBilgiDialog(QDialog):
     def __init__(self, api_url, token, danisan, ebeveyn=None, planli_oyun_randevu_sayisi=0):
         super().__init__(ebeveyn)
         self.planli_oyun_randevu_sayisi = planli_oyun_randevu_sayisi
+        self.mevcut_yas = danisan.get("yas_grubu")
         self.api_url = api_url.rstrip("/")
         self.token = token
         self.danisan_kodu = danisan.get("danisan_kod_id")
@@ -72,9 +73,14 @@ class DanisanBilgiDialog(QDialog):
         if yas is None:
             QMessageBox.warning(self, "Yaş Grubu Seçilmedi", "Lütfen danışanın yaş grubunu seçin.")
             return
+        satirlar = []
+        if self.mevcut_yas is not None and self.mevcut_yas != yas:
+            satirlar.append(f"Yaş grubu {yas_etiketi(self.mevcut_yas)} yerine {yas_etiketi(yas)} olarak değiştirilecek.")
         if yas == "YETISKIN" and self.planli_oyun_randevu_sayisi:
-            soru = (f"Bu danışanın {self.planli_oyun_randevu_sayisi} planlı randevusunun terapi türü Oyun terapisinden "
-                    "Bireysel terapiye çevrilecek.\n\nGeçmiş randevular değişmez. Devam edilsin mi?")
+            satirlar.append(f"Bu danışanın {self.planli_oyun_randevu_sayisi} planlı randevusunun terapi türü Oyun terapisinden "
+                            "Bireysel terapiye çevrilecek. Geçmiş randevular değişmez.")
+        if satirlar:                                  # yaş grubu geçişi ya da randevu etkisi varsa emin misiniz diye sorulur
+            soru = "\n\n".join(satirlar) + "\n\nEmin misiniz?"
             if QMessageBox.question(self, "Onay", soru, QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
                 return
         self.btn_kaydet.setEnabled(False)

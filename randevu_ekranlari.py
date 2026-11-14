@@ -97,9 +97,7 @@ class DolulukGosterimi:
             "color: #B42318; padding: 6px; font-size: 12px;"
         )
         self.layout().addWidget(self.lbl_doluluk_hatasi)
-        self._doluluk_durumunu_ayarla(
-            False, "Saat uygunluğu henüz doğrulanmadı."
-        )
+        self._doluluk_durumunu_ayarla(False)      # yüklenirken uyarı gösterilmez (pencere büyüyüp küçülmesin)
         self._doluluk_zamanlayici = QTimer(self)
         self._doluluk_zamanlayici.setSingleShot(True)
         self._doluluk_zamanlayici.timeout.connect(self.doluluk_yenile)
@@ -111,9 +109,7 @@ class DolulukGosterimi:
 
     def doluluk_yenilemeyi_planla(self, *_):
         # Art arda gelen değişiklikler (liste temizleme + doldurma) tek istekte birleşir.
-        self._doluluk_durumunu_ayarla(
-            False, "Saat uygunluğu kontrol ediliyor..."
-        )
+        self._doluluk_durumunu_ayarla(False)
         self._doluluk_zamanlayici.start(0)
 
     def _doluluk_durumunu_ayarla(self, dogrulandi, mesaj=""):
@@ -128,7 +124,13 @@ class DolulukGosterimi:
         self.lbl_doluluk_hatasi.setVisible(bool(mesaj))
         if self.isVisible():
             # Uyarı satırı kapanınca pencere eski (büyük) boyutta kalıp düğmenin üstünde boşluk bırakmasın.
-            QTimer.singleShot(0, lambda: self.resize(self.width(), self.sizeHint().height()))
+            QTimer.singleShot(0, self._boyutu_icerige_uydur)
+
+    def _boyutu_icerige_uydur(self):
+        """Uyarı satırı açılıp kapanınca yükseklik içeriğe uyar (genişlik korunur) ve pencere yeniden ortalanır."""
+        self.resize(self.width(), self.sizeHint().height())
+        from pencere_konumu import ortala
+        ortala(self)
 
     def _form_hata_durumu(self, kaynak, mesaj=None):
         if mesaj:
@@ -194,9 +196,7 @@ class DolulukGosterimi:
         psikolog_id = self.cmb_psikologlar.currentData()
         tarih_str = self.dt_tarih.date().toString("yyyy-MM-dd")
 
-        self._doluluk_durumunu_ayarla(
-            False, "Saat uygunluğu kontrol ediliyor..."
-        )
+        self._doluluk_durumunu_ayarla(False)
 
         if hafta_sonu_mu(self.dt_tarih.date()):
             self.saat_kutusunu_kapat()
