@@ -41,6 +41,7 @@ PAGE_ICONS = {
     "Ana Kontrol Paneli": "home",
     "Randevu Yönetimi": "calendar",
     "Danışanlar": "users",
+    "Randevu Raporları": "chart",
     "Oda Kullanımı": "door",
     "Danışma Masası": "calendar",
     "Danışma Masası Yönetimi": "clipboard",
