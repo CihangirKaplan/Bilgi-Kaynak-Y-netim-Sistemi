@@ -627,7 +627,8 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         baslik_frame = QFrame()
         baslik_frame.setStyleSheet("background-color: #0A1F5C; border-radius: 8px;")
         baslik_layout = QHBoxLayout(baslik_frame)
-        baslik_layout.setContentsMargins(15, 15, 15, 15)
+        baslik_layout.setContentsMargins(15, 10, 15, 10)
+        baslik_frame.setFixedHeight(46)
 
         lbl_ikon = QLabel("✏️")
         lbl_ikon.setStyleSheet("font-size: 18px; color: white; background: transparent;")
@@ -762,9 +763,25 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         gorusme = self.cmb_gorusme.findData(self.eski_veriler.get("gorusme_tipi") or "YUZ_YUZE")
         if gorusme >= 0:
             self.cmb_gorusme.setCurrentIndex(gorusme)
+        yas = self._danisan_yas_grubu()
         terapi_kutusunu_doldur(
-            self.cmb_terapi, None, secili=self.eski_veriler.get("terapi_turu"), yas_bilinmiyor_secenekli=True
+            self.cmb_terapi, yas, secili=self.eski_veriler.get("terapi_turu"), yas_bilinmiyor_secenekli=True,
+            cocukta_secim_zorunlu=True,
         )
+
+    def _danisan_yas_grubu(self):
+        """Düzenlenen randevunun danışanının güncel yaş grubu (bulunamazsa None: tüm seçenekler gösterilir, sunucu denetler)."""
+        kod = self.eski_veriler.get("danisan_kod_id")
+        try:
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/danisan-kodlari", params={"pasifler_dahil": "true"},
+                                           headers={"Authorization": f"Bearer {self.token}"}, timeout=5)
+            if cevap is not None and cevap.status_code == 200:
+                for danisan in cevap.json():
+                    if danisan.get("danisan_kod_id") == kod:
+                        return danisan.get("yas_grubu")
+        except Exception:
+            pass
+        return None
 
     def randevuyu_guncelle(self):
         if (
