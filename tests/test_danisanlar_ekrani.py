@@ -152,7 +152,7 @@ def test_randevusuz_danisan_ozeti_bos():
 def test_basliklar_ve_ilk_yukleme():
     ekran = ekran_ac()
     basliklar = [ekran.tablo.horizontalHeaderItem(i).text() for i in range(ekran.tablo.columnCount())]
-    assert basliklar == ["Danışan Kodu", "Psikolog", "Ücret", "İstisna", "Randevu", "Durum"]
+    assert basliklar == ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Terapi", "Ücret", "Randevu", "Durum"]
     assert kodlar(ekran) == ["DAN-2026-0001", "DAN-2026-0002", "DAN-2026-0003"]
     assert ekran.lbl_sayac.text() == "3 danışan"
     ekran.close()
@@ -334,7 +334,7 @@ def test_uc_yeni_alanlari_dondurur(istemci):
     assert yanit.status_code == 200
     assert yanit.json() == [{"danisan_kod_id": "DAN-2026-0001", "ucretli_mi": True, "aktif_mi": True,
                              "istisna_turu": "YOK", "olusturulma_tarihi": "2026-05-01T10:00:00",
-                             "olusturan_psikolog_id": 3}]
+                             "olusturan_psikolog_id": 3, "yas_grubu": None, "terapi_turu": None}]
 
 
 def test_ust_rol_psikolog_secince_o_psikologa_gore_sorgulanir(istemci):
@@ -367,7 +367,7 @@ def test_sunucu_yaniti_kisisel_veri_sutunu_icermez(istemci):
     yanit, _ = _liste_cagir(istemci, "ADMIN")
     for kayit in yanit.json():
         assert set(kayit) <= {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
-                              "olusturan_psikolog_id"}
+                              "olusturan_psikolog_id", "yas_grubu", "terapi_turu"}
 
 
 def test_psikolog_degisirken_yukleme_hatasinda_eski_danisanlar_gizlenir():

@@ -20,13 +20,16 @@ from PySide6.QtWidgets import (
 
 from api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from api_yoneticisi import api_hata_mesaji
+from PySide6.QtWidgets import QDialog
+from danisan_bilgi_diyalogu import DanisanBilgiDialog
+from siniflandirma import terapi_etiketi, yas_etiketi
 from randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
-DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Ücret", "İstisna", "Randevu", "Durum"]
+DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Terapi", "Ücret", "Randevu", "Durum"]
 GECMIS_TABLO_BASLIKLARI = ["Tarih", "Saat", "Oda", "Durum"]
 BOLUMLER = [("Bilgiler", 0), ("Özet", 1), ("Randevular", 2)]
 
@@ -197,6 +200,7 @@ class DanisanlarEkrani(QWidget):
         self.tablo.setHorizontalHeaderLabels(DANISAN_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tablo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)  # kod kırpılmasın
+        self.tablo.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)  # terapi adı tek satırda
         self.tablo.verticalHeader().setVisible(False)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -284,11 +288,19 @@ class DanisanlarEkrani(QWidget):
         form.setVerticalSpacing(10)
         self.bilgi_alanlari = {}
         for anahtar, ad in (("kod", "Danışan kodu"), ("ucret", "Ücret durumu"), ("istisna", "İstisna türü"),
-                            ("durum", "Durum"), ("psikolog", "Oluşturan psikolog"), ("tarih", "Oluşturulma tarihi")):
+                            ("yas", "Yaş grubu"), ("terapi", "Terapi türü"), ("durum", "Durum"), ("psikolog", "Oluşturan psikolog"), ("tarih", "Oluşturulma tarihi")):
             deger = self._alan_etiketi("", "alan_degeri")
             deger.setTextInteractionFlags(Qt.TextSelectableByMouse)
             self.bilgi_alanlari[anahtar] = deger
             form.addRow(self._alan_etiketi(ad, "alan_adi"), deger)
+        self.btn_bilgi_duzenle = QPushButton("Bilgileri Düzenle")
+        self.btn_bilgi_duzenle.setObjectName("btn_durum")
+        self.btn_bilgi_duzenle.setCursor(Qt.PointingHandCursor)
+        self.btn_bilgi_duzenle.clicked.connect(self.bilgileri_duzenle)
+        duzenle_satiri = QHBoxLayout()
+        duzenle_satiri.addWidget(self.btn_bilgi_duzenle)
+        duzenle_satiri.addStretch()
+        form.addRow(duzenle_satiri)
         return sayfa
 
     def _ozet_sayfasi(self):
@@ -505,8 +517,9 @@ class DanisanlarEkrani(QWidget):
             hucreler = (
                 kod_hucresi,
                 self._hucre(self._psikolog_adi(danisan.get("olusturan_psikolog_id"))),
+                self._hucre(yas_etiketi(danisan.get("yas_grubu"))),
+                self._hucre(terapi_etiketi(danisan.get("terapi_turu"))),
                 self._hucre("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz"),
-                self._hucre(istisna_etiketi(danisan.get("istisna_turu"))),
                 self._hucre(str(randevu_sayisi)),
                 self._hucre("Aktif" if danisan.get("aktif_mi", True) else "Pasif"),
             )
@@ -535,6 +548,15 @@ class DanisanlarEkrani(QWidget):
         if isinstance(detay, str) and cevap.status_code in (403, 404, 409):
             return detay
         return api_hata_mesaji(cevap)
+
+    def bilgileri_duzenle(self):
+        """Seçili danışanın yaş grubunu ve terapi türünü düzenler (eski danışanlar buradan tamamlanır)."""
+        danisan = self.secili_danisan()
+        if danisan is None:
+            return
+        pencere = DanisanBilgiDialog(self.api_url, self.token, danisan, self)
+        if pencere.exec() == QDialog.Accepted:
+            self.verileri_cek()
 
     def durum_degistir(self):
         """Seçili danışanı pasife alır / yeniden aktif eder (silme yoktur; randevu geçmişi korunur)."""
@@ -583,6 +605,8 @@ class DanisanlarEkrani(QWidget):
         self.bilgi_alanlari["kod"].setText(str(kod))
         self.bilgi_alanlari["ucret"].setText("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz")
         self.bilgi_alanlari["istisna"].setText(istisna_etiketi(danisan.get("istisna_turu")))
+        self.bilgi_alanlari["yas"].setText(yas_etiketi(danisan.get("yas_grubu")))
+        self.bilgi_alanlari["terapi"].setText(terapi_etiketi(danisan.get("terapi_turu")))
         self.bilgi_alanlari["durum"].setText("Aktif" if danisan.get("aktif_mi", True) else "Pasif")
         self.bilgi_alanlari["psikolog"].setText(psikolog)
         self.bilgi_alanlari["tarih"].setText(tarih_metni(danisan.get("olusturulma_tarihi")))

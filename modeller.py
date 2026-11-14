@@ -235,6 +235,8 @@ class DanisanKoduModeli(BaseModel):
     istisna_turu: str = "YOK"
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime.datetime] = None
+    yas_grubu: Optional[str] = None       # COCUK / YETISKIN (kapalı liste)
+    terapi_turu: Optional[str] = None     # OYUN_TERAPISI / BIREYSEL_TERAPI (kapalı liste)
 
 # ROOM-001: Oda Modeli -> odalar tablosu
 class OdaModeli(BaseModel):
@@ -261,6 +263,8 @@ class RandevuOlusturModeli(BaseModel):
     oda_id: int = Field(gt=0)
     baslangic_zamani: NaifZaman
     bitis_zamani: NaifZaman
+    gorusme_tipi: Literal["YUZ_YUZE", "ONLINE"] = "YUZ_YUZE"
+    terapi_turu: Optional[Literal["OYUN_TERAPISI", "BIREYSEL_TERAPI"]] = None
 
 # APT-API-001 / SEC-APT-002: Randevu Güncelleme Modeli
 class RandevuGuncelleModeli(BaseModel):
@@ -273,6 +277,49 @@ class RandevuGuncelleModeli(BaseModel):
     oda_id: Optional[int] = Field(default=None, gt=0)
     baslangic_zamani: Optional[NaifZaman] = None
     bitis_zamani: Optional[NaifZaman] = None
+    gorusme_tipi: Optional[Literal["YUZ_YUZE", "ONLINE"]] = None
+    terapi_turu: Optional[Literal["OYUN_TERAPISI", "BIREYSEL_TERAPI"]] = None
+
+# Danışan ve randevu sınıflandırmaları: KAPALI listeler (serbest metin yok - FR-008). İstemcideki listelerle aynı olmalıdır.
+YAS_GRUPLARI = {"COCUK": "Çocuk", "YETISKIN": "Yetişkin"}
+TERAPI_TURLERI = {"OYUN_TERAPISI": "Oyun terapisi", "BIREYSEL_TERAPI": "Bireysel terapi"}
+GORUSME_TIPLERI = {"YUZ_YUZE": "Yüz yüze", "ONLINE": "Online"}
+YAS_GRUBUNA_GORE_TERAPILER = {"COCUK": ("OYUN_TERAPISI", "BIREYSEL_TERAPI"), "YETISKIN": ("BIREYSEL_TERAPI",)}
+
+
+def danisan_terapisini_belirle(yas_grubu, terapi_turu):
+    """Yetişkinde terapi otomatik bireysel terapidir; çocukta seçilmelidir. Uygun değilse ValueError."""
+    izinli = YAS_GRUBUNA_GORE_TERAPILER.get(yas_grubu)
+    if izinli is None:
+        raise ValueError("Yaş grubu çocuk ya da yetişkin olmalıdır.")
+    if terapi_turu is None:
+        if len(izinli) == 1:
+            return izinli[0]
+        raise ValueError("Çocuk danışan için terapi türü seçilmelidir.")
+    if terapi_turu not in izinli:
+        raise ValueError("Yetişkin danışan için yalnızca bireysel terapi seçilebilir.")
+    return terapi_turu
+
+
+def randevu_terapisini_belirle(yas_grubu, terapi_turu):
+    """Randevunun terapisi danışanın yaş grubuna uymalıdır. Yaş grubu bilinmiyorsa (eski danışan) değer olduğu gibi kabul edilir."""
+    if yas_grubu not in YAS_GRUBUNA_GORE_TERAPILER:
+        return terapi_turu
+    return danisan_terapisini_belirle(yas_grubu, terapi_turu)
+
+
+class DanisanBilgiModeli(BaseModel):
+    """Danışanın yaş grubu ve terapi türü (kapalı listeler). Bilinmeyen alan reddedilir (FR-008)."""
+    model_config = ConfigDict(extra="forbid")
+
+    yas_grubu: Literal["COCUK", "YETISKIN"]
+    terapi_turu: Optional[Literal["OYUN_TERAPISI", "BIREYSEL_TERAPI"]] = None
+
+    @model_validator(mode="after")
+    def _terapi_yas_grubuna_uygun(self):
+        self.terapi_turu = danisan_terapisini_belirle(self.yas_grubu, self.terapi_turu)
+        return self
+
 
 # Randevu iptal nedenleri (kod -> görünen ad). İstemcideki liste ile aynı olmalıdır (test denetler).
 IPTAL_NEDENLERI = {

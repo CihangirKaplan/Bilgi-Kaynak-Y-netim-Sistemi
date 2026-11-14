@@ -97,7 +97,7 @@ def ekran_ac(qt_app):
 def rozet(ekran, randevu_id):
     for satir in range(ekran.tablo.rowCount()):
         if ekran.tablo.item(satir, 0).text() == str(randevu_id):
-            return ekran.tablo.cellWidget(satir, 6).findChild(QLabel)
+            return ekran.tablo.cellWidget(satir, 8).findChild(QLabel)
     raise AssertionError(randevu_id)
 
 
@@ -198,7 +198,7 @@ def test_onay_penceresi_danisani_yeni_durumu_ve_varsa_mevcut_durumu_soyler_varsa
 
 def test_durum_hucresinde_ipucu_yok(ekran_ac):
     ekran = ekran_ac(Sunucu(LISTE))
-    assert all(ekran.tablo.item(s, 6).toolTip() == "" for s in range(ekran.tablo.rowCount()))
+    assert all(ekran.tablo.item(s, 8).toolTip() == "" for s in range(ekran.tablo.rowCount()))
 
 
 def test_liste_kapatilirsa_istek_gitmez(ekran_ac):

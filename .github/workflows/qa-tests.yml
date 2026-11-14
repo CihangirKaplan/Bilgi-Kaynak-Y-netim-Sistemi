@@ -74,6 +74,7 @@ jobs:
             --ignore=tests/test_admin_tum_izinler_pg_quality.py \
             --ignore=tests/test_kisisel_veri_ayrimi_pg_quality.py \
             --ignore=tests/test_randevu_iptal_durum_pg_quality.py \
+            --ignore=tests/test_yas_terapi_gorusme_pg_quality.py \
             --ignore=tests/test_girdi_fuzz_pg_quality.py \
             --ignore=tests/test_yabanci_anahtar_indeks_pg_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
@@ -177,4 +178,5 @@ jobs:
             tests/test_kisisel_veri_ayrimi_pg_quality.py \
             tests/test_yabanci_anahtar_indeks_pg_quality.py \
             tests/test_girdi_fuzz_pg_quality.py \
-            tests/test_randevu_iptal_durum_pg_quality.py
+            tests/test_randevu_iptal_durum_pg_quality.py \
+            tests/test_yas_terapi_gorusme_pg_quality.py
