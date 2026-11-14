@@ -236,7 +236,6 @@ class DanisanKoduModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime.datetime] = None
     yas_grubu: Optional[str] = None       # COCUK / YETISKIN (kapalı liste)
-    terapi_turu: Optional[str] = None     # OYUN_TERAPISI / BIREYSEL_TERAPI (kapalı liste)
 
 # ROOM-001: Oda Modeli -> odalar tablosu
 class OdaModeli(BaseModel):
@@ -287,8 +286,8 @@ GORUSME_TIPLERI = {"YUZ_YUZE": "Yüz yüze", "ONLINE": "Online"}
 YAS_GRUBUNA_GORE_TERAPILER = {"COCUK": ("OYUN_TERAPISI", "BIREYSEL_TERAPI"), "YETISKIN": ("BIREYSEL_TERAPI",)}
 
 
-def danisan_terapisini_belirle(yas_grubu, terapi_turu):
-    """Yetişkinde terapi otomatik bireysel terapidir; çocukta seçilmelidir. Uygun değilse ValueError."""
+def terapiyi_belirle(yas_grubu, terapi_turu):
+    """Yaş grubuna göre terapi: yetişkinde otomatik bireysel terapi, çocukta seçilmelidir. Uygun değilse ValueError."""
     izinli = YAS_GRUBUNA_GORE_TERAPILER.get(yas_grubu)
     if izinli is None:
         raise ValueError("Yaş grubu çocuk ya da yetişkin olmalıdır.")
@@ -305,20 +304,14 @@ def randevu_terapisini_belirle(yas_grubu, terapi_turu):
     """Randevunun terapisi danışanın yaş grubuna uymalıdır. Yaş grubu bilinmiyorsa (eski danışan) değer olduğu gibi kabul edilir."""
     if yas_grubu not in YAS_GRUBUNA_GORE_TERAPILER:
         return terapi_turu
-    return danisan_terapisini_belirle(yas_grubu, terapi_turu)
+    return terapiyi_belirle(yas_grubu, terapi_turu)
 
 
 class DanisanBilgiModeli(BaseModel):
-    """Danışanın yaş grubu ve terapi türü (kapalı listeler). Bilinmeyen alan reddedilir (FR-008)."""
+    """Danışanın yaş grubu (kapalı liste). Terapi türü randevuda tutulur. Bilinmeyen alan reddedilir (FR-008)."""
     model_config = ConfigDict(extra="forbid")
 
     yas_grubu: Literal["COCUK", "YETISKIN"]
-    terapi_turu: Optional[Literal["OYUN_TERAPISI", "BIREYSEL_TERAPI"]] = None
-
-    @model_validator(mode="after")
-    def _terapi_yas_grubuna_uygun(self):
-        self.terapi_turu = danisan_terapisini_belirle(self.yas_grubu, self.terapi_turu)
-        return self
 
 
 # Randevu iptal nedenleri (kod -> görünen ad). İstemcideki liste ile aynı olmalıdır (test denetler).

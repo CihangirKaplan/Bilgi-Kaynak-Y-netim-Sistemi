@@ -1,9 +1,9 @@
 """
-Danışan yaş grubu + terapi türü; randevu görüşme tipi + terapi türü (kapalı listeler).
+Danışan yaş grubu; randevu görüşme tipi + terapi türü (kapalı listeler).
 
-Kurallar: yaş grubu Çocuk/Yetişkin; yetişkinde terapi türü yalnızca Bireysel terapi (otomatik); çocukta Oyun terapisi ya da
-Bireysel terapi. Görüşme tipi Yüz yüze/Online (online da oda ister). Eski kayıtlar "Belirtilmedi"/Yüz yüze kalır.
-Bunlar serbest metin değildir (FR-008): modellerde Literal, veritabanında CHECK kısıtı.
+Kurallar: yaş grubu danışana aittir (Çocuk/Yetişkin). Terapi türü her randevuda değişebildiği için RANDEVUYA aittir: yetişkinde yalnızca
+Bireysel terapi (otomatik), çocukta Oyun terapisi ya da Bireysel terapi (seçilmeli). Görüşme tipi Yüz yüze/Online (online da oda ister).
+Eski kayıtlar "Belirtilmedi"/Yüz yüze kalır. Bunlar serbest metin değildir (FR-008): modellerde Literal, veritabanında CHECK kısıtı.
 
 Tarihler "şimdi"ye göre üretilir.
 """
@@ -16,7 +16,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QLabel, QApplication, QMessageBox
 
 import danisanlar_ekrani as dmodul
 import modeller
@@ -25,7 +25,7 @@ import siniflandirma
 from danisan_bilgi_diyalogu import DanisanBilgiDialog
 from danisan_diyalog import DanisanOlusturDialog
 from modeller import (
-    DanisanBilgiModeli, RandevuOlusturModeli, danisan_terapisini_belirle, randevu_terapisini_belirle,
+    DanisanBilgiModeli, RandevuOlusturModeli, randevu_terapisini_belirle, terapiyi_belirle,
 )
 from randevu_ekranlari import RandevuAnaEkrani, RandevuDuzenleFormu, RandevuOlusturFormu
 from sunucu import app, mevcut_kullanici_id, randevu_olustur
@@ -42,19 +42,19 @@ def test_istemci_ve_sunucu_listeleri_ayni():
 
 
 def test_yetiskinde_terapi_otomatik_bireysel_terapi():
-    assert danisan_terapisini_belirle("YETISKIN", None) == "BIREYSEL_TERAPI"
-    assert danisan_terapisini_belirle("YETISKIN", "BIREYSEL_TERAPI") == "BIREYSEL_TERAPI"
+    assert terapiyi_belirle("YETISKIN", None) == "BIREYSEL_TERAPI"
+    assert terapiyi_belirle("YETISKIN", "BIREYSEL_TERAPI") == "BIREYSEL_TERAPI"
     with pytest.raises(ValueError):
-        danisan_terapisini_belirle("YETISKIN", "OYUN_TERAPISI")
+        terapiyi_belirle("YETISKIN", "OYUN_TERAPISI")
 
 
 def test_cocukta_terapi_secilmeli_iki_secenek_gecerli():
     with pytest.raises(ValueError):
-        danisan_terapisini_belirle("COCUK", None)
-    assert danisan_terapisini_belirle("COCUK", "OYUN_TERAPISI") == "OYUN_TERAPISI"
-    assert danisan_terapisini_belirle("COCUK", "BIREYSEL_TERAPI") == "BIREYSEL_TERAPI"
+        terapiyi_belirle("COCUK", None)
+    assert terapiyi_belirle("COCUK", "OYUN_TERAPISI") == "OYUN_TERAPISI"
+    assert terapiyi_belirle("COCUK", "BIREYSEL_TERAPI") == "BIREYSEL_TERAPI"
     with pytest.raises(ValueError):
-        danisan_terapisini_belirle("BILINMEYEN", None)
+        terapiyi_belirle("BILINMEYEN", None)
 
 
 def test_randevu_terapisi_danisanin_yas_grubuna_uymali_eski_danisanda_serbest():
@@ -67,17 +67,15 @@ def test_randevu_terapisi_danisanin_yas_grubuna_uymali_eski_danisanda_serbest():
     assert randevu_terapisini_belirle(None, "OYUN_TERAPISI") == "OYUN_TERAPISI"
 
 
-def test_bilgi_modeli_ve_kapali_liste_alanlari():
-    m = DanisanBilgiModeli(yas_grubu="YETISKIN")
-    assert m.terapi_turu == "BIREYSEL_TERAPI"
-    assert DanisanBilgiModeli(yas_grubu="COCUK", terapi_turu="OYUN_TERAPISI").terapi_turu == "OYUN_TERAPISI"
-    for veri in ({}, {"yas_grubu": "COCUK"}, {"yas_grubu": "YETISKIN", "terapi_turu": "OYUN_TERAPISI"},
-                 {"yas_grubu": "Ergen"}, {"yas_grubu": "COCUK", "terapi_turu": "serbest metin"},
-                 {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI", "ad_soyad": "Ali"}):
+def test_bilgi_modeli_yalnizca_yas_grubu_ve_kapali_liste_alanlari():
+    assert DanisanBilgiModeli(yas_grubu="YETISKIN").yas_grubu == "YETISKIN"
+    assert set(DanisanBilgiModeli.model_fields) == {"yas_grubu"}                       # terapi türü danışana ait değildir
+    for veri in ({}, {"yas_grubu": "Ergen"}, {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"}, {"yas_grubu": "COCUK", "ad_soyad": "Ali"}):
         with pytest.raises(ValidationError):
             DanisanBilgiModeli(**veri)
+    assert "terapi_turu" not in modeller.DanisanKoduModeli.model_fields
     # kapalı liste: bu alanlar serbest metin değil, Literal'dir
-    for model, alan in ((DanisanBilgiModeli, "yas_grubu"), (DanisanBilgiModeli, "terapi_turu"),
+    for model, alan in ((DanisanBilgiModeli, "yas_grubu"),
                         (RandevuOlusturModeli, "gorusme_tipi"), (RandevuOlusturModeli, "terapi_turu"),
                         (modeller.RandevuGuncelleModeli, "gorusme_tipi"), (modeller.RandevuGuncelleModeli, "terapi_turu")):
         assert "Literal" in str(model.model_fields[alan].annotation), f"{model.__name__}.{alan}"
@@ -104,28 +102,26 @@ def istemci():
 def _olustur(istemci, sorgu):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "X", "Y")]
+    c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "X")]
     with patch("sunucu.psycopg2.connect", return_value=conn), patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = istemci.post("/api/danisan-kodlari" + sorgu)
     ekleme = next((x.args[1] for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
     return yanit, ekleme
 
 
-def test_yetiskin_danisan_terapisiz_olusur_ve_otomatik_bireysel_terapi_yazilir(istemci):
-    yanit, ekleme = _olustur(istemci, "?yas_grubu=YETISKIN")
-    assert yanit.status_code == 201 and ekleme[-2:] == ("YETISKIN", "BIREYSEL_TERAPI")
+@pytest.mark.parametrize("yas", ["YETISKIN", "COCUK"])
+def test_danisan_yas_grubuyla_olusur_terapi_danisana_yazilmaz(istemci, yas):
+    yanit, ekleme = _olustur(istemci, f"?yas_grubu={yas}")
+    assert yanit.status_code == 201 and ekleme[-1] == yas and len(ekleme) == 5       # kod, ücret, istisna, psikolog, yaş grubu
 
 
-def test_cocuk_danisan_terapi_secilmeden_olusmaz_secilince_olusur(istemci):
-    yanit, ekleme = _olustur(istemci, "?yas_grubu=COCUK")
-    assert yanit.status_code == 422 and ekleme is None
+def test_terapi_turu_parametresi_danisan_olusturmada_yok_sayilir(istemci):
     yanit, ekleme = _olustur(istemci, "?yas_grubu=COCUK&terapi_turu=OYUN_TERAPISI")
-    assert yanit.status_code == 201 and ekleme[-2:] == ("COCUK", "OYUN_TERAPISI")
+    assert yanit.status_code == 201 and "OYUN_TERAPISI" not in ekleme
 
 
-@pytest.mark.parametrize("sorgu", ["", "?yas_grubu=", "?yas_grubu=Ergen", "?yas_grubu=YETISKIN&terapi_turu=OYUN_TERAPISI",
-                                   "?yas_grubu=COCUK&terapi_turu=grup", "?yas_grubu=Ali%20Veli%20depresyon"])
-def test_gecersiz_yas_grubu_ve_terapi_kombinasyonlari_reddedilir(istemci, sorgu):
+@pytest.mark.parametrize("sorgu", ["", "?yas_grubu=", "?yas_grubu=Ergen", "?yas_grubu=Ali%20Veli%20depresyon"])
+def test_gecersiz_yas_grubu_reddedilir(istemci, sorgu):
     yanit, ekleme = _olustur(istemci, sorgu)
     assert yanit.status_code == 422 and ekleme is None
     assert "Ali" not in yanit.text                                                # girilen metin geri yansıtılmaz
@@ -147,25 +143,23 @@ def _bilgi(istemci, govde, danisan=(3,), rol="ADMIN", personel=(3,)):
 
 
 def test_danisan_bilgileri_guncellenir(istemci):
-    yanit, guncelleme, conn = _bilgi(istemci, {"yas_grubu": "COCUK", "terapi_turu": "BIREYSEL_TERAPI"})
-    assert yanit.status_code == 200 and guncelleme == ("COCUK", "BIREYSEL_TERAPI", "DAN-2026-0001")
+    yanit, guncelleme, conn = _bilgi(istemci, {"yas_grubu": "COCUK"})
+    assert yanit.status_code == 200 and guncelleme == ("COCUK", "DAN-2026-0001")
     conn.commit.assert_called_once()
-    yanit, guncelleme, _ = _bilgi(istemci, {"yas_grubu": "YETISKIN"})
-    assert guncelleme == ("YETISKIN", "BIREYSEL_TERAPI", "DAN-2026-0001")           # yetişkinde otomatik
 
 
 def test_danisan_bilgileri_yetki_ve_hata_durumlari(istemci):
-    yanit, guncelleme, _ = _bilgi(istemci, {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"}, rol="PSIKOLOG", personel=(9,))
+    yanit, guncelleme, _ = _bilgi(istemci, {"yas_grubu": "COCUK"}, rol="PSIKOLOG", personel=(9,))
     assert yanit.status_code == 403 and guncelleme is None                           # başkasının danışanı
-    yanit, _, _ = _bilgi(istemci, {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"}, rol="PSIKOLOG", personel=(3,))
+    yanit, _, _ = _bilgi(istemci, {"yas_grubu": "COCUK"}, rol="PSIKOLOG", personel=(3,))
     assert yanit.status_code == 200                                                  # kendi danışanı
-    yanit, _, _ = _bilgi(istemci, {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"}, danisan=None)
+    yanit, _, _ = _bilgi(istemci, {"yas_grubu": "COCUK"}, danisan=None)
     assert yanit.status_code == 404
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = (1,)
     with patch("sunucu.psycopg2.connect", return_value=conn):
-        for kotu in ({"yas_grubu": "YETISKIN", "terapi_turu": "OYUN_TERAPISI"}, {"yas_grubu": "COCUK"},
-                     {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI", "tani": "x"}, {}):
+        for kotu in ({"yas_grubu": "Ergen"}, {"yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"},      # terapi danışana ait değil
+                     {"yas_grubu": "COCUK", "tani": "x"}, {}):
             assert istemci.patch("/api/danisan-kodlari/DAN-2026-0001/bilgiler", json=kotu).status_code == 422
 
 
@@ -264,11 +258,11 @@ def cevap(veri, durum=200):
 
 DANISANLAR = [
     {"danisan_kod_id": "DAN-2026-0001", "ucretli_mi": True, "aktif_mi": True, "istisna_turu": "YOK", "olusturulma_tarihi": "2026-10-01T10:00:00",
-     "olusturan_psikolog_id": 3, "yas_grubu": "YETISKIN", "terapi_turu": "BIREYSEL_TERAPI"},
+     "olusturan_psikolog_id": 3, "yas_grubu": "YETISKIN"},
     {"danisan_kod_id": "DAN-2026-0002", "ucretli_mi": True, "aktif_mi": True, "istisna_turu": "YOK", "olusturulma_tarihi": "2026-10-01T10:00:00",
-     "olusturan_psikolog_id": 3, "yas_grubu": "COCUK", "terapi_turu": "OYUN_TERAPISI"},
+     "olusturan_psikolog_id": 3, "yas_grubu": "COCUK"},
     {"danisan_kod_id": "DAN-2026-0003", "ucretli_mi": True, "aktif_mi": True, "istisna_turu": "YOK", "olusturulma_tarihi": "2026-10-01T10:00:00",
-     "olusturan_psikolog_id": 3, "yas_grubu": None, "terapi_turu": None},                         # eski danışan
+     "olusturan_psikolog_id": 3, "yas_grubu": None},                                              # eski danışan
 ]
 
 
@@ -326,6 +320,8 @@ def test_terapi_kutusu_yardimcisi(qt_app):
     assert secenekler(k) == ["BIREYSEL_TERAPI"] and not k.isEnabled()
     siniflandirma.terapi_kutusunu_doldur(k, "COCUK", secili="BIREYSEL_TERAPI")
     assert secenekler(k) == ["OYUN_TERAPISI", "BIREYSEL_TERAPI"] and k.isEnabled() and k.currentData() == "BIREYSEL_TERAPI"
+    siniflandirma.terapi_kutusunu_doldur(k, "COCUK", cocukta_secim_zorunlu=True)           # çocukta seçim zorunlu: boş başlar
+    assert secenekler(k) == [None, "OYUN_TERAPISI", "BIREYSEL_TERAPI"] and k.currentData() is None and k.isEnabled()
     siniflandirma.terapi_kutusunu_doldur(k, None)
     assert secenekler(k) == [None] and not k.isEnabled()
     siniflandirma.terapi_kutusunu_doldur(k, None, yas_bilinmiyor_secenekli=True)
@@ -340,14 +336,12 @@ def test_etiketler():
 
 
 # ------------------------------------------------------------------ Yeni Danışan penceresi
-def test_yeni_danisan_penceresi_yetiskin_ve_cocuk_secimi(qt_app):
+def test_yeni_danisan_penceresinde_terapi_turu_yok_yalnizca_yas_grubu(qt_app):
     AKTIF["s"] = Sunucu()
     p = DanisanOlusturDialog("http://x", "T", mevcut_psikolog_id=3)
-    assert secenekler(p.cmb_yas) == [None, "COCUK", "YETISKIN"] and not p.cmb_terapi.isEnabled()
-    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
-    assert secenekler(p.cmb_terapi) == ["BIREYSEL_TERAPI"] and not p.cmb_terapi.isEnabled()
-    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("COCUK"))
-    assert secenekler(p.cmb_terapi) == ["OYUN_TERAPISI", "BIREYSEL_TERAPI"] and p.cmb_terapi.isEnabled()
+    assert secenekler(p.cmb_yas) == [None, "COCUK", "YETISKIN"]
+    assert not hasattr(p, "cmb_terapi")                                                 # terapi her randevuda seçilir
+    assert not [e for e in p.findChildren(QLabel) if "Terapi" in e.text()]
 
 
 def test_yaş_grubu_secilmeden_danisan_olusturulmaz(qt_app):
@@ -361,16 +355,16 @@ def test_yaş_grubu_secilmeden_danisan_olusturulmaz(qt_app):
 
 
 # ------------------------------------------------------------------ Danışan bilgileri penceresi
-def test_bilgi_penceresi_mevcut_degerlerle_acilir_ve_kaydeder(qt_app):
+def test_bilgi_penceresi_mevcut_degerle_acilir_ve_yalnizca_yas_grubunu_kaydeder(qt_app):
     sunucu = Sunucu()
     AKTIF["s"] = sunucu
     p = DanisanBilgiDialog("http://x", "T", DANISANLAR[1])
-    assert p.cmb_yas.currentData() == "COCUK" and p.cmb_terapi.currentData() == "OYUN_TERAPISI" and p.cmb_terapi.isEnabled()
-    p.cmb_terapi.setCurrentIndex(p.cmb_terapi.findData("BIREYSEL_TERAPI"))
+    assert p.cmb_yas.currentData() == "COCUK" and not hasattr(p, "cmb_terapi")
+    p.cmb_yas.setCurrentIndex(p.cmb_yas.findData("YETISKIN"))
     with patch.object(p, "accept") as kabul:
         p.kaydet()
     assert ("PATCH", "http://x/api/danisan-kodlari/DAN-2026-0002/bilgiler") in sunucu.istekler
-    assert sunucu.govdeler == [{"yas_grubu": "COCUK", "terapi_turu": "BIREYSEL_TERAPI"}]
+    assert sunucu.govdeler == [{"yas_grubu": "YETISKIN"}]
     kabul.assert_called_once()
 
 
@@ -395,16 +389,16 @@ def test_bilgi_penceresi_sunucu_reddederse_mesaji_gosterir(qt_app):
 
 
 # ------------------------------------------------------------------ Danışanlar sayfası
-def test_danisanlar_sayfasi_yas_grubu_ve_terapi_gosterir_eski_danisan_belirtilmedi(qt_app):
+def test_danisanlar_sayfasi_yas_grubu_gosterir_eski_danisan_belirtilmedi_terapi_yok(qt_app):
     AKTIF["s"] = Sunucu()
     ekran = dmodul.DanisanlarEkrani("http://x", "T", 11)
     t = ekran.tablo
+    basliklar = [t.horizontalHeaderItem(i).text() for i in range(t.columnCount())]
+    assert "Yaş Grubu" in basliklar and "Terapi" not in basliklar
     satir = {t.item(i, 0).text(): i for i in range(t.rowCount())}
-    assert [t.item(satir["DAN-2026-0001"], c).text() for c in (2, 3)] == ["Yetişkin", "Bireysel terapi"]
-    assert [t.item(satir["DAN-2026-0002"], c).text() for c in (2, 3)] == ["Çocuk", "Oyun terapisi"]
-    assert [t.item(satir["DAN-2026-0003"], c).text() for c in (2, 3)] == ["Belirtilmedi", "Belirtilmedi"]
+    assert [t.item(satir[k], 2).text() for k in ("DAN-2026-0001", "DAN-2026-0002", "DAN-2026-0003")] == ["Yetişkin", "Çocuk", "Belirtilmedi"]
     t.selectRow(satir["DAN-2026-0002"])
-    assert ekran.bilgi_alanlari["yas"].text() == "Çocuk" and ekran.bilgi_alanlari["terapi"].text() == "Oyun terapisi"
+    assert ekran.bilgi_alanlari["yas"].text() == "Çocuk" and "terapi" not in ekran.bilgi_alanlari
     ekran.close()
 
 
@@ -439,12 +433,25 @@ def form_ac():
 def test_randevu_formunda_terapi_danisanin_yas_grubundan_gelir(qt_app):
     form = form_ac()
     assert secenekler(form.cmb_gorusme) == ["YUZ_YUZE", "ONLINE"] and form.cmb_gorusme.currentData() == "YUZ_YUZE"
-    form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0001"))      # yetişkin
+    form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0001"))      # yetişkin: otomatik
     assert secenekler(form.cmb_terapi) == ["BIREYSEL_TERAPI"] and not form.cmb_terapi.isEnabled()
-    form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0002"))      # çocuk (oyun terapisi)
-    assert secenekler(form.cmb_terapi) == ["OYUN_TERAPISI", "BIREYSEL_TERAPI"] and form.cmb_terapi.currentData() == "OYUN_TERAPISI"
+    form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0002"))      # çocuk: her randevuda seçilir
+    assert secenekler(form.cmb_terapi) == [None, "OYUN_TERAPISI", "BIREYSEL_TERAPI"] and form.cmb_terapi.currentData() is None
+    assert form.cmb_terapi.isEnabled()
     form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0003"))      # eski danışan
     assert secenekler(form.cmb_terapi) == [None, "OYUN_TERAPISI", "BIREYSEL_TERAPI"] and form.cmb_terapi.isEnabled()
+    form.close()
+
+
+def test_cocuk_randevusunda_terapi_secilmeden_kaydedilmez(qt_app):
+    form = form_ac()
+    form.cmb_danisan_kodu.setCurrentIndex(form.cmb_danisan_kodu.findData("DAN-2026-0002"))
+    isle()
+    sayi = len(AKTIF["s"].govdeler)
+    with patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "information"):
+        form.randevuyu_kaydet()
+    assert len(AKTIF["s"].govdeler) == sayi
+    assert any("terapi" in str(c.args[2]).lower() for c in uyari.call_args_list)
     form.close()
 
 

@@ -17,7 +17,7 @@ from sunucu import VT_AYARLARI
 # Danışan koduyla ilgili tabloların TÜM sütunları (başka sütun eklenirse test kırılır).
 IZINLI_SUTUNLAR = {
     "danisan_kodlari": {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
-                        "olusturan_psikolog_id", "yas_grubu", "terapi_turu"},
+                        "olusturan_psikolog_id", "yas_grubu"},
     "randevular": {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
                    "durum", "olusturulma_tarihi", "iptal_nedeni", "iptal_notu", "gorusme_tipi", "terapi_turu"},
 }
@@ -29,7 +29,6 @@ KISA_SERBEST_METIN_ISTISNALARI = {("randevular", "iptal_notu"): 100}
 # terapi_turu bu listedeki sütunlar adı üzerinden denetimden muaftır; başka bir sütun buraya ancak bilerek eklenir.
 KAPALI_LISTE_SUTUNLARI = {
     ("danisan_kodlari", "yas_grubu"): {"COCUK", "YETISKIN"},
-    ("danisan_kodlari", "terapi_turu"): {"OYUN_TERAPISI", "BIREYSEL_TERAPI"},
     ("randevular", "gorusme_tipi"): {"YUZ_YUZE", "ONLINE"},
     ("randevular", "terapi_turu"): {"OYUN_TERAPISI", "BIREYSEL_TERAPI"},
 }

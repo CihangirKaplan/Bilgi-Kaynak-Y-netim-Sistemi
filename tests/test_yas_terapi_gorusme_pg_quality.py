@@ -1,5 +1,5 @@
 """
-Gerçek PostgreSQL: danışan yaş grubu / terapi türü ve randevu görüşme tipi / terapi türü (kapalı listeler).
+Gerçek PostgreSQL: danışan yaş grubu; randevu görüşme tipi / terapi türü (kapalı listeler). Terapi türü danışanda tutulmaz.
 
 CI'daki "PostgreSQL Entegrasyon Testleri" işinde (alembic upgrade head sonrası) çalışır. Kısıt testleri işlemi geri alır;
 uç testleri gerçek kayıt oluşturur ve sonunda temizler.
@@ -40,35 +40,28 @@ def _psikolog_ve_oda(cursor, etiket):
     return kullanici_id, personel_id, oda_id
 
 
-def _danisan(cursor, kod, personel_id, yas=None, terapi=None):
-    cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, olusturan_psikolog_id, yas_grubu, terapi_turu) VALUES (%s, %s, %s, %s)",
-                   (kod, personel_id, yas, terapi))
+def _danisan(cursor, kod, personel_id, yas=None):
+    cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id, olusturan_psikolog_id, yas_grubu) VALUES (%s, %s, %s)", (kod, personel_id, yas))
 
 
-def test_danisan_yas_terapi_kisitlari():
+def test_danisan_yas_kisiti_ve_terapi_sutunu_yok():
     etiket = uuid4().hex[:10]
     with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
         try:
             with conn.cursor() as c:
                 _dogru_veritabani(c)
                 _, pid, _ = _psikolog_ve_oda(c, etiket)
+                c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'danisan_kodlari' AND column_name = 'terapi_turu'")
+                assert c.fetchone() is None                         # terapi türü danışanda tutulmaz
 
-                def reddedilir(yas, terapi):
+                for gecersiz in ("Ergen", "cocuk", ""):
                     c.execute("SAVEPOINT sp")
                     with pytest.raises(errors.CheckViolation):
-                        _danisan(c, f"T-{etiket}-X", pid, yas, terapi)
+                        _danisan(c, f"T-{etiket}-X", pid, gecersiz)
                     c.execute("ROLLBACK TO SAVEPOINT sp")
-
-                reddedilir("YETISKIN", "OYUN_TERAPISI")          # yetişkinde oyun terapisi yok
-                reddedilir("COCUK", None)                         # çocukta terapi zorunlu (yaş grubu varsa)
-                reddedilir("YETISKIN", None)
-                reddedilir(None, "BIREYSEL_TERAPI")               # yaş grubu olmadan terapi olmaz
-                reddedilir("Ergen", "BIREYSEL_TERAPI")
-                reddedilir("COCUK", "grup terapisi")
-                _danisan(c, f"T-{etiket}-1", pid, "YETISKIN", "BIREYSEL_TERAPI")
-                _danisan(c, f"T-{etiket}-2", pid, "COCUK", "OYUN_TERAPISI")
-                _danisan(c, f"T-{etiket}-3", pid, "COCUK", "BIREYSEL_TERAPI")
-                _danisan(c, f"T-{etiket}-4", pid, None, None)     # eski danışan: belirtilmedi
+                _danisan(c, f"T-{etiket}-1", pid, "YETISKIN")
+                _danisan(c, f"T-{etiket}-2", pid, "COCUK")
+                _danisan(c, f"T-{etiket}-4", pid, None)             # eski danışan: belirtilmedi
         finally:
             conn.rollback()
 
@@ -81,7 +74,7 @@ def test_randevu_gorusme_tipi_ve_terapi_kisitlari():
                 _dogru_veritabani(c)
                 _, pid, oda = _psikolog_ve_oda(c, etiket)
                 kod = f"T-{etiket}-1"
-                _danisan(c, kod, pid, "COCUK", "OYUN_TERAPISI")
+                _danisan(c, kod, pid, "COCUK")
                 bas = datetime(2031, 3, 4, 10, 0)
 
                 def ekle(gun, **ek):
@@ -136,22 +129,20 @@ def test_uclar_gercek_veritabaninda(gercek_kayitlar):
         r = istemci.post(f"/api/danisan-kodlari?psikolog_id={pid}&{sorgu}")
         return r.status_code, (r.json().get("veri") or r.json())
 
-    # danışan oluşturma: yaş grubu zorunlu; yetişkinde otomatik bireysel terapi; çocukta seçilmeli
+    # danışan oluşturma: yaş grubu zorunlu; terapi türü danışanda yok (yok sayılır)
     assert istemci.post(f"/api/danisan-kodlari?psikolog_id={pid}").status_code == 422
-    assert olustur("yas_grubu=COCUK")[0] == 422
-    assert olustur("yas_grubu=YETISKIN&terapi_turu=OYUN_TERAPISI")[0] == 422
     durum, veri = olustur("yas_grubu=YETISKIN")
-    assert durum == 201 and (veri["yas_grubu"], veri["terapi_turu"]) == ("YETISKIN", "BIREYSEL_TERAPI")
+    assert durum == 201 and veri["yas_grubu"] == "YETISKIN" and "terapi_turu" not in veri
     yetiskin = veri["danisan_kod_id"]
     durum, veri = olustur("yas_grubu=COCUK&terapi_turu=OYUN_TERAPISI")
-    assert durum == 201 and (veri["yas_grubu"], veri["terapi_turu"]) == ("COCUK", "OYUN_TERAPISI")
+    assert durum == 201 and veri["yas_grubu"] == "COCUK" and "terapi_turu" not in veri
     cocuk = veri["danisan_kod_id"]
-    _danisan(c, f"T-{etiket}-ESKI", pid, None, None)                                          # eski danışan
+    _danisan(c, f"T-{etiket}-ESKI", pid, None)                                                # eski danışan
 
-    # liste yeni alanları döndürür
+    # liste yaş grubunu döndürür, terapi türünü döndürmez
     liste = {d["danisan_kod_id"]: d for d in istemci.get(f"/api/danisan-kodlari?psikolog_id={pid}").json()}
-    assert (liste[cocuk]["yas_grubu"], liste[cocuk]["terapi_turu"]) == ("COCUK", "OYUN_TERAPISI")
-    assert (liste[f"T-{etiket}-ESKI"]["yas_grubu"], liste[f"T-{etiket}-ESKI"]["terapi_turu"]) == (None, None)
+    assert liste[cocuk]["yas_grubu"] == "COCUK" and "terapi_turu" not in liste[cocuk]
+    assert liste[f"T-{etiket}-ESKI"]["yas_grubu"] is None
 
     # randevu: online da oda ister; terapi yaş grubuna uymalı
     ileri = datetime.now().replace(microsecond=0, minute=0, second=0, hour=10) + timedelta(days=40)
@@ -184,13 +175,13 @@ def test_uclar_gercek_veritabaninda(gercek_kayitlar):
     assert c.fetchone() == ("YUZ_YUZE", "OYUN_TERAPISI")
     assert istemci.patch(f"/api/randevular/{rid}", json={"gorusme_tipi": "telefon"}).status_code == 422
 
-    # danışan bilgileri: eski danışan tamamlanır; yetişkin yapılınca terapi otomatik; geçmiş randevular değişmez
+    # danışan bilgileri: eski danışanın yaş grubu tamamlanır; geçmiş randevuların terapisi değişmez
     assert istemci.patch(f"/api/danisan-kodlari/T-{etiket}-ESKI/bilgiler", json={"yas_grubu": "YETISKIN"}).status_code == 200
-    c.execute("SELECT yas_grubu, terapi_turu FROM danisan_kodlari WHERE danisan_kod_id = %s", (f"T-{etiket}-ESKI",))
-    assert c.fetchone() == ("YETISKIN", "BIREYSEL_TERAPI")
+    c.execute("SELECT yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s", (f"T-{etiket}-ESKI",))
+    assert c.fetchone() == ("YETISKIN",)
     assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN"}).status_code == 200
     c.execute("SELECT terapi_turu FROM randevular WHERE randevu_id = %s", (rid,))
-    assert c.fetchone() == ("OYUN_TERAPISI",)                                                    # eski randevunun terapisi korunur
+    assert c.fetchone() == ("OYUN_TERAPISI",)
     assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/bilgiler", json={"yas_grubu": "YETISKIN", "terapi_turu": "OYUN_TERAPISI"}).status_code == 422
 
     # randevu listesi yeni alanları döndürür

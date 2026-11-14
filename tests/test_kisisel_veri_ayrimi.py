@@ -21,11 +21,11 @@ KISISEL_PARCALAR = {
     "tani", "ilac", "terapi", "travma", "aciklama", "not", "notu", "sikayet", "olcek", "gozlem", "saglik",
     "hastalik", "yorum",
 }
-# FR-008 İSTİSNASI: yaş grubu / terapi türü / görüşme tipi KAPALI listeli alanlardır (serbest metin yok; veritabanında CHECK
+# FR-008 İSTİSNASI: yaş grubu (danışan) ile görüşme tipi / terapi türü (randevu) KAPALI listeli alanlardır (serbest metin yok; veritabanında CHECK
 # kısıtı, modellerde Literal). "terapi" sözcüğü klinik terim sayıldığı için terapi_turu bilerek istisnadır.
 KAPALI_LISTE_SUTUNLARI = {"terapi_turu"}
 DANISAN_KODLARI_SUTUNLARI = {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
-                             "olusturan_psikolog_id", "yas_grubu", "terapi_turu"}
+                             "olusturan_psikolog_id", "yas_grubu"}
 RANDEVU_SUTUNLARI = {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
                      "durum", "olusturulma_tarihi", "gorusme_tipi", "terapi_turu"}
 KAYNAK = Path(sunucu.__file__).read_text(encoding="utf-8")
@@ -91,7 +91,7 @@ def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
 def _kod_olustur(sorgu_dizesi=""):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "YETISKIN", "BIREYSEL_TERAPI")]   # izin, kimlik, kayıt
+    c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "YETISKIN")]   # izin, kimlik, kayıt
     sorgu_dizesi = (sorgu_dizesi + "&" if sorgu_dizesi else "?") + "yas_grubu=YETISKIN"      # yaş grubu zorunludur
     with patch("sunucu.psycopg2.connect", return_value=conn), \
             patch("sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
@@ -103,7 +103,7 @@ def _kod_olustur(sorgu_dizesi=""):
 def test_kod_olusturma_fazladan_kisisel_alanlari_yok_sayar_ve_kaydetmez():
     yanit, parametreler = _kod_olustur("?ad_soyad=Ali%20Veli&telefon=5551234567&tc_kimlik=12345678901&tani=x")
     assert yanit.status_code == 201
-    assert parametreler == ("DAN-2026-0099", True, "YOK", 7, "YETISKIN", "BIREYSEL_TERAPI")   # kod, ücret, istisna, psikolog, yaş grubu, terapi
+    assert parametreler == ("DAN-2026-0099", True, "YOK", 7, "YETISKIN")   # kod, ücret, istisna, psikolog, yaş grubu
     assert not any(isinstance(p, str) and ("Ali" in p or "555" in p or "123456" in p) for p in parametreler)
 
 
@@ -118,7 +118,7 @@ def test_kod_olusturma_ucu_yalnizca_ucret_ve_istisna_parametresi_alir():
     import inspect
     parametreler = set(inspect.signature(sunucu.danisan_kodu_olustur).parameters)
     # psikolog_id yalnızca bir personel kimliğidir (kişisel veri değil); admin/danışma danışanın psikoloğunu bununla bildirir
-    assert parametreler == {"ucretli_mi", "istisna_turu", "psikolog_id", "yas_grubu", "terapi_turu", "kullanici_id"}
+    assert parametreler == {"ucretli_mi", "istisna_turu", "psikolog_id", "yas_grubu", "kullanici_id"}
 
 
 def test_kod_listesi_yalnizca_kod_ucret_ve_aktiflik_dondurur():

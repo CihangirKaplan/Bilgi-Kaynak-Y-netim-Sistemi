@@ -23,8 +23,6 @@ from modeller import (
     RandevuDurumModeli,
     DanisanBilgiModeli,
     YAS_GRUPLARI,
-    TERAPI_TURLERI,
-    danisan_terapisini_belirle,
     randevu_terapisini_belirle,
     BakimPlaniGuncelleModeli,
     BakimPlaniOlusturModeli,
@@ -2350,7 +2348,6 @@ def danisan_kodu_olustur(
     istisna_turu: str = "YOK",
     psikolog_id: int | None = Query(None, gt=0),
     yas_grubu: str = Query(...),
-    terapi_turu: str | None = Query(None),
     kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
 ):
     """Yeni danışan kodu üretir.
@@ -2366,12 +2363,6 @@ def danisan_kodu_olustur(
     # Kapalı listeler: gelen metin doğrulanır ve hata mesajına yazılmaz (FR-008)
     if yas_grubu not in YAS_GRUPLARI:
         raise HTTPException(status_code=422, detail="Geçersiz yaş grubu. İzinli değerler: " + ", ".join(YAS_GRUPLARI) + ".")
-    if terapi_turu is not None and terapi_turu not in TERAPI_TURLERI:
-        raise HTTPException(status_code=422, detail="Geçersiz terapi türü. İzinli değerler: " + ", ".join(TERAPI_TURLERI) + ".")
-    try:
-        terapi_turu = danisan_terapisini_belirle(yas_grubu, terapi_turu)      # yetişkinde otomatik bireysel terapi
-    except ValueError as hata:
-        raise HTTPException(status_code=422, detail=str(hata))
     conn = None
     cursor = None
     try:
@@ -2413,11 +2404,11 @@ def danisan_kodu_olustur(
         # 3. Veritabanına oluşturan psikoloğun ID'siyle birlikte kaydediyoruz
         cursor.execute(
             """
-            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturan_psikolog_id, yas_grubu, terapi_turu) 
-            VALUES (%s, %s, %s, TRUE, %s, %s, %s) 
-            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu, terapi_turu;
+            INSERT INTO danisan_kodlari (danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturan_psikolog_id, yas_grubu) 
+            VALUES (%s, %s, %s, TRUE, %s, %s) 
+            RETURNING danisan_kod_id, ucretli_mi, istisna_turu, aktif_mi, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu;
             """, 
-            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id, yas_grubu, terapi_turu)
+            (yeni_kod, ucretli_mi, istisna_turu, olusturan_psikolog_id, yas_grubu)
         )
         kayit = cursor.fetchone()
 
@@ -2434,8 +2425,7 @@ def danisan_kodu_olustur(
                 "aktif_mi": kayit[3],
                 "olusturulma_tarihi": kayit[4],
                 "olusturan_psikolog_id": kayit[5],
-                "yas_grubu": kayit[6] if len(kayit) > 6 else yas_grubu,
-                "terapi_turu": kayit[7] if len(kayit) > 7 else terapi_turu
+                "yas_grubu": kayit[6] if len(kayit) > 6 else yas_grubu
             }
         }
     finally:
@@ -2746,7 +2736,7 @@ def danisan_kodlari_listele(
         rol_kayit = cursor.fetchone()
         rol_adi = rol_kayit[0].upper() if rol_kayit else ""
 
-        sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu, terapi_turu"
+        sutunlar = "danisan_kod_id, ucretli_mi, aktif_mi, istisna_turu, olusturulma_tarihi, olusturan_psikolog_id, yas_grubu"
         aktif_kosulu = "TRUE" if pasifler_dahil else "aktif_mi = TRUE"
 
         # 2. Psikolog yalnızca kendi oluşturduğu danışan kodlarını görür
@@ -2783,7 +2773,6 @@ def danisan_kodlari_listele(
                 "olusturulma_tarihi": k[4].isoformat() if hasattr(k[4], "isoformat") else k[4],
                 "olusturan_psikolog_id": k[5],
                 "yas_grubu": k[6] if len(k) > 6 else None,
-                "terapi_turu": k[7] if len(k) > 7 else None,
             }
             for k in cursor.fetchall()
         ]
@@ -2854,7 +2843,7 @@ def danisan_bilgilerini_guncelle(
     bilgi: DanisanBilgiModeli,
     kullanici_id: int = Depends(izin_kontrol("RANDEVU_OLUSTUR")),
 ):
-    """Danışanın yaş grubunu ve terapi türünü günceller (ikisi de kapalı listedir; serbest metin yoktur).
+    """Danışanın yaş grubunu günceller (kapalı liste; serbest metin yoktur). Terapi türü randevuda tutulur.
 
     Psikolog yalnızca kendi danışanını güncelleyebilir. Önceki randevuların terapi türü değişmez (geçmiş korunur).
     """
@@ -2878,12 +2867,12 @@ def danisan_bilgilerini_guncelle(
                 raise HTTPException(status_code=403, detail="Yalnızca kendi danışanınızın bilgilerini güncelleyebilirsiniz.")
 
         cursor.execute(
-            "UPDATE danisan_kodlari SET yas_grubu = %s, terapi_turu = %s WHERE danisan_kod_id = %s;",
-            (bilgi.yas_grubu, bilgi.terapi_turu, danisan_kod_id),
+            "UPDATE danisan_kodlari SET yas_grubu = %s WHERE danisan_kod_id = %s;",
+            (bilgi.yas_grubu, danisan_kod_id),
         )
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
         conn.commit()
-        return {"durum": "basarili", "yas_grubu": bilgi.yas_grubu, "terapi_turu": bilgi.terapi_turu, "mesaj": "Danışan bilgileri güncellendi."}
+        return {"durum": "basarili", "yas_grubu": bilgi.yas_grubu, "mesaj": "Danışan bilgileri güncellendi."}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

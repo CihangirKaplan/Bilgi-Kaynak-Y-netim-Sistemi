@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLay
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
 from api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
-from siniflandirma import YAS_GRUPLARI, terapi_kutusunu_doldur
+from siniflandirma import YAS_GRUPLARI
 
 OKUNUR_STIL = "background-color: #F1F5F9; color: #64748B; font-weight: bold;"
 
@@ -69,18 +69,12 @@ class DanisanOlusturDialog(QDialog):
         self.cmb_psikolog = QComboBox()
         form.addRow("Psikolog:", self.cmb_psikolog)
 
-        # Yaş grubu ve terapi türü: kapalı listeler (yetişkinde terapi otomatik bireysel terapidir)
+        # Yaş grubu: kapalı liste (terapi türü her randevuda seçilir, danışanda tutulmaz)
         self.cmb_yas = QComboBox()
         self.cmb_yas.addItem("--- Yaş Grubu Seçiniz ---", None)
         for kod, etiket in YAS_GRUPLARI:
             self.cmb_yas.addItem(etiket, kod)
         form.addRow("Yaş Grubu:", self.cmb_yas)
-        self.cmb_terapi = QComboBox()
-        form.addRow("Terapi Türü:", self.cmb_terapi)
-        self.cmb_yas.currentIndexChanged.connect(
-            lambda *_: terapi_kutusunu_doldur(self.cmb_terapi, self.cmb_yas.currentData())
-        )
-        terapi_kutusunu_doldur(self.cmb_terapi, None)
 
         # Ücret Durumu Seçimi
         self.cmb_ucret = QComboBox()
@@ -212,8 +206,6 @@ class DanisanOlusturDialog(QDialog):
             QMessageBox.warning(self, "Yaş Grubu Seçilmedi", "Lütfen danışanın yaş grubunu seçin.")
             return
         parametreler["yas_grubu"] = self.cmb_yas.currentData()
-        if self.cmb_terapi.currentData() is not None:
-            parametreler["terapi_turu"] = self.cmb_terapi.currentData()
         psikolog_id = self.cmb_psikolog.currentData()
         if self.cmb_psikolog.isEnabled() and psikolog_id is None:
             QMessageBox.warning(self, "Psikolog Seçilmedi", "Lütfen danışanın psikoloğunu seçin.")

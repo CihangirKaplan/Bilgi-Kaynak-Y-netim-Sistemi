@@ -1,6 +1,7 @@
 """Danışan ve randevu sınıflandırmaları (yaş grubu, terapi türü, görüşme tipi): KAPALI listeler, serbest metin yok (FR-008).
 
-Listeler sunucudaki modeller.YAS_GRUPLARI / TERAPI_TURLERI / GORUSME_TIPLERI ile aynı olmalıdır (testle denetlenir).
+Yaş grubu danışana, görüşme tipi ve terapi türü RANDEVUYA aittir (terapi her randevuda değişebilir). Listeler sunucudaki
+modeller.YAS_GRUPLARI / TERAPI_TURLERI / GORUSME_TIPLERI ile aynı olmalıdır (testle denetlenir).
 Kural: yetişkinde terapi türü yalnızca bireysel terapidir (otomatik); çocukta oyun terapisi ya da bireysel terapi seçilir.
 """
 
@@ -36,11 +37,12 @@ def terapi_secenekleri(yas_grubu):
 
 
 def terapi_kutusunu_doldur(kutu, yas_grubu, secili=None, yas_bilinmiyor_secenekli=False,
-                           bos_metin="--- Önce yaş grubunu seçin ---"):
+                           bos_metin="--- Önce yaş grubunu seçin ---", cocukta_secim_zorunlu=False):
     """Terapi türü açılır kutusunu yaş grubuna göre doldurur.
 
-    Yetişkin: tek seçenek, kutu kapalı. Çocuk: iki seçenek. Yaş grubu bilinmiyorsa: boş metin ve kapalı kutu; ya da
-    (eski kayıtlar için) "Belirtilmedi" + iki seçenek (yas_bilinmiyor_secenekli=True).
+    Yetişkin: tek seçenek, kutu kapalı. Çocuk: iki seçenek (cocukta_secim_zorunlu=True ise önce "Seçiniz" satırı gelir ve seçim
+    yapılmalıdır). Yaş grubu bilinmiyorsa: boş metin ve kapalı kutu; ya da (eski danışanlar için) "Belirtilmedi" + iki seçenek
+    (yas_bilinmiyor_secenekli=True).
     """
     kutu.blockSignals(True)
     kutu.clear()
@@ -55,6 +57,8 @@ def terapi_kutusunu_doldur(kutu, yas_grubu, secili=None, yas_bilinmiyor_secenekl
             kutu.addItem(bos_metin, None)
             kutu.setEnabled(False)
     else:
+        if cocukta_secim_zorunlu and len(secenekler) > 1:
+            kutu.addItem("--- Terapi Türü Seçiniz ---", None)
         for kod in secenekler:
             kutu.addItem(TERAPI_ETIKETLERI[kod], kod)
         kutu.setEnabled(len(secenekler) > 1)

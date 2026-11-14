@@ -22,14 +22,14 @@ from api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from api_yoneticisi import api_hata_mesaji
 from PySide6.QtWidgets import QDialog
 from danisan_bilgi_diyalogu import DanisanBilgiDialog
-from siniflandirma import terapi_etiketi, yas_etiketi
+from siniflandirma import yas_etiketi
 from randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
-DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Terapi", "Ücret", "Randevu", "Durum"]
+DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Ücret", "Randevu", "Durum"]
 GECMIS_TABLO_BASLIKLARI = ["Tarih", "Saat", "Oda", "Durum"]
 BOLUMLER = [("Bilgiler", 0), ("Özet", 1), ("Randevular", 2)]
 
@@ -200,7 +200,6 @@ class DanisanlarEkrani(QWidget):
         self.tablo.setHorizontalHeaderLabels(DANISAN_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tablo.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)  # kod kırpılmasın
-        self.tablo.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)  # terapi adı tek satırda
         self.tablo.verticalHeader().setVisible(False)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -288,7 +287,7 @@ class DanisanlarEkrani(QWidget):
         form.setVerticalSpacing(10)
         self.bilgi_alanlari = {}
         for anahtar, ad in (("kod", "Danışan kodu"), ("ucret", "Ücret durumu"), ("istisna", "İstisna türü"),
-                            ("yas", "Yaş grubu"), ("terapi", "Terapi türü"), ("durum", "Durum"), ("psikolog", "Oluşturan psikolog"), ("tarih", "Oluşturulma tarihi")):
+                            ("yas", "Yaş grubu"), ("durum", "Durum"), ("psikolog", "Oluşturan psikolog"), ("tarih", "Oluşturulma tarihi")):
             deger = self._alan_etiketi("", "alan_degeri")
             deger.setTextInteractionFlags(Qt.TextSelectableByMouse)
             self.bilgi_alanlari[anahtar] = deger
@@ -518,7 +517,6 @@ class DanisanlarEkrani(QWidget):
                 kod_hucresi,
                 self._hucre(self._psikolog_adi(danisan.get("olusturan_psikolog_id"))),
                 self._hucre(yas_etiketi(danisan.get("yas_grubu"))),
-                self._hucre(terapi_etiketi(danisan.get("terapi_turu"))),
                 self._hucre("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz"),
                 self._hucre(str(randevu_sayisi)),
                 self._hucre("Aktif" if danisan.get("aktif_mi", True) else "Pasif"),
@@ -550,7 +548,7 @@ class DanisanlarEkrani(QWidget):
         return api_hata_mesaji(cevap)
 
     def bilgileri_duzenle(self):
-        """Seçili danışanın yaş grubunu ve terapi türünü düzenler (eski danışanlar buradan tamamlanır)."""
+        """Seçili danışanın yaş grubunu düzenler (eski danışanlar buradan tamamlanır)."""
         danisan = self.secili_danisan()
         if danisan is None:
             return
@@ -606,7 +604,6 @@ class DanisanlarEkrani(QWidget):
         self.bilgi_alanlari["ucret"].setText("Ücretli" if danisan.get("ucretli_mi") else "Ücretsiz")
         self.bilgi_alanlari["istisna"].setText(istisna_etiketi(danisan.get("istisna_turu")))
         self.bilgi_alanlari["yas"].setText(yas_etiketi(danisan.get("yas_grubu")))
-        self.bilgi_alanlari["terapi"].setText(terapi_etiketi(danisan.get("terapi_turu")))
         self.bilgi_alanlari["durum"].setText("Aktif" if danisan.get("aktif_mi", True) else "Pasif")
         self.bilgi_alanlari["psikolog"].setText(psikolog)
         self.bilgi_alanlari["tarih"].setText(tarih_metni(danisan.get("olusturulma_tarihi")))

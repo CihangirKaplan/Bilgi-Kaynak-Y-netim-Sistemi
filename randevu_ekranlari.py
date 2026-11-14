@@ -325,7 +325,8 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         baslik_frame = QFrame()
         baslik_frame.setStyleSheet("background-color: #0A1F5C; border-radius: 8px;")
         baslik_layout = QHBoxLayout(baslik_frame)
-        baslik_layout.setContentsMargins(15, 12, 15, 12)
+        baslik_layout.setContentsMargins(15, 10, 15, 10)
+        baslik_frame.setFixedHeight(46)
 
         lbl_ikon = QLabel("📅")
         lbl_ikon.setStyleSheet("font-size: 18px; background: transparent;")
@@ -488,7 +489,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 for danisan in cevap.json():
                     kod = danisan.get("danisan_kod_id")
                     self.cmb_danisan_kodu.addItem(kod, kod)
-                    self._danisan_siniflari[kod] = (danisan.get("yas_grubu"), danisan.get("terapi_turu"))
+                    self._danisan_siniflari[kod] = danisan.get("yas_grubu")
         except Exception as e:
             QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
 
@@ -498,12 +499,12 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 self.cmb_danisan_kodu.setCurrentIndex(index)
 
     def _terapiyi_danisana_gore_ayarla(self, *_):
-        """Terapi türü danışanın yaş grubundan gelir: yetişkinde otomatik bireysel terapi, çocukta seçilir."""
+        """Terapi seçenekleri danışanın yaş grubuna göre belirlenir: yetişkinde otomatik bireysel terapi, çocukta seçilir."""
         kod = self.cmb_danisan_kodu.currentData()
-        yas, terapi = self._danisan_siniflari.get(kod, (None, None))
+        yas = self._danisan_siniflari.get(kod)
         terapi_kutusunu_doldur(
-            self.cmb_terapi, yas, secili=terapi, yas_bilinmiyor_secenekli=bool(kod),
-            bos_metin="--- Önce danışan seçiniz ---",
+            self.cmb_terapi, yas, yas_bilinmiyor_secenekli=bool(kod),
+            bos_metin="--- Önce danışan seçiniz ---", cocukta_secim_zorunlu=True,
         )
 
     def randevuyu_kaydet(self):
@@ -537,6 +538,9 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         saat_str = self.saat_secimi()
         if saat_str is None:
             QMessageBox.warning(self, "Saat Seçilemedi", "Seçilen tarih için boş saat yok ya da seçili saat dolu. Lütfen başka bir saat, oda veya tarih seçiniz.")
+            return
+        if self._danisan_siniflari.get(secilen_danisan_kodu) == "COCUK" and self.cmb_terapi.currentData() is None:
+            QMessageBox.warning(self, "Eksik Veri", "Lütfen terapi türünü seçiniz.")
             return
         saat_int = int(saat_str.split(":")[0])
 
@@ -587,7 +591,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         self.eski_veriler = eski_veriler
         self.tum_odalar = []
 
-        self.setWindowTitle("Randevu Yönetimi")
+        self.setWindowTitle("Randevu Düzenle")
         self.resize(450, 420)
 
         self.init_ui()
@@ -616,8 +620,8 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         """)
 
         ana_layout = QVBoxLayout(self)
-        ana_layout.setContentsMargins(20, 20, 20, 20)
-        ana_layout.setSpacing(18)
+        ana_layout.setContentsMargins(15, 15, 15, 15)
+        ana_layout.setSpacing(12)
 
         from PySide6.QtWidgets import QFrame
         baslik_frame = QFrame()
@@ -627,7 +631,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 
         lbl_ikon = QLabel("✏️")
         lbl_ikon.setStyleSheet("font-size: 18px; color: white; background: transparent;")
-        lbl_baslik = QLabel("Randevu Yönetimi")
+        lbl_baslik = QLabel("Randevu Düzenle")
         lbl_baslik.setStyleSheet("color: white; font-size: 15px; font-weight: bold; background: transparent;")
 
         baslik_layout.addWidget(lbl_ikon)
@@ -636,7 +640,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         ana_layout.addWidget(baslik_frame)
 
         form_layout = QFormLayout()
-        form_layout.setSpacing(15)
+        form_layout.setSpacing(12)
 
         self.txt_danisan_kodu = QLineEdit()
         self.txt_danisan_kodu.setReadOnly(True)
@@ -1047,7 +1051,6 @@ class RandevuAnaEkrani(QWidget):
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tablo.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.tablo.setToolTip("Düzenlemek için satıra çift tıklayın")
         self.tablo.setStyleSheet("""
             QTableWidget { background-color: white; border: 1px solid #D0D7E5; border-radius: 8px; gridline-color: #E2E8F0; }
             QHeaderView::section { background-color: #0A1F5C; color: white; font-weight: bold; padding: 10px; border: none; }
