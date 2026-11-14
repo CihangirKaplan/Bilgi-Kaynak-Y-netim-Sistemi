@@ -23,6 +23,9 @@ from modeller import (
     RandevuDurumModeli,
     DanisanBilgiModeli,
     YAS_GRUPLARI,
+    TERAPI_TURLERI,
+    GORUSME_TIPLERI,
+    IPTAL_NEDENLERI,
     randevu_terapisini_belirle,
     BakimPlaniGuncelleModeli,
     BakimPlaniOlusturModeli,
@@ -52,6 +55,7 @@ from guvenlik import (
 )
 from denetim import denetim_kaydi_olustur
 from girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
+from randevu_rapor_hesapla import randevu_raporu_hesapla
 from modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
 import psycopg2.errors
 from modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
@@ -4840,6 +4844,70 @@ def ogrenci_puan_detayi(
 
 
 PUAN_RAPORU_DURUMLARI = ("aktif", "pasif")
+
+
+@app.get("/api/randevu-raporu")
+def randevu_raporu(
+    baslangic: _ogr_date | None = None,
+    bitis: _ogr_date | None = None,
+    psikolog_id: int | None = None,
+    oda_id: int | None = None,
+    detay: bool = False,
+    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
+):
+    """Randevu raporu: seçilen dönemde (randevunun başlangıç günü) durum sayıları, psikolog bazlı döküm, iptal nedenleri ve
+    görüşme tipi / terapi türü / yaş grubu dağılımı. Psikolog yalnızca kendi randevularını görür. detay=true ise tek tek
+    randevular da döner (Excel için). Danışanlar yalnızca kodla görünür (kişisel veri yok)."""
+    if baslangic is not None and bitis is not None and baslangic > bitis:
+        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+
+        kosullar, parametreler = [], []
+        if baslangic is not None:
+            kosullar.append("r.baslangic_zamani >= %s")
+            parametreler.append(datetime.combine(baslangic, datetime.min.time()))
+        if bitis is not None:
+            kosullar.append("r.baslangic_zamani < %s")
+            parametreler.append(datetime.combine(bitis, datetime.min.time()) + timedelta(days=1))
+        if psikolog_mu:
+            kosullar.append("p.kullanici_id = %s")      # psikolog yalnızca kendi randevularını raporlar
+            parametreler.append(kullanici_id)
+        elif psikolog_id is not None:
+            kosullar.append("r.psikolog_id = %s")
+            parametreler.append(psikolog_id)
+        if oda_id is not None:
+            kosullar.append("r.oda_id = %s")
+            parametreler.append(oda_id)
+        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
+
+        cursor.execute(f"""
+            SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, ku.kullanici_adi, r.oda_id, o.oda_adi,
+                   r.baslangic_zamani, r.bitis_zamani, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu
+            FROM randevular r
+            LEFT JOIN personel p ON p.personel_id = r.psikolog_id
+            LEFT JOIN kullanicilar ku ON ku.kullanici_id = p.kullanici_id
+            LEFT JOIN odalar o ON o.oda_id = r.oda_id
+            LEFT JOIN danisan_kodlari d ON d.danisan_kod_id = r.danisan_kod_id
+            {where}
+            ORDER BY r.baslangic_zamani, r.randevu_id;
+        """, tuple(parametreler))
+        anahtarlar = ("randevu_id", "danisan_kod_id", "psikolog_id", "psikolog_adi", "oda_id", "oda_adi",
+                      "baslangic_zamani", "bitis_zamani", "durum", "iptal_nedeni", "gorusme_tipi", "terapi_turu", "yas_grubu")
+        satirlar = [dict(zip(anahtarlar, kayit)) for kayit in cursor.fetchall()]
+        return randevu_raporu_hesapla(
+            satirlar, {"iptal": IPTAL_NEDENLERI, "gorusme": GORUSME_TIPLERI, "terapi": TERAPI_TURLERI, "yas": YAS_GRUPLARI}, detay=detay,
+        )
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
 
 
 @app.get("/api/puan-raporu")

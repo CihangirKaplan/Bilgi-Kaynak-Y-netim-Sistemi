@@ -226,6 +226,8 @@ MENU = [
              aksiyon=[("＋  Yeni Danışan", "Randevu oluşturma")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
+        dict(ikon="📈", ad="Randevu Raporları", izin="Randevu takvimini görüntüleme",
+             aciklama="Randevu sayıları, durumlar, iptal nedenleri, dağılımlar ve Excel raporu", aksiyon=[]),
     ]),
     ("ÖĞRENCİ & FAALİYET YÖNETİMİ", [
         dict(
@@ -1783,6 +1785,7 @@ QLabel {
         "Oda Yönetimi": (None, "odalari_getir"),
         "Danışanlar": ("danisanlar_ekrani", "verileri_cek"),
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
+        "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
     }
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
 
@@ -2257,6 +2260,19 @@ QLabel {
                 api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
             )
             il.addWidget(self.danisanlar_ekrani)
+
+            lay.addWidget(ik, 1)
+
+        elif oge["ad"] == "Randevu Raporları":
+            ik = kart_olustur()
+            ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            il = QVBoxLayout(ik)
+
+            from randevu_raporlari_ekrani import RandevuRaporlariEkrani
+            self.randevu_raporu_ekrani = RandevuRaporlariEkrani(
+                api_url=self.api_url, token=self.token, psikolog_mu=str(self.aktif_rol).lower() == "psikolog",
+            )
+            il.addWidget(self.randevu_raporu_ekrani)
 
             lay.addWidget(ik, 1)
 
