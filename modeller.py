@@ -282,7 +282,7 @@ class RandevuGuncelleModeli(BaseModel):
 # Danışan ve randevu sınıflandırmaları: KAPALI listeler (serbest metin yok - FR-008). İstemcideki listelerle aynı olmalıdır.
 YAS_GRUPLARI = {"COCUK": "Çocuk", "YETISKIN": "Yetişkin"}
 TERAPI_TURLERI = {"OYUN_TERAPISI": "Oyun terapisi", "BIREYSEL_TERAPI": "Bireysel terapi"}
-GORUSME_TIPLERI = {"YUZ_YUZE": "Yüz yüze", "ONLINE": "Online"}
+GORUSME_TIPLERI = {"YUZ_YUZE": "Yüz yüze", "ONLINE": "Çevrimiçi"}
 YAS_GRUBUNA_GORE_TERAPILER = {"COCUK": ("OYUN_TERAPISI", "BIREYSEL_TERAPI"), "YETISKIN": ("BIREYSEL_TERAPI",)}
 
 
