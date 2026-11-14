@@ -496,6 +496,23 @@ def test_duzenleme_formu_mevcut_gorusme_ve_terapiyi_gosterir_ve_gonderir(qt_app)
     form.close()
 
 
+def test_duzenleme_formunda_terapi_secenekleri_danisanin_yas_grubuna_gore_ve_baslik_kucuk(qt_app):
+    AKTIF["s"] = Sunucu()
+    temel = {"psikolog_id": 3, "oda_id": 2, "durum": "PLANLANDI", "baslangic_zamani": "2026-12-07T10:00:00",
+             "bitis_zamani": "2026-12-07T11:00:00", "gorusme_tipi": "YUZ_YUZE"}
+    yetiskin = RandevuDuzenleFormu("http://x", "T", 11, 7, {**temel, "danisan_kod_id": "DAN-2026-0001", "terapi_turu": "OYUN_TERAPISI"})
+    isle()
+    assert secenekler(yetiskin.cmb_terapi) == ["BIREYSEL_TERAPI"] and not yetiskin.cmb_terapi.isEnabled()   # oyun terapisi seçilemez
+    from PySide6.QtWidgets import QFrame
+    baslik = next(f for f in yetiskin.findChildren(QFrame) if f.findChildren(QLabel) and "Randevu Düzenle" in [e.text() for e in f.findChildren(QLabel)])
+    assert baslik.height() <= 50
+    yetiskin.close()
+    cocuk = RandevuDuzenleFormu("http://x", "T", 11, 7, {**temel, "danisan_kod_id": "DAN-2026-0002", "terapi_turu": None})
+    isle()
+    assert secenekler(cocuk.cmb_terapi) == [None, "OYUN_TERAPISI", "BIREYSEL_TERAPI"] and cocuk.cmb_terapi.isEnabled()
+    cocuk.close()
+
+
 # ------------------------------------------------------------------ Randevu Yönetimi tablosu
 def test_randevu_tablosu_gorusme_ve_terapi_sutunlari(qt_app):
     simdi = datetime.now()
