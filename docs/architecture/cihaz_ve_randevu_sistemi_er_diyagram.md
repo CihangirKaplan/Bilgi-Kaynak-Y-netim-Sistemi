@@ -1,137 +1,15 @@
-# Cihaz, Randevu, Kullanıcı Yönetim Sistemi - Varlık İlişki (ER) Diyagramı
+# TKYS - Güncel Veritabanı ER Diyagramı
+
+Bu diyagram, `D04_Data_Dictionary.md` belgesinde tanımlanan 29 uygulama tablosunu esas alır.
 
 ```mermaid
 erDiagram
-    roller {
-        int rol_id PK
-        string rol_adi UK
-    }
-
-    izinler {
-        int izin_id PK
-        string izin_adi UK
-        string aciklama
-    }
-
-    rol_izinleri {
-        int rol_id PK, FK
-        int izin_id PK, FK
-        smallint izin_var
-    }
-
-    kullanicilar {
-        int kullanici_id PK
-        string kullanici_adi UK
-        string parola_hash
-        int rol_id FK
-        boolean aktif_mi
-        timestamp olusturulma_tarihi
-    }
-
-    personel {
-        int personel_id PK
-        int kullanici_id UK, FK
-        string personel_kodu UK
-        boolean aktif_mi
-        timestamp olusturulma_tarihi
-    }
-
-    ogrenciler {
-        int ogrenci_id PK
-        int kullanici_id UK, FK
-        string ad_soyad
-        string ogrenci_numarasi UK
-        string telefon
-        ogrenci_turu tur
-        boolean aktif_mi
-        timestamp olusturulma_tarihi
-    }
-
-    odalar {
-        int oda_id PK
-        string oda_adi UK
-        int kapasite
-        boolean aktif_mi
-    }
-
     bolumler {
         int bolum_id PK
         string bolum_adi UK
         string sorumlu_ad_soyad
         string iletisim_bilgisi
         boolean aktif_mi
-    }
-
-    danisan_kodlari {
-        string danisan_kod_id PK
-        boolean ucretli_mi
-        string istisna_turu
-        boolean aktif_mi
-        timestamp olusturulma_tarihi
-    }
-
-    faaliyetler {
-        int faaliyet_id PK
-        string faaliyet_adi UK
-        int puan
-        boolean aktif_mi
-    }
-
-    faaliyet_birimleri {
-        int birim_id PK
-        string birim_adi UK
-        boolean aktif_mi
-    }
-
-    danisma_masasi_oturumlari {
-        int oturum_id PK
-        int ogrenci_id FK
-        timestamp baslangic_zamani
-        timestamp bitis_zamani
-        boolean onaylandi_mi
-    }
-
-    ogrenci_faaliyet_takip {
-        int takip_id PK
-        int ogrenci_id FK
-        int faaliyet_id FK
-        int adet
-        int birim_id FK
-        date faaliyet_tarihi
-        string aciklama
-        boolean onaylandi_mi
-        timestamp olusturulma_tarihi
-    }
-
-    randevular {
-        int randevu_id PK
-        string danisan_kod_id FK
-        int psikolog_id FK
-        int oda_id FK
-        timestamp baslangic_zamani
-        timestamp bitis_zamani
-        string durum
-        timestamp olusturulma_tarihi
-    }
-
-    oda_etkinlikleri {
-        int etkinlik_id PK
-        int oda_id FK
-        int organize_eden_personel_id FK
-        string etkinlik_adi
-        int katilimci_sayisi
-        timestamp baslangic_zamani
-        timestamp bitis_zamani
-        boolean iptal_edildi_mi
-    }
-
-    denetim_kayitlari {
-        bigint denetim_id PK
-        int kullanici_id FK
-        denetim_olay_turu olay_turu
-        string hedef_tablo
-        int hedef_kayit_id
-        timestamp olusturulma_tarihi
     }
 
     cihazlar {
@@ -141,7 +19,7 @@ erDiagram
         string marka_model
         string seri_no UK
         int zimmetli_oda_id FK
-        cihaz_durumu durum
+        string durum
         timestamp kayit_tarihi
     }
 
@@ -156,6 +34,7 @@ erDiagram
         int kullanilacak_oda_id FK
         string proje_turu
         string proje_adi_aciklamasi
+        timestamp rezervasyon_tarihi
     }
 
     cihaz_arizalari {
@@ -175,6 +54,10 @@ erDiagram
         text yapilan_islem
         decimal maliyet
         timestamp bakim_tarihi
+        date sonraki_bakim_tarihi
+        date bakim_baslangic_tarihi
+        date bakim_bitis_tarihi
+        int uyari_suresi_gun
     }
 
     cihaz_kalibrasyonlari {
@@ -184,6 +67,9 @@ erDiagram
         date gecerlilik_tarihi
         string sertifika_no
         timestamp islem_tarihi
+        date kalibrasyon_baslangic_tarihi
+        date kalibrasyon_bitis_tarihi
+        int uyari_suresi_gun
     }
 
     cihaz_bakim_planlari {
@@ -205,29 +91,242 @@ erDiagram
         timestamp son_guncelleme
     }
 
-    %% İlişkiler (Foreign Key Bağlantıları)
-    roller ||--o{ rol_izinleri : "sahiptir"
-    izinler ||--o{ rol_izinleri : "ait"
-    roller ||--o{ kullanicilar : "tanimlar"
-    kullanicilar ||--o| personel : "personelidir"
-    kullanicilar ||--o| ogrenciler : "ogrencisidir"
-    ogrenciler ||--o{ danisma_masasi_oturumlari : "acar"
-    ogrenciler ||--o{ ogrenci_faaliyet_takip : "gerceklestirir"
-    faaliyetler ||--o{ ogrenci_faaliyet_takip : "turu"
-    faaliyet_birimleri ||--o{ ogrenci_faaliyet_takip : "birimi"
-    danisan_kodlari ||--o{ randevular : "kullanilir"
-    personel ||--o{ randevular : "yurutur"
-    odalar ||--o{ randevular : "gerceklesir"
-    odalar ||--o{ oda_etkinlikleri : "ev_sahipligi_yapar"
-    personel ||--o{ oda_etkinlikleri : "organize_eder"
-    kullanicilar ||--o{ denetim_kayitlari : "tetikler"
-    odalar ||--o{ cihazlar : "zimmetlidir"
-    cihazlar ||--o{ cihaz_rezervasyonlari : "rezerve_edilir"
-    bolumler ||--o{ cihaz_rezervasyonlari : "talep_eder"
-    personel ||--o{ cihaz_rezervasyonlari : "yapar"
-    odalar ||--o{ cihaz_rezervasyonlari : "kullanilir"
-    cihazlar ||--o{ cihaz_arizalari : "arizalanir"
-    cihazlar ||--o{ cihaz_bakimlari : "bakim_gorur"
-    cihazlar ||--o{ cihaz_kalibrasyonlari : "kalibre_edilir"
-    cihazlar ||--o{ cihaz_bakim_planlari : "planlanir"
-    cihazlar ||--o{ cihaz_takip_parametreleri : "parametreleri_vardir"
+    danisan_kodlari {
+        string danisan_kod_id PK
+        boolean ucretli_mi
+        string istisna_turu
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+        int olusturan_psikolog_id FK
+        string yas_grubu
+    }
+
+    odalar {
+        int oda_id PK
+        string oda_adi UK
+        int kapasite
+        boolean aktif_mi
+    }
+
+    randevular {
+        int randevu_id PK
+        string danisan_kod_id FK
+        int psikolog_id FK
+        int oda_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        string durum
+        timestamp olusturulma_tarihi
+        string iptal_nedeni
+        string iptal_notu
+        string gorusme_tipi
+        string terapi_turu
+    }
+
+    oda_etkinlikleri {
+        int etkinlik_id PK
+        int oda_id FK
+        int organize_eden_personel_id FK
+        string etkinlik_adi
+        int katilimci_sayisi
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        boolean iptal_edildi_mi
+    }
+
+    psikolog_odalar {
+        int kullanici_id PK, FK
+        int oda_id PK, FK
+    }
+
+    roller {
+        int rol_id PK
+        string rol_adi UK
+        string gorunen_ad
+        boolean aktif_mi
+    }
+
+    izinler {
+        int izin_id PK
+        string izin_adi UK
+        string aciklama
+        string gorunen_ad
+    }
+
+    rol_izinleri {
+        int rol_id PK, FK
+        int izin_id PK, FK
+        smallint izin_var
+    }
+
+    kullanicilar {
+        int kullanici_id PK
+        string kullanici_adi UK
+        string parola_hash
+        int rol_id FK
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+        int basarisiz_giris_sayisi
+        timestamp kilit_bitis_zamani
+        boolean ilk_giris_mi
+    }
+
+    personel {
+        int personel_id PK
+        int kullanici_id FK, UK
+        string personel_kodu UK
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+        int varsayilan_oda_id FK
+    }
+
+    giris_captcha_kodlari {
+        string captcha_id PK
+        string kod_ozeti
+        timestamp gecerlilik_sonu
+        timestamp olusturulma_tarihi
+    }
+
+    giris_istek_limitleri {
+        string anahtar PK
+        timestamp pencere_baslangici
+        int istek_sayisi
+    }
+
+    parola_sifirlama_talepleri {
+        int talep_id PK
+        int kullanici_id FK
+        timestamp talep_zamani
+        string durum
+        timestamp kapanis_zamani
+        int kapatan_kullanici_id FK
+    }
+
+    ogrenciler {
+        int ogrenci_id PK
+        int kullanici_id FK, UK
+        string ad_soyad
+        string ogrenci_numarasi UK
+        string telefon
+        string tur
+        boolean aktif_mi
+        timestamp olusturulma_tarihi
+    }
+
+    danisma_masasi_oturumlari {
+        int oturum_id PK
+        int ogrenci_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+        boolean onaylandi_mi
+    }
+
+    faaliyet_birimleri {
+        int birim_id PK
+        string birim_adi UK
+        boolean aktif_mi
+    }
+
+    faaliyetler {
+        int faaliyet_id PK
+        string faaliyet_adi UK
+        int puan
+        boolean aktif_mi
+    }
+
+    ogrenci_faaliyet_takip {
+        int takip_id PK
+        int ogrenci_id FK
+        int faaliyet_id FK
+        int adet
+        int birim_id FK
+        date faaliyet_tarihi
+        string aciklama
+        boolean onaylandi_mi
+        timestamp olusturulma_tarihi
+        int kayit_puani
+    }
+
+    ogrenci_kayit_erteleme_gecmisi {
+        int erteleme_id PK
+        int ogrenci_id FK
+        string ogrenci_numarasi
+        date yeni_uyari_tarihi
+        int erteleyen_kullanici_id FK
+        timestamp olusturulma_tarihi
+    }
+
+    personel_faaliyet_kayitlari {
+        int kayit_id PK
+        int personel_id
+        int faaliyet_id FK
+        int birim_id FK
+        int miktar
+        int toplam_puan
+        timestamp kayit_tarihi
+    }
+
+    denetim_kayitlari {
+        bigint denetim_id PK
+        int kullanici_id FK
+        string olay_turu
+        string hedef_tablo
+        int hedef_kayit_id
+        timestamp olusturulma_tarihi
+        string version_num PK
+    }
+
+    %% Veritabanında tanımlı FK ilişkileri
+    odalar o|--o{ cihazlar : "zimmetli_oda_id"
+    cihazlar ||--o{ cihaz_rezervasyonlari : "cihaz_id"
+    bolumler o|--o{ cihaz_rezervasyonlari : "bolum_id"
+    personel o|--o{ cihaz_rezervasyonlari : "rezervasyonu_yapan_personel_id"
+    odalar o|--o{ cihaz_rezervasyonlari : "kullanilacak_oda_id"
+    cihazlar o|--o{ cihaz_arizalari : "cihaz_id"
+    cihazlar o|--o{ cihaz_bakimlari : "cihaz_id"
+    cihazlar o|--o{ cihaz_kalibrasyonlari : "cihaz_id"
+    cihazlar o|--o{ cihaz_bakim_planlari : "cihaz_id"
+    cihazlar o|--o{ cihaz_takip_parametreleri : "cihaz_id"
+    personel o|--o{ danisan_kodlari : "olusturan_psikolog_id"
+    danisan_kodlari ||--o{ randevular : "danisan_kod_id"
+    personel ||--o{ randevular : "psikolog_id"
+    odalar ||--o{ randevular : "oda_id"
+    odalar ||--o{ oda_etkinlikleri : "oda_id"
+    personel ||--o{ oda_etkinlikleri : "organize_eden_personel_id"
+    kullanicilar ||--o{ psikolog_odalar : "kullanici_id"
+    odalar ||--o{ psikolog_odalar : "oda_id"
+    roller ||--o{ rol_izinleri : "rol_id"
+    izinler ||--o{ rol_izinleri : "izin_id"
+    roller ||--o{ kullanicilar : "rol_id"
+    kullanicilar ||--o| personel : "kullanici_id"
+    odalar o|--o{ personel : "varsayilan_oda_id"
+    kullanicilar ||--o{ parola_sifirlama_talepleri : "kullanici_id"
+    kullanicilar o|--o{ parola_sifirlama_talepleri : "kapatan_kullanici_id"
+    kullanicilar o|--o| ogrenciler : "kullanici_id"
+    ogrenciler ||--o{ danisma_masasi_oturumlari : "ogrenci_id"
+    ogrenciler ||--o{ ogrenci_faaliyet_takip : "ogrenci_id"
+    faaliyetler ||--o{ ogrenci_faaliyet_takip : "faaliyet_id"
+    faaliyet_birimleri ||--o{ ogrenci_faaliyet_takip : "birim_id"
+    ogrenciler o|--o{ ogrenci_kayit_erteleme_gecmisi : "ogrenci_id"
+    kullanicilar o|--o{ ogrenci_kayit_erteleme_gecmisi : "erteleyen_kullanici_id"
+    faaliyetler o|--o{ personel_faaliyet_kayitlari : "faaliyet_id"
+    faaliyet_birimleri o|--o{ personel_faaliyet_kayitlari : "birim_id"
+    kullanicilar o|--o{ denetim_kayitlari : "kullanici_id"
+```
+
+## Diyagram notları
+
+- Diyagramda 29 uygulama tablosu bulunmaktadır.
+- `alembic_version` teknik migration tablosudur; uygulama ER diyagramına dahil edilmemiştir.
+- PK, FK ve UK işaretleri D04'teki veritabanı kısıtlarına dayanır.
+- İlişki çizgileri FK bağlantılarını gösterir. Kesin zorunluluk, NULL ve UNIQUE kuralları için D04 Veri Sözlüğü esas alınmalıdır.
+- `personel_faaliyet_kayitlari.personel_id` sütununda veritabanı FK kısıtı bulunmadığından personel tablosuna ilişki çizilmemiştir.
+- `cihazlar.durum`, `ogrenciler.tur` ve `denetim_kayitlari.olay_turu` VARCHAR alanlarıdır; PostgreSQL ENUM sütunları değildir.
+
+## Rezervasyon ve randevu çakışma kısıtları
+
+- `cihaz_rezervasyon_cakisma`: İptal edilmemiş aynı cihaz rezervasyonlarının zaman çakışmasını engeller.
+- `oda_randevu_cakisma`: PLANLANDI durumundaki aynı oda randevularının zaman çakışmasını engeller.
+- `psikolog_randevu_cakisma`: PLANLANDI durumundaki aynı psikoloğun randevularının zaman çakışmasını engeller.
+
+CHECK, DEFAULT ve NULL ayrıntıları için `D04_Data_Dictionary.md` belgesine bakılmalıdır.
