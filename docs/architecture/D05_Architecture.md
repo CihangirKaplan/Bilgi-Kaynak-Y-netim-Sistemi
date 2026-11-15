@@ -421,10 +421,11 @@ bitis_zamani = NULL
 Öğrenci "Bitir" işlemini yapar
         ↓
 bitis_zamani kaydedilir
-onaylandi_mi güncellenir
+        ↓
+Oturum yetkili onayına sunulur
 ```
 
-`bitis_zamani`, `baslangic_zamani` değerinden sonra olmak zorundadır.
+`bitis_zamani`, `baslangic_zamani` değerinden sonra olmak zorundadır. Oturumun tamamlanması ile yetkili tarafından onaylanması ayrı aşamalardır; onay durumu `onaylandi_mi` alanıyla takip edilir.
 
 ## 5.5. Faaliyetler, Faaliyet Birimleri ve Öğrenci Faaliyet Takibi
 
