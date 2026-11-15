@@ -74,6 +74,7 @@ jobs:
             --ignore=tests/integration/test_randevu_raporu_pg_quality.py \
             --ignore=tests/integration/test_girdi_fuzz_pg_quality.py \
             --ignore=tests/integration/test_yabanci_anahtar_indeks_pg_quality.py \
+            --ignore=tests/integration/test_kisitli_kullanici_pg_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
             --cov=server.sunucu \
             --cov=server.guvenlik \
@@ -174,6 +175,7 @@ jobs:
             tests/integration/test_admin_tum_izinler_pg_quality.py \
             tests/integration/test_kisisel_veri_ayrimi_pg_quality.py \
             tests/integration/test_yabanci_anahtar_indeks_pg_quality.py \
+            tests/integration/test_kisitli_kullanici_pg_quality.py \
             tests/integration/test_girdi_fuzz_pg_quality.py \
             tests/integration/test_randevu_iptal_durum_pg_quality.py \
             tests/integration/test_yas_terapi_gorusme_pg_quality.py \

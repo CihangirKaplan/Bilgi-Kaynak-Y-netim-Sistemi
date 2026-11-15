@@ -21,6 +21,9 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import sql
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from server.sema_kimligi import SemaKimligiHatasi, sema_kimligi  # noqa: E402
+
 load_dotenv()
 
 YEDEK_KLASORU = Path(__file__).resolve().parents[2] / "backups"
@@ -38,11 +41,20 @@ class GeriYuklemeHatasi(Exception):
     """Beklenen, kullanıcıya mesajla bildirilecek hata."""
 
 
+def _sema_kimligi():
+    """Yeni veritabanı oluşturup tablo yükleyebilen kimlik (kısıtlı uygulama kullanıcısı bunu yapamaz)."""
+    try:
+        return sema_kimligi()
+    except SemaKimligiHatasi as hata:
+        raise GeriYuklemeHatasi(str(hata)) from hata
+
+
 def _baglan(veritabani):
+    kullanici, parola = _sema_kimligi()
     return psycopg2.connect(
         dbname=veritabani,
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"],
+        user=kullanici,
+        password=parola,
         host=os.environ["DB_HOST"],
         port=os.environ["DB_PORT"],
     )
@@ -123,13 +135,21 @@ def geri_yukle(dump, hedef, kaynak):
             raise GeriYuklemeHatasi(
                 f"'{hedef}' veritabani zaten var; mevcut veritabaninin uzerine yazilmaz. Yeni bir ad secin."
             )
-        imlec.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(hedef)))
+        try:
+            imlec.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(hedef)))
+        except psycopg2.errors.InsufficientPrivilege as hata:
+            raise GeriYuklemeHatasi(
+                "Bağlanılan veritabanı kullanıcısı yeni veritabanı oluşturamaz (kısıtlı uygulama kullanıcısı). "
+                ".env dosyasına tam yetkili kullanıcının bilgilerini DB_MIGRATION_USER ve DB_MIGRATION_PASSWORD "
+                "olarak ekleyin, sonra geri yüklemeyi tekrar deneyin."
+            ) from hata
 
         ortam = os.environ.copy()
-        ortam["PGPASSWORD"] = ortam["DB_PASSWORD"]
+        sema_kullanici, sema_parola = _sema_kimligi()
+        ortam["PGPASSWORD"] = sema_parola
         komut = [
             pg_restore, "--no-password", "--no-owner", "--exit-on-error",
-            "--host", ortam["DB_HOST"], "--port", ortam["DB_PORT"], "--username", ortam["DB_USER"],
+            "--host", ortam["DB_HOST"], "--port", ortam["DB_PORT"], "--username", sema_kullanici,
             "--dbname", hedef, str(dump),
         ]
         try:

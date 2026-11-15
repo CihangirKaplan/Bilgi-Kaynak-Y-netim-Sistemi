@@ -120,6 +120,63 @@ Böyle bir durumda iş yavaşlamasın diye kurulumdan hemen sonra şunları yap�
 Geçici parolayı vermeden önce her zaman kullanıcının kimliğini doğrulayın; parolayı telefonda ya da mesajla
 değil, mümkünse yüz yüze iletin.
 
+## 6A. Önerilen güvenlik adımı: sunucuyu kısıtlı veritabanı kullanıcısıyla çalıştırın
+
+Şimdiye kadar sunucu veritabanına `postgres` (tam yetkili) kullanıcıyla bağlanıyordu. Sunucuda bir güvenlik açığı
+çıksa, saldırgan veritabanının tamamını silebilir ya da değiştirebilirdi. Bu bölümde sunucu için **yalnızca veri okuyup
+yazabilen** ayrı bir kullanıcı (`tkys_uygulama`) oluşturulur. Bu kullanıcı:
+
+- tablo oluşturamaz, silemez, değiştiremez; süper kullanıcı değildir,
+- denetim kayıtlarına yalnızca satır ekleyebilir (değiştiremez, silemez),
+- ileride güncellemeyle eklenen yeni tablolara otomatik olarak okuma/yazma yetkisi alır.
+
+Tablo oluşturma ve güncelleme işleri (`alembic upgrade head`, yedekten geri yükleme) tam yetkili kullanıcıyla yapılmaya
+devam eder; onun bilgileri `.env` içinde ayrıca tutulur. Bu adım **zorunlu değildir**; yapılmazsa sistem eskisi gibi çalışır.
+Ofis sunucusuna kurarken yapmanız önerilir.
+
+**1. Şu anki tam yetkili kullanıcının bilgisini "şema kullanıcısı" olarak da yazın.** `.env` dosyasında `DB_USER` ve
+`DB_PASSWORD` satırlarında yazan değerleri aşağıdaki iki satıra aynen kopyalayın (örnek):
+
+    DB_MIGRATION_USER=postgres
+    DB_MIGRATION_PASSWORD=BURAYA_POSTGRES_PAROLASI
+
+**2. Önce önizleme çalıştırın** (hiçbir şeyi değiştirmez, ne yapacağını gösterir):
+
+    python scripts/uygulama_kullanicisi_olustur.py
+
+**3. Kullanıcıyı oluşturun:**
+
+    python scripts/uygulama_kullanicisi_olustur.py --uygula
+
+Araç kullanıcıyı oluşturur, yetkilerini ayarlar ve **gerçekten kısıtlı olduğunu kendisi doğrular**. Sonunda rastgele bir
+parolayı ekrana **yalnızca bir kez** yazar; hemen kopyalayın.
+
+**4. `.env` dosyasındaki `DB_USER` ve `DB_PASSWORD` satırlarını değiştirin:**
+
+    DB_USER=tkys_uygulama
+    DB_PASSWORD=ARACIN_GOSTERDIGI_YENI_PAROLA
+
+`DB_MIGRATION_USER` ve `DB_MIGRATION_PASSWORD` satırları olduğu gibi kalmalıdır.
+
+**5. Sunucuyu yeniden başlatın ve deneyin:**
+
+    schtasks /End /TN TKYS_Sunucu
+    schtasks /Run /TN TKYS_Sunucu
+
+Tarayıcıda `http://SUNUCU_ADRESI:8000/api/saglik` açılmalı, uygulamadan giriş yapabilmelisiniz.
+
+**Sonrasında bilmeniz gerekenler**
+
+- **Güncelleme** (11. bölüm): `python -m alembic upgrade head` komutu `DB_MIGRATION_*` bilgisiyle kendiliğinden tam yetkiyle
+  çalışır; yeni tablolar `tkys_uygulama` kullanıcısına otomatik yetkilendirilir.
+- **Yedekleme** (10. bölüm) kısıtlı kullanıcıyla çalışır; yalnızca okur.
+- **Yedekten geri yükleme** yeni veritabanı oluşturduğu için `DB_MIGRATION_*` bilgisi gerekir. Yoksa araç bunu açıkça söyler.
+- Parolayı unutursanız ya da yenilemek isterseniz: `python scripts/uygulama_kullanicisi_olustur.py --uygula --parolayi-yenile`
+  (yeni parolayı `.env` içindeki `DB_PASSWORD` satırına yazın).
+- **`.env` dosyası artık tam yetkili parolayı da içerir.** Dosyaya yalnızca sunucuyu yöneten kişinin erişebildiğinden emin olun;
+  GitHub'a asla göndermeyin (zaten `.gitignore` ile gizlidir).
+- Eski haline dönmek için `.env` içinde `DB_USER` ve `DB_PASSWORD` satırlarını tekrar tam yetkili kullanıcınınkilerle değiştirmeniz yeter.
+
 ## 7. Sunucuyu ağa açın
 
 Sunucu bilgisayarının adresini öğrenin:
