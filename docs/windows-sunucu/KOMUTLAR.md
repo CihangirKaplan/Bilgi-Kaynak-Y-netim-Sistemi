@@ -50,15 +50,42 @@ alembic heads
 
 Migration uygulamadan önce yedek ve veritabanı bağlantısı doğrulanmalıdır.
 
-## FastAPI sunucusu
 
-Proje klasöründe ve sanal ortam etkinleştirilmişken:
+## TKYS sunucusunu elle başlatma
+
+Windows PowerShell'de, proje klasöründe ve sanal ortam etkinleştirilmişken:
 
 ```powershell
-python -m uvicorn sunucu:app --host 0.0.0.0 --port 8000
+python scripts/windows/sunucu_baslat.py
 ```
 
-Sunucu başlatılmadan önce veritabanı bağlantısı ve migration sürümü kontrol edilmelidir.
+Bu betik PostgreSQL bağlantısını bekler, FastAPI'yi başlatır ve sunucu beklenmedik şekilde kapanırsa yeniden başlatır.
+
+## Windows açılışında otomatik başlatma
+
+Önce `.env` ayarlarını, veritabanı bağlantısını ve migration durumunu doğrulayın.
+
+Yönetici yetkili PowerShell'de:
+
+```powershell
+python scripts/windows/sunucu_kurulum.py
+```
+
+Bu işlem `TKYS_Sunucu` adlı zamanlanmış görevi oluşturur.
+
+Görevi kontrol etmek için:
+
+```powershell
+schtasks /Query /TN TKYS_Sunucu
+```
+
+Görevi kaldırmak için:
+
+```powershell
+python scripts/windows/sunucu_kurulum.py --kaldir
+```
+
+Varsayılan görev SYSTEM hesabıyla çalışır. Windows üzerinde dosya izinleri, veritabanı erişimi ve `logs/sunucu.log` kontrol edilmelidir.
 
 ## Yerel API kontrolü
 
