@@ -60,26 +60,28 @@ python -m alembic upgrade head
 
 **5) Geliştirme kullanıcılarını ekle** (isteğe bağlı)
 ```powershell
-python ilk_kurulum.py
+> **Dikkat:** Bu komut yalnızca yerel `crkys_alembic_test` veritabanında, `TKYS_PG_TEST_ONAY=EVET` onayıyla kullanılmalıdır. Canlı veritabanında çalıştırılmamalıdır.
+
+python -m scripts.ilk_kurulum
 ```
-Bu betik her rol için (psikolog, memur, müdür, danışma öğrencisi, proje asistanı, admin) bir test kullanıcısı oluşturur. Parolaları betiğin içinde yazar ve bilinen parolalardır, bu yüzden **yalnızca geliştirme ortamında** kullanın, gerçek (canlı) veritabanında çalıştırmayın. Canlı kurulum için `docs/Sunucu_Kurulum_Kilavuzu.md` dosyasına ve `scripts/ilk_admin_olustur.py` betiğine bakın.
+Bu betik her rol için (psikolog, memur, müdür, danışma öğrencisi, proje asistanı, admin) bir test kullanıcısı oluşturur. Parolaları betiğin içinde yazar ve bilinen parolalardır, bu yüzden **yalnızca geliştirme ortamında** kullanın, gerçek (canlı) veritabanında çalıştırmayın. Canlı kurulum için `docs/deployment/Sunucu_Kurulum_Kilavuzu.md` dosyasına ve `scripts/ilk_admin_olustur.py` betiğine bakın.
 
 ## Çalıştırma
 
 **Sunucu** (bir terminalde):
 ```powershell
-uvicorn sunucu:app --reload
+uvicorn server.sunucu:app --reload
 ```
 API dokümantasyonu (varsayılan kapalıdır; açmak için `.env` dosyasına `TKYS_API_DOCS=1` yazıp sunucuyu yeniden başlatın): http://127.0.0.1:8000/docs
 
 **İstemci** (başka bir terminalde):
 ```powershell
-python login_ekrani.py
+python -m client.login_ekrani
 ```
 İstemci varsayılan olarak `http://127.0.0.1:8000` adresindeki sunucuya bağlanır. Sunucu başka bir bilgisayardaysa adresi şöyle verin:
 ```powershell
 $env:TKYS_API_URL = "http://SUNUCU_ADRESI:8000"
-python login_ekrani.py
+python -m client.login_ekrani
 ```
 
 ## Roller
@@ -96,7 +98,7 @@ python -m pytest -q tests
 
 **Gerçek PostgreSQL gerektiren testler** (QA-001) ana veritabanını korumak için kilitlidir: yalnızca ayrı bir test veritabanında (`crkys_alembic_test`, önce `alembic upgrade head` ile hazırlanır) ve `TKYS_PG_TEST_ONAY=EVET` ortam değişkeni verilirse çalışır. Bu koşullar yoksa bu testler bilerek başarısız olur.
 
-Depoda düz yazılı şifre/anahtar bulunmadığını doğrulayan bir test de vardır (`tests/test_gizli_bilgi_taramasi.py`).
+Depoda düz yazılı şifre/anahtar bulunmadığını doğrulayan bir test de vardır (`tests/security/test_gizli_bilgi_taramasi.py`).
 
 ## Yedekleme
 
@@ -104,10 +106,10 @@ PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadı
 
 | Amaç | Komut |
 |---|---|
-| Yedek al (`backups/<veritabani>_<tarih>.dump`) | `python scripts/veritabani_yedekle.py` |
-| Yedek al + 7 günden eski yedekleri sil | `python scripts/otomatik_yedekleme.py` |
-| Eski yedekleri önizle / sil | `python scripts/yedek_rotasyonu.py --days 7` (silmek için `--apply`) |
-| Yedeği **yeni** veritabanına geri yükle ve kontrol et | `python scripts/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi` |
+| Yedek al (`backups/<veritabani>_<tarih>.dump`) | `python scripts/backup/veritabani_yedekle.py` |
+| Yedek al + 7 günden eski yedekleri sil | `python scripts/backup/otomatik_yedekleme.py` |
+| Eski yedekleri önizle / sil | `python scripts/backup/yedek_rotasyonu.py --days 7` (silmek için `--apply`) |
+| Yedeği **yeni** veritabanına geri yükle ve kontrol et | `python scripts/restore/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi` |
 
 - Yedekleme yalnızca okur, veritabanını değiştirmez. Rotasyon yalnızca seçilen veritabanının, tam ad biçimine uyan yedeklerini siler.
 - Geri yükleme **hiçbir mevcut veritabanının üzerine yazmaz**: hedef veritabanı yeni olmalıdır, canlı veritabanı hedef olarak kabul edilmez, hata olursa oluşturulan yarım veritabanı silinir. Sonunda tablo satır sayıları ve migration sürümü yedeğin alındığı veritabanıyla yan yana gösterilir.
@@ -115,9 +117,9 @@ PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadı
 
 ## Dokümanlar
 
-- `docs/D01_Process_Analysis.md`, `docs/D02_Requirements_v1.md`: süreç ve gereksinim analizi
+- `docs/D01_Process_Analysis.md`, `docs/requirements/D02_Requirements_v1.md`: süreç ve gereksinim analizi
 - `docs/architecture/`: mimari (D05), veri sözlüğü (D04), tehdit modeli (D06)
-- `docs/QA-001_Kalite_Test_Raporu.md` ve `docs/test-reports/`: kalite ve performans test raporları
+- `docs/test-reports/QA-001_Kalite_Test_Raporu.md` ve `docs/test-reports/`: kalite ve performans test raporları
 
 ## Katkı kuralları
 

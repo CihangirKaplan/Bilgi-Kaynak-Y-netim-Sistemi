@@ -20,7 +20,7 @@ tam yolu olarak tanımlayın.
 
 Önce manuel yedeklemeyi test edin:
 
-    python scripts/veritabani_yedekle.py
+    python scripts/backup/veritabani_yedekle.py
 
 Ardından günlük otomatik görevi oluşturun:
 
@@ -40,14 +40,14 @@ Başarılı yedekleme sonrasında 7 günden eski yedekler temizlenir.
 
 Yedeği **yeni** bir veritabanına yükleyip kayıt sayılarını karşılaştırın:
 
-    python scripts/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi
+    python scripts/restore/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi
 
 Araç mevcut hiçbir veritabanının üzerine yazmaz. Doğrulamadan sonra test veritabanını kendiniz silin.
 
 ## Önemli
 
 - Yedeklenen veritabanı .env dosyasındaki DB_NAME'dir (ana veritabanı). Yedekleme yalnızca okur,
-  veritabanını değiştirmez. Başka bir veritabanı için: python scripts/veritabani_yedekle.py --database AD
+  veritabanını değiştirmez. Başka bir veritabanı için: python scripts/backup/veritabani_yedekle.py --database AD
 - Daha önce kurulmuş görev varsa yeniden kurmaya gerek yoktur; betik güncellenince görev bir sonraki
   çalışmada ana veritabanını yedekler.
 - Otomatik görev, bilgisayar kapalıyken çalışmaz.

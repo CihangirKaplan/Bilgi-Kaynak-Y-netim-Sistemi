@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psycopg2
 from dotenv import load_dotenv
 
-from denetim import denetim_kaydi_olustur
-from guvenlik import gecici_parola_uret, parola_hashle
+from server.denetim import denetim_kaydi_olustur
+from server.guvenlik import gecici_parola_uret, parola_hashle
 
 load_dotenv()
 

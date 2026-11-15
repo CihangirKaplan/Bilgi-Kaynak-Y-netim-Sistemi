@@ -15,7 +15,7 @@ def main():
         raise SystemExit("Bu kurulum yalnizca Windows'ta calisir.")
 
     proje = Path(__file__).resolve().parents[2]
-    script = proje / "scripts" / "otomatik_yedekleme.py"
+    script = proje / "scripts" / "backup" / "otomatik_yedekleme.py"
 
     if not script.is_file():
         raise SystemExit("Otomatik yedekleme scripti bulunamadi.")

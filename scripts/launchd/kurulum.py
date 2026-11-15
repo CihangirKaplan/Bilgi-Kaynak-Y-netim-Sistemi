@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 PROJE = Path(__file__).resolve().parents[2]
-SCRIPT = PROJE / "scripts" / "otomatik_yedekleme.py"
+SCRIPT = PROJE / "scripts" / "backup" / "otomatik_yedekleme.py"
 HEDEF = Path.home() / "Library" / "LaunchAgents" / "tr.edu.tkys.backup.plist"
 
 def main():
