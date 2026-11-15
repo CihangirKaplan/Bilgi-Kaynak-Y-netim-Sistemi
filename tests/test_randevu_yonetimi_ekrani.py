@@ -223,7 +223,7 @@ def ornek_liste():
 def test_basliklar_psikolog_sutunu_var_olusturulma_tarihi_yok():
     ekran = ekran_ac(Sunucu([]))
     basliklar = [ekran.tablo.horizontalHeaderItem(i).text() for i in range(ekran.tablo.columnCount())]
-    assert basliklar == ["Randevu ID", "Danışan Kodu", "Psikolog", "Oda", "Tarih", "Saat", "Durum"]
+    assert basliklar == ["Randevu ID", "Danışan Kodu", "Psikolog", "Oda", "Tarih", "Saat", "Görüşme", "Terapi", "Durum"]
     ekran.close()
 
 
@@ -299,7 +299,7 @@ def test_durum_rozetleri_yumusak_renkli_ve_iptal_kirmizi_degil():
     ekran.chk_iptal_gizle.setChecked(False)
     rozetler = {}
     for satir in range(ekran.tablo.rowCount()):
-        etiket = ekran.tablo.cellWidget(satir, 6).findChild(QLabel)
+        etiket = ekran.tablo.cellWidget(satir, 8).findChild(QLabel)
         rozetler[etiket.text().replace("  ▾", "")] = etiket.styleSheet()     # geçmiş randevularda tıklanabilir rozet ▾ taşır
     assert set(rozetler) == {"Planlandı", "Tamamlandı", "Gelmedi", "İptal Edildi"}
     assert "#DBEAFE" in rozetler["Planlandı"] and "#1D4ED8" in rozetler["Planlandı"]       # mavi

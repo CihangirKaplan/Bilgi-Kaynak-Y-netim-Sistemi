@@ -364,9 +364,9 @@ def test_gecmis_randevu_isaretlenir(ekran_ac, yeni):
     sunucu = Sunucu([randevu(5, gun=-2)])
     ekran = ekran_ac(sunucu)
     sec(ekran, 5)
-    with patch.object(QMessageBox, "question") as soru:
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes) as soru:
         ekran.durum_isaretle(yeni)
-    soru.assert_not_called()                                                         # onay penceresi yok
+    soru.assert_called_once()                                                        # işaretleme onay ister
     assert ("PATCH", "http://testserver/api/randevular/5/durum") in sunucu.istekler
     assert sunucu.govdeler == [{"durum": yeni}]
     assert sunucu.istekler[-1][1].endswith("/api/randevular")                       # sonra liste yenilenir
