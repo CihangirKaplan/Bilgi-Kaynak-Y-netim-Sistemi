@@ -15,14 +15,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
 
+from server.sema_kimligi import sema_kimligi
+
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+_SEMA_KULLANICI, _SEMA_PAROLA = sema_kimligi()   # tabloları değiştirebilen kimlik (DB_MIGRATION_* yoksa DB_USER)
 
 config.set_main_option(
     "sqlalchemy.url",
     URL.create(
         drivername="postgresql+psycopg2",
-        username=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
+        username=_SEMA_KULLANICI,
+        password=_SEMA_PAROLA,
         host=os.getenv("DB_HOST"),
         port=int(os.getenv("DB_PORT", "5432")),
         database=os.getenv("DB_NAME"),
