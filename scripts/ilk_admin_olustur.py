@@ -1,6 +1,6 @@
 """Canlı veritabanı için ilk yönetici (ADMIN) hesabını oluşturur.
 
-ilk_kurulum.py bilinen parolalı TEST kullanıcıları ekler ve canlıda kullanılmamalıdır.
+scripts/ilk_kurulum.py bilinen parolalı TEST kullanıcıları ekler ve canlıda kullanılmamalıdır.
 Bu betik onun yerine geçer: yalnızca bir ADMIN kullanıcısı oluşturur, rastgele bir
 geçici parola üretip ekrana BİR KEZ yazar ve ilk girişte parola değiştirmeyi zorunlu kılar.
 Veritabanında zaten bir ADMIN varsa hiçbir şey eklemez.
@@ -28,8 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psycopg2
 from dotenv import load_dotenv
 
-from denetim import denetim_kaydi_olustur
-from guvenlik import gecici_parola_uret, parola_hashle
+from server.denetim import denetim_kaydi_olustur
+from server.guvenlik import gecici_parola_uret, parola_hashle
 
 load_dotenv()
 

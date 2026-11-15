@@ -46,7 +46,7 @@ def ayarlar():
 
 
 def sunucu_komutu(host, port):
-    return [sys.executable, "-m", "uvicorn", "sunucu:app", "--host", host, "--port", str(port)]
+    return [sys.executable, "-m", "uvicorn", "server.sunucu:app", "--host", host, "--port", str(port)]
 
 
 def veritabani_hazir_mi(db_host, db_port, zaman_asimi=3):

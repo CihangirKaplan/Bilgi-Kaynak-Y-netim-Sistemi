@@ -67,7 +67,7 @@ def postgresql_test_guvenligi(request, monkeypatch):
             "Calistirmak icin TKYS_PG_TEST_ONAY=EVET gerekli."
         )
 
-    from sunucu import VT_AYARLARI
+    from server.sunucu import VT_AYARLARI
 
     db_adi = VT_AYARLARI.get("dbname")
     db_host = str(VT_AYARLARI.get("host") or "").lower().strip()

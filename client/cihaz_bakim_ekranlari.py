@@ -1,0 +1,444 @@
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
+    QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
+    QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit, QFrame
+)
+from PySide6.QtCore import Qt, QDate
+import requests
+from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
+from client.tekrar_uyari_alanlari import TekrarUyariAlanlari
+from client.plan_secimi import PlanSecimi
+from client.api_yoneticisi import (
+    oturum_kontrollu_istek,
+    oturum_hatasi_mi,
+    api_hata_mesaji,
+)
+from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
+                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
+                            yenile_butonu_olustur, bos_mesaj_olustur)
+
+BAKIM_CAKISMA_METINLERI = (
+    "Bu tarihlerde rezervasyon var",
+    "Cihaz bu tarihlerde bakımda olacağı için aşağıdaki rezervasyonlarla çakışıyor. "
+    "Bakımı kaydetmek için gerekli olanları iptal edebilirsiniz.",
+    "Bakımı kaydet",
+)
+
+class YeniBakimFormu(QDialog):
+    def __init__(self, api_url, token, parent=None):
+        super().__init__(parent)
+        self.api_url = api_url
+        self.token = token
+
+        self.setWindowTitle("Yeni Bakım Kaydı")
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
+
+        self.setStyleSheet(FORM_STIL)
+
+        layout = QVBoxLayout(self)
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+
+        self.cmb_cihaz = QComboBox()
+        self.txt_kisi = QLineEdit()
+        self.txt_islem = QTextEdit()
+        self.txt_islem.setMaximumHeight(80)
+        self.txt_maliyet = QLineEdit("0.0")
+
+        # --- YENİ EKLENEN: BAŞLANGIÇ VE BİTİŞ TARİHLERİ ---
+        self.dt_baslangic = QDateEdit(QDate.currentDate())
+        self.dt_baslangic.setCalendarPopup(True)
+
+        self.dt_bitis = QDateEdit(QDate.currentDate())
+        self.dt_bitis.setCalendarPopup(True)
+
+        self.dt_sonraki_bakim = QDateEdit(QDate.currentDate().addMonths(6))
+        self.dt_sonraki_bakim.setCalendarPopup(True)
+
+        form_layout.addRow("Cihaz (*):", self.cmb_cihaz)
+        form_layout.addRow("Bakım Yapan Kişi (*):", self.txt_kisi)
+        form_layout.addRow("Yapılan İşlem (*):", self.txt_islem)
+        form_layout.addRow("Maliyet (₺):", self.txt_maliyet)
+        form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
+
+        # Tekrar aralığı seçilince sonraki tarih kendiliğinden hesaplanır; uyarı süresi zil/dashboard içindir.
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım", varsayilan_ay=6)
+        # Cihazın bakım planı varsa kayıt ona bağlanabilir (tarih ve bildirim plandan gelir).
+        self.plan_secimi = PlanSecimi(self.api_url, self.token, False, self.cmb_cihaz, self.dt_bitis, self.tekrar, self)
+        self.plan_secimi.satirlari_ekle(form_layout)
+        self.tekrar.satirlari_ekle(form_layout, "Sonraki bakım:")
+
+        layout.addLayout(form_layout)
+
+        self.lbl_cihaz_hatasi = QLabel()
+        self.lbl_cihaz_hatasi.setWordWrap(True)
+        self.lbl_cihaz_hatasi.setStyleSheet("color: #B42318;")
+        self.lbl_cihaz_hatasi.hide()
+        layout.addWidget(self.lbl_cihaz_hatasi)
+
+        self.btn_kaydet = QPushButton("Kaydet")
+        self.btn_kaydet.setObjectName("kaydet")
+        self.btn_kaydet.setCursor(Qt.PointingHandCursor)
+        self.btn_kaydet.clicked.connect(self.kaydet)
+        self.btn_kaydet.setEnabled(False)
+        layout.addWidget(self.btn_kaydet)
+
+        self.cihazlari_yukle()
+
+    def cihazlari_yukle(self):
+        self.btn_kaydet.setEnabled(False)
+        self.cmb_cihaz.clear()
+        self.lbl_cihaz_hatasi.hide()
+
+        try:
+            cevap = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/cihazlar",
+                headers={"Authorization": f"Bearer {self.token}"},
+                timeout=10,
+            )
+
+            if oturum_hatasi_mi(cevap):
+                return
+
+            if cevap.status_code != 200:
+                self.lbl_cihaz_hatasi.setText(api_hata_mesaji(cevap))
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            cihazlar = cevap.json()
+
+            if not isinstance(cihazlar, list):
+                raise ValueError("Geçersiz cihaz listesi")
+
+            if not cihazlar:
+                self.lbl_cihaz_hatasi.setText(
+                    "Sistemde kayıtlı cihaz bulunmamaktadır."
+                )
+                self.lbl_cihaz_hatasi.show()
+                return
+
+            for cihaz in cihazlar:
+                self.cmb_cihaz.addItem(
+                    f"{cihaz['envanter_kodu']} - {cihaz['cihaz_adi']}",
+                    cihaz["cihaz_id"],
+                )
+
+            self.btn_kaydet.setEnabled(True)
+
+        except Exception as hata:
+            self.cmb_cihaz.clear()
+            self.lbl_cihaz_hatasi.setText(
+                api_hata_mesaji(hata=hata)
+            )
+            self.lbl_cihaz_hatasi.show()
+
+
+    def kaydet(self):
+        # TL Formatı Düzeltici: 10.000,50 veya 10000 veya 10,50'yi anlar
+        metin = self.txt_maliyet.text().strip()
+        if '.' in metin and ',' in metin:
+            metin = metin.replace('.', '').replace(',', '.')
+        elif '.' in metin and len(metin.split('.')[-1]) == 3:
+            metin = metin.replace('.', '')
+        else:
+            metin = metin.replace(',', '.')
+
+        try:
+            maliyet = float(metin)
+        except ValueError:
+            maliyet = 0.0
+
+        # GÜVENLİK YAMASI: Eski model "bakim_tarihi" bekliyorsa diye onu da pakete ekliyoruz
+        veri = {
+            "cihaz_id": self.cmb_cihaz.currentData(),
+            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"), # EKLENDİ
+            "bakim_yapan_kisi": self.txt_kisi.text().strip(),
+            "yapilan_islem": self.txt_islem.toPlainText().strip(),
+            "maliyet": maliyet,
+            "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
+            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
+        }
+        if self.plan_secimi.plan_id() is not None:
+            veri["plan_id"] = self.plan_secimi.plan_id()
+
+        if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
+            QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            return
+
+        try:
+            res = cakisma_cozumlu_istek(self, "POST", f"{self.api_url}/api/bakimlar", veri, {"Authorization": f"Bearer {self.token}"}, *BAKIM_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
+                return
+            if res.status_code == 201:
+                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
+                self.accept()
+            else:
+                # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
+                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+
+class BakimDuzenleFormu(QDialog):
+    def __init__(self, api_url, token, bakim_verisi, parent=None):
+        super().__init__(parent)
+        self.api_url = api_url
+        self.token = token
+        self.bakim_verisi = bakim_verisi
+
+        self.setWindowTitle("Bakım Kaydını Düzenle")
+        self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
+
+        self.setStyleSheet(FORM_STIL)
+
+        layout = QVBoxLayout(self)
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(15)
+
+        self.txt_cihaz = QLineEdit(bakim_verisi.get("cihaz_adi", ""))
+        self.txt_cihaz.setReadOnly(True)
+        self.txt_kisi = QLineEdit(bakim_verisi.get("bakim_yapan_kisi", ""))
+
+        maliyet_str = str(bakim_verisi.get("maliyet", "0.0"))
+        self.txt_maliyet = QLineEdit(maliyet_str)
+
+        self.txt_islem = QTextEdit(bakim_verisi.get("yapilan_islem", ""))
+        self.txt_islem.setMaximumHeight(80)
+
+        # --- TARİHLERİ GÜVENLİ ÇEKME (Hiçbir şekilde patlamaz) ---
+        baslangic_str = bakim_verisi.get("bakim_baslangic_tarihi") or bakim_verisi.get("bakim_tarihi") or QDate.currentDate().toString("yyyy-MM-dd")
+        bitis_str = bakim_verisi.get("bakim_bitis_tarihi") or baslangic_str
+        sonraki_str = bakim_verisi.get("sonraki_bakim_tarihi") or QDate.currentDate().addMonths(6).toString("yyyy-MM-dd")
+
+        self.dt_baslangic = QDateEdit(QDate.fromString(str(baslangic_str)[:10], "yyyy-MM-dd"))
+        self.dt_baslangic.setCalendarPopup(True)
+
+        self.dt_bitis = QDateEdit(QDate.fromString(str(bitis_str)[:10], "yyyy-MM-dd"))
+        self.dt_bitis.setCalendarPopup(True)
+
+        self.dt_sonraki_bakim = QDateEdit(QDate.fromString(str(sonraki_str)[:10], "yyyy-MM-dd"))
+        self.dt_sonraki_bakim.setCalendarPopup(True)
+
+        form_layout.addRow("Cihaz (Değiştirilemez):", self.txt_cihaz)
+        form_layout.addRow("Bakımı Yapan Kişi (*):", self.txt_kisi)
+        form_layout.addRow("Maliyet (₺):", self.txt_maliyet)
+        form_layout.addRow("Yapılan İşlem (*):", self.txt_islem)
+        form_layout.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form_layout.addRow("Bitiş Tarihi (*):", self.dt_bitis)
+
+        # Kayıtlı tarih korunur ("Elle gireceğim"); aralık seçilirse bitişe göre yeniden hesaplanır.
+        self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_sonraki_bakim, "Sonraki bakım",
+                                          uyari_suresi=bakim_verisi.get("uyari_suresi_gun", 30))
+        self.tekrar.satirlari_ekle(form_layout, "Sonraki bakım:")
+
+        layout.addLayout(form_layout)
+
+        btn_kaydet = QPushButton("Değişiklikleri Kaydet")
+        btn_kaydet.setObjectName("kaydet")
+        btn_kaydet.setCursor(Qt.PointingHandCursor)
+        btn_kaydet.clicked.connect(self.kaydet)
+        layout.addWidget(btn_kaydet)
+
+    def kaydet(self):
+        # TL Formatı Düzeltici
+        metin = self.txt_maliyet.text().strip()
+        if '.' in metin and ',' in metin:
+            metin = metin.replace('.', '').replace(',', '.')
+        elif '.' in metin and len(metin.split('.')[-1]) == 3:
+            metin = metin.replace('.', '')
+        else:
+            metin = metin.replace(',', '.')
+
+        try:
+            maliyet = float(metin)
+        except ValueError:
+            maliyet = 0.0
+
+        veri = {
+            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "bakim_yapan_kisi": self.txt_kisi.text().strip(),
+            "yapilan_islem": self.txt_islem.toPlainText().strip(),
+            "maliyet": maliyet,
+            "bakim_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
+            "bakim_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
+            "sonraki_bakim_tarihi": self.dt_sonraki_bakim.date().toString("yyyy-MM-dd"),
+            "uyari_suresi_gun": self.tekrar.uyari_suresi()
+        }
+
+        if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
+            QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            return
+
+        try:
+            res = cakisma_cozumlu_istek(self, "PUT", f"{self.api_url}/api/bakimlar/{self.bakim_verisi['bakim_id']}", veri, {"Authorization": f"Bearer {self.token}"}, *BAKIM_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
+                return
+            if res.status_code == 200:
+                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
+                self.accept()
+            else:
+                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+
+class BakimYonetimEkrani(QWidget):
+    """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
+    def __init__(self, api_url, token):
+        super().__init__()
+        self.api_url = api_url
+        self.token = token
+        self.basliklar = {"Authorization": f"Bearer {token}"}
+        self.bakim_detaylari = {}
+        self.arayuzu_olustur()
+
+    def arayuzu_olustur(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        self.arama = QLineEdit()
+        self.arama.setPlaceholderText("🔍  Cihaz, kişi veya işlem ara...")
+        self.arama.textChanged.connect(self.filtrele)
+
+        self.cip_toplam = sayi_cipi("0 kayıt")
+        self.cip_yaklasan = sayi_cipi("0 yaklaşan", "#854D0E", "#FEF3C7")
+        self.cip_gecmis = sayi_cipi("0 gecikmiş", "#991B1B", "#FEE2E2")
+
+        layout.addWidget(sayfa_basligi(
+            "Cihaz Bakım Geçmişi", "Yapılan bakımlar ve planlanan sonraki bakım tarihleri",
+            self.arama, yenile_butonu_olustur(self.verileri_yukle),
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
+
+        self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"])
+        kb = self.tablo.horizontalHeader()
+        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(2, QHeaderView.Stretch)
+        kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(5, QHeaderView.Fixed)
+        kb.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(7, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(5, 230)
+        self.tablo.setColumnWidth(7, 110)
+
+        self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
+
+        kart = QFrame()
+        kart.setObjectName("kart")
+        kl = QVBoxLayout(kart)
+        kl.setContentsMargins(8, 8, 8, 8)
+        kl.addWidget(self.tablo)
+        kl.addWidget(self.bos_mesaj)
+        layout.addWidget(kart, 1)
+
+        self.verileri_yukle()
+
+    def verileri_yukle(self):
+        self.tablo.setRowCount(0)
+        self.bakim_detaylari.clear()
+        yaklasan = gecmis = 0
+        try:
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/bakimlar", headers=self.basliklar, timeout=10)
+            if oturum_hatasi_mi(res):
+                return
+            res.raise_for_status()
+            bakimlar = res.json()
+        except Exception as e:
+            print("Bakım listesi yükleme hatası:", e)
+            self.bos_mesaj.setText("Bakım kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
+            self.bos_mesaj.show()
+            self.tablo.hide()
+            return
+
+        self.tablo.setRowCount(len(bakimlar))
+        for i, b in enumerate(bakimlar):
+            self.bakim_detaylari[b["bakim_id"]] = b
+
+            maliyet = float(b.get("maliyet") or 0.0)
+            maliyet_metni = f"{maliyet:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
+
+            bas = tarih_goster(b.get("bakim_baslangic_tarihi") or b.get("bakim_tarihi"))
+            bit = tarih_goster(b.get("bakim_bitis_tarihi"))
+            tarih_metni = bas if bas == bit else f"{bas} – {bit}"
+
+            cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
+            cihaz_item.setData(Qt.UserRole, b["bakim_id"])
+            self.tablo.setItem(i, 0, cihaz_item)
+            self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
+            self.tablo.setItem(i, 2, metin_item(b.get("yapilan_islem", "")))
+            self.tablo.setItem(i, 3, metin_item(maliyet_metni, ortala=True))
+            self.tablo.setItem(i, 4, metin_item(tarih_metni, ortala=True))
+
+            sonraki = b.get("sonraki_bakim_tarihi")
+            if sonraki and sonraki != "Belirtilmedi":
+                widget, durum = kalan_gun_hapi(sonraki, b.get("uyari_suresi_gun", 30))
+                yaklasan += durum == "yaklasiyor"
+                gecmis += durum == "gecmis"
+            else:
+                widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
+            self.tablo.setCellWidget(i, 5, widget)
+
+            # Sonraki bakım planlanmadıysa bildirim de anlamsızdır
+            hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
+            self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
+
+            self.tablo.setCellWidget(i, 7, islem_butonlari(
+                lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
+                lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
+
+        self.cip_toplam.setText(f"{len(bakimlar)} kayıt")
+        self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
+        self.cip_gecmis.setText(f"{gecmis} gecikmiş")
+        self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
+        self.bos_mesaj.setVisible(not bakimlar)
+        self.tablo.setVisible(bool(bakimlar))
+        self.filtrele(self.arama.text())
+
+    def filtrele(self, metin):
+        """Cihaz, kişi ve işlem sütunlarında arama yapar."""
+        aranan = metin.strip().lower()
+        for satir in range(self.tablo.rowCount()):
+            icerik = " ".join(
+                (self.tablo.item(satir, k).text() if self.tablo.item(satir, k) else "")
+                for k in (0, 1, 2)).lower()
+            self.tablo.setRowHidden(satir, aranan not in icerik)
+
+    def yeni_bakim_ekle(self):
+        form = YeniBakimFormu(self.api_url, self.token, self)
+        if form.exec():
+            self.verileri_yukle()
+
+    def bakim_duzenle_ac(self, bakim_id):
+        secili_bakim = self.bakim_detaylari.get(bakim_id)
+        if secili_bakim:
+            form = BakimDuzenleFormu(self.api_url, self.token, secili_bakim, self)
+            if form.exec():
+                self.verileri_yukle()
+
+    def bakim_sil(self, bakim_id):
+        kayit = self.bakim_detaylari.get(bakim_id)
+        if not kayit:
+            return
+        if not sil_onayi(self, "Bakım Kaydını Sil",
+                         f"“{kayit.get('cihaz_adi', '')}” cihazının bu bakım kaydı silinsin mi?"):
+            return
+        try:
+            res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/bakimlar/{bakim_id}", headers=self.basliklar, timeout=10)
+            if oturum_hatasi_mi(res):
+                return
+            if res.status_code == 200:
+                self.verileri_yukle()
+            else:
+                hata = res.json().get("detail", "Bilinmeyen hata")
+                QMessageBox.warning(self, "Silinemedi", hata)
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
