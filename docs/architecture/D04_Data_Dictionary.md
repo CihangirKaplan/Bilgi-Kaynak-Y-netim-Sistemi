@@ -1,187 +1,443 @@
 # Veritabanı Veri Sözlüğü (Data Dictionary)
 
-Veritabanında kullanılan özel ENUM tipleri şu şekildedir:
-*   **`cihaz_durumu`**: `'Kullanima_Hazir'`, `'Rezerve'`, `'Kullanimda'`, `'Arizali'`, `'Bakimda'`, `'Kalibrasyonda'`, `'Kullanim_Disi'`
-*   **`denetim_olay_turu`**: `'LOGIN'`, `'LOGIN_FAILED'`, `'CREATE'`, `'UPDATE'`, `'CANCEL'`, `'ROLE_CHANGE'`, `'DEVICE_STATUS_CHANGE'`
+> Kaynak: PostgreSQL `public` şeması. Bu belge gerçek veritabanı sütun tipleri ve tanımlı kısıtlara göre hazırlanmıştır.
+> Veritabanı: `crkys` · Uygulama tablosu: **29** · Teknik sürüm tablosu: **1**.
+
+## PostgreSQL ENUM tipleri
+
+Aşağıdaki ENUM tipleri şemada tanımlıdır. Bir tipin tanımlı olması, benzer amaçlı `VARCHAR` sütunlarının o ENUM tipini kullandığı anlamına gelmez.
+
+- **`cihaz_durumu`:** `Kullanima_Hazir`, `Rezerve`, `Kullanimda`, `Arizali`, `Bakimda`, `Kalibrasyonda`, `Kullanim_Disi`
+- **`denetim_olay_turu`:** `LOGIN`, `LOGIN_FAILED`, `CREATE`, `UPDATE`, `CANCEL`, `ROLE_CHANGE`, `DEVICE_STATUS_CHANGE`, `DELETE`, `PASSWORD_RESET`, `PASSWORD_CHANGE`, `PASSWORD_CHANGE_FAILED`
+- **`ogrenci_turu`:** `GONULLU`, `DANISMA_MASASI`
+
+## Notasyon
+
+- **PK:** Primary Key; **FK:** Foreign Key; **UNIQUE:** benzersizlik; **CHECK:** veri doğrulama; **EXCLUDE:** çakışmayı engelleyen kısıt.
+- `NULL` ve `NOT NULL` doğrudan PostgreSQL sütun tanımından alınmıştır. `DEFAULT` belirtilmemişse veritabanı varsayılanı yoktur.
+- `SERIAL` ve `BIGSERIAL` ifadeleri, PostgreSQL'de sequence tabanlı otomatik artan `INTEGER`/`BIGINT` alanlarını açıklamak için kullanılmıştır.
+- **FK olmayan kimlik alanları:** Bir sütunun adı başka tabloya işaret etse bile, veritabanında FK tanımlı değilse FK olarak gösterilmez.
 
 ## 1. Cihaz ve Bölüm Yönetimi Modülü
 
-Bu modül, merkeze ait cihazların yaşam döngüsünü, zimmet durumlarını, arıza, bakım ve kalibrasyon süreçlerini yönetir.
+Merkeze ait cihazların envanter, rezervasyon, bakım, arıza, kalibrasyon ve takip süreçleri.
 
-**Tablo: `bolumler`** (Cihazların kiralandığı/verildiği yerler)
+### Tablo: `bolumler`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `bolum_id` | SERIAL | PRIMARY KEY | Bölümün benzersiz kimliği. |
-| `bolum_adi` | VARCHAR(150) | UNIQUE, NOT NULL | Bölümün adı (Örn: Nöroloji Lab). |
+| `bolum_id` | SERIAL (INTEGER) | PK; NOT NULL | Bölümün benzersiz kimliği. |
+| `bolum_adi` | VARCHAR(150) | UNIQUE; NOT NULL | Bölümün adı (Örn: Nöroloji Lab). |
 | `sorumlu_ad_soyad` | VARCHAR(100) | NOT NULL | Cihazı teslim alan yetkilinin adı soyadı. |
 | `iletisim_bilgisi` | VARCHAR(100) | NULL | Telefon veya dahili numara. |
-| `aktif_mi` | BOOLEAN | DEFAULT TRUE | Bölümün aktiflik durumu. |
+| `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Bölümün aktiflik durumu. |
 
-**Tablo: `cihazlar`** (Ana cihaz envanteri)
+### Tablo: `cihazlar`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `cihaz_id` | SERIAL | PRIMARY KEY | Cihazın benzersiz kimliği. |
-| `envanter_kodu` | VARCHAR(50) | UNIQUE, NOT NULL | Kurum içi cihaz takip kodu. |
+| `cihaz_id` | SERIAL (INTEGER) | PK; NOT NULL | Cihazın benzersiz kimliği. |
+| `envanter_kodu` | VARCHAR(50) | UNIQUE; NOT NULL | Kurum içi cihaz takip kodu. |
 | `cihaz_adi` | VARCHAR(100) | NOT NULL | Cihazın genel adı. |
 | `marka_model` | VARCHAR(100) | NULL | Cihazın marka ve modeli. |
-| `seri_no` | VARCHAR(100) | UNIQUE | Üretici seri numarası. |
-| `zimmetli_oda_id` | INT | FK -> `odalar(oda_id)` | Cihazın sabit olarak bulunduğu oda. |
-| `durum` | cihaz_durumu | DEFAULT 'Kullanima_Hazir' | Cihazın anlık operasyonel durumu. |
-| `kayit_tarihi` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Sisteme eklenme zamanı. |
+| `seri_no` | VARCHAR(100) | UNIQUE; NULL | Üretici seri numarası. |
+| `zimmetli_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Cihazın sabit olarak bulunduğu oda. |
+| `durum` | VARCHAR(50) | NULL; DEFAULT `'Kullanılabilir'::character varying` | Cihazın durumunu tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
+| `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Sisteme eklenme zamanı. |
 
-**Tablo: `cihaz_rezervasyonlari`** (Cihaz kiralama işlemleri)
+### Tablo: `cihaz_rezervasyonlari`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `rezervasyon_id` | SERIAL | PRIMARY KEY | Rezervasyonun benzersiz kimliği. |
-| `cihaz_id` | INT | FK -> `cihazlar(cihaz_id)` | Rezerve edilen cihaz. |
-| `bolum_id` | INT | FK -> `bolumler(bolum_id)` | Cihazın tahsis edildiği bölüm. |
-| `rezervasyonu_yapan_personel_id` | INT | FK -> `personel(personel_id)` | İşlemi gerçekleştiren personel. |
+| `rezervasyon_id` | SERIAL (INTEGER) | PK; NOT NULL | Rezervasyonun benzersiz kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Rezerve edilen cihaz. |
+| `bolum_id` | INTEGER | FK → `bolumler(bolum_id)`; NULL | Cihazın tahsis edildiği bölüm. |
+| `rezervasyonu_yapan_personel_id` | INTEGER | FK → `personel(personel_id)`; NULL | İşlemi gerçekleştiren personel. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Rezervasyon başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Rezervasyon bitişi. |
-| `iptal_edildi_mi` | BOOLEAN | DEFAULT FALSE | İptal durumu. |
-| `kullanilacak_oda_id` | INT | FK -> `odalar(oda_id)` | Cihazın kullanılacağı fiziksel oda. |
+| `iptal_edildi_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | İptal durumu. |
+| `kullanilacak_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Cihazın kullanılacağı fiziksel oda. |
+| `proje_turu` | VARCHAR(50) | NULL | Rezervasyonun ilişkili olduğu proje türü. |
+| `proje_adi_aciklamasi` | VARCHAR(255) | NULL | İlgili projenin adı veya açıklaması. |
+| `rezervasyon_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Rezervasyon kaydının oluşturulma zamanı. |
 
-**Tablo: `cihaz_arizalari`**
+**CHECK kısıtları:**
+
+- `cihaz_rezervasyon_zaman_kontrol`: `baslangic_zamani < bitis_zamani`
+
+**EXCLUDE kısıtları:**
+
+- `cihaz_rezervasyon_cakisma`: `EXCLUDE USING gist (cihaz_id WITH =, tsrange(baslangic_zamani, bitis_zamani, '[)'::text) WITH &&) WHERE ((iptal_edildi_mi = false))`
+
+### Tablo: `cihaz_arizalari`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `ariza_id` | SERIAL | PRIMARY KEY | Arıza kaydının kimliği. |
-| `cihaz_id` | INT | FK -> `cihazlar(cihaz_id)` | Arızalanan cihaz. |
+| `ariza_id` | SERIAL (INTEGER) | PK; NOT NULL | Arıza kaydının kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Arızalanan cihaz. |
 | `bildiren_personel` | VARCHAR(100) | NULL | Arızayı tespit/ihbar eden kişi. |
 | `ariza_aciklamasi` | TEXT | NOT NULL | Arızanın detayı. |
-| `bildirim_tarihi` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Arızanın sisteme girildiği tarih. |
+| `bildirim_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Arızanın sisteme girildiği tarih. |
 | `cozum_tarihi` | TIMESTAMP | NULL | Arızanın giderildiği tarih. |
-| `cozuldu_mu` | BOOLEAN | DEFAULT FALSE | Arıza onarım durumu. |
+| `cozuldu_mu` | BOOLEAN | NULL; DEFAULT `false` | Arıza onarım durumu. |
 
-**Tablo: `cihaz_bakimlari`**
+### Tablo: `cihaz_bakimlari`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `bakim_id` | SERIAL | PRIMARY KEY | Bakım işleminin kimliği. |
-| `cihaz_id` | INT | FK -> `cihazlar(cihaz_id)` | Bakım yapılan cihaz. |
+| `bakim_id` | SERIAL (INTEGER) | PK; NOT NULL | Bakım işleminin kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Bakım yapılan cihaz. |
 | `bakim_yapan_kisi` | VARCHAR(100) | NULL | İşlemi gerçekleştiren kişi/firma. |
 | `yapilan_islem` | TEXT | NULL | Uygulanan bakımın detayı. |
-| `maliyet` | DECIMAL(10,2) | NULL | Bakım maliyeti. |
-| `bakim_tarihi` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Bakımın gerçekleştiği tarih. |
+| `maliyet` | NUMERIC(10, 2) | NULL | Bakım maliyeti. |
+| `bakim_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Bakımın gerçekleştiği tarih. |
+| `sonraki_bakim_tarihi` | DATE | NULL | Planlanan bir sonraki bakım tarihi. |
+| `bakim_baslangic_tarihi` | DATE | NULL | Bakım sürecinin başlangıç tarihi. |
+| `bakim_bitis_tarihi` | DATE | NULL | Bakım sürecinin bitiş tarihi. |
+| `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Bakım tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
 
-**Tablo: `cihaz_kalibrasyonlari`**
+**CHECK kısıtları:**
+
+- `ck_cihaz_bakimlari_uyari_suresi_gun`: `uyari_suresi_gun >= 0 AND uyari_suresi_gun <= 365`
+
+### Tablo: `cihaz_kalibrasyonlari`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `kalibrasyon_id` | SERIAL | PRIMARY KEY | Kalibrasyon kaydının kimliği. |
-| `cihaz_id` | INT | FK -> `cihazlar(cihaz_id)` | Kalibre edilen cihaz. |
+| `kalibrasyon_id` | SERIAL (INTEGER) | PK; NOT NULL | Kalibrasyon kaydının kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Kalibre edilen cihaz. |
 | `kalibrasyon_yapan_kurum` | VARCHAR(100) | NULL | Kalibrasyonu sağlayan akredite kurum. |
 | `gecerlilik_tarihi` | DATE | NULL | Sertifikanın son geçerlilik tarihi. |
 | `sertifika_no` | VARCHAR(100) | NULL | Belge numarası. |
-| `islem_tarihi` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | İşlemin yapıldığı tarih. |
+| `islem_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | İşlemin yapıldığı tarih. |
+| `kalibrasyon_baslangic_tarihi` | DATE | NULL | Kalibrasyon sürecinin başlangıç tarihi. |
+| `kalibrasyon_bitis_tarihi` | DATE | NULL | Kalibrasyon sürecinin bitiş tarihi. |
+| `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Kalibrasyon tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
+
+**CHECK kısıtları:**
+
+- `ck_cihaz_kalibrasyonlari_uyari_suresi_gun`: `uyari_suresi_gun >= 0 AND uyari_suresi_gun <= 365`
+
+### Tablo: `cihaz_bakim_planlari`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `plan_id` | SERIAL (INTEGER) | PK; NOT NULL | Bakım veya takip planının benzersiz kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Planın ilişkili olduğu cihaz. |
+| `gorev_turu` | VARCHAR(100) | NOT NULL | Planlanan görev veya işlem türü. |
+| `periyot_gun` | INTEGER | NOT NULL | Görevin tekrar aralığı (gün). |
+| `uyari_suresi_gun` | INTEGER | NULL; DEFAULT `1` | Planlanan görev öncesindeki uyarı süresi (gün). |
+| `sonraki_gorev_tarihi` | DATE | NOT NULL | Görevin bir sonraki planlanan tarihi. |
+| `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Planın etkinlik durumu. |
+
+### Tablo: `cihaz_takip_parametreleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `parametre_id` | SERIAL (INTEGER) | PK; NOT NULL | Takip parametresi kaydının benzersiz kimliği. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Parametrenin ilişkili olduğu cihaz. |
+| `parametre_adi` | VARCHAR(100) | NOT NULL | Takip edilen özelliğin adı. |
+| `parametre_degeri` | VARCHAR(100) | NOT NULL | Takip edilen özelliğin kayıtlı değeri. |
+| `birim` | VARCHAR(50) | NULL | Parametre değerinin ölçü birimi. |
+| `son_guncelleme` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Parametre kaydının son güncellenme zamanı. |
 
 ## 2. Randevu ve Oda Yönetimi Modülü
 
-Bu modül, danışanların anonim kodlarını, fiziksel odaları ve bu odalarda gerçekleşecek randevu ile etkinlikleri kapsar.
+Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 
-**Tablo: `danisan_kodlari`**
+### Tablo: `danisan_kodlari`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `danisan_kod_id` | VARCHAR(50) | PRIMARY KEY | Danışanı temsil eden anonim operasyonel kod. |
-| `ucretli_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Hizmetin ücretli/ücretsiz durumu. |
-| `istisna_turu` | VARCHAR(50) | DEFAULT 'YOK' | Ücretsiz olma gerekçesi (Örn: Şehit/Gazi yakını). |
-| `aktif_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Kodun geçerlilik durumu. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL, DEFAULT CURRENT | Kodun sisteme eklendiği tarih. |
+| `danisan_kod_id` | VARCHAR(50) | PK; NOT NULL | Danışanı temsil eden anonim operasyonel kod. |
+| `ucretli_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Hizmetin ücretli/ücretsiz durumu. |
+| `istisna_turu` | VARCHAR(50) | NULL; DEFAULT `'YOK'::character varying` | Ücretsiz olma gerekçesi (Örn: Şehit/Gazi yakını). |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Kodun geçerlilik durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kodun sisteme eklendiği tarih. |
+| `olusturan_psikolog_id` | INTEGER | FK → `personel(personel_id)`; NULL | Danışan kodunu oluşturan psikoloğun personel kimliği. |
+| `yas_grubu` | VARCHAR(20) | NULL | Danışanın yaş grubu; COCUK veya YETISKIN olabilir. |
 
-**Tablo: `odalar`**
+**CHECK kısıtları:**
+
+- `danisan_kodlari_yas_grubu_gecerli`: `yas_grubu IS NULL OR (yas_grubu::text = ANY (ARRAY['COCUK'::character varying, 'YETISKIN'::character varying]::text[]))`
+
+### Tablo: `odalar`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `oda_id` | SERIAL | PRIMARY KEY | Odanın benzersiz kimliği. |
-| `oda_adi` | VARCHAR(50) | UNIQUE, NOT NULL | Odanın tabeladaki adı/numarası. |
-| `kapasite` | INT | DEFAULT 1 | Maksimum kişi kapasitesi. |
-| `aktif_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Odanın kullanıma açıklık durumu. |
+| `oda_id` | SERIAL (INTEGER) | PK; NOT NULL | Odanın benzersiz kimliği. |
+| `oda_adi` | VARCHAR(50) | UNIQUE; NOT NULL | Odanın tabeladaki adı/numarası. |
+| `kapasite` | INTEGER | NULL; DEFAULT `1` | Maksimum kişi kapasitesi. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Odanın kullanıma açıklık durumu. |
 
-**Tablo: `randevular`**
+### Tablo: `randevular`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `randevu_id` | SERIAL | PRIMARY KEY | Randevunun kimliği. |
-| `danisan_kod_id` | VARCHAR(50) | FK -> `danisan_kodlari`, NOT NULL | Randevu alınan danışan kodu. |
-| `psikolog_id` | INT | FK -> `personel(personel_id)`, NOT NULL | Görüşmeyi yapacak uzman. |
-| `oda_id` | INT | FK -> `odalar(oda_id)`, NOT NULL | Görüşmenin yapılacağı oda. |
+| `randevu_id` | SERIAL (INTEGER) | PK; NOT NULL | Randevunun kimliği. |
+| `danisan_kod_id` | VARCHAR(50) | FK → `danisan_kodlari(danisan_kod_id)`; NOT NULL | Randevu alınan danışan kodu. |
+| `psikolog_id` | INTEGER | FK → `personel(personel_id)`; NOT NULL | Görüşmeyi yapacak uzman. |
+| `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Görüşmenin yapılacağı oda. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Randevu başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Randevu bitişi. |
-| `durum` | VARCHAR(30) | DEFAULT 'PLANLANDI' | Randevunun anlık durumu. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL, DEFAULT CURRENT | Kaydın oluşturulma zamanı. |
+| `durum` | VARCHAR(30) | NULL; DEFAULT `'PLANLANDI'::character varying` | Randevunun anlık durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
+| `iptal_nedeni` | VARCHAR(30) | NULL | Randevunun iptal edilme nedeni. |
+| `iptal_notu` | VARCHAR(100) | NULL | İptale ilişkin açıklama; DIGER nedeni seçilirse zorunludur. |
+| `gorusme_tipi` | VARCHAR(20) | NOT NULL; DEFAULT `'YUZ_YUZE'::character varying` | Görüşme biçimi; YUZ_YUZE veya ONLINE. |
+| `terapi_turu` | VARCHAR(30) | NULL | Terapi türü; OYUN_TERAPISI veya BIREYSEL_TERAPI; boş olabilir. |
 
-**Tablo: `oda_etkinlikleri`**
+**CHECK kısıtları:**
+
+- `randevular_diger_icin_not_zorunlu`: `iptal_nedeni::text IS DISTINCT FROM 'DIGER'::text OR iptal_notu IS NOT NULL AND btrim(iptal_notu::text) <> ''::text`
+- `randevular_gorusme_tipi_gecerli`: `gorusme_tipi::text = ANY (ARRAY['YUZ_YUZE'::character varying, 'ONLINE'::character varying]::text[])`
+- `randevular_iptal_nedeni_gecerli`: `iptal_nedeni IS NULL OR (iptal_nedeni::text = ANY (ARRAY['DANISAN_TALEBI'::character varying, 'PSIKOLOG_MAZERETI'::character varying, 'ODA_EKIPMAN_SORUNU'::character varying, 'HATALI_KAYIT'::character varying, 'DIGER'::character varying]::text[]))`
+- `randevular_iptal_nedeni_yalniz_iptalde`: `iptal_nedeni IS NULL OR durum::text = 'IPTAL_EDILDI'::text`
+- `randevular_iptal_notu_nedene_bagli`: `iptal_notu IS NULL OR iptal_nedeni IS NOT NULL`
+- `randevular_terapi_turu_gecerli`: `terapi_turu IS NULL OR (terapi_turu::text = ANY (ARRAY['OYUN_TERAPISI'::character varying, 'BIREYSEL_TERAPI'::character varying]::text[]))`
+
+**EXCLUDE kısıtları:**
+
+- `oda_randevu_cakisma`: `EXCLUDE USING gist (oda_id WITH =, tsrange(baslangic_zamani, bitis_zamani, '[)'::text) WITH &&) WHERE (((durum)::text = 'PLANLANDI'::text))`
+- `psikolog_randevu_cakisma`: `EXCLUDE USING gist (psikolog_id WITH =, tsrange(baslangic_zamani, bitis_zamani, '[)'::text) WITH &&) WHERE (((durum)::text = 'PLANLANDI'::text))`
+
+### Tablo: `oda_etkinlikleri`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `etkinlik_id` | SERIAL | PRIMARY KEY | İdari toplantı/eğitim kimliği. |
-| `oda_id` | INT | FK -> `odalar(oda_id)`, NOT NULL | Etkinliğin yapılacağı oda. |
-| `organize_eden_personel_id` | INT | FK -> `personel(personel_id)`, NOT NULL| Düzenleyen yetkili. |
+| `etkinlik_id` | SERIAL (INTEGER) | PK; NOT NULL | İdari toplantı/eğitim kimliği. |
+| `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Etkinliğin yapılacağı oda. |
+| `organize_eden_personel_id` | INTEGER | FK → `personel(personel_id)`; NOT NULL | Düzenleyen yetkili. |
 | `etkinlik_adi` | VARCHAR(150) | NOT NULL | Toplantı veya eğitim adı. |
-| `katilimci_sayisi` | INT | NULL | Beklenen kişi sayısı (Kapasite kontrolü için). |
+| `katilimci_sayisi` | INTEGER | NULL | Beklenen kişi sayısı (Kapasite kontrolü için). |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Etkinlik başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Etkinlik bitişi. |
-| `iptal_edildi_mi` | BOOLEAN | DEFAULT FALSE | Etkinliğin iptal durumu. |
+| `iptal_edildi_mi` | BOOLEAN | NULL; DEFAULT `false` | Etkinliğin iptal durumu. |
+
+### Tablo: `psikolog_odalar`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `kullanici_id` | INTEGER | Birleşik PK parçası; FK → `kullanicilar(kullanici_id)`; NOT NULL | Odayla ilişkilendirilen psikoloğun kullanıcı kimliği. |
+| `oda_id` | INTEGER | Birleşik PK parçası; FK → `odalar(oda_id)`; NOT NULL | Psikoloğa ilişkilendirilen oda kimliği. |
 
 ## 3. Kimlik, Rol ve Yetki Modülü (Security & Platform)
 
-Sisteme erişim sağlayan kullanıcıları, personeli, öğrencileri ve Rol Tabanlı Erişim Kontrolü (RBAC) matrisini yönetir.
+Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçleri.
 
-**Tablo: `roller` & `izinler`**
-| Tablo Adı | Kolon Adı | Veri Tipi | Kısıtlamalar | Açıklama |
-| :--- | :--- | :--- | :--- | :--- |
-| **roller** | `rol_id` | SERIAL | PRIMARY KEY | Rol kimliği. |
-| | `rol_adi` | VARCHAR(50) | UNIQUE, NOT NULL | Rolün sistemdeki adı. |
-| **izinler** | `izin_id` | SERIAL | PRIMARY KEY | İznin kimliği. |
-| | `izin_adi` | VARCHAR(100) | UNIQUE, NOT NULL | Kod tarafındaki yetki anahtarı. |
-| | `aciklama` | VARCHAR(255) | NULL | İznin işlevsel açıklaması. |
+### Tablo: `roller`
 
-**Tablo: `rol_izinleri`**
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `rol_id` | INT | FK -> `roller`, PK'nin parçası | İlgili rol. |
-| `izin_id` | INT | FK -> `izinler`, PK'nin parçası | İlgili izin. |
-| `izin_var` | SMALLINT | DEFAULT 0, CHECK(0,1) | İznin aktif olup olmadığı (Boolean mantığı). |
+| `rol_id` | SERIAL (INTEGER) | PK; NOT NULL | Rol kimliği. |
+| `rol_adi` | VARCHAR(50) | UNIQUE; NOT NULL | Rolün sistemdeki adı. |
+| `gorunen_ad` | VARCHAR(100) | NULL | Arayüzde gösterilebilen rol adı. |
+| `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Rolün etkinlik durumu. |
 
-**Tablo: `kullanicilar`**
+### Tablo: `izinler`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `kullanici_id` | SERIAL | PRIMARY KEY | Hesabın benzersiz kimliği. |
-| `kullanici_adi` | VARCHAR(100) | UNIQUE, NOT NULL | Sisteme giriş (login) adı. |
+| `izin_id` | SERIAL (INTEGER) | PK; NOT NULL | İznin kimliği. |
+| `izin_adi` | VARCHAR(100) | UNIQUE; NOT NULL | Yetkinin sistemde kullanılan benzersiz adı. |
+| `aciklama` | VARCHAR(255) | NULL | Yetkinin işlevsel açıklaması. |
+| `gorunen_ad` | VARCHAR(100) | NULL | Arayüzde gösterilebilen yetki adı. |
+
+### Tablo: `rol_izinleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `rol_id` | INTEGER | Birleşik PK parçası; FK → `roller(rol_id)`; NOT NULL | İlgili rol. |
+| `izin_id` | INTEGER | Birleşik PK parçası; FK → `izinler(izin_id)`; NOT NULL | İlgili izin. |
+| `izin_var` | SMALLINT | NOT NULL; DEFAULT `0` | İznin aktif olup olmadığı (Boolean mantığı). |
+
+**CHECK kısıtları:**
+
+- `rol_izinleri_izin_var_check`: `izin_var = ANY (ARRAY[0, 1])`
+
+### Tablo: `kullanicilar`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `kullanici_id` | SERIAL (INTEGER) | PK; NOT NULL | Hesabın benzersiz kimliği. |
+| `kullanici_adi` | VARCHAR(100) | UNIQUE; NOT NULL | Sisteme giriş (login) adı. |
 | `parola_hash` | VARCHAR(255) | NOT NULL | Şifrelenmiş parola verisi. |
-| `rol_id` | INT | FK -> `roller(rol_id)`, NOT NULL | Kullanıcının sistemdeki rolü. |
-| `aktif_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Hesabın erişime açıklık durumu. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL, DEFAULT CURRENT | Hesabın açılış zamanı. |
+| `rol_id` | INTEGER | FK → `roller(rol_id)`; NOT NULL | Kullanıcının sistemdeki rolü. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Hesabın erişime açıklık durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Hesabın açılış zamanı. |
+| `basarisiz_giris_sayisi` | INTEGER | NOT NULL; DEFAULT `0` | Hesap için kaydedilen başarısız giriş denemesi sayısı. |
+| `kilit_bitis_zamani` | TIMESTAMP | NULL | Hesap kilidinin sona ereceği zaman; kilit yoksa boş olabilir. |
+| `ilk_giris_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Hesabın ilk giriş durumunu belirten işaret. |
 
-**Tablo: `personel`**
+### Tablo: `personel`
+
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `personel_id` | SERIAL | PRIMARY KEY | Personel kaydının kimliği. |
-| `kullanici_id` | INT | UNIQUE, FK -> `kullanicilar`, NOT NULL | Bağlı olduğu giriş hesabı. |
-| `personel_kodu` | VARCHAR(50) | UNIQUE, NOT NULL | Kurum sicil/personel numarası. |
-| `aktif_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Kurumda çalışma durumu. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL, DEFAULT CURRENT | Kaydın oluşturulma zamanı. |
+| `personel_id` | SERIAL (INTEGER) | PK; NOT NULL | Personel kaydının kimliği. |
+| `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; UNIQUE; NOT NULL | Bağlı olduğu giriş hesabı. |
+| `personel_kodu` | VARCHAR(50) | UNIQUE; NOT NULL | Kurum sicil/personel numarası. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Kurumda çalışma durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
+| `varsayilan_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Personelle ilişkilendirilmiş varsayılan oda. |
 
-**Tablo: `danisma_ogrencileri` & `danisma_masasi_oturumlari`**
-| Tablo Adı | Kolon Adı | Veri Tipi | Kısıtlamalar | Açıklama |
-| :--- | :--- | :--- | :--- | :--- |
-| **danisma_ogrencileri** | `ogrenci_id` | SERIAL | PRIMARY KEY | Öğrencinin benzersiz kimliği. |
-| | `kullanici_id` | INT | UNIQUE, FK -> `kullanicilar`, NOT NULL | Bağlı hesabı. |
-| | `ad_soyad` | VARCHAR(100)| NOT NULL | Öğrencinin adı soyadı. |
-| | `ogrenci_numarasi`| VARCHAR(50) | UNIQUE, NOT NULL | Üniversite öğrenci no. |
-| | `telefon` | VARCHAR(20) | NULL | İletişim numarası. |
-| | `aktif_mi` | BOOLEAN | NOT NULL, DEFAULT TRUE | Görev durumu. |
-| **danisma_masasi_oturumlari** | `oturum_id` | SERIAL | PRIMARY KEY | Mesai oturum kimliği. |
-| | `ogrenci_id` | INT | FK -> `danisma_ogrencileri`, NOT NULL | Nöbeti tutan öğrenci. |
-| | `baslangic_zamani`| TIMESTAMP | NOT NULL, DEFAULT CURRENT | Mesai başlangıcı. |
-| | `bitis_zamani` | TIMESTAMP | NOT NULL, CHECK(>baslangic) | Mesai bitişi. |
-| | `onaylandi_mi` | BOOLEAN | NOT NULL, DEFAULT FALSE | Nöbetin idarece onayı. |
-| | `guncellenme_tarihi`| TIMESTAMP | NOT NULL, DEFAULT CURRENT | Son değişiklik zamanı. |
+### Tablo: `giris_captcha_kodlari`
 
-## 4. Denetim (Audit) Modülü
-
-Sistemdeki kritik güvenlik ve veri değişikliklerinin izlerini barındırır.
-
-**Tablo: `denetim_kayitlari`**
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `denetim_id` | BIGSERIAL | PRIMARY KEY | Audit kaydının benzersiz kimliği. |
-| `kullanici_id` | INT | FK -> `kullanicilar(kullanici_id)`, NULL | İşlemi yapan kullanıcı (Failed login durumunda NULL olabilir). |
-| `olay_turu` | denetim_olay_turu | NOT NULL | Gerçekleşen eylemin tipi (Enum). |
+| `captcha_id` | VARCHAR(32) | PK; NOT NULL | CAPTCHA kaydının benzersiz kimliği. |
+| `kod_ozeti` | VARCHAR(64) | NOT NULL | CAPTCHA doğrulama kodunun özeti. |
+| `gecerlilik_sonu` | TIMESTAMP | NOT NULL | CAPTCHA kodunun geçerliliğinin sona ereceği zaman. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | CAPTCHA kaydının oluşturulma zamanı. |
+
+### Tablo: `giris_istek_limitleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `anahtar` | VARCHAR(64) | PK; NOT NULL | Giriş isteği sınırlandırması için kullanılan kayıt anahtarı. |
+| `pencere_baslangici` | TIMESTAMP | NOT NULL | İstek sayım penceresinin başlangıcı. |
+| `istek_sayisi` | INTEGER | NOT NULL | İlgili pencerede kaydedilen istek sayısı. |
+
+**CHECK kısıtları:**
+
+- `ck_giris_istek_sayisi`: `istek_sayisi >= 1`
+
+### Tablo: `parola_sifirlama_talepleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `talep_id` | SERIAL (INTEGER) | PK; NOT NULL | Parola sıfırlama talebinin benzersiz kimliği. |
+| `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NOT NULL | Parola sıfırlama talebinde bulunan kullanıcı. |
+| `talep_zamani` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Talebin oluşturulduğu zaman. |
+| `durum` | VARCHAR(12) | NOT NULL; DEFAULT `'ACIK'::character varying` | Talep durumu: ACIK, TAMAMLANDI veya KAPATILDI. |
+| `kapanis_zamani` | TIMESTAMP | NULL | Talebin kapatılma zamanı; açık taleplerde boştur. |
+| `kapatan_kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | Talebi kapatan kullanıcının kimliği. |
+
+**CHECK kısıtları:**
+
+- `parola_sifirlama_talepleri_durum_check`: `durum::text = ANY (ARRAY['ACIK'::character varying, 'TAMAMLANDI'::character varying, 'KAPATILDI'::character varying]::text[])`
+- `parola_talep_kapanis_tutarli`: `durum::text = 'ACIK'::text AND kapanis_zamani IS NULL OR durum::text <> 'ACIK'::text AND kapanis_zamani IS NOT NULL`
+
+## 4. Öğrenci ve Faaliyet Yönetimi Modülü
+
+Öğrenci kayıtları, danışma masası görevleri, faaliyet puanları ve erteleme geçmişi.
+
+### Tablo: `ogrenciler`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `ogrenci_id` | SERIAL (INTEGER) | PK; NOT NULL | Öğrencinin benzersiz kimliği. |
+| `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; UNIQUE; NULL | Varsa öğrenciyle ilişkilendirilmiş kullanıcı hesabı. |
+| `ad_soyad` | VARCHAR(100) | NOT NULL | Öğrencinin adı ve soyadı. |
+| `ogrenci_numarasi` | VARCHAR(50) | UNIQUE; NOT NULL | Öğrencinin benzersiz öğrenci numarası. |
+| `telefon` | VARCHAR(20) | NULL | Öğrencinin iletişim telefonu. |
+| `tur` | VARCHAR(14) | NOT NULL | Öğrenci türünü tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Öğrenci kaydının etkinlik durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Öğrenci kaydının oluşturulma zamanı. |
+
+### Tablo: `danisma_masasi_oturumlari`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `oturum_id` | SERIAL (INTEGER) | PK; NOT NULL | Mesai oturum kimliği. |
+| `ogrenci_id` | INTEGER | FK → `ogrenciler(ogrenci_id)`; NOT NULL | Görevi gerçekleştiren öğrenci. |
+| `baslangic_zamani` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Danışma masası görevinin başlangıcı. |
+| `bitis_zamani` | TIMESTAMP | NULL | Görev devam ederken NULL olabilir; doluysa başlangıçtan sonra olmalıdır. |
+| `onaylandi_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Görev oturumunun onaylanıp onaylanmadığı. |
+
+**CHECK kısıtları:**
+
+- `danisma_masasi_oturumlari_check`: `bitis_zamani IS NULL OR bitis_zamani > baslangic_zamani`
+
+### Tablo: `faaliyet_birimleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `birim_id` | SERIAL (INTEGER) | PK; NOT NULL | Faaliyet biriminin benzersiz kimliği. |
+| `birim_adi` | VARCHAR(50) | UNIQUE; NOT NULL | Faaliyet miktarını ifade eden birimin adı. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Faaliyet biriminin etkinlik durumu. |
+
+### Tablo: `faaliyetler`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `faaliyet_id` | SERIAL (INTEGER) | PK; NOT NULL | Faaliyet türünün benzersiz kimliği. |
+| `faaliyet_adi` | VARCHAR(100) | UNIQUE; NOT NULL | Faaliyetin adı. |
+| `puan` | INTEGER | NOT NULL | Faaliyet türüne tanımlanan puan. |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Faaliyet türünün etkinlik durumu. |
+
+**CHECK kısıtları:**
+
+- `faaliyetler_puan_check`: `puan >= 0`
+
+### Tablo: `ogrenci_faaliyet_takip`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `takip_id` | SERIAL (INTEGER) | PK; NOT NULL | Öğrenci faaliyet kaydının benzersiz kimliği. |
+| `ogrenci_id` | INTEGER | FK → `ogrenciler(ogrenci_id)`; NOT NULL | Faaliyeti gerçekleştiren öğrenci. |
+| `faaliyet_id` | INTEGER | FK → `faaliyetler(faaliyet_id)`; NOT NULL | Kaydın ilişkili olduğu faaliyet türü. |
+| `adet` | INTEGER | NOT NULL | Kaydedilen faaliyet miktarı; sıfırdan büyük olmalıdır. |
+| `birim_id` | INTEGER | FK → `faaliyet_birimleri(birim_id)`; NOT NULL | Faaliyet miktarının birimi. |
+| `faaliyet_tarihi` | DATE | NOT NULL; DEFAULT `CURRENT_DATE` | Faaliyetin gerçekleştiği tarih. |
+| `aciklama` | VARCHAR(255) | NULL | Faaliyet kaydına ilişkin ek açıklama. |
+| `onaylandi_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Faaliyet kaydının onay durumu. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Faaliyet kaydının oluşturulma zamanı. |
+| `kayit_puani` | INTEGER | NOT NULL | Bu faaliyet kaydına ait, sıfır veya daha büyük puan. |
+
+**CHECK kısıtları:**
+
+- `ck_ogrenci_faaliyet_kayit_puani`: `kayit_puani >= 0`
+- `ogrenci_faaliyet_takip_adet_check`: `adet > 0`
+
+### Tablo: `ogrenci_kayit_erteleme_gecmisi`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `erteleme_id` | SERIAL (INTEGER) | PK; NOT NULL | Erteleme kaydının benzersiz kimliği. |
+| `ogrenci_id` | INTEGER | FK → `ogrenciler(ogrenci_id)`; NULL | Varsa ertelemenin ilişkili olduğu öğrenci. |
+| `ogrenci_numarasi` | VARCHAR(15) | NOT NULL | Erteleme kaydında saklanan öğrenci numarası. |
+| `yeni_uyari_tarihi` | DATE | NOT NULL | Erteleme sonucunda belirlenen yeni uyarı tarihi. |
+| `erteleyen_kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | Erteleme işlemini yapan kullanıcı. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Erteleme kaydının oluşturulma zamanı. |
+
+### Tablo: `personel_faaliyet_kayitlari`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `kayit_id` | SERIAL (INTEGER) | PK; NOT NULL | Personel faaliyet kaydının benzersiz kimliği. |
+| `personel_id` | INTEGER | NOT NULL | Personel kimliği; mevcut veritabanında bu sütuna tanımlanmış FK kısıtı bulunmuyor. |
+| `faaliyet_id` | INTEGER | FK → `faaliyetler(faaliyet_id)`; NULL | Varsa ilgili faaliyet türü. |
+| `birim_id` | INTEGER | FK → `faaliyet_birimleri(birim_id)`; NULL | Varsa faaliyet miktarının birimi. |
+| `miktar` | INTEGER | NOT NULL | Kaydedilen faaliyet miktarı. |
+| `toplam_puan` | INTEGER | NOT NULL | Faaliyet kaydına ait toplam puan. |
+| `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Faaliyet kaydının zamanı. |
+
+## 5. Denetim (Audit) Modülü
+
+Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
+
+### Tablo: `denetim_kayitlari`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `denetim_id` | BIGSERIAL (BIGINT) | PK; NOT NULL | Audit kaydının benzersiz kimliği. |
+| `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | İşlemi yapan kullanıcı (Failed login durumunda NULL olabilir). |
+| `olay_turu` | VARCHAR(22) | NOT NULL | Denetim olay türünü tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
 | `hedef_tablo` | VARCHAR(100) | NULL | Veri değişikliğinden etkilenen tablo. |
-| `hedef_kayit_id` | INT | NULL | Değiştirilen/Silinen kaydın PK değeri. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL, DEFAULT CURRENT | Olayın gerçekleştiği tam zaman. |
+| `hedef_kayit_id` | INTEGER | NULL | Değiştirilen/Silinen kaydın PK değeri. |
+| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Olayın gerçekleştiği tam zaman. |
+
+## Teknik tablo: `alembic_version`
+
+Alembic migration sürümünü izler; uygulamanın iş verisi tablosu değildir.
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `version_num` | VARCHAR(32) | PK, NOT NULL | Uygulanmış migration revizyonu. |
+
+## Doğrulama notları
+
+- Sütunlar, veri tipleri, varsayılanlar, PK, FK, UNIQUE, CHECK ve EXCLUDE tanımları PostgreSQL üzerinden okunmuştur.
+- Sütun açıklamaları, alan adları ve bilinen işlevleri esas alınarak tamamlanmıştır; uygulama düzeyindeki iş kuralları ayrıca kod ve testlerle doğrulanmalıdır.
+- ENUM değerleri ile `VARCHAR` alanları ayrı gösterilmiştir. Veritabanında bulunmayan kısıtlar varsayılmamıştır.
+- Bu belge şema tanımıdır; API davranışları ve uygulama düzeyindeki doğrulamalar ayrıca incelenmelidir.
