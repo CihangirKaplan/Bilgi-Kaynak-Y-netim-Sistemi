@@ -1,6 +1,6 @@
 # TKYS Fonksiyonel Gereksinim İzlenebilirlik Tablosu
 
-Bu tablo, `docs/requirements/D02_Requirements_v1.md` içindeki 51 fonksiyonel gereksinimin (FR) kodda ve testlerde
+Bu tablo, `docs/requirements/D02_Requirements_v1.md` içindeki 67 fonksiyonel gereksinimin (FR) kodda ve testlerde
 karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`b524e50`).
 
 Durumlar:
@@ -17,15 +17,15 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | Durum | Adet | Maddeler |
 |---|---|---|
 | ✅ Karşılanıyor | 48 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
-| ⚠️ Kısmen | 2 | FR-013, FR-041 |
+| ⚠️ Kısmen | 18 | FR-013, FR-041, FR-052, FR-053, FR-054, FR-055, FR-056, FR-057, FR-058, FR-059, FR-060, FR-061, FR-062, FR-063, FR-064, FR-065, FR-066, FR-067 |
 | ❌ Karşılanmıyor | 1 | FR-012 |
 
 ## Açık işler
 
 1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
-2. **FR-041 Temel raporlar:** Doküman "V1.0 kapsamındaki raporlar" diyor ama hangi raporların kapsamda olduğu
-   yazılı değil. Cihaz raporu, danışma masası raporu ve öğrenci puan raporu var; üçü de Excel'e aktarılabiliyor.
+2. **FR-041 Temel raporlar:** D02'de cihaz, danışma masası ve öğrenci faaliyet/puan raporları kapsamı tanımlandı. Doğrudan test kapsamı ayrıca gözden geçirilecek.
+
 
 ## Tablo
 
@@ -129,6 +129,47 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-049 | Yedek rotasyonu | ✅ | `scripts/backup/yedek_rotasyonu.py` (varsayılan 7 gün) | `test_backup_restore.py`, `test_otomatik_yedekleme.py` |
 | FR-050 | Geri yükleme | ✅ | `scripts/restore/veritabani_geri_yukle.py` (yeni veritabanına) | `test_veritabani_geri_yukle.py` |
 | FR-051 | Geri yükleme doğrulaması | ✅ | Betik sonunda tablo satır sayıları ve migration sürümü kaynak veritabanıyla yan yana gösterilir | `test_veritabani_geri_yukle.py` (`test_main_basarida_kayit_sayilarini_karsilastirir`) |
+
+### 5.11 Öğrenci yönetimi
+
+| FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
+|---|---|---|---|---|
+| FR-052 | Öğrenci listeleme | ⚠️ | `GET /api/ogrenciler-liste`, `GET /api/ogrenciler-yonetim`; `client/ogrenci_yonetim_ekrani.py` | `test_ogrenci_liste_tur_etiketi.py`, `test_ogrenci_liste_api_hatalari.py`; test sonuçları bu güncellemede yeniden doğrulanmadı |
+| FR-053 | Öğrenci ekleme | ⚠️ | `POST /api/ogrenci-ekle`; `client/ogrenci_dialog.py` | `test_ogrenci_ekleme_http_quality.py`, `test_ogrenci_ekleme_son_quality.py` |
+| FR-054 | Öğrenci aktiflik yönetimi | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/aktiflik` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG) |
+| FR-055 | Öğrenci silme ve erteleme | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/silme-ertele`, `DELETE /api/ogrenciler/{ogrenci_id}/on-yil-sil` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG); saklama ve silme koşulları ayrıca doğrulanmalı |
+
+### 5.12 Faaliyet ve puan yönetimi
+
+| FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
+|---|---|---|---|---|
+| FR-056 | Faaliyet türü ve birimi yönetimi | ⚠️ | `/api/faaliyetler`, `/api/faaliyet-birimleri`; `client/faaliyet_turleri_dialog.py` | `test_faaliyet_turleri_quality.py`, `test_faaliyet_turleri_postgresql_quality.py` (PG), `test_faaliyet_birimi_yazma_izni.py` |
+| FR-057 | Faaliyet kaydı yönetimi | ⚠️ | `POST/GET /api/faaliyet-kayitlari`, `PUT/DELETE /api/faaliyet-kayitlari/{takip_id}`; `client/faaliyet_dialog.py` | `test_faaliyet_formu_kisayollari.py`, `test_faaliyet_okuma_uclari_yetki.py`; tüm CRUD davranışları ayrıca doğrulanmalı |
+| FR-058 | Faaliyet puanları ve raporlama | ⚠️ | `GET /api/ogrenciler/{ogrenci_id}/puanlar`, `GET /api/puan-raporu`; `client/puan_raporu_ekrani.py`, `client/puan_rapor_excel.py` | `test_puan_raporu.py` |
+
+### 5.13 Danışma masası yönetimi
+
+| FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
+|---|---|---|---|---|
+| FR-059 | Görev başlatma | ⚠️ | `POST /api/danisma/oturum/baslat`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py` |
+| FR-060 | Görev bitirme | ⚠️ | `PATCH /api/danisma/oturum/bitir`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py`, `test_gui_danisma_gorev_quality.py` |
+| FR-061 | Görev geçmişi | ⚠️ | `GET /api/danisma/oturum/aktif`, `GET /api/danisma/oturum/gecmis` | `test_danisma_oturumu.py` |
+| FR-062 | Görev onayı ve yönetimi | ⚠️ | `GET /api/danisma/yonetim/oturumlar`, `PATCH /api/danisma/yonetim/oturumlar/{oturum_id}/onayla`, yönetim oluşturma/düzenleme uçları | `test_danisma_oturumu.py`, `test_danisma_onay_bildirimleri.py` |
+| FR-063 | Danışma masası raporları | ⚠️ | `GET /api/danisma/raporlar`; `client/danisma_masasi_raporlari.py`, `client/danisma_rapor_excel.py` | `test_danisma_rapor_excel.py` |
+
+### 5.14 Parola yönetimi
+
+| FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
+|---|---|---|---|---|
+| FR-064 | Parola sıfırlama talebi | ⚠️ | `POST /api/parola-sifirlama-talebi`; `client/parola_talebi_dialog.py` | `test_parola_sifirlama_talebi.py`, `test_parola_talebi_arayuz.py` |
+| FR-065 | Yönetici tarafından parola sıfırlama | ⚠️ | `POST /api/kullanicilar/{kullanici_id}/parola-sifirla` | `test_parola_sifirlama_quality.py`, `test_parola_sifirlama_audit_ui.py` |
+| FR-066 | Parola taleplerinin yönetimi | ⚠️ | `GET /api/parola-sifirlama-talepleri`, `PATCH /api/parola-sifirlama-talepleri/{talep_id}/kapat` | `test_parola_sifirlama_talebi.py`, `test_parola_talepleri_hata_yonetimi.py` |
+
+### 5.15 Onay bildirimleri
+
+| FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
+|---|---|---|---|---|
+| FR-067 | Danışma masası onay bildirimleri | ⚠️ | `GET /api/danisma/yonetim/onay-bildirimleri`; `client/bildirim_paneli.py` | `test_danisma_onay_bildirimleri.py`, `test_dashboard_bildirim_tiklama.py` |
 
 ## Gereksinim listesi dışında eklenen güvenlik ve kullanılabilirlik işleri
 

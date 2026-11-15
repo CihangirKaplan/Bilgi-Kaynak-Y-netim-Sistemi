@@ -71,6 +71,25 @@ operasyonel süreçleri merkezi ve izlenebilir biçimde yönetmektir.
 
 -   Audit kayıtlarını inceleyebilmeli.
 
+## 2.4 Sistem Admin
+
+- Sistemin yönetimsel işlemlerini, tanımlanan güvenlik kuralları ve yetkiler kapsamında gerçekleştirebilmelidir.
+- Kullanıcı, rol ve izin yönetimi işlemlerini gerçekleştirebilmelidir.
+- Audit kayıtlarını inceleyebilmelidir.
+
+## 2.5 Danışma Öğrencisi
+
+- Sisteme kendisine tanımlanan yetkilerle giriş yapabilmelidir.
+- Danışma masası görevini başlatabilmeli ve bitirebilmelidir.
+- Aktif ve geçmiş görev oturumlarını görüntüleyebilmelidir.
+- Kendisine verilen randevu ve takvim yetkileri kapsamında işlem yapabilmelidir.
+
+## 2.6 Proje Asistanı
+
+- Sisteme kendisine tanımlanan yetkilerle giriş yapabilmelidir.
+- Yetkisi kapsamında cihaz uygunluğunu görüntüleyebilmeli ve cihaz rezervasyonu yapabilmelidir.
+- Yetkisi kapsamında faaliyet kayıtları üzerinde işlem yapabilmelidir.
+
 # 3. Use Case'ler
 
 Use case'ler, kullanıcı rollerinin sistemde gerçekleştirdiği temel
@@ -197,6 +216,60 @@ Operasyonel durum dashboard ve temel raporlardan izlenir.
 
 Audit kapsamındaki işlem kayıtları incelenir.
 
+**UC-20 --- Öğrenci Yönetimi**
+
+**Aktör:** Yetkili personel
+
+Öğrenci kayıtları görüntülenir, oluşturulur, aktiflik durumları ve kayıt saklama işlemleri yönetilir.
+
+**UC-21 --- Faaliyet Türü ve Birim Yönetimi**
+
+**Aktör:** Yetkili personel
+
+Faaliyet türleri ve birimleri tanımlanır ve güncellenir.
+
+**UC-22 --- Öğrenci Faaliyetlerini Yönetme**
+
+**Aktör:** Yetkili personel
+
+Öğrencilerin faaliyet kayıtları oluşturulur, düzenlenir ve takip edilir.
+
+**UC-23 --- Öğrenci Puanlarını Raporlama**
+
+**Aktör:** Yetkili personel
+
+Öğrenci faaliyet puanları görüntülenir ve raporlanır.
+
+**UC-24 --- Danışma Masası Görevini Yürütme**
+
+**Aktör:** Danışma Öğrencisi
+
+Öğrenci görev oturumu başlatır, görev süresini takip eder ve görevini bitirir.
+
+**UC-25 --- Danışma Masası Oturumlarını Onaylama**
+
+**Aktör:** Yetkili yönetici
+
+Danışma masası oturumları görüntülenir, yönetilir ve onaylanır.
+
+**UC-26 --- Danışma Masası Raporlarını Görüntüleme**
+
+**Aktör:** Yetkili personel
+
+Danışma masası görev raporları görüntülenir.
+
+**UC-27 --- Parola Sıfırlama İşlemleri**
+
+**Aktör:** Kullanıcı, yetkili yönetici
+
+Kullanıcı parola sıfırlama talebi oluşturur; yetkili yönetici talepleri yönetir ve parola sıfırlama işlemini gerçekleştirir.
+
+**UC-28 --- Bekleyen Onay Bildirimlerini Görüntüleme**
+
+**Aktör:** Yetkili personel
+
+Danışma masasında onay bekleyen görev oturumlarına ilişkin bildirimler görüntülenir.
+
 # 4. User Story'ler
 
 **US-01 --- Sisteme Giriş**
@@ -315,6 +388,42 @@ Müdür olarak, kritik işlemleri inceleyebilmek için audit kayıtlarını
 
 görüntülemek istiyorum.
 
+**US-20 --- Öğrenci Yönetimi**
+
+Yetkili personel olarak, öğrenci kayıtlarını düzenli takip edebilmek için öğrencileri görüntülemek ve kayıtlarını yönetmek istiyorum.
+
+**US-21 --- Faaliyet Türleri ve Birimleri**
+
+Yetkili personel olarak, faaliyet kayıtlarının standart biçimde tutulabilmesi için faaliyet türlerini ve birimlerini yönetmek istiyorum.
+
+**US-22 --- Öğrenci Faaliyetleri**
+
+Yetkili personel olarak, öğrencilerin çalışmalarını takip edebilmek için faaliyet kayıtlarını yönetmek istiyorum.
+
+**US-23 --- Öğrenci Puan Raporu**
+
+Yetkili personel olarak, öğrencilerin faaliyetlerini değerlendirebilmek için puan raporlarını görüntülemek istiyorum.
+
+**US-24 --- Danışma Masası Görevi**
+
+Danışma öğrencisi olarak, çalışma süremi kaydedebilmek için görevimi başlatmak ve bitirmek istiyorum.
+
+**US-25 --- Danışma Masası Görev Onayı**
+
+Yetkili yönetici olarak, öğrencilerin görev sürelerini doğrulayabilmek için oturumları incelemek ve onaylamak istiyorum.
+
+**US-26 --- Danışma Masası Raporları**
+
+Yetkili personel olarak, danışma masası çalışmalarını değerlendirebilmek için görev raporlarını görüntülemek istiyorum.
+
+**US-27 --- Parola Sıfırlama**
+
+Kullanıcı olarak, parolamı unuttuğumda erişimimi yeniden sağlayabilmek için sıfırlama talebi oluşturmak istiyorum.
+
+**US-28 --- Onay Bildirimleri**
+
+Yetkili personel olarak, bekleyen danışma masası oturumlarını kaçırmamak için onay bildirimlerini görüntülemek istiyorum.
+
 # 5. Fonksiyonel Gereksinimler
 
 ## 5.1 Kimlik Doğrulama ve Yetkilendirme
@@ -325,13 +434,7 @@ kullanıcıların
 
 hesapları ile giriş yapabilmesini sağlamalıdır.
 
-**FR-002 --- Rol Tabanlı Yetkilendirme:** Sistem,
-
-kullanıcıların
-
-Psikolog, Memur ve Müdür rollerine göre yetkilendirilmesini
-
-sağlamalıdır.
+**FR-002 — Rol Tabanlı Yetkilendirme:** Sistem; Psikolog, Memur, Müdür, Sistem Admin, Danışma Öğrencisi ve Proje Asistanı rollerini desteklemeli, işlemleri kullanıcıya tanımlanan izinlere göre yetkilendirmelidir.
 
 **FR-003 --- Yetkiye Göre Erişim:** Sistem, kullanıcının
 
@@ -453,13 +556,7 @@ duruma
 
 getirilebilmelidir.
 
-**FR-023 --- Cihaz Durumu Yönetimi:** Cihaz durumları
-
-Kullanılabilir,
-
-Rezerve, Bakımda, Arızalı, Kalibrasyonda ve Kullanım Dışı değerlerini
-
-desteklemelidir.
+**FR-023 — Cihaz Durumu Yönetimi:** Sistem; Kullanıma Hazır (Kullanılabilir), Rezerve, Kullanımda, Arızalı, Bakımda, Kalibrasyonda ve Kullanım Dışı cihaz durumlarını desteklemelidir.
 
 **FR-024 --- Cihaz Rezervasyonu:** Uygun durumdaki cihaz
 
@@ -515,15 +612,9 @@ edilebilmelidir.
 
 ## 5.7 Müdür Yönetim İşlemleri
 
-**FR-034 --- Kullanıcı Oluşturma:** Müdür yeni kullanıcı
+**FR-034 — Kullanıcı Oluşturma:** Yetkili yönetici yeni kullanıcı oluşturabilmelidir. Kullanıcı, personel ve gerektiğinde danışma öğrencisi kayıtları tek bir veritabanı transaction'ı içinde oluşturulmalı; işlem başarısız olursa kısmi kayıtlar geri alınmalıdır.
 
-oluşturabilmelidir.
-
-**FR-035 --- Personel Tanımlama:** Müdür psikolog ve memur
-
-personel
-
-tanımlayabilmelidir.
+**FR-035 — Personel Tanımlama:** Sistem, kullanıcı oluşturma işlemi sırasında ilgili personel kaydını otomatik oluşturmalı ve kullanıcı ile ilişkilendirmelidir. Kullanıcı oluşturma sonrasında ayrı bir manuel personel atama adımı gerekmemelidir.
 
 **FR-036 --- Rol Atama:** Müdür kullanıcılara rol
 
@@ -555,11 +646,7 @@ aktif/arızalı/bakımda cihazlar, yaklaşan bakımlar, kalibrasyonlar ve
 
 açık arızalar gibi temel bilgileri göstermelidir.
 
-**FR-041 --- Temel Raporlar:** V1.0 kapsamındaki temel
-
-operasyonel
-
-raporlar görüntülenebilmelidir.
+**FR-041 — Temel Raporlar:** Sistem, yetkili kullanıcılara cihaz raporları, danışma masası raporları ve öğrenci faaliyet/puan raporlarını sunmalıdır. Raporların kapsamı ve erişim izinleri ilgili modüllere göre belirlenmelidir.
 
 ## 5.9 Audit
 
@@ -569,13 +656,7 @@ kullanıcı ve
 
 sistem işlemleri kayıt altına alınmalıdır.
 
-**FR-043 --- Audit İşlem Türleri:** Audit en az LOGIN,
-
-LOGIN_FAILED,
-
-CREATE, UPDATE, CANCEL, ROLE_CHANGE ve DEVICE_STATUS_CHANGE türlerini
-
-desteklemelidir.
+**FR-043 — Audit İşlem Türleri:** Audit mekanizması en az LOGIN, LOGIN_FAILED, CREATE, UPDATE, DELETE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE ve PASSWORD_RESET işlem türlerini desteklemelidir.
 
 **FR-044 --- Audit Görüntüleme:** Müdür audit kayıtlarını
 
@@ -619,9 +700,55 @@ uygulama ve
 
 veriler doğrulanabilmelidir.
 
+## 5.11 Öğrenci Yönetimi
+
+**FR-052 — Öğrenci Listeleme:** Sistem, yetkili kullanıcıların öğrenci kayıtlarını listelemesine ve görüntülemesine olanak sağlamalıdır.
+
+**FR-053 — Öğrenci Ekleme:** Sistem, yetkili kullanıcıların öğrenci kaydı oluşturmasına olanak sağlamalıdır.
+
+**FR-054 — Öğrenci Aktiflik Yönetimi:** Sistem, yetkili kullanıcıların öğrencilerin aktiflik durumunu değiştirmesine olanak sağlamalıdır.
+
+**FR-055 — Öğrenci Silme ve Erteleme:** Sistem, öğrenci kayıtları için silme erteleme ve tanımlı saklama süresi sonunda silme işlemlerini desteklemelidir.
+
+## 5.12 Faaliyet ve Puan Yönetimi
+
+**FR-056 — Faaliyet Türü ve Birimi Yönetimi:** Sistem, yetkili kullanıcıların faaliyet türlerini ve faaliyet birimlerini tanımlamasına ve yönetmesine olanak sağlamalıdır.
+
+**FR-057 — Faaliyet Kaydı Yönetimi:** Sistem, yetkili kullanıcıların öğrenci faaliyet kayıtlarını eklemesine, listelemesine, düzenlemesine ve silmesine olanak sağlamalıdır.
+
+**FR-058 — Faaliyet Puanları ve Raporlama:** Sistem, öğrenci faaliyet puanlarının görüntülenmesini ve puan raporlarının oluşturulmasını desteklemelidir.
+
+## 5.13 Danışma Masası Yönetimi
+
+**FR-059 — Görev Başlatma:** Sistem, yetkili danışma masası öğrencisinin görev oturumu başlatmasına olanak sağlamalıdır.
+
+**FR-060 — Görev Bitirme:** Sistem, başlatılmış danışma masası görev oturumunun bitirilmesini desteklemelidir.
+
+**FR-061 — Görev Geçmişi:** Sistem, yetkili kullanıcıların aktif ve geçmiş danışma masası oturumlarını görüntülemesini sağlamalıdır.
+
+**FR-062 — Görev Onayı ve Yönetimi:** Sistem, yetkili yöneticilerin danışma masası oturumlarını yönetmesine ve onaylamasına olanak sağlamalıdır.
+
+**FR-063 — Danışma Masası Raporları:** Sistem, danışma masası görev kayıtlarına ilişkin raporların oluşturulmasını desteklemelidir.
+
+## 5.14 Parola Yönetimi
+
+**FR-064 — Parola Sıfırlama Talebi:** Sistem, kullanıcıların parola sıfırlama talebi oluşturmasını desteklemelidir.
+
+**FR-065 — Yönetici Tarafından Parola Sıfırlama:** Sistem, gerekli yetkiye sahip kullanıcıların parola sıfırlama işlemi gerçekleştirmesine olanak sağlamalıdır.
+
+**FR-066 — Parola Taleplerinin Yönetimi:** Sistem, yetkili kullanıcıların parola sıfırlama taleplerini listelemesini ve kapatmasını desteklemelidir.
+
+## 5.15 Onay Bildirimleri
+
+**FR-067 — Danışma Masası Onay Bildirimleri:** Sistem, yetkili kullanıcıların onay bekleyen danışma masası oturumlarına ilişkin bildirimleri görüntülemesini sağlamalıdır.
+
 # 6. Fonksiyonel Olmayan Gereksinimler
 
 ## 6.1 Güvenlik
+
+-   Veritabanı için kısıtlı yetkili uygulama hesabı kullanımı desteklenmelidir. Şema değişiklikleri ve migration işlemleri gerektiğinde ayrı bir veritabanı hesabı üzerinden yürütülebilmelidir.
+
+
 
 -   Sistem kimlik doğrulama ve RBAC mekanizmalarına sahip olmalıdır.
 
@@ -708,6 +835,10 @@ veriler doğrulanabilmelidir.
 -   Dokümantasyon güncel tutulmalıdır.
 
 ## 6.5 Mimari ve Erişim
+
+-   Uygulamanın veritabanı hesabı ile migration/şema yönetimi hesabının ayrılması desteklenmelidir. Bu ayrım yapılandırmaya bağlı olarak uygulanmalıdır.
+
+
 
 -   Sistem üç katmanlı mimariye uygun geliştirilmelidir.
 
