@@ -114,13 +114,13 @@ Yetkisiz randevu, kullanıcı, oda, cihaz veya diğer kayıt değişiklikleri il
 
 ## 6.4. Randevu İşlemlerinde Yetki Sınırı
 
-Randevu oluşturma, düzenleme ve iptal etme yetkisi Psikolog ve Danışma Masası Öğrencisine aittir.
+Randevu oluşturma, düzenleme ve iptal etme yetkisi Psikolog ve Danışma Masası Öğrencisine verilmiştir. Admin rolü, sistemin süper kullanıcısı olarak bu işlemleri de gerçekleştirebilir.
 
 Memur ve Müdür randevuları ve takvimi görüntüleyebilir ancak oluşturamaz, düzenleyemez veya iptal edemez.
 
 ## 6.5. Cihaz İşlemlerinde Yetki Sınırı
 
-Cihaz rezervasyonu yalnızca Memur tarafından yapılabilir. Psikolog ve Müdür cihaz uygunluğunu görüntüleyebilir ancak rezervasyon yapamaz. Danışma Masası Öğrencisinin cihaz işlemleri üzerinde yetkisi yoktur.
+Cihaz rezervasyonu yapma yetkisi Memur ve Proje Asistanı rollerine verilmiştir. Admin rolü de bu işlemi gerçekleştirebilir. Psikolog ve Müdür cihaz uygunluğunu görüntüleyebilir ancak rezervasyon yapamaz. Danışma Masası Öğrencisinin cihaz işlemleri üzerinde yetkisi yoktur.
 
 ---
 
