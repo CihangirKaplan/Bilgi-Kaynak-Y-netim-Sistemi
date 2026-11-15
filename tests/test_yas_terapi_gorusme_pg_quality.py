@@ -150,9 +150,11 @@ def test_uclar_gercek_veritabaninda(gercek_kayitlar):
         ileri += timedelta(days=1)
 
     def randevu(kod, gun, **ek):
-        t = ileri + timedelta(days=gun)
-        while t.weekday() >= 5:
+        t = ileri
+        for _ in range(gun):
             t += timedelta(days=1)
+            while t.weekday() >= 5:
+                t += timedelta(days=1)
         return istemci.post("/api/randevular", json={"danisan_kod_id": kod, "psikolog_id": pid, "oda_id": oda,
                                                       "baslangic_zamani": t.isoformat(), "bitis_zamani": (t + timedelta(hours=1)).isoformat(), **ek})
 
