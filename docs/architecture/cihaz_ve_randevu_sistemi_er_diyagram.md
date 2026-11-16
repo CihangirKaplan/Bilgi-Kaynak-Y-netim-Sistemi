@@ -1,6 +1,6 @@
 # TKYS - Güncel Veritabanı ER Diyagramı
 
-Bu diyagram, `D04_Data_Dictionary.md` belgesinde tanımlanan 29 uygulama tablosunu esas alır.
+Bu diyagram, `D04_Data_Dictionary.md` belgesinde tanımlanan 30 uygulama tablosunu esas alır.
 
 ```mermaid
 erDiagram
@@ -99,6 +99,12 @@ erDiagram
         timestamp olusturulma_tarihi
         int olusturan_psikolog_id FK
         string yas_grubu
+    }
+
+    proje_turleri {
+        int proje_turu_id PK
+        string ad UK
+        boolean aktif_mi
     }
 
     odalar {
@@ -316,7 +322,7 @@ erDiagram
 
 ## Diyagram notları
 
-- Diyagramda 29 uygulama tablosu bulunmaktadır.
+- Diyagramda 30 uygulama tablosu bulunmaktadır.
 - `alembic_version` teknik migration tablosudur; uygulama ER diyagramına dahil edilmemiştir.
 - PK, FK ve UK işaretleri D04'teki veritabanı kısıtlarına dayanır.
 - İlişki çizgileri FK bağlantılarını gösterir. Kesin zorunluluk, NULL ve UNIQUE kuralları için D04 Veri Sözlüğü esas alınmalıdır.

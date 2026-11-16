@@ -35,6 +35,8 @@ from server.modeller import (
     CihazOlusturModeli,
     CihazGuncelleModeli,
     RezervasyonOlusturModeli,
+    BolumOlusturModeli,
+    ProjeTuruOlusturModeli,
     ArizaBildirimModeli,
     ArizaGuncelleModeli,
     KalibrasyonOlusturModeli,
@@ -2685,6 +2687,28 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+CIHAZ_ODALARI_SORGUSU = (
+    "SELECT DISTINCT o.oda_id, o.oda_adi FROM odalar o "
+    "JOIN cihazlar c ON c.zimmetli_oda_id = o.oda_id WHERE o.aktif_mi = TRUE ORDER BY o.oda_adi"
+)
+
+
+@app.get("/api/cihaz-odalari")
+def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    """Cihaz rezervasyonunda seçilebilen odalar: en az bir cihazın zimmetli olduğu aktif odalar.
+
+    Psikologlara atanan görüşme odaları (cihazı olmayan odalar) listeye girmez."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(CIHAZ_ODALARI_SORGUSU + ";")
+        return [{"oda_id": k[0], "oda_adi": k[1], "aktif_mi": True} for k in cursor.fetchall()]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 @app.get("/api/odalar/{oda_id}")
 def oda_detay(oda_id: int, kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE"))):
     conn = None
@@ -3330,11 +3354,21 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
                     ),
                 )
 
+            if rez.kullanilacak_oda_id is not None:
+                cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
+                if cursor.fetchone() is None:
+                    raise HTTPException(status_code=422, detail="Seçilen oda bir cihaz odası değil veya aktif değil.")
+
+            if rez.bolum_id is not None:
+                cursor.execute("SELECT 1 FROM bolumler WHERE bolum_id = %s AND aktif_mi IS NOT FALSE;", (rez.bolum_id,))
+                if cursor.fetchone() is None:
+                    raise HTTPException(status_code=422, detail="Bölüm bulunamadı veya aktif değil.")
+
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
             pers = cursor.fetchone()
             personel_id = pers[0] if pers else None
 
-            cursor.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, rezervasyonu_yapan_personel_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani, proje_turu, proje_adi_aciklamasi) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING rezervasyon_id;", (rez.cihaz_id, personel_id, rez.kullanilacak_oda_id, rez.baslangic_zamani, rez.bitis_zamani, rez.proje_turu, rez.proje_adi_aciklamasi))
+            cursor.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, bolum_id, rezervasyonu_yapan_personel_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani, proje_turu, proje_adi_aciklamasi) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING rezervasyon_id;", (rez.cihaz_id, rez.bolum_id, personel_id, rez.kullanilacak_oda_id, rez.baslangic_zamani, rez.bitis_zamani, rez.proje_turu, rez.proje_adi_aciklamasi))
             rez_id = cursor.fetchone()[0]
 
             cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CREATE", "cihaz_rezervasyonlari", rez_id))
@@ -3404,9 +3438,83 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi FROM cihaz_rezervasyonlari r JOIN cihazlar c ON r.cihaz_id = c.cihaz_id ORDER BY r.baslangic_zamani DESC;")
+        cursor.execute("SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi, o.oda_adi, r.proje_turu, r.proje_adi_aciklamasi, r.bolum_id, b.bolum_adi FROM cihaz_rezervasyonlari r JOIN cihazlar c ON r.cihaz_id = c.cihaz_id LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id LEFT JOIN bolumler b ON r.bolum_id = b.bolum_id ORDER BY r.baslangic_zamani DESC;")
         kayitlar = cursor.fetchall()
-        return [{"rezervasyon_id": k[0], "cihaz_id": f"{k[1]} - {k[2]}", "baslangic_zamani": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]), "bitis_zamani": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]), "durum": rezervasyon_gorunen_durumu(k[5], k[4])} for k in kayitlar]
+        return [{"rezervasyon_id": k[0], "cihaz_id": f"{k[1]} - {k[2]}", "baslangic_zamani": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]), "bitis_zamani": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]), "durum": rezervasyon_gorunen_durumu(k[5], k[4]), "envanter_kodu": k[1], "cihaz_adi": k[2], "oda_adi": k[6], "proje_turu": k[7], "proje_adi_aciklamasi": k[8], "bolum_id": k[9], "bolum_adi": k[10]} for k in kayitlar]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.get("/api/bolumler")
+def bolumleri_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    """Rezervasyon formundaki bölüm listesi (yalnızca aktif bölümler)."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT bolum_id, bolum_adi, sorumlu_ad_soyad FROM bolumler WHERE aktif_mi IS NOT FALSE ORDER BY bolum_adi;")
+        return [{"bolum_id": k[0], "bolum_adi": k[1], "sorumlu_ad_soyad": k[2]} for k in cursor.fetchall()]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/bolumler", status_code=201)
+def bolum_olustur(bolum: BolumOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad, iletisim_bilgisi, aktif_mi) VALUES (%s, %s, %s, TRUE) RETURNING bolum_id;", (bolum.bolum_adi, bolum.sorumlu_ad_soyad, bolum.iletisim_bilgisi))
+        bolum_id = cursor.fetchone()[0]
+        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CREATE", "bolumler", bolum_id))
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Bölüm eklendi.", "bolum_id": bolum_id, "bolum_adi": bolum.bolum_adi}
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=409, detail="Bu isimde bir bölüm zaten mevcut.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+def proje_turu_anahtari(ad):
+    """Proje türü karşılaştırma anahtarı: Türkçe büyük/küçük harf farkı (İ/i, I/ı) ve kenar boşlukları yok sayılır."""
+    return str(ad).strip().replace("İ", "i").replace("I", "ı").lower()
+
+
+@app.get("/api/proje-turleri")
+def proje_turlerini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    """Rezervasyon formundaki proje türü listesi."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT proje_turu_id, ad FROM proje_turleri WHERE aktif_mi ORDER BY ad;")
+        return [{"proje_turu_id": k[0], "ad": k[1]} for k in cursor.fetchall()]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+@app.post("/api/proje-turleri", status_code=201)
+def proje_turu_olustur(tur: ProjeTuruOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT ad FROM proje_turleri;")
+        if proje_turu_anahtari(tur.ad) in {proje_turu_anahtari(k[0]) for k in cursor.fetchall()}:     # büyük/küçük harf (İ/ı dahil) farkı yok sayılır
+            raise HTTPException(status_code=409, detail="Bu proje türü zaten mevcut.")
+        cursor.execute("INSERT INTO proje_turleri (ad) VALUES (%s) RETURNING proje_turu_id;", (tur.ad,))
+        tur_id = cursor.fetchone()[0]
+        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CREATE", "proje_turleri", tur_id))
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Proje türü eklendi.", "proje_turu_id": tur_id, "ad": tur.ad}
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=409, detail="Bu proje türü zaten mevcut.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

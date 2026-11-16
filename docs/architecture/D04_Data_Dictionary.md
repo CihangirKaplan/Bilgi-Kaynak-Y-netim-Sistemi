@@ -32,6 +32,18 @@ Merkeze ait cihazların envanter, rezervasyon, bakım, arıza, kalibrasyon ve ta
 | `iletisim_bilgisi` | VARCHAR(100) | NULL | Telefon veya dahili numara. |
 | `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Bölümün aktiflik durumu. |
 
+Bölümler Cihaz Rezervasyonu formundaki "Bölüm" listesinden seçilir; listede olmayan bölüm aynı formdaki "＋ Yeni bölüm" düğmesiyle eklenir.
+
+### Tablo: `proje_turleri`
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `proje_turu_id` | SERIAL (INTEGER) | PK; NOT NULL | Proje türünün benzersiz kimliği. |
+| `ad` | VARCHAR(50) | NOT NULL; benzersiz indeks `ux_proje_turleri_ad` (`lower(ad)`) | Proje türü adı (Örn: Araştırma, Test). |
+| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Listede gösterilip gösterilmeyeceği. |
+
+Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı formdan eklenir. `cihaz_rezervasyonlari.proje_turu` sütunu metin olarak kalır (eski kayıtlar değişmez). Başlangıç listesi migrasyonla (`c8f2a5d1e704`) varsayılan türlerden ve mevcut rezervasyonlarda geçen türlerden oluşturulur.
+
 ### Tablo: `cihazlar`
 
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
@@ -51,7 +63,7 @@ Merkeze ait cihazların envanter, rezervasyon, bakım, arıza, kalibrasyon ve ta
 | :--- | :--- | :--- | :--- |
 | `rezervasyon_id` | SERIAL (INTEGER) | PK; NOT NULL | Rezervasyonun benzersiz kimliği. |
 | `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Rezerve edilen cihaz. |
-| `bolum_id` | INTEGER | FK → `bolumler(bolum_id)`; NULL | Cihazın tahsis edildiği bölüm. |
+| `bolum_id` | INTEGER | FK → `bolumler(bolum_id)`; NULL | Rezervasyonu yapan bölüm (formda seçilir; eski kayıtlarda boş olabilir). |
 | `rezervasyonu_yapan_personel_id` | INTEGER | FK → `personel(personel_id)`; NULL | İşlemi gerçekleştiren personel. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Rezervasyon başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Rezervasyon bitişi. |

@@ -424,6 +424,7 @@ class CihazGuncelleModeli(BaseModel):
 # RES-001: Cihaz Rezervasyonu Oluşturma Modeli
 class RezervasyonOlusturModeli(BaseModel):
     cihaz_id: int = Field(gt=0)
+    bolum_id: Optional[int] = Field(default=None, gt=0)           # rezervasyonu yapan bölüm (eski istemciler göndermeyebilir)
     kullanilacak_oda_id: Optional[int] = Field(default=None, gt=0)
     baslangic_zamani: ZamanDamgasi
     bitis_zamani: ZamanDamgasi
@@ -434,6 +435,40 @@ class RezervasyonOlusturModeli(BaseModel):
     def ayni_dilim(self):
         _ayni_dilim_denetle(self.baslangic_zamani, self.bitis_zamani)
         return self
+
+def _zorunlu_metin(ad):
+    """Baş/son boşlukları atar, boş metni reddeder (uzunluk sınırı kırpılmış metne uygulanır)."""
+    def temizle(deger):
+        if isinstance(deger, str):
+            deger = deger.strip()
+            if not deger:
+                raise ValueError(f"{ad} boş olamaz.")
+        return deger
+    return temizle
+
+
+class BolumOlusturModeli(BaseModel):
+    """Rezervasyon formundan eklenen yeni bölüm."""
+    model_config = ConfigDict(extra="forbid")
+
+    bolum_adi: Annotated[str, BeforeValidator(_zorunlu_metin("Bölüm adı"))] = Field(min_length=1, max_length=150)
+    sorumlu_ad_soyad: Annotated[str, BeforeValidator(_zorunlu_metin("Sorumlu adı soyadı"))] = Field(min_length=1, max_length=100)
+    iletisim_bilgisi: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("iletisim_bilgisi", mode="before")
+    @classmethod
+    def iletisim_bos_ise_yok(cls, deger):
+        if isinstance(deger, str):
+            deger = deger.strip() or None
+        return deger
+
+
+class ProjeTuruOlusturModeli(BaseModel):
+    """Rezervasyon formundan eklenen yeni proje türü."""
+    model_config = ConfigDict(extra="forbid")
+
+    ad: Annotated[str, BeforeValidator(_zorunlu_metin("Proje türü"))] = Field(min_length=1, max_length=50)
+
 
 # FAIL-001: Arıza Bildirim Modeli
 class ArizaBildirimModeli(BaseModel):
