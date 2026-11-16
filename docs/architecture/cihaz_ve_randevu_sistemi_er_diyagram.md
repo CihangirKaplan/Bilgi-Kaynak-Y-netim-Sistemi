@@ -169,6 +169,7 @@ erDiagram
         int basarisiz_giris_sayisi
         timestamp kilit_bitis_zamani
         boolean ilk_giris_mi
+        timestamp gecici_parola_bitis
     }
 
     personel {

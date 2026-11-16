@@ -68,7 +68,7 @@ def panoya_kopyala_ve_zamanla(parola, saniye=PANO_TEMIZLEME_SANIYE):
 
 
 class GeciciParolaDialog(QDialog):
-    def __init__(self, kullanici_adi, parola, parent=None, pano_saniye=PANO_TEMIZLEME_SANIYE):
+    def __init__(self, kullanici_adi, parola, parent=None, pano_saniye=PANO_TEMIZLEME_SANIYE, gecerlilik_saat=None):
         super().__init__(parent)
         self.parola = parola
         self.pano_saniye = pano_saniye
@@ -106,9 +106,10 @@ class GeciciParolaDialog(QDialog):
         self.lbl_durum.setWordWrap(True)
         ana.addWidget(self.lbl_durum)
 
+        gecerlilik = f" Bu parola {gecerlilik_saat} saat geçerlidir; bu sürede giriş yapılmazsa parolanın yeniden sıfırlanması gerekir." if gecerlilik_saat else ""
         self.lbl_not = QLabel(
             "Parolayı kullanıcıya güvenli şekilde iletin. Pencere kapandıktan sonra parola tekrar gösterilemez. "
-            "Kullanıcı ilk girişinde yeni parola belirlemek zorundadır."
+            "Kullanıcı ilk girişinde yeni parola belirlemek zorundadır." + gecerlilik
         )
         self.lbl_not.setObjectName("not")
         self.lbl_not.setWordWrap(True)

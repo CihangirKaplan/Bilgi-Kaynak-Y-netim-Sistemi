@@ -51,7 +51,9 @@ from server.guvenlik import (
     gecici_parola_uret,
     access_token_olustur,
     token_dogrula,
-    token_parola_gecerli
+    token_parola_gecerli,
+    GECICI_PAROLA_BITIS_SQL,
+    GECICI_PAROLA_GECERLILIK_SAAT,
 )
 from server.denetim import denetim_kaydi_olustur
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
@@ -280,7 +282,7 @@ def giris_yap(giris: GirisModeli):
         cursor.execute(
             """
             SELECT k.kullanici_id, k.kullanici_adi, k.parola_hash, k.rol_id, k.aktif_mi,
-                   k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi
+                   k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi, k.gecici_parola_bitis
             FROM kullanicilar k
             LEFT JOIN roller r ON k.rol_id = r.rol_id
             WHERE k.kullanici_adi = %s;
@@ -326,6 +328,15 @@ def giris_yap(giris: GirisModeli):
                     headers={"Retry-After": str(kilit_saniye)},
                 )
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
+
+        # Parola doğru ama GEÇİCİ parolanın süresi dolmuşsa giriş yapılamaz (yanlış parolada bu bilgi verilmez).
+        gecici_bitis = kullanici[9] if len(kullanici) > 9 else None
+        if kullanici[7] and gecici_bitis is not None and gecici_bitis < datetime.now():
+            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
+            raise HTTPException(
+                status_code=403,
+                detail="Geçici parolanızın süresi doldu. Yöneticinizden yeni bir geçici parola isteyin.",
+            )
 
         cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = 0, kilit_bitis_zamani = NULL WHERE kullanici_id = %s;", (kullanici[0],))
         conn.commit()
@@ -404,7 +415,7 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
 
         yeni_hash = parola_hashle(veri.yeni_parola)
         cursor.execute(
-            "UPDATE kullanicilar SET parola_hash = %s, ilk_giris_mi = FALSE WHERE kullanici_id = %s;",
+            "UPDATE kullanicilar SET parola_hash = %s, ilk_giris_mi = FALSE, gecici_parola_bitis = NULL WHERE kullanici_id = %s;",
             (yeni_hash, kullanici_id)
         )
         cursor.execute(
@@ -621,10 +632,10 @@ def kullanici_olustur(
         parola_hash = parola_hashle(gecici_parola)
 
         cursor.execute(
-            """
+            f"""
             INSERT INTO kullanicilar
-                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi)
-            VALUES (%s, %s, %s, TRUE, TRUE)
+                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis)
+            VALUES (%s, %s, %s, TRUE, TRUE, {GECICI_PAROLA_BITIS_SQL})
             RETURNING kullanici_id;
             """,
             (
@@ -704,6 +715,7 @@ def kullanici_olustur(
             "kullanici_id": yeni_id,
             "kullanici_adi": yeni_kullanici.kullanici_adi,
             "gecici_parola": gecici_parola,
+            "gecici_parola_gecerlilik_saat": GECICI_PAROLA_GECERLILIK_SAAT,
             "ilk_giris_mi": True,
             "personel_id": personel_id,
             "personel_kodu": personel_kodu,
@@ -1387,6 +1399,12 @@ def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YO
 
 
 
+YONETICI_PAROLASI_ENGEL_MESAJI = (
+    "Yönetici (ADMIN) hesaplarının parolası uygulamadan sıfırlanamaz; başka bir yönetici de sıfırlayamaz. "
+    "Sunucu bilgisayarında kurtarma aracı kullanılmalıdır (scripts/admin_parola_kurtar.py)."
+)
+
+
 @app.post("/api/kullanicilar/{kullanici_id}/parola-sifirla")
 def kullanici_parola_sifirla(
     kullanici_id: int,
@@ -1428,10 +1446,11 @@ def kullanici_parola_sifirla(
 
         cursor.execute(
             """
-            SELECT aktif_mi
-            FROM kullanicilar
-            WHERE kullanici_id = %s
-            FOR UPDATE;
+            SELECT k.aktif_mi, r.rol_adi
+            FROM kullanicilar k
+            LEFT JOIN roller r ON r.rol_id = k.rol_id
+            WHERE k.kullanici_id = %s
+            FOR UPDATE OF k;
             """,
             (kullanici_id,)
         )
@@ -1441,6 +1460,14 @@ def kullanici_parola_sifirla(
             raise HTTPException(
                 status_code=404,
                 detail="Kullanıcı bulunamadı."
+            )
+
+        # Yönetici hesapları uygulamadan sıfırlanamaz: bir yöneticinin başka bir yönetici hesabını ele geçirmesi engellenir.
+        # Tek yol, sunucu bilgisayarındaki kurtarma aracıdır (kimin çalıştırdığı günlüğe yazılır).
+        if len(hedef) > 1 and hedef[1] == "ADMIN":
+            raise HTTPException(
+                status_code=403,
+                detail=YONETICI_PAROLASI_ENGEL_MESAJI
             )
 
         if not hedef[0]:
@@ -1453,12 +1480,13 @@ def kullanici_parola_sifirla(
         yeni_hash = parola_hashle(gecici_parola)
 
         cursor.execute(
-            """
+            f"""
             UPDATE kullanicilar
             SET parola_hash = %s,
                 ilk_giris_mi = TRUE,
                 basarisiz_giris_sayisi = 0,
-                kilit_bitis_zamani = NULL
+                kilit_bitis_zamani = NULL,
+                gecici_parola_bitis = {GECICI_PAROLA_BITIS_SQL}
             WHERE kullanici_id = %s;
             """,
             (yeni_hash, kullanici_id)
@@ -1496,7 +1524,8 @@ def kullanici_parola_sifirla(
             "durum": "basarili",
             "mesaj": "Geçici parola oluşturuldu.",
             "kullanici_id": kullanici_id,
-            "gecici_parola": gecici_parola
+            "gecici_parola": gecici_parola,
+            "gecici_parola_gecerlilik_saat": GECICI_PAROLA_GECERLILIK_SAAT
         }
 
     except HTTPException:
@@ -1530,6 +1559,9 @@ PAROLA_TALEBI_ALINDI_MESAJI = "Talebiniz yöneticiye iletildi. Geçici parolanı
 PAROLA_TALEBI_ZATEN_VAR_MESAJI = "Bu hesap için zaten bekleyen bir talebiniz var. Yöneticinizin size dönmesini bekleyin."
 PAROLA_TALEBI_KULLANICI_YOK_MESAJI = "Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı. Yazımı kontrol edip tekrar deneyin."
 PAROLA_TALEBI_HESAP_PASIF_MESAJI = "Bu hesap pasif. Lütfen yöneticinize başvurun."
+PAROLA_TALEBI_HESAP_YONETICI_MESAJI = (
+    "Bu bir yönetici hesabı; parolası uygulamadan sıfırlanamaz. Sunucu bilgisayarından sorumlu kişiye (sistem sorumlusu) başvurun."
+)
 
 
 @app.post("/api/parola-sifirlama-talebi")
@@ -1545,7 +1577,12 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT kullanici_id, aktif_mi FROM kullanicilar WHERE kullanici_adi = %s;",
+            """
+            SELECT k.kullanici_id, k.aktif_mi, r.rol_adi
+            FROM kullanicilar k
+            LEFT JOIN roller r ON r.rol_id = k.rol_id
+            WHERE k.kullanici_adi = %s;
+            """,
             (talep.kullanici_adi,)
         )
         kullanici = cursor.fetchone()
@@ -1561,6 +1598,12 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
             raise HTTPException(
                 status_code=403,
                 detail={"kod": "HESAP_PASIF", "mesaj": PAROLA_TALEBI_HESAP_PASIF_MESAJI},
+            )
+        if len(kullanici) > 2 and kullanici[2] == "ADMIN":
+            # Yönetici hesapları uygulamadan sıfırlanamadığı için talep açmak anlamsızdır (kimse karşılayamaz): kaydedilmez.
+            raise HTTPException(
+                status_code=403,
+                detail={"kod": "HESAP_YONETICI", "mesaj": PAROLA_TALEBI_HESAP_YONETICI_MESAJI},
             )
 
         cursor.execute(
@@ -1630,7 +1673,7 @@ def parola_sifirlama_taleplerini_listele(
             FROM parola_sifirlama_talepleri t
             JOIN kullanicilar k ON k.kullanici_id = t.kullanici_id
             LEFT JOIN roller r ON r.rol_id = k.rol_id
-            WHERE t.durum = 'ACIK' AND k.aktif_mi
+            WHERE t.durum = 'ACIK' AND k.aktif_mi AND r.rol_adi IS DISTINCT FROM 'ADMIN'
             ORDER BY t.talep_zamani, t.talep_id;
             """
         )

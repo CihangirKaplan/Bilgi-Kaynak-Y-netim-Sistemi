@@ -79,36 +79,35 @@ geçici parolayı **bir kez** yazar; hesap ilk girişte yeni parola belirlemek z
 ### Yönetici parolasını unuttuysanız
 
 Normal kullanıcılar giriş ekranındaki **Şifremi unuttum** ile talep açar, bir yönetici parolayı sıfırlar.
-Parolasını unutan kişi **tek yöneticiyse** talebi görecek kimse kalmaz; bu durumda yönetici hesabı
-**sunucu bilgisayarında** şu araçla kurtarılır (veritabanı ayarlarına erişim gerektirdiği için yalnızca
-sistem sorumlusu yapabilir):
+**Yönetici (ADMIN) hesaplarının parolası uygulamadan sıfırlanamaz; başka bir yönetici de sıfırlayamaz.** Bir yöneticinin başka bir
+yönetici hesabını ele geçirmesi (ve işlemlerin onun adıyla görünmesi) engellensin diye bu iş yalnızca **sunucu bilgisayarında**
+şu araçla yapılır (veritabanı ayarlarına erişim gerektirdiği için yalnızca sistem sorumlusu yapabilir):
 
 - Kolay yol: sunucu bilgisayarında `scripts\windows\admin_parola_kurtar.bat` dosyasına çift tıklayın.
 - Ya da proje klasöründe: `python scripts/admin_parola_kurtar.py`
 
-Araç yönetici hesaplarını listeler, hangisi olduğunu sorar ve **EVET** yazarak onayınızı ister. Ardından
-rastgele bir geçici parolayı ekrana **bir kez** yazar; hemen not edin. Uygulamaya bu parolayla giriş yapın,
-ekran sizden yeni parola belirlemenizi ister. Araç hatalı giriş kilidini de kaldırır, bekleyen parola
-talebini kapatır ve olayı denetim kaydına (`PASSWORD_RESET`) yazar. Yalnızca yönetici (ADMIN) hesapları
-için çalışır; diğer kullanıcıların parolasını yönetici uygulamadan sıfırlar.
+Araç yönetici hesaplarını listeler, hangisi olduğunu sorar, **işlemi yapan kişinin adını soyadını** ister ve **EVET** yazarak
+onayınızı ister. Ardından rastgele bir geçici parolayı ekrana **bir kez** yazar; hemen not edin. Uygulamaya bu parolayla giriş yapın,
+ekran sizden yeni parola belirlemenizi ister. **Geçici parola 48 saat geçerlidir** (`.env` içindeki `GECICI_PAROLA_GECERLILIK_SAAT`
+ile değiştirilebilir); bu sürede giriş yapılmazsa araç yeniden çalıştırılır. Araç hatalı giriş kilidini de kaldırır, bekleyen
+parola talebini kapatır ve olayı denetim kaydına (`PASSWORD_RESET`) yazar. **Kimin yaptığı** (ad soyad, sunucudaki kullanıcı, bilgisayar
+adı, zaman) proje klasöründeki `logs/admin_kurtarma.log` dosyasına eklenir; bu dosyayı silmeyin ve yedeklerinize dahil edin.
+Yalnızca yönetici (ADMIN) hesapları için çalışır; diğer kullanıcıların parolasını yönetici uygulamadan sıfırlar. Yönetici hesabı için
+giriş ekranından parola talebi de açılamaz (uygulama sunucudaki araca yönlendirir).
 
-**Öneri:** Böyle bir durumla karşılaşmamak için sistemde en az **iki** yönetici hesabı bulundurun; biri
-parolasını unutursa diğeri, Kullanıcı & Personel ekranındaki parola taleplerinden onu sıfırlayabilir. İkinci yönetici,
+**Öneri:** Sistemde her zaman en az **iki** yönetici hesabı bulundurun; biri yokken ya da parolasını unutmuşken diğeri sistemi
+yönetmeye devam eder. Parola unutulursa yine yukarıdaki araç sunucuda çalıştırılır. İkinci yönetici,
 yukarıdaki `--ek-yonetici` seçeneğiyle sunucu bilgisayarında açılır.
 
 ### Acil durum: yönetici hesabına kimse giremiyorsa
 
-Sırayla şu üç yola bakın; ilk yol yeterliyse diğerlerine gerek kalmaz.
+Sırayla şu iki yola bakın; ilk yol yeterliyse ikincisine gerek kalmaz.
 
-1. **Başka bir yönetici varsa (en kolayı).** Şifresini unutan yönetici, giriş ekranındaki **Şifremi unuttum**
-   penceresine kendi kullanıcı adını yazıp **Yöneticiye Bildir**'e basar. Diğer yönetici, ana panelde ve zil
-   simgesinde **Parola Talepleri** bildirimini görür. Önce şifresini unutan kişinin kimliğini yüz yüze ya da
-   telefonla doğrular, sonra Kullanıcı & Personel ekranından **Parolayı Sıfırla** der ve geçici parolayı o kişiye
-   verir.
-2. **Tüm yöneticiler şifresini unuttuysa.** Sunucu bilgisayarında kurtarma aracı çalıştırılır
-   (`scripts\windows\admin_parola_kurtar.bat`). Araç bütün yöneticileri listeler. Biri seçilip kurtarılır; o kişi
-   giriş yaptıktan sonra diğer yöneticinin parolasını uygulamadan sıfırlayabilir (ya da araç ikinci kez çalıştırılır).
-3. **Sunucu bilgisayarına ya da `.env` dosyasına da ulaşılamıyorsa.** Veritabanı parolasını (`.env` içindeki
+1. **Yönetici şifresini unuttuysa (başka yönetici olsa bile).** Yönetici parolası uygulamadan sıfırlanamadığı için sunucu
+   bilgisayarında kurtarma aracı çalıştırılır (`scripts\windows\admin_parola_kurtar.bat`). Araç bütün yöneticileri listeler,
+   işlemi yapan kişinin adını ister, biri seçilip kurtarılır; geçici parola 48 saat geçerlidir. Aracı çalıştıran kişi
+   `logs/admin_kurtarma.log` dosyasına kaydedilir.
+2. **Sunucu bilgisayarına ya da `.env` dosyasına da ulaşılamıyorsa.** Veritabanı parolasını (`.env` içindeki
    `DB_PASSWORD` ve PostgreSQL `postgres` kullanıcısının parolası) bilen kişi veritabanı yöneticisi olarak
    müdahale eder. Bu teknik bir iştir; bir yazılım geliştiriciden yardım alın. Hiçbir veri kaybolmaz, en kötü
    durumda 10. bölümdeki yedekten geri dönülür.

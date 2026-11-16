@@ -27,6 +27,11 @@ if len(JWT_SECRET) < JWT_SECRET_ASGARI_UZUNLUK:
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "45"))
 
+# Yönetici ya da kurtarma aracıyla verilen GEÇİCİ parolanın geçerlilik süresi (saat). Süre dolunca kullanıcı giriş yapamaz ve
+# yeniden geçici parola ister. Süre bilgisi boş eski kayıtlar süresiz kalır. (SQL'e tam sayı olarak gömülür: kullanıcı girdisi değildir.)
+GECICI_PAROLA_GECERLILIK_SAAT = max(1, int(os.getenv("GECICI_PAROLA_GECERLILIK_SAAT", "48")))
+GECICI_PAROLA_BITIS_SQL = f"CURRENT_TIMESTAMP + INTERVAL '{GECICI_PAROLA_GECERLILIK_SAAT} hours'"
+
 def gecici_parola_uret() -> str:
     karakterler = string.ascii_letters + string.digits + "!@#$%&*"
     return "".join(

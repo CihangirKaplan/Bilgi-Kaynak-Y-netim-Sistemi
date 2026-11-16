@@ -162,7 +162,7 @@ class ParolaTalebiDialog(QDialog):
                 self.btn_gonder.setEnabled(True)
                 self.btn_gonder.setText("Yöneticiye Bildir")
 
-    BILINEN_HATA_KODLARI = ("KULLANICI_BULUNAMADI", "HESAP_PASIF")
+    BILINEN_HATA_KODLARI = ("KULLANICI_BULUNAMADI", "HESAP_PASIF", "HESAP_YONETICI")
 
     @classmethod
     def _bilinen_hata_mesaji(cls, yanit):
