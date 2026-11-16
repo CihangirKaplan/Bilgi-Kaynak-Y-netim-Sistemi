@@ -132,8 +132,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-052 | Öğrenci listeleme | ⚠️ | `GET /api/ogrenciler-liste`, `GET /api/ogrenciler-yonetim`; `client/ogrenci_yonetim_ekrani.py` | `test_ogrenci_liste_tur_etiketi.py`, `test_ogrenci_liste_api_hatalari.py`; test sonuçları bu güncellemede yeniden doğrulanmadı |
-| FR-053 | Öğrenci ekleme | ⚠️ | `POST /api/ogrenci-ekle`; `client/ogrenci_dialog.py` | `test_ogrenci_ekleme_http_quality.py`, `test_ogrenci_ekleme_son_quality.py` |
+| FR-052 | Öğrenci listeleme | ⚠️ | `GET /api/ogrenciler-liste`, `GET /api/ogrenciler-yonetim`; `client/ogrenci_yonetim_ekrani.py` | `test_ogrenci_liste_tur_etiketi.py`, `test_ogrenci_liste_api_hatalari.py`; Doğrulama: öğrenci listeleme ve API hata testleri başarılı (16.11.2026). |
+| FR-053 | Öğrenci ekleme | ⚠️ | `POST /api/ogrenci-ekle`; `client/ogrenci_dialog.py` | `test_ogrenci_ekleme_http_quality.py`, `test_ogrenci_ekleme_son_quality.py`; Doğrulama: öğrenci ekleme HTTP, kalite ve güvenlik testleri başarılı (16.11.2026). |
 | FR-054 | Öğrenci aktiflik yönetimi | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/aktiflik` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG) |
 | FR-055 | Öğrenci silme ve erteleme | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/silme-ertele`, `DELETE /api/ogrenciler/{ogrenci_id}/on-yil-sil` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG); saklama ve silme koşulları ayrıca doğrulanmalı |
 
@@ -141,9 +141,9 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-056 | Faaliyet türü ve birimi yönetimi | ⚠️ | `/api/faaliyetler`, `/api/faaliyet-birimleri`; `client/faaliyet_turleri_dialog.py` | `test_faaliyet_turleri_quality.py`, `test_faaliyet_turleri_postgresql_quality.py` (PG), `test_faaliyet_birimi_yazma_izni.py` |
-| FR-057 | Faaliyet kaydı yönetimi | ⚠️ | `POST/GET /api/faaliyet-kayitlari`, `PUT/DELETE /api/faaliyet-kayitlari/{takip_id}`; `client/faaliyet_dialog.py` | `test_faaliyet_formu_kisayollari.py`, `test_faaliyet_okuma_uclari_yetki.py`; tüm CRUD davranışları ayrıca doğrulanmalı |
-| FR-058 | Faaliyet puanları ve raporlama | ⚠️ | `GET /api/ogrenciler/{ogrenci_id}/puanlar`, `GET /api/puan-raporu`; `client/puan_raporu_ekrani.py`, `client/puan_rapor_excel.py` | `test_puan_raporu.py` |
+| FR-056 | Faaliyet türü ve birimi yönetimi | ⚠️ | `/api/faaliyetler`, `/api/faaliyet-birimleri`; `client/faaliyet_turleri_dialog.py` | `test_faaliyet_turleri_quality.py`, `test_faaliyet_turleri_postgresql_quality.py` (PG), `test_faaliyet_birimi_yazma_izni.py`; Doğrulama: faaliyet türü/birimi ve yazma yetkisi testleri başarılı (16.11.2026). |
+| FR-057 | Faaliyet kaydı yönetimi | ⚠️ | `POST/GET /api/faaliyet-kayitlari`, `PUT/DELETE /api/faaliyet-kayitlari/{takip_id}`; `client/faaliyet_dialog.py` | `test_faaliyet_formu_kisayollari.py`, `test_faaliyet_okuma_uclari_yetki.py`; Doğrulama: faaliyet formu ve okuma yetkisi testleri başarılı; tüm CRUD işlemleri ayrıca doğrulanmalı. |
+| FR-058 | Faaliyet puanları ve raporlama | ⚠️ | `GET /api/ogrenciler/{ogrenci_id}/puanlar`, `GET /api/puan-raporu`; `client/puan_raporu_ekrani.py`, `client/puan_rapor_excel.py` | `test_puan_raporu.py`; Doğrulama: puan raporu testleri başarılı (16.11.2026). |
 
 ### 5.13 Danışma masası yönetimi
 
