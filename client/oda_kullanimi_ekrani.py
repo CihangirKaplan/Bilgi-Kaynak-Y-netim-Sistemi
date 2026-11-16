@@ -5,6 +5,7 @@ gösterilir (renkler Randevu Yönetimi'ndeki durum renkleriyle aynıdır); iptal
 randevularında yalnızca "Dolu" bilgisini görür (sunucu uygular). Sayfa yalnızca görüntülemedir.
 """
 
+import textwrap
 from datetime import date, datetime, timedelta
 
 import requests
@@ -114,6 +115,14 @@ def doluluk_hesapla(randevular, odalar, gunler, saatler):
 
 def yuzde(oran):
     return "—" if oran is None else f"%{round(oran * 100)}"
+
+
+def oda_basligi(ad, doluluk_metni, genislik=15):
+    """Sütun başlığı: oda adı en çok iki satıra bölünür (uzun adlar kırpılmasın), altında doluluk yüzdesi."""
+    satirlar = textwrap.wrap(str(ad), width=genislik, break_long_words=False) or [""]
+    if len(satirlar) > 2:
+        satirlar = [satirlar[0], " ".join(satirlar[1:])]
+    return "\n".join(satirlar + [f"{doluluk_metni} dolu"])
 
 
 # ------------------------------------------------------------------ arayüz
@@ -260,6 +269,7 @@ class OdaKullanimiEkrani(QWidget):
         self.tablo.verticalHeader().setFixedWidth(62)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tablo.horizontalHeader().setFixedHeight(42)
+        self.tablo.horizontalHeader().setMinimumSectionSize(110)     # çok oda olursa sütunlar daralıp kırpılmasın; sığmazsa yatay kaydırma
         self.tablo.setStyleSheet("""
             QTableWidget { background: white; border: none; gridline-color: #EEF2F8; color: #243653; }
             QTableCornerButton::section { background: white; border: none; border-bottom: 1px solid #E3EAF5; border-right: 1px solid #E3EAF5; }
@@ -489,13 +499,14 @@ class OdaKullanimiEkrani(QWidget):
         harita = blok_haritasi(self.randevular)
         ozet = doluluk_hesapla(self.randevular, self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
         if self.gorunum == "gun":
-            sutunlar = [(o["oda_id"], f"{o.get('oda_adi')}\n{yuzde(ozet['odalar'][o['oda_id']]['oran'])} dolu") for o in aktif]
+            sutunlar = [(o["oda_id"], oda_basligi(o.get("oda_adi"), yuzde(ozet["odalar"][o["oda_id"]]["oran"]))) for o in aktif]
             anahtar = lambda sutun, saat: (sutun[0], self.secili_gun, saat)
         else:
             oda_id = self.oda_sec.currentData()
             sutunlar = [(g, f"{GUN_KISA[i]} {g.day}") for i, g in enumerate(gunler)]
             anahtar = lambda sutun, saat: (oda_id, sutun[0], saat)
 
+        self.tablo.horizontalHeader().setFixedHeight(64 if self.gorunum == "gun" else 42)       # gün görünümünde 3 satırlık oda başlığı
         self.tablo.setColumnCount(len(sutunlar))
         self.tablo.setRowCount(len(saatler))
         self.tablo.setHorizontalHeaderLabels([etiket for _, etiket in sutunlar])

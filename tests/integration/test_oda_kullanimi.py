@@ -14,7 +14,7 @@ import client.main_window as main_window
 import client.oda_kullanimi_ekrani as modul
 import client.tkys_sidebar_refined as tkys_sidebar_refined
 from client.oda_kullanimi_ekrani import (
-    OdaKullanimiEkrani, blok_haritasi, doluluk_hesapla, hafta_basi, hafta_basligi, saat_dilimleri, yuzde,
+    OdaKullanimiEkrani, blok_haritasi, doluluk_hesapla, hafta_basi, hafta_basligi, oda_basligi, saat_dilimleri, yuzde,
 )
 from server.sunucu import app, mevcut_kullanici_id
 
@@ -63,6 +63,16 @@ def test_doluluk_bos_ve_aktif_oda_yok():
     bos = doluluk_hesapla([], [], GUNLER, SAATLER)
     assert bos["toplam"] == 0 and bos["oran"] is None
     assert yuzde(None) == "—" and yuzde(0.214) == "%21" and yuzde(1) == "%100"
+
+
+def test_oda_basligi_uzun_adi_iki_satira_boler_ve_dolulugu_altina_yazar():
+    assert oda_basligi("Oda-1", "%43") == "Oda-1\n%43 dolu"
+    baslik = oda_basligi("Gözlem ve Sanal Gerçeklik Odası", "%0")
+    satirlar = baslik.split("\n")
+    assert len(satirlar) == 3 and satirlar[0] == "Gözlem ve Sanal" and satirlar[1] == "Gerçeklik Odası" and satirlar[2] == "%0 dolu"
+    cok_uzun = oda_basligi("Çok Uzun Adlı Bir Terapi Görüşme Gözlem Odası", "%10").split("\n")
+    assert len(cok_uzun) == 3 and cok_uzun[2] == "%10 dolu"                                  # ikiden fazla satıra bölünmez
+    assert oda_basligi("", "%0") == "\n%0 dolu"
 
 
 def test_blok_haritasi_baslangic_saatine_koyar():
@@ -165,6 +175,19 @@ def test_acilista_bugunun_gun_gorunumu_ve_istek_araligi(ekran_ac):
     basliklar = [ekran.tablo.horizontalHeaderItem(i).text() for i in range(2)]
     assert basliklar[0].startswith("Oda-1") and basliklar[1].startswith("Oda-2")
     assert [ekran.tablo.verticalHeaderItem(i).text() for i in range(7)] == [f"{h:02d}:00" for h in range(9, 16)]
+
+
+def test_cok_odali_gunde_uzun_oda_adlari_tam_basliklarda_yer_alir(ekran_ac):
+    odalar = [{"oda_id": i, "oda_adi": ad, "kapasite": 1, "aktif_mi": True} for i, ad in enumerate(
+        ["Aynalı Görüşme Odası", "Bilişsel Test Odası", "Gözlem ve Sanal Gerçeklik Odası", "Oyun Terapi Odası", "Sanat Terapi Odası", "EEG Odası",
+         "Deneme Odası-2", "Görüşme Odası-1", "Görüşme Odası-2", "Gözlem Odası"], start=1)]
+    ekran, _ = ekran_ac(Sunucu([], odalar))
+    assert ekran.tablo.columnCount() == 10 and ekran.tablo.horizontalHeader().minimumSectionSize() >= 110
+    assert ekran.tablo.horizontalHeader().height() == 64
+    basliklar = [ekran.tablo.horizontalHeaderItem(i).text() for i in range(10)]
+    assert "Gerçeklik Odası" in basliklar[2] and basliklar[0].startswith("Aynalı Görüşme") and all(b.endswith("dolu") for b in basliklar)
+    ekran.btn_hafta.click()
+    assert ekran.tablo.horizontalHeader().height() == 42                                      # hafta görünümünde gün başlıkları tek satır
 
 
 def test_gun_gorunumunde_bloklar_durum_ve_bilgi(ekran_ac):
