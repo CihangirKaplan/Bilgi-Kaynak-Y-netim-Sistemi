@@ -195,22 +195,22 @@ QLabel#guvenlik {
 }
 """
 
+ONAY_ISARETI_DOSYASI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "tkys_checkbox_check.svg")
+
+
+def stil_olustur(ikon_yolu=ONAY_ISARETI_DOSYASI):
+    """Giriş ekranı stilini üretir. QSS'te url("...") içindeki ters bölüler kaçış dizisi sayıldığından (Windows yollarında
+    stilin geri kalanı sessizce uygulanmaz) yol ileri bölülü yazılır."""
+    return STIL.replace("__TKYS_CHECK_ICON__", str(ikon_yolu).replace("\\", "/"))
+
+
 class LoginEkrani(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("kok")
         self.setWindowTitle("TKYS — Güvenli Giriş")
         self.setFixedSize(980, 620)
-        self.setStyleSheet(
-            STIL.replace(
-                "__TKYS_CHECK_ICON__",
-                os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)),
-                    "assets",
-                    "tkys_checkbox_check.svg"
-                )
-            )
-        )
+        self.setStyleSheet(stil_olustur())
         self.ana_pencere = None
         self.hatali_deneme = 0
         self.kalan = 0
