@@ -4846,6 +4846,58 @@ def ogrenci_puan_detayi(
 PUAN_RAPORU_DURUMLARI = ("aktif", "pasif")
 
 
+@app.get("/api/randevu-raporu/secenekler")
+def randevu_raporu_secenekleri(
+    psikolog_id: int | None = None,
+    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
+):
+    """Randevu raporu süzgeç listeleri: aktif psikologlar ve yalnızca PSİKOLOGLARA ATANMIŞ aktif odalar.
+    psikolog_id verilirse odalar o psikologun odalarına daralır. Psikolog yalnızca kendisini ve kendi odalarını görür."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+
+        kosullar, parametreler = [], []
+        if psikolog_mu:
+            kosullar.append("p.kullanici_id = %s")
+            parametreler.append(kullanici_id)
+        elif psikolog_id is not None:
+            kosullar.append("p.personel_id = %s")
+            parametreler.append(psikolog_id)
+        ek_kosul = "".join(f" AND {k}" for k in kosullar)
+
+        cursor.execute(f"""
+            SELECT DISTINCT p.personel_id, k.kullanici_adi
+            FROM personel p
+            JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
+            JOIN roller r ON r.rol_id = k.rol_id
+            WHERE p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{" AND p.kullanici_id = %s" if psikolog_mu else ""}
+            ORDER BY k.kullanici_adi;
+        """, ((kullanici_id,) if psikolog_mu else ()))
+        psikologlar = [{"personel_id": s[0], "ad_soyad": s[1]} for s in cursor.fetchall()]
+
+        cursor.execute(f"""
+            SELECT DISTINCT o.oda_id, o.oda_adi
+            FROM odalar o
+            JOIN psikolog_odalar po ON po.oda_id = o.oda_id
+            JOIN personel p ON p.kullanici_id = po.kullanici_id
+            JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
+            JOIN roller r ON r.rol_id = k.rol_id
+            WHERE o.aktif_mi = TRUE AND p.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{ek_kosul}
+            ORDER BY o.oda_adi;
+        """, tuple(parametreler))
+        odalar = [{"oda_id": o[0], "oda_adi": o[1]} for o in cursor.fetchall()]
+        return {"psikologlar": psikologlar, "odalar": odalar}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 @app.get("/api/randevu-raporu")
 def randevu_raporu(
     baslangic: _ogr_date | None = None,
