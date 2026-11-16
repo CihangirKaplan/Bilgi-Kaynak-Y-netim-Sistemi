@@ -346,12 +346,6 @@ class ElegantSidebar(QObject):
             self.w.logo_karti.setVisible(not collapsed)
             self.w.rol_karti.setVisible(False)
 
-            self.w.btn_cikis.setText(
-                "⏻" if collapsed else "⏻   Oturumu Kapat"
-            )
-
-            self.w.btn_cikis.setToolTip("Oturumu Kapat")
-
             for name, group in self.groups.items():
                 active = any(
                     button.isChecked()
