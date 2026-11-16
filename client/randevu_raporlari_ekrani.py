@@ -108,6 +108,9 @@ class RandevuRaporlariEkrani(QWidget):
             QPushButton:hover { background: #1E4BC5; }
             QLabel { color: #243653; }
             QComboBox, QDateEdit { background: white; color: #243653; border: 1px solid #C9D6EA; border-radius: 6px; padding: 6px 8px; }
+            /* Ana pencerenin genel stili her açılır kutuya min-width: 170px verir; süzgeç çubuğunda geçersiz kılınır. */
+            QComboBox { min-width: 110px; }
+            QDateEdit { min-width: 105px; }
             QComboBox:focus, QDateEdit:focus { border: 1px solid #285CE6; }
         """)
         ana = QVBoxLayout(self)
@@ -115,20 +118,22 @@ class RandevuRaporlariEkrani(QWidget):
         ana.setSpacing(12)
 
         satir = QHBoxLayout()
+        satir.setSpacing(8)
         satir.addWidget(QLabel("Dönem:"))
         self.donem = QComboBox()
         self.donem.addItems(DONEMLER)
         satir.addWidget(self.donem)
-        satir.addWidget(QLabel("Başlangıç:"))
+        # Tarih kutuları yalnızca "Tarih Aralığı" seçilince görünür (hazır dönemlerde gereksiz kalabalık yapmaz).
+        self.etiket_baslangic = QLabel("Başlangıç:")
         self.baslangic = QDateEdit()
         self.baslangic.setCalendarPopup(True)
         self.baslangic.setDisplayFormat("dd.MM.yyyy")
-        satir.addWidget(self.baslangic)
-        satir.addWidget(QLabel("Bitiş:"))
+        self.etiket_bitis = QLabel("Bitiş:")
         self.bitis = QDateEdit()
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
-        satir.addWidget(self.bitis)
+        for parca in (self.etiket_baslangic, self.baslangic, self.etiket_bitis, self.bitis):
+            satir.addWidget(parca)
         satir.addSpacing(10)
         self.etiket_psikolog = QLabel("Psikolog:")
         self.psikolog_sec = QComboBox()
@@ -142,9 +147,9 @@ class RandevuRaporlariEkrani(QWidget):
         self.oda_sec.addItem("Tümü", None)
         satir.addWidget(self.oda_sec)
         satir.addStretch(1)
-        self.yenile_btn = QPushButton("↻ Raporu Getir")
-        satir.addWidget(self.yenile_btn)
+        # Rapor süzgeç değişince kendiliğinden yenilenir; ayrı bir "Raporu Getir" düğmesi yoktur.
         self.excel_btn = QPushButton("⬇ Excel'e Aktar")
+        self.excel_btn.setMinimumWidth(150)
         self.excel_btn.setEnabled(False)
         self.excel_btn.setStyleSheet(
             "QPushButton { background: #16803C; } QPushButton:hover { background: #126A31; } QPushButton:disabled { background: #AEB9CC; }"
@@ -189,31 +194,49 @@ class RandevuRaporlariEkrani(QWidget):
         self.donem.currentIndexChanged.connect(self._donem_degisti)
         self.baslangic.dateChanged.connect(self._tarih_elle_degisti)
         self.bitis.dateChanged.connect(self._tarih_elle_degisti)
-        self.psikolog_sec.currentIndexChanged.connect(self._filtre_degisti)
+        self.psikolog_sec.currentIndexChanged.connect(self._psikolog_degisti)
         self.oda_sec.currentIndexChanged.connect(self._filtre_degisti)
-        self.yenile_btn.clicked.connect(self.yenile)
         self.excel_btn.clicked.connect(self.excel_aktar)
         self._donem_tarihlerini_yaz()
 
     # ------------------------------------------------------------------ süzgeç listeleri
+    def _secenekleri_getir(self, psikolog_id=None):
+        """Sunucudan psikolog ve oda seçeneklerini alır; odalar yalnızca psikologlara atanmış aktif odalardır."""
+        params = {"psikolog_id": int(psikolog_id)} if psikolog_id is not None else {}
+        try:
+            yanit = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevu-raporu/secenekler",
+                                           headers=self._headers(), params=params, timeout=5)
+            if yanit is not None and yanit.status_code == 200:
+                return yanit.json()
+        except (requests.RequestException, ValueError):
+            pass
+        return None
+
+    def _kutuyu_doldur(self, kutu, kayitlar, ad_alani, kimlik, secili=None):
+        kutu.blockSignals(True)
+        kutu.clear()
+        kutu.addItem("Tümü", None)
+        for kayit in kayitlar:
+            kutu.addItem(str(kayit.get(ad_alani)), kayit.get(kimlik))
+        indeks = kutu.findData(secili) if secili is not None else -1
+        kutu.setCurrentIndex(max(indeks, 0))
+        kutu.blockSignals(False)
+
     def _listeleri_yukle(self):
         """Psikolog ve oda açılır listelerini doldurur (yüklenemezse yalnızca 'Tümü' kalır)."""
-        for url, kutu, ad_alani, kimlik in (
-            ("/api/psikologlar", self.psikolog_sec, "ad_soyad", "personel_id"),
-            ("/api/odalar", self.oda_sec, "oda_adi", "oda_id"),
-        ):
-            if kutu is self.psikolog_sec and self.psikolog_mu:
-                continue
-            try:
-                yanit = oturum_kontrollu_istek("GET", f"{self.api_url}{url}", headers=self._headers(), timeout=5)
-                if yanit is not None and yanit.status_code == 200:
-                    kutu.blockSignals(True)
-                    for kayit in yanit.json():
-                        if kayit.get("aktif_mi", True):
-                            kutu.addItem(str(kayit.get(ad_alani)), kayit.get(kimlik))
-                    kutu.blockSignals(False)
-            except (requests.RequestException, ValueError):
-                pass
+        veri = self._secenekleri_getir()
+        if veri is None:
+            return
+        if not self.psikolog_mu:
+            self._kutuyu_doldur(self.psikolog_sec, veri.get("psikologlar", []), "ad_soyad", "personel_id")
+        self._kutuyu_doldur(self.oda_sec, veri.get("odalar", []), "oda_adi", "oda_id")
+
+    def _psikolog_degisti(self, *_):
+        """Psikolog seçilince oda listesi o psikologun odalarına daralır; sonra rapor bir kez yenilenir."""
+        veri = self._secenekleri_getir(self.psikolog_sec.currentData())
+        if veri is not None:
+            self._kutuyu_doldur(self.oda_sec, veri.get("odalar", []), "oda_adi", "oda_id", secili=self.oda_sec.currentData())
+        self.yenile()
 
     # ------------------------------------------------------------------ dönem
     def _donem_araligi(self):
@@ -246,8 +269,8 @@ class RandevuRaporlariEkrani(QWidget):
             self.baslangic.blockSignals(False)
             self.bitis.blockSignals(False)
         ozel = secim == "Tarih Aralığı"
-        self.baslangic.setEnabled(ozel)
-        self.bitis.setEnabled(ozel)
+        for parca in (self.etiket_baslangic, self.baslangic, self.etiket_bitis, self.bitis):
+            parca.setVisible(ozel)
 
     def _donem_degisti(self, *_):
         self._donem_tarihlerini_yaz()
@@ -343,7 +366,7 @@ class RandevuRaporlariEkrani(QWidget):
         alt.setText(f"Gelmeme oranı {yuzde_metni(ozet.get('gelmeme_orani'))}")
         deger, alt = self.kartlar["iptal"]
         deger.setText(str(ozet.get("iptal_edildi", 0)))
-        alt.setText("nedenleri sağdaki tabloda")
+        alt.setText("")
 
         self._doldur(self.tablo_psikolog, [
             [p.get("ad"), p.get("toplam", 0), p.get("planlandi", 0), p.get("tamamlandi", 0), p.get("gelmedi", 0), p.get("iptal_edildi", 0)]

@@ -51,6 +51,7 @@ def kayitlar():
         c.execute("DELETE FROM randevular WHERE danisan_kod_id = ANY(%s)", (kodlar,))
         c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s)", ([admin] + [p[0] for p in psikologlar],))
         c.execute("DELETE FROM danisan_kodlari WHERE danisan_kod_id = ANY(%s)", (kodlar,))
+        c.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = ANY(%s)", ([p[0] for p in psikologlar],))
         for kullanici, pid, oda in psikologlar:
             c.execute("DELETE FROM odalar WHERE oda_id = %s", (oda,))
             c.execute("DELETE FROM personel WHERE personel_id = %s", (pid,))
@@ -108,3 +109,29 @@ def test_psikolog_yalnizca_kendi_randevularini_gorur(kayitlar):
     app.dependency_overrides[mevcut_kullanici_id] = lambda: psi_b[0]
     veri = istemci.get(f"/api/randevu-raporu?baslangic=2031-03-01&bitis=2031-03-31&psikolog_id={psi_a[1]}").json()   # başkasını istese de
     assert veri["ozet"]["toplam"] == 2 and [p["psikolog_id"] for p in veri["psikologlar"]] == [psi_b[1]]
+
+
+def test_secenekler_yalnizca_psikologlara_atanmis_aktif_odalari_getirir(kayitlar):
+    c, admin, (psi_a, psi_b), _ = kayitlar
+    etiket = uuid4().hex[:8]
+    c.execute("INSERT INTO odalar (oda_adi, kapasite) VALUES (%s, 1) RETURNING oda_id", (f"r_atanmamis_{etiket}",))
+    atanmamis = c.fetchone()[0]                                                              # hiçbir psikolog atanmamış oda
+    c.execute("INSERT INTO odalar (oda_adi, kapasite, aktif_mi) VALUES (%s, 1, FALSE) RETURNING oda_id", (f"r_pasif_{etiket}",))
+    pasif = c.fetchone()[0]                                                                  # atanmış ama pasif oda
+    c.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s), (%s, %s), (%s, %s)",
+              (psi_a[0], psi_a[2], psi_a[0], pasif, psi_b[0], psi_b[2]))
+    try:
+        istemci = TestClient(app)
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        veri = istemci.get("/api/randevu-raporu/secenekler").json()
+        odalar = {o["oda_id"] for o in veri["odalar"]}
+        assert {psi_a[2], psi_b[2]} <= odalar and atanmamis not in odalar and pasif not in odalar
+        assert {p["personel_id"] for p in veri["psikologlar"]} >= {psi_a[1], psi_b[1]}
+        dar = istemci.get(f"/api/randevu-raporu/secenekler?psikolog_id={psi_a[1]}").json()
+        assert [o["oda_id"] for o in dar["odalar"]] == [psi_a[2]]                            # seçilen psikologun odalarına daralır
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: psi_b[0]
+        kendi = istemci.get(f"/api/randevu-raporu/secenekler?psikolog_id={psi_a[1]}").json()   # başkasını istese de
+        assert [o["oda_id"] for o in kendi["odalar"]] == [psi_b[2]] and [p["personel_id"] for p in kendi["psikologlar"]] == [psi_b[1]]
+    finally:
+        c.execute("DELETE FROM psikolog_odalar WHERE oda_id = ANY(%s)", ([atanmamis, pasif],))
+        c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", ([atanmamis, pasif],))

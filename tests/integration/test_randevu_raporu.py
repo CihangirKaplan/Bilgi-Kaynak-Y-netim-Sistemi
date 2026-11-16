@@ -133,6 +133,33 @@ def test_gecersiz_girdi_reddedilir(istemci, sorgu):
     assert yanit.status_code == 422 and sorgusu is None
 
 
+def _secenekler(istemci, sorgu="", rol="ADMIN"):
+    conn = MagicMock()
+    c = conn.cursor.return_value
+    c.fetchone.side_effect = [(1,), (rol,)]
+    c.fetchall.side_effect = [[(3, "Ayşe"), (7, "Fatma")], [(2, "Oda-2")]]
+    with patch("server.sunucu.psycopg2.connect", return_value=conn):
+        yanit = istemci.get("/api/randevu-raporu/secenekler" + sorgu)
+    sorgular = [x.args for x in c.execute.call_args_list if "FROM odalar o" in x.args[0] or "FROM personel p" in x.args[0]]
+    return yanit, sorgular
+
+
+def test_secenekler_yalnizca_psikologlara_atanmis_aktif_odalari_dondurur(istemci):
+    yanit, sorgular = _secenekler(istemci)
+    assert yanit.json() == {"psikologlar": [{"personel_id": 3, "ad_soyad": "Ayşe"}, {"personel_id": 7, "ad_soyad": "Fatma"}], "odalar": [{"oda_id": 2, "oda_adi": "Oda-2"}]}
+    oda_sql = sorgular[1][0]
+    assert "JOIN psikolog_odalar" in oda_sql and "o.aktif_mi = TRUE" in oda_sql and "UPPER(r.rol_adi) = 'PSIKOLOG'" in oda_sql
+    assert sorgular[1][1] == ()                                                           # psikolog seçilmediyse tümü
+
+
+def test_secenekler_psikolog_secilince_odalar_daralir_psikolog_yalnizca_kendini_gorur(istemci):
+    _, sorgular = _secenekler(istemci, "?psikolog_id=7")
+    assert "p.personel_id = %s" in sorgular[1][0] and sorgular[1][1] == (7,)
+    _, sorgular = _secenekler(istemci, "?psikolog_id=7", rol="PSIKOLOG")
+    assert "p.kullanici_id = %s" in sorgular[1][0] and "p.personel_id = %s" not in sorgular[1][0] and sorgular[1][1] == (5,)
+    assert "p.kullanici_id = %s" in sorgular[0][0] and sorgular[0][1] == (5,)             # psikolog listesinde de yalnızca kendisi
+
+
 # ------------------------------------------------------------------ Excel
 def test_excel_dort_sayfa_ve_icerik(tmp_path):
     veri = randevu_raporu_hesapla(ORNEK, ETIKETLER, detay=True)
@@ -168,10 +195,11 @@ class Sunucu:
 
     def __call__(self, yontem, url, **kwargs):
         self.istekler.append((url, kwargs.get("params") or {}))
-        if url.endswith("/api/psikologlar"):
-            veri = [{"personel_id": 3, "ad_soyad": "Ayşe"}, {"personel_id": 7, "ad_soyad": "Fatma"}]
-        elif url.endswith("/api/odalar"):
-            veri = [{"oda_id": 2, "oda_adi": "Oda-2", "aktif_mi": True}, {"oda_id": 9, "oda_adi": "Eski", "aktif_mi": False}]
+        if url.endswith("/api/randevu-raporu/secenekler"):
+            psikolog = (kwargs.get("params") or {}).get("psikolog_id")
+            odalar = [{"oda_id": 2, "oda_adi": "Oda-2"}, {"oda_id": 5, "oda_adi": "Oda-5"}]
+            veri = {"psikologlar": [{"personel_id": 3, "ad_soyad": "Ayşe"}, {"personel_id": 7, "ad_soyad": "Fatma"}],
+                    "odalar": [o for o in odalar if o["oda_id"] == 5] if psikolog == 7 else odalar}      # psikolog seçilince odalar daralır
         else:
             veri = self.rapor
         return SimpleNamespace(status_code=200, json=lambda: veri, raise_for_status=lambda: None)   # MagicMock "oturum reddedildi" sanılır
@@ -207,14 +235,19 @@ def test_ekran_kartlar_ve_tablolar_dolar(ekran_ac):
 
 def test_ekran_suzgec_listeleri_ve_istek_parametreleri(ekran_ac):
     ekran, sunucu = ekran_ac()
-    assert [ekran.psikolog_sec.itemText(i) for i in range(ekran.psikolog_sec.count())] == ["Tümü", "Ayşe", "Fatma"]
-    assert [ekran.oda_sec.itemText(i) for i in range(ekran.oda_sec.count())] == ["Tümü", "Oda-2"]        # pasif oda listelenmez
+    adlar = lambda kutu: [kutu.itemText(i) for i in range(kutu.count())]
+    assert adlar(ekran.psikolog_sec) == ["Tümü", "Ayşe", "Fatma"]
+    assert adlar(ekran.oda_sec) == ["Tümü", "Oda-2", "Oda-5"]            # yalnızca psikologlara atanmış odalar (sunucu süzer)
     with patch.object(ekranmodulu, "oturum_kontrollu_istek", side_effect=sunucu):
-        ekran.psikolog_sec.setCurrentIndex(2)
+        ekran.psikolog_sec.setCurrentIndex(2)                             # Fatma (id 7)
+        assert adlar(ekran.oda_sec) == ["Tümü", "Oda-5"]                 # oda listesi o psikologun odalarına daralır
+        assert sunucu.istekler[-2][1] == {"psikolog_id": 7}
         ekran.oda_sec.setCurrentIndex(1)
         ekran.donem.setCurrentText("Tümü")
         params = [p for u, p in sunucu.istekler if u.endswith("/api/randevu-raporu")][-1]
-        assert params == {"psikolog_id": 7, "oda_id": 2}                                   # tüm tarihlerde tarih parametresi yok
+        assert params == {"psikolog_id": 7, "oda_id": 5}                   # tüm tarihlerde tarih parametresi yok
+        ekran.psikolog_sec.setCurrentIndex(0)                              # Tümü'ne dönünce oda listesi yeniden genişler
+        assert adlar(ekran.oda_sec) == ["Tümü", "Oda-2", "Oda-5"] and ekran.oda_sec.currentData() == 5   # geçerli oda seçimi korunur
         ekran.donem.setCurrentText("Bu Yıl")
         assert ekran._parametreler()["baslangic"].endswith("-01-01") and ekran._parametreler()["bitis"].endswith("-12-31")
 
@@ -223,8 +256,23 @@ def test_psikolog_hesabinda_psikolog_suzgeci_gizli_ve_gonderilmez(ekran_ac):
     ekran, sunucu = ekran_ac(psikolog_mu=True)
     assert not ekran.psikolog_sec.isVisibleTo(ekran) and not ekran.etiket_psikolog.isVisibleTo(ekran)
     assert not any(u.endswith("/api/psikologlar") for u, _ in sunucu.istekler)
+    assert ekran.psikolog_sec.count() == 1                                  # psikolog listesi doldurulmaz
     assert "psikolog_id" not in ekran._parametreler()
     assert dict(ekran._son_filtre)["Psikolog"] == "Yalnızca kendi randevularınız"
+
+
+def test_rapor_kendiliginden_yenilenir_raporu_getir_dugmesi_yok_ve_arayuz_sikismaz(ekran_ac):
+    ekran, sunucu = ekran_ac()
+    assert not hasattr(ekran, "yenile_btn") and ekran.excel_btn.minimumWidth() >= 150
+    assert ekran.kartlar["iptal"][1].text() == ""                           # iptal kartında açıklama yazısı yok
+    for ad in ("etiket_baslangic", "baslangic", "etiket_bitis", "bitis"):  # tarih kutuları yalnızca "Tarih Aralığı"nda görünür
+        assert not getattr(ekran, ad).isVisibleTo(ekran), ad
+    sayi = len([u for u, _ in sunucu.istekler if u.endswith("/api/randevu-raporu")])
+    with patch.object(ekranmodulu, "oturum_kontrollu_istek", side_effect=sunucu):
+        ekran.donem.setCurrentText("Tarih Aralığı")                        # süzgeç değişince rapor kendiliğinden gelir
+    assert len([u for u, _ in sunucu.istekler if u.endswith("/api/randevu-raporu")]) == sayi + 1
+    for ad in ("etiket_baslangic", "baslangic", "etiket_bitis", "bitis"):
+        assert getattr(ekran, ad).isVisibleTo(ekran), ad
 
 
 def test_gecersiz_tarih_araligi_uyarir_istek_atmaz(ekran_ac):
