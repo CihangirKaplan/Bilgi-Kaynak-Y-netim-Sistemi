@@ -819,12 +819,6 @@ QLabel {
         rk.addWidget(self.lbl_kullanici)
         sb.addWidget(rol_kart)
 
-        btn_cikis = QPushButton("⏻   Oturumu Kapat")
-        self.btn_cikis = btn_cikis
-        btn_cikis.setObjectName("cikis")
-        btn_cikis.setCursor(Qt.PointingHandCursor)
-        btn_cikis.clicked.connect(self.oturum_kapat)
-        sb.addWidget(btn_cikis)
         ana.addWidget(sidebar)
 
         # ---------------- SAĞ ALAN ----------------
