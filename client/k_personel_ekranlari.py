@@ -508,7 +508,7 @@ class KullaniciPersonelEkrani(QWidget):
                 return
 
             # Parola kopyalanabilir pencerede gösterilir; kapandıktan sonra tekrar gösterilemez.
-            GeciciParolaDialog(kullanici_adi, gecici_parola, self).exec()
+            GeciciParolaDialog(kullanici_adi, gecici_parola, self, gecerlilik_saat=sonuc.get("gecici_parola_gecerlilik_saat")).exec()
             # Sıfırlanan kullanıcının bekleyen talebi sunucuda tamamlandı; paneli tazele.
             self.talepleri_yukle()
 
@@ -1291,6 +1291,8 @@ class KullaniciOlusturFormu(QDialog):
                     )
                     return
                 gecici_parola = sonuc.get("gecici_parola", "HATA")
+                gecerlilik_metni = (f"\n⏳ Geçerlilik: {sonuc['gecici_parola_gecerlilik_saat']} saat"
+                                    if sonuc.get("gecici_parola_gecerlilik_saat") else "")
                 self.olusturulan_kullanici = {
                     "kullanici_id": sonuc.get("kullanici_id"),
                     "kullanici_adi": kullanici_adi,
@@ -1301,7 +1303,7 @@ class KullaniciOlusturFormu(QDialog):
                 self.lbl_sonuc.setText(
                     "✔ Kullanıcı ve personel başarıyla oluşturuldu.\n\n"
                     f"👤 Kullanıcı Adı: {kullanici_adi}\n"
-                    f"🔑 Geçici Parola: {gecici_parola}\n"
+                    f"🔑 Geçici Parola: {gecici_parola}{gecerlilik_metni}\n"
                     f"🏷 Personel Kodu: {personel_kodu}\n\n"
                     "Parolayı kullanıcıya iletin; ilk girişte "
                     "değiştirmesi gerekir."

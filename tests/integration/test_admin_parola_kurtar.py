@@ -110,7 +110,7 @@ def calistir(argv, yanitlar=(), yoneticiler=("admin",), hesap=(5, True)):
 
 
 def test_onaysiz_vazgecince_hicbir_sey_degismez(capsys):
-    kod, conn, c = calistir([], yanitlar=["hayir"])
+    kod, conn, c = calistir([], yanitlar=["Ali Veli", "hayir"])
     assert kod == 0 and "Vazgeçildi" in capsys.readouterr().out
     conn.commit.assert_not_called()
     assert not any(s[0].startswith("UPDATE") for s in sorgular(c))
@@ -118,26 +118,26 @@ def test_onaysiz_vazgecince_hicbir_sey_degismez(capsys):
 
 @pytest.mark.parametrize("yanit", ["evet", "e", "EVE", "yes", ""])
 def test_yalniz_EVET_onay_sayilir(yanit, capsys):
-    kod, conn, _ = calistir([], yanitlar=[yanit])
+    kod, conn, _ = calistir([], yanitlar=["Ali Veli", yanit])
     assert kod == 0 and "Parola sıfırlandı" not in capsys.readouterr().out
     conn.commit.assert_not_called()
 
 
 def test_EVET_ile_sifirlanir_parola_bir_kez_yazilir_ve_commit_edilir(capsys):
-    kod, conn, _ = calistir([], yanitlar=["EVET"])
+    kod, conn, _ = calistir([], yanitlar=["Ali Veli", "EVET"])
     cikti = capsys.readouterr().out
     assert kod == 0 and "Parola sıfırlandı" in cikti and "Geçici parola" in cikti and "bir daha gösterilmez" in cikti
     conn.commit.assert_called_once()
 
 
 def test_evet_bayragi_onay_sormaz(capsys):
-    kod, conn, _ = calistir(["--evet", "--kullanici-adi", "admin"])
+    kod, conn, _ = calistir(["--evet", "--kullanici-adi", "admin", "--yapan", "Ali Veli"])
     assert kod == 0 and "Parola sıfırlandı" in capsys.readouterr().out
     conn.commit.assert_called_once()
 
 
 def test_hata_olursa_geri_alinir_ve_parola_yazilmaz(capsys):
-    kod, conn, _ = calistir(["--evet", "--kullanici-adi", "memur1"], hesap=None)
+    kod, conn, _ = calistir(["--evet", "--kullanici-adi", "memur1", "--yapan", "Ali Veli"], hesap=None)
     cikti = capsys.readouterr().out
     assert kod == 1 and "HATA" in cikti and "Geçici parola" not in cikti
     conn.rollback.assert_called_once()
@@ -163,10 +163,81 @@ def test_kilavuz_kurtarma_adimlarini_ve_iki_yonetici_onerisini_icerir():
     assert "en az **iki** yönetici" in kilavuz
 
 
-def test_kilavuz_acil_durum_bolumu_uc_yolu_ve_onlem_listesini_icerir():
+def test_kilavuz_acil_durum_bolumu_iki_yolu_ve_onlem_listesini_icerir():
     kilavuz = (Path(__file__).resolve().parents[2] / "docs" / "deployment" / "Sunucu_Kurulum_Kilavuzu.md").read_text(encoding="utf-8")
     bolum = kilavuz[kilavuz.index("### Acil durum: yönetici hesabına kimse giremiyorsa"):kilavuz.index("## 7. Sunucuyu ağa açın")]
-    assert "Başka bir yönetici varsa" in bolum and "Tüm yöneticiler şifresini unuttuysa" in bolum
-    assert "ulaşılamıyorsa" in bolum and "admin_parola_kurtar.bat" in bolum
+    assert "Yönetici şifresini unuttuysa" in bolum and "Sunucu bilgisayarına ya da" in bolum
+    assert "ulaşılamıyorsa" in bolum and "admin_parola_kurtar.bat" in bolum and "admin_kurtarma.log" in bolum
+    assert "Başka bir yönetici varsa" not in bolum                    # yönetici parolası uygulamadan sıfırlanamaz
     assert bolum.count("- [ ]") == 5                                 # kurulum sonrası önlem listesi
     assert "kimliğini doğrulayın" in bolum and "yedek" in bolum
+
+
+def test_kilavuz_yonetici_korumasini_gecici_parola_suresini_ve_gunlugu_anlatir():
+    kilavuz = (Path(__file__).resolve().parents[2] / "docs" / "deployment" / "Sunucu_Kurulum_Kilavuzu.md").read_text(encoding="utf-8")
+    bolum = kilavuz[kilavuz.index("### Yönetici parolasını unuttuysanız"):kilavuz.index("### Acil durum: yönetici hesabına kimse giremiyorsa")]
+    assert "uygulamadan sıfırlanamaz" in bolum and "başka bir" in bolum
+    assert "48 saat" in bolum and "GECICI_PAROLA_GECERLILIK_SAAT" in bolum
+    assert "logs/admin_kurtarma.log" in bolum and "işlemi yapan kişinin adını" in bolum
+
+
+# ------------------------------------------------------------------ geçici parola süresi, işlemi yapan kişi ve günlük
+@pytest.fixture(autouse=True)
+def gunluk_gecici_dosyada(tmp_path, monkeypatch):
+    """Testler gerçek logs/ klasörüne yazmasın."""
+    monkeypatch.setattr(betik, "GUNLUK_DOSYASI", tmp_path / "logs" / "admin_kurtarma.log")
+    return tmp_path / "logs" / "admin_kurtarma.log"
+
+
+def test_sifirlama_gecici_parola_gecerlilik_suresini_yazar():
+    c = imlec((5, True))
+    betik.admin_parolasini_sifirla(c, "admin")
+    guncelleme = next(s for s in sorgular(c) if s[0].startswith("UPDATE kullanicilar"))
+    assert f"gecici_parola_bitis = {betik.GECICI_PAROLA_BITIS_SQL}" in guncelleme[0]
+
+
+def test_yapan_kisinin_adi_zorunlu_ve_temizlenir():
+    assert betik.yapan_kisiyi_al("Ayşe Yılmaz", girdi=lambda _: "x") == "Ayşe Yılmaz"
+    assert betik.yapan_kisiyi_al(None, girdi=lambda _: "  Ali   Veli ") == "Ali Veli"                     # boşluklar sadeleşir
+    assert betik.yapan_kisiyi_al("Ali | hedef=admin\nSahte", girdi=lambda _: "") == "Ali hedef=admin Sahte"  # günlük satırı bozulamaz
+    for kotu in ("", "  ", "ab", "x" * 101):
+        with pytest.raises(betik.KurtarmaHatasi, match="adı"):
+            betik.yapan_kisiyi_al(kotu, girdi=lambda _: "")
+
+
+def test_gunluk_satiri_yapan_hedef_sunucu_kullanicisi_ve_bilgisayari_icerir(tmp_path):
+    dosya = tmp_path / "l" / "g.log"
+    satir = betik.kurtarma_gunlugune_yaz("Ali Veli", "admin", gunluk_dosyasi=dosya, simdi=betik.datetime(2026, 11, 16, 12, 30, 5))
+    assert satir.startswith("2026-11-16T12:30:05 | yapan=Ali Veli | hedef=admin | sunucu_kullanicisi=")
+    assert "bilgisayar=" in satir
+    betik.kurtarma_gunlugune_yaz("Ayşe", "admin", gunluk_dosyasi=dosya)
+    assert len(dosya.read_text(encoding="utf-8").splitlines()) == 2                                       # yalnızca eklenir, üzerine yazılmaz
+
+
+def test_basarili_kurtarma_yapani_gunluge_yazar_ve_gecerliligi_gosterir(capsys, gunluk_gecici_dosyada):
+    kod, conn, _ = calistir([], yanitlar=["Ali Veli", "EVET"])
+    cikti = capsys.readouterr().out
+    assert kod == 0 and "Geçerlilik" in cikti and "saat" in cikti
+    satir = gunluk_gecici_dosyada.read_text(encoding="utf-8")
+    assert "yapan=Ali Veli" in satir and "hedef=admin" in satir
+
+
+def test_vazgecilirse_ve_hata_olursa_gunluk_yazilmaz(gunluk_gecici_dosyada):
+    calistir([], yanitlar=["Ali Veli", "hayir"])
+    calistir(["--evet", "--kullanici-adi", "memur1", "--yapan", "Ali Veli"], hesap=None)
+    assert not gunluk_gecici_dosyada.exists()
+
+
+def test_yapan_adi_gecersizse_hicbir_sey_degismez(capsys):
+    kod, conn, c = calistir(["--evet", "--yapan", "ab"])
+    assert kod == 1 and "adı" in capsys.readouterr().out
+    conn.commit.assert_not_called()
+    assert not any(s[0].startswith("UPDATE") for s in sorgular(c))
+
+
+def test_gunluk_yazilamazsa_parola_yine_verilir_ama_uyari_gosterilir(capsys):
+    with patch.object(betik, "kurtarma_gunlugune_yaz", side_effect=OSError("disk dolu")):
+        kod, conn, _ = calistir(["--evet", "--yapan", "Ali Veli"])
+    cikti = capsys.readouterr().out
+    assert kod == 0 and "Geçici parola" in cikti and "UYARI" in cikti and "günlüğüne yazılamadı" in cikti
+    conn.commit.assert_called_once()                                                                       # kilitli kalınmaz: sıfırlama geçerli

@@ -30,7 +30,7 @@ class SahteImlec:
 
     def fetchone(self):
         s = self._son
-        if s.startswith("SELECT kullanici_id, aktif_mi FROM kullanicilar"):
+        if "FROM kullanicilar k LEFT JOIN roller r" in s and "k.kullanici_adi = %s" in s:
             return self.kullanici
         if "SELECT 1 FROM parola_sifirlama_talepleri" in s:
             return self.acik_talep

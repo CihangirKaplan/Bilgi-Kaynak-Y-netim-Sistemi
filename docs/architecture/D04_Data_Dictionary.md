@@ -268,6 +268,7 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `basarisiz_giris_sayisi` | INTEGER | NOT NULL; DEFAULT `0` | Hesap için kaydedilen başarısız giriş denemesi sayısı. |
 | `kilit_bitis_zamani` | TIMESTAMP | NULL | Hesap kilidinin sona ereceği zaman; kilit yoksa boş olabilir. |
 | `ilk_giris_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Hesabın ilk giriş durumunu belirten işaret. |
+| `gecici_parola_bitis` | TIMESTAMP | NULL | Geçici parolanın geçerli olduğu son zaman (yönetici/kurtarma aracı sıfırlaması ve yeni kullanıcı için; varsayılan 48 saat). Süre dolunca giriş reddedilir; parola değiştirilince boşaltılır. Boşsa süresizdir. |
 
 ### Tablo: `personel`
 
