@@ -3144,9 +3144,17 @@ def cihaz_uygunluk_hazirla(bugun, bas, bit, cihazlar, rezervasyonlar, bakimlar, 
     for cihaz_id, baslangic, bitis in rezervasyonlar:
         ekle(cihaz_id, "REZERVASYON", baslangic, bitis)
     for cihaz_id, gun1, gun2 in bakimlar:                       # gün aralığı, bitiş günü dahil
-        ekle(cihaz_id, "BAKIM", gun_basi(gun1), gun_basi(gun2 + timedelta(days=1)))
+        ilk_gun = max(gun1, bas)
+        son_gun = min(gun2, bit)
+        if ilk_gun <= son_gun:
+            ekle(cihaz_id, "BAKIM", gun_basi(ilk_gun),
+                 gun_basi(son_gun) + timedelta(days=1))
     for cihaz_id, gun1, gun2 in kalibrasyonlar:
-        ekle(cihaz_id, "KALIBRASYON", gun_basi(gun1), gun_basi(gun2 + timedelta(days=1)))
+        ilk_gun = max(gun1, bas)
+        son_gun = min(gun2, bit)
+        if ilk_gun <= son_gun:
+            ekle(cihaz_id, "KALIBRASYON", gun_basi(ilk_gun),
+                 gun_basi(son_gun) + timedelta(days=1))
     for cihaz_id, bildirim, cozum, cozuldu in arizalar:         # açık arızanın bitişi yoktur
         if cozuldu and cozum is None:                            # çözüldü ama çözüm zamanı yok: süresi belirsiz, gösterme
             continue
