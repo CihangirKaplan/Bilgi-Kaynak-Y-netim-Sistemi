@@ -9,7 +9,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import psycopg2
-import pytests
+import pytest
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
