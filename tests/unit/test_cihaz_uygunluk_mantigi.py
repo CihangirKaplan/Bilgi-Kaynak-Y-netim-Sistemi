@@ -1,5 +1,5 @@
 """Cihaz uygunluk takviminin saf mantığı: gün durumu, saat çizelgesi, aralık müsaitliği, filtre."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
@@ -269,3 +269,12 @@ def test_simdi_kuralinin_filtre_ve_sayaca_yansimasi():
     assert m.bugun_ozeti([c], GUN, simdi)["musait"] == 1 and m.bugun_ozeti([c], GUN)["ariza"] == 1
     assert [x["cihaz_id"] for x in m.filtrele([c], mod="BUGUN_MUSAIT", bugun=GUN, simdi=simdi)] == [1]
     assert m.sorunlu_mu(c, [GUN], simdi) is False and m.sorunlu_mu(c, [GUN]) is True
+
+
+def test_saat_araligi_metni_en_cok_iki_aralik_gosterir_gerisini_ozetler():
+    g = date(2026, 11, 4)
+    aralik = lambda a, b: (datetime.combine(g, time(a)), datetime.combine(g, time(b)))
+    assert m.saat_araligi_metni([aralik(10, 12)]) == "10:00–12:00"
+    assert m.saat_araligi_metni([aralik(9, 10), aralik(13, 14)]) == "09:00–10:00, 13:00–14:00"
+    assert m.saat_araligi_metni([aralik(9, 10), aralik(11, 12), aralik(14, 15)]) == "09:00–10:00, 11:00–12:00 +1"
+    assert m.KOD_ADLARI[m.KISMEN] == "Kısmen rezerve" and m.KOD_ADLARI[m.DOLU] == "Tam rezerve"

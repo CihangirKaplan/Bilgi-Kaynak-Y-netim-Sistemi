@@ -31,7 +31,7 @@ def test_menu_ogesi_goruntuleme_iznine_bagli_ve_islem_butonlari_ayri_izinlere_ba
     """Sayfa başlığındaki 'SALT OKUNUR' rozeti, kullanıcının gerçekten işlem yetkisi yoksa görünmeli."""
     o = oge()
     assert o["izin"] == "Cihaz uygunluğunu görüntüleme"
-    assert [izin for _, izin in o["aksiyon"]] == ["Cihaz rezervasyonu yapma", "Arıza kayıtlarını yönetme"]
+    assert o["aksiyon"] == []                              # rezervasyon/arıza kendi sayfalarında; burada yinelenen düğme yok
     assert "haftalık" in o["aciklama"]
     assert mw.IZIN_KODLARI["Cihaz uygunluğunu görüntüleme"] == ("CIHAZ_UYGUNLUK_GORUNTULE",)
 
