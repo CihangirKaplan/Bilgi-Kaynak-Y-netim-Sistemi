@@ -296,3 +296,62 @@ kabul kriterlerini karşıladığı henüz doğrulanmamıştır.
 Issue #186'nın Definition of Done koşulları için
 açık kalan kriterlerin ekip tarafından değerlendirilmesi
 ve ilgili PR incelemelerinin tamamlanması gerekmektedir.
+
+## 16. 16.11.2026 Final Regresyon Doğrulaması
+
+### 16.1. Test ortamı
+
+- Tarih: 16.11.2026
+- Git commit: `2f1a05c`
+- Branch: `develop` (testlerin gerçekleştirildiği sürüm)
+- Test veritabanı: `crkys_alembic_test`
+- Alembic HEAD: `c8f2a5d1e704`
+- Arayüz test ortamı: `QT_QPA_PLATFORM=offscreen`
+
+Gerçek PostgreSQL testleri yalnızca bağımsız test veritabanında
+`TKYS_PG_TEST_ONAY=EVET` onayıyla çalıştırılmıştır.
+
+### 16.2. Test sonuçları
+
+| Test grubu | Başarılı |
+|---|---:|
+| Unit | 273 |
+| Security | 224 |
+| Acceptance | 822 |
+| Integration (PostgreSQL test dosyaları hariç) | 1167 |
+| PostgreSQL kalite testleri (20 dosya) | 95 |
+| Gerçek eşzamanlı cihaz rezervasyonu | 1 |
+| **Toplam** | **2582** |
+
+- Başarısız test: **0**
+- Testler ayrı pytest çalıştırmalarıyla tamamlanmıştır.
+- Tüm çalıştırmalarda çıkış kodu `0` alınmıştır.
+- PostgreSQL test veritabanı güncel Alembic HEAD sürümündedir.
+
+### 16.3. Uyarılar
+
+- FastAPI/Starlette TestClient bağımlılığı için
+  `StarletteDeprecationWarning` görülmüştür.
+- Güvenlik testlerinde JWT HMAC anahtarının önerilen
+  32 bayt uzunluğundan kısa olduğuna ilişkin
+  `InsecureKeyLengthWarning` görülmüştür.
+  Uyarının test yapılandırmasından mı yoksa uygulama
+  yapılandırmasından mı kaynaklandığı ayrıca incelenmelidir.
+
+### 16.4. Kapsam ve sınırlamalar
+
+- Sonuçlar tek bir kesintisiz pytest çalıştırmasından değil,
+  ayrı test gruplarının başarılı çalıştırmalarından elde edilmiştir.
+- Önceki QA-001 raporundaki %66 coverage değeri,
+  belirli üç dosyanın eski ölçümüdür; bu final regresyon
+  çalışmasının güncel kod kapsamı değildir.
+- Bu sonuçlar tüm kurumsal kabul kriterlerinin,
+  uzun süreli yük dayanıklılığının veya tüm işletim
+  sistemlerindeki davranışların doğrulandığı anlamına gelmez.
+- Test sonuçları, çalıştırılan otomatik test senaryoları
+  kapsamında başarılıdır.
+
+### 16.5. Sonuç
+
+Final regresyon kapsamında toplam 2582 test başarılı
+olmuştur. Çalıştırılan testlerde başarısızlık görülmemiştir.
