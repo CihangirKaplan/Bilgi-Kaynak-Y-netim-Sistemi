@@ -117,18 +117,23 @@ def yuzde(oran):
     return "—" if oran is None else f"%{round(oran * 100)}"
 
 
-def oda_basligi(ad, doluluk_metni, genislik=15):
-    """Sütun başlığı: oda adı en çok iki satıra bölünür (uzun adlar kırpılmasın), altında doluluk yüzdesi."""
+def oda_basligi(ad, doluluk_metni, genislik=16):
+    """Sütun başlığı: oda adı en çok üç satıra bölünür (uzun adlar kırpılmasın), altında doluluk yüzdesi."""
     satirlar = textwrap.wrap(str(ad), width=genislik, break_long_words=False) or [""]
-    if len(satirlar) > 2:
-        satirlar = [satirlar[0], " ".join(satirlar[1:])]
+    if len(satirlar) > 3:
+        satirlar = satirlar[:2] + [" ".join(satirlar[2:])]
     return "\n".join(satirlar + [f"{doluluk_metni} dolu"])
+
+
+def baslik_yuksekligi(basliklar):
+    """Başlık satırı yüksekliği: en uzun başlığın satır sayısına göre (11 px yazıda satır ~13 px)."""
+    return 13 * max((b.count("\n") + 1 for b in basliklar), default=1) + 14
 
 
 # ------------------------------------------------------------------ arayüz
 class OdaKullanimiEkrani(QWidget):
     NAVY = "#16294B"
-    SATIR_YUKSEKLIGI = 50
+    SATIR_YUKSEKLIGI = 44
 
     def __init__(self, api_url, token, parent=None):
         super().__init__(parent)
@@ -153,14 +158,14 @@ class OdaKullanimiEkrani(QWidget):
         kart = QFrame()
         kart.setStyleSheet("QFrame { background: white; border: 1px solid #E3EAF5; border-radius: 10px; } QLabel { border: none; }")
         icerik = QVBoxLayout(kart)
-        icerik.setContentsMargins(14, 9, 14, 9)
+        icerik.setContentsMargins(14, 4, 14, 4)
         icerik.setSpacing(1)
         etiket = QLabel(baslik)
-        etiket.setStyleSheet("color: #697993; font-size: 12px;")
+        etiket.setStyleSheet("color: #697993; font-size: 11px;")
         deger = QLabel("—")
-        deger.setStyleSheet(f"color: {renk}; font-size: 22px; font-weight: bold;")
+        deger.setStyleSheet(f"color: {renk}; font-size: 19px; font-weight: bold;")
         alt = QLabel("")
-        alt.setStyleSheet("color: #8A98B0; font-size: 11px;")
+        alt.setStyleSheet("color: #8A98B0; font-size: 10px;")
         alt.setWordWrap(True)
         icerik.addWidget(etiket)
         icerik.addWidget(deger)
@@ -173,15 +178,15 @@ class OdaKullanimiEkrani(QWidget):
             QWidget#odaKullanimi { background: #EAF0FA; }
             QLabel { color: #243653; }
             QPushButton#gezinme { background: white; color: #243653; border: 1px solid #C9D6EA; border-radius: 8px;
-                padding: 7px 14px; font-weight: bold; }
+                padding: 5px 14px; font-weight: bold; }
             QPushButton#gezinme:hover { background: #F2F6FD; }
-            QPushButton#segment { background: white; color: #243653; border: 1px solid #C9D6EA; padding: 7px 18px; font-weight: bold; }
+            QPushButton#segment { background: white; color: #243653; border: 1px solid #C9D6EA; padding: 5px 18px; font-weight: bold; }
             QPushButton#segment:checked { background: #16294B; color: white; border-color: #16294B; }
             QComboBox { background: white; color: #243653; border: 1px solid #C9D6EA; border-radius: 8px; padding: 6px 10px; min-width: 150px; }
         """)
         ana = QVBoxLayout(self)
-        ana.setContentsMargins(20, 16, 20, 16)
-        ana.setSpacing(10)
+        ana.setContentsMargins(0, 0, 0, 0)               # çevre boşluğunu ana pencere verir (kompakt sayfa: KOMPAKT_SAYFALAR)
+        ana.setSpacing(8)
 
         # ---- gezinme satırı
         ust = QHBoxLayout()
@@ -233,7 +238,7 @@ class OdaKullanimiEkrani(QWidget):
             dugme = QPushButton("")
             dugme.setCheckable(True)
             dugme.setCursor(Qt.PointingHandCursor)
-            dugme.setMinimumHeight(42)
+            dugme.setMinimumHeight(32)
             self.gun_grubu.addButton(dugme, i)
             self.gun_dugmeleri.append(dugme)
             serit.addWidget(dugme, 1)
@@ -273,7 +278,7 @@ class OdaKullanimiEkrani(QWidget):
         self.tablo.setStyleSheet("""
             QTableWidget { background: white; border: none; gridline-color: #EEF2F8; color: #243653; }
             QTableCornerButton::section { background: white; border: none; border-bottom: 1px solid #E3EAF5; border-right: 1px solid #E3EAF5; }
-            QHeaderView::section { background: white; color: #16294B; font-weight: bold; font-size: 12px; padding: 4px;
+            QHeaderView::section { background: white; color: #16294B; font-weight: bold; font-size: 11px; padding: 3px;
                 border: none; border-bottom: 1px solid #E3EAF5; border-right: 1px solid #EEF2F8; }
             QHeaderView::section:vertical { color: #8A98B0; font-weight: normal; border-bottom: 1px solid #EEF2F8; border-right: 1px solid #E3EAF5;
                 padding-right: 8px; }
@@ -414,7 +419,7 @@ class OdaKullanimiEkrani(QWidget):
                 sayilar[bas.date()] = sayilar.get(bas.date(), 0) + 1
         for i, (dugme, gun) in enumerate(zip(self.gun_dugmeleri, gunler)):
             sayi = sayilar.get(gun, 0)
-            dugme.setText(f"{GUN_KISA[i]}  {gun.day}\n{sayi} randevu" if sayi else f"{GUN_KISA[i]}  {gun.day}\n—")
+            dugme.setText(f"{GUN_KISA[i]} {gun.day}  ·  {sayi} randevu" if sayi else f"{GUN_KISA[i]} {gun.day}")
             bugun, secili, hafta_sonu = gun == self.bugun, gun == self.secili_gun and self.gorunum == "gun", i >= CALISMA_GUNU_SAYISI
             dugme.setChecked(secili)
             kenar = "#285CE6" if bugun else "#D5DFEF"
@@ -464,18 +469,18 @@ class OdaKullanimiEkrani(QWidget):
         kutu.setObjectName("blok")
         kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
         yerlesim = QVBoxLayout(kutu)
-        yerlesim.setContentsMargins(9, 3, 6, 3)
+        yerlesim.setContentsMargins(9, 2, 6, 2)
         yerlesim.setSpacing(0)
         bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
         saat = f"{bas:%H:%M} – {bit:%H:%M}" if bas and bit else ""
         if gizli:
-            satirlar = [("Dolu", f"color: {fg}; font-weight: bold; font-size: 13px;"), (saat, f"color: {fg}; font-size: 11px;")]
+            satirlar = [("Dolu", f"color: {fg}; font-weight: bold; font-size: 12px;"), (saat, f"color: {fg}; font-size: 10px;")]
         else:
             ek = " · " + gorusme_etiketi(r.get("gorusme_tipi")) if r.get("gorusme_tipi") == "ONLINE" else ""
             satirlar = [
-                (str(r.get("psikolog") or "—"), f"color: {fg}; font-weight: bold; font-size: 13px;"),
-                (str(r.get("danisan_kod_id") or "—"), f"color: {fg}; font-size: 11px;"),
-                (f"{saat}{ek}", f"color: {fg}; font-size: 10px;"),
+                (str(r.get("psikolog") or "—"), f"color: {fg}; font-weight: bold; font-size: 12px;"),
+                (str(r.get("danisan_kod_id") or "—"), f"color: {fg}; font-size: 10px;"),
+                (f"{saat}{ek}", f"color: {fg}; font-size: 9px;"),
             ]
         for metin, stil in satirlar:
             etiket = QLabel(metin)
@@ -506,9 +511,9 @@ class OdaKullanimiEkrani(QWidget):
             sutunlar = [(g, f"{GUN_KISA[i]} {g.day}") for i, g in enumerate(gunler)]
             anahtar = lambda sutun, saat: (oda_id, sutun[0], saat)
 
-        self.tablo.horizontalHeader().setFixedHeight(64 if self.gorunum == "gun" else 42)       # gün görünümünde 3 satırlık oda başlığı
         self.tablo.setColumnCount(len(sutunlar))
         self.tablo.setRowCount(len(saatler))
+        self.tablo.horizontalHeader().setFixedHeight(baslik_yuksekligi([etiket for _, etiket in sutunlar]))   # başlık satırı uzun adlara göre
         self.tablo.setHorizontalHeaderLabels([etiket for _, etiket in sutunlar])
         self.tablo.setVerticalHeaderLabels([f"{s:02d}:00" for s in saatler])
 
