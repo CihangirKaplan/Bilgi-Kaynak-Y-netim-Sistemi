@@ -35,6 +35,19 @@ NUL_MESAJI = "Girdi geçersiz karakter içeriyor."
 SAYI_MESAJI = "Girilen sayı izin verilen aralığın dışında."
 BUYUK_GOVDE_MESAJI = "İstek gövdesi çok büyük."
 
+# Veritabanında kodun beklediği tablo/sütun yoksa (migration çalıştırılmamış ya da atlanmış) kullanıcıya "beklenmeyen hata"
+# yerine ne yapılacağını söyleyen 503 döner. Teknik ayrıntı (hangi sütun) yalnızca sunucu günlüğüne yazılır.
+SEMA_UYUMSUZ_KODU = "SEMA_UYUMSUZ"
+SEMA_UYUMSUZ_MESAJI = (
+    "Veritabanı şeması sunucu sürümüyle uyumlu değil (eksik tablo ya da sütun). "
+    "Sistem yöneticisi güncellemeyi çalıştırmalı: python -m alembic upgrade head"
+)
+_SEMA_HATALARI = (psycopg2.errors.UndefinedColumn, psycopg2.errors.UndefinedTable)
+
+
+def sema_uyumsuz_mu(hata):
+    return isinstance(hata, _SEMA_HATALARI)
+
 
 def _nul_var_mi(deger):
     return "\x00" in deger
@@ -149,6 +162,8 @@ def veritabani_hatasini_cevir(hata):
         return 422, "Girilen değer geçersiz."
     if isinstance(hata, psycopg2.IntegrityError):
         return 422, "Girilen değer veritabanı kurallarına uymuyor."
+    if sema_uyumsuz_mu(hata):
+        return 503, SEMA_UYUMSUZ_MESAJI
     return None
 
 
@@ -165,16 +180,29 @@ def _asil_hata(hata):
     return None
 
 
+def _veritabani_cevabi(hata, yol):
+    """Çevrilebilen veritabanı hatası için JSON yanıt döndürür; çevrilemiyorsa None."""
+    cevrilen = veritabani_hatasini_cevir(hata)
+    if cevrilen is None:
+        return None
+    durum, mesaj = cevrilen
+    govde = {"detail": mesaj}
+    if sema_uyumsuz_mu(hata):
+        govde["kod"] = SEMA_UYUMSUZ_KODU
+        ayrinti = getattr(getattr(hata, "diag", None), "message_primary", None) or (str(hata).splitlines() or [""])[0]
+        GUNLUK.error("Veritabanı şeması uyumsuz: %s %s -> %s", type(hata).__name__, yol, ayrinti, exc_info=hata)
+    return JSONResponse(govde, status_code=durum)
+
+
 def merkezi_hata_yakalayicilari_kur(app):
     """500 olarak fırlatılan ama kökü kullanıcı girdisi olan veritabanı hatalarını 409/422'ye çevirir."""
 
     @app.exception_handler(psycopg2.Error)
     async def veritabani_hatasi(request, hata):
         """Uç noktanın yakalamadan geri fırlattığı veritabanı hataları: tanınıyorsa 409/422, değilse JSON 500."""
-        cevrilen = veritabani_hatasini_cevir(hata)
-        if cevrilen is not None:
-            durum, mesaj = cevrilen
-            return JSONResponse({"detail": mesaj}, status_code=durum)
+        cevap = _veritabani_cevabi(hata, request.url.path)
+        if cevap is not None:
+            return cevap
         GUNLUK.error("Beklenmeyen veritabanı hatası: %s %s", type(hata).__name__, request.url.path, exc_info=hata)
         return JSONResponse({"detail": GENEL_HATA_MESAJI}, status_code=500)
 
@@ -184,9 +212,7 @@ def merkezi_hata_yakalayicilari_kur(app):
             asil = _asil_hata(hata)
             if isinstance(asil, ValueError):
                 return JSONResponse({"detail": NUL_MESAJI}, status_code=422)
-            if asil is not None:
-                cevrilen = veritabani_hatasini_cevir(asil)
-                if cevrilen is not None:
-                    durum, mesaj = cevrilen
-                    return JSONResponse({"detail": mesaj}, status_code=durum)
+            cevap = _veritabani_cevabi(asil, request.url.path) if asil is not None else None
+            if cevap is not None:
+                return cevap
         return await http_exception_handler(request, hata)

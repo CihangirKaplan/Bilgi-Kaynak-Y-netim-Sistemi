@@ -14,7 +14,7 @@ import client.main_window as main_window
 import client.oda_kullanimi_ekrani as modul
 import client.tkys_sidebar_refined as tkys_sidebar_refined
 from client.oda_kullanimi_ekrani import (
-    OdaKullanimiEkrani, blok_haritasi, doluluk_hesapla, hafta_basi, hafta_basligi, oda_basligi, saat_dilimleri, yuzde,
+    OdaKullanimiEkrani, baslik_yuksekligi, blok_haritasi, doluluk_hesapla, hafta_basi, hafta_basligi, oda_basligi, saat_dilimleri, yuzde,
 )
 from server.sunucu import app, mevcut_kullanici_id
 
@@ -65,14 +65,18 @@ def test_doluluk_bos_ve_aktif_oda_yok():
     assert yuzde(None) == "—" and yuzde(0.214) == "%21" and yuzde(1) == "%100"
 
 
-def test_oda_basligi_uzun_adi_iki_satira_boler_ve_dolulugu_altina_yazar():
+def test_oda_basligi_uzun_adi_satirlara_boler_ve_dolulugu_altina_yazar():
     assert oda_basligi("Oda-1", "%43") == "Oda-1\n%43 dolu"
-    baslik = oda_basligi("Gözlem ve Sanal Gerçeklik Odası", "%0")
-    satirlar = baslik.split("\n")
-    assert len(satirlar) == 3 and satirlar[0] == "Gözlem ve Sanal" and satirlar[1] == "Gerçeklik Odası" and satirlar[2] == "%0 dolu"
+    assert oda_basligi("Gözlem ve Sanal Gerçeklik Odası", "%0").split("\n") == ["Gözlem ve Sanal", "Gerçeklik Odası", "%0 dolu"]
+    assert oda_basligi("Göz İzleme ve Sanal Gerçeklik Odası", "%0").split("\n") == ["Göz İzleme ve", "Sanal Gerçeklik", "Odası", "%0 dolu"]   # üç satır
     cok_uzun = oda_basligi("Çok Uzun Adlı Bir Terapi Görüşme Gözlem Odası", "%10").split("\n")
-    assert len(cok_uzun) == 3 and cok_uzun[2] == "%10 dolu"                                  # ikiden fazla satıra bölünmez
+    assert len(cok_uzun) == 4 and cok_uzun[3] == "%10 dolu"                                  # ad en çok üç satır
     assert oda_basligi("", "%0") == "\n%0 dolu"
+
+
+def test_baslik_yuksekligi_satir_sayisina_gore():
+    assert baslik_yuksekligi(["Pzt 16"]) == 27 and baslik_yuksekligi(["Oda-1\n%0 dolu"]) == 40
+    assert baslik_yuksekligi(["A\nB\nC\n%0 dolu", "X\n%0 dolu"]) == 66 and baslik_yuksekligi([]) == 27
 
 
 def test_blok_haritasi_baslangic_saatine_koyar():
@@ -183,11 +187,11 @@ def test_cok_odali_gunde_uzun_oda_adlari_tam_basliklarda_yer_alir(ekran_ac):
          "Deneme Odası-2", "Görüşme Odası-1", "Görüşme Odası-2", "Gözlem Odası"], start=1)]
     ekran, _ = ekran_ac(Sunucu([], odalar))
     assert ekran.tablo.columnCount() == 10 and ekran.tablo.horizontalHeader().minimumSectionSize() >= 110
-    assert ekran.tablo.horizontalHeader().height() == 64
+    assert ekran.tablo.horizontalHeader().height() == 53                                      # en uzun ad iki satır + doluluk satırı
     basliklar = [ekran.tablo.horizontalHeaderItem(i).text() for i in range(10)]
     assert "Gerçeklik Odası" in basliklar[2] and basliklar[0].startswith("Aynalı Görüşme") and all(b.endswith("dolu") for b in basliklar)
     ekran.btn_hafta.click()
-    assert ekran.tablo.horizontalHeader().height() == 42                                      # hafta görünümünde gün başlıkları tek satır
+    assert ekran.tablo.horizontalHeader().height() == 27                                      # hafta görünümünde gün başlıkları tek satır
 
 
 def test_gun_gorunumunde_bloklar_durum_ve_bilgi(ekran_ac):
@@ -209,7 +213,7 @@ def test_ozet_kartlari(ekran_ac):
 
 def test_gun_seridi_ve_gun_secimi(ekran_ac):
     ekran, _ = ekran_ac()
-    assert "2 randevu" in ekran.gun_dugmeleri[0].text() and "1 randevu" in ekran.gun_dugmeleri[1].text() and ekran.gun_dugmeleri[5].text().endswith("—")
+    assert "2 randevu" in ekran.gun_dugmeleri[0].text() and "1 randevu" in ekran.gun_dugmeleri[1].text() and ekran.gun_dugmeleri[5].text() == "Cmt 21"
     ekran.gun_dugmeleri[1].click()                                                            # Salı: başka psikolog "Dolu" bloğu
     assert ekran.secili_gun == date(2026, 11, 17) and ekran.gorunum == "gun"
     assert blok_metinleri(ekran, 2, 0)[0] == "Dolu" and len(blok_metinleri(ekran, 2, 0)) == 2      # kimlik yok, yalnızca "Dolu" + saat
@@ -266,6 +270,23 @@ def test_sunucu_hatasinda_uyari_cokmez(tkys_qapplication):
 
 
 # ------------------------------------------------------------------ menü bağlantısı
+def test_oda_kullanimi_kompakt_kenar_bosluklariyla_acilir_diger_sayfalar_varsayilanla():
+    ana = MagicMock()
+    ana.sayfa_bilgi = [("Ana Kontrol Paneli", ""), ("Oda Kullanımı", "")]
+    ana.KOMPAKT_SAYFALAR = main_window.AnaPencere.KOMPAKT_SAYFALAR
+    ana.SAYFA_KENAR_BOSLUKLARI = main_window.AnaPencere.SAYFA_KENAR_BOSLUKLARI
+    main_window.AnaPencere.sayfa_ac(ana, 1)
+    ana.sag_yerlesim.setContentsMargins.assert_called_with(28, 6, 28, 6)                      # üst ve alt boşluk daraltılır
+    main_window.AnaPencere.sayfa_ac(ana, 0)
+    ana.sag_yerlesim.setContentsMargins.assert_called_with(28, 24, 28, 18)                    # diğer sayfalar eskisi gibi
+
+
+def test_sayfa_kendi_cevre_bosluk_eklemez(ekran_ac):
+    ekran, _ = ekran_ac()
+    m = ekran.layout().contentsMargins()
+    assert (m.left(), m.top(), m.right(), m.bottom()) == (0, 0, 0, 0)
+
+
 def test_menu_oda_kullanimi_normal_sayfa_olarak_baglidir():
     sayfalar = {oge["ad"]: oge for _, ogeler in main_window.MENU for oge in ogeler}
     assert sayfalar["Oda Kullanımı"]["izin"] == "Oda kullanım durumunu görüntüleme"

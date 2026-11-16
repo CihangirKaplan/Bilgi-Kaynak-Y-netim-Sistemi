@@ -55,9 +55,39 @@ jobs:
       - name: Test icin gecici JWT anahtari olustur
         run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
-      - name: Guvenli QA testlerini calistir
+      - name: Guvenli QA testlerini ayri sureclerde calistir
+        shell: bash
+        env:
+          PYTHONFAULTHANDLER: "1"
+          COVERAGE_FILE: .coverage
         run: |
-          python -m pytest tests/ -q --tb=short \
+          set -euo pipefail
+
+          # Her pytest süreci coverage verisini ayrı dosyaya yazar.
+          export COVERAGE_FILE=".coverage"
+
+          echo "=== UNIT (DOSYA BAZINDA) ==="
+          for dosya in tests/unit/test_*.py; do
+            ad="$(basename "$dosya" .py)"
+            echo "=== $dosya ==="
+            COVERAGE_FILE=".coverage.unit.$ad" python -m pytest "$dosya" -q --tb=short \
+              --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
+              --cov-branch --cov-report=
+          done
+
+          echo "=== ACCEPTANCE (DOSYA BAZINDA) ==="
+          for dosya in tests/acceptance/test_*.py; do
+            ad="$(basename "$dosya" .py)"
+            echo "=== $dosya ==="
+            COVERAGE_FILE=".coverage.acceptance.$ad" python -m pytest "$dosya" -q --tb=short \
+              --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
+              --cov-branch --cov-report=
+          done
+
+          echo "=== DIGER GUVENLI TESTLER ==="
+          COVERAGE_FILE=.coverage.other python -m pytest tests/ -q --tb=short \
+            --ignore=tests/unit \
+            --ignore=tests/acceptance \
             --ignore=tests/integration/test_transaction_quality.py \
             --ignore=tests/integration/test_randevu_transaction_quality.py \
             --ignore=tests/integration/test_randevu_eszamanlilik_quality.py \
@@ -74,15 +104,17 @@ jobs:
             --ignore=tests/integration/test_randevu_raporu_pg_quality.py \
             --ignore=tests/integration/test_oda_kullanimi_pg_quality.py \
             --ignore=tests/integration/test_girdi_fuzz_pg_quality.py \
+            --ignore=tests/integration/test_sema_dogrulama_pg_quality.py \
             --ignore=tests/integration/test_yabanci_anahtar_indeks_pg_quality.py \
             --ignore=tests/integration/test_kisitli_kullanici_pg_quality.py \
             -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
-            --cov=server.sunucu \
-            --cov=server.guvenlik \
-            --cov=server.denetim \
-            --cov-branch \
-            --cov-report=term \
-            --cov-report=xml:coverage.xml
+            --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
+            --cov-branch --cov-report=
+
+          echo "=== COVERAGE BIRLESTIR ==="
+          python -m coverage combine
+          python -m coverage report
+          python -m coverage xml -o coverage.xml
 
       - name: Coverage raporunu kaydet
         if: always()
@@ -178,6 +210,7 @@ jobs:
             tests/integration/test_yabanci_anahtar_indeks_pg_quality.py \
             tests/integration/test_kisitli_kullanici_pg_quality.py \
             tests/integration/test_girdi_fuzz_pg_quality.py \
+            tests/integration/test_sema_dogrulama_pg_quality.py \
             tests/integration/test_randevu_iptal_durum_pg_quality.py \
             tests/integration/test_yas_terapi_gorusme_pg_quality.py \
             tests/integration/test_randevu_raporu_pg_quality.py \

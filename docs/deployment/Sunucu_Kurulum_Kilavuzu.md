@@ -50,6 +50,12 @@ yukarıda üretilen değeri yazın. `.env` dosyasını kimseyle paylaşmayın ve
 
 Son komut `(head)` ile biten bir sürüm göstermelidir.
 
+`alembic current` yalnızca "hangi sürümdeyim" bilgisini verir. Tabloların gerçekten doğru kurulduğunu da doğrulayın:
+
+    python scripts/sema_dogrula.py
+
+Beklenen son satır: `SONUÇ: ŞEMA UYUMLU.` (araç ayrıntıları aşağıdaki "Veritabanı şeması kontrolü" bölümünde.)
+
 ## 6. İlk yönetici hesabı
 
 Canlı veritabanında **`scripts/ilk_kurulum.py` çalıştırmayın**: bilinen parolalı test kullanıcıları ekler.
@@ -257,10 +263,34 @@ Yeni sürüm geldiğinde sunucu bilgisayarında, sunucuyu durdurduktan sonra:
     python -m pip install -r requirements.txt
     python scripts/backup/veritabani_yedekle.py
     python -m alembic upgrade head
+    python scripts/sema_dogrula.py
     uvicorn server.sunucu:app --host 0.0.0.0 --port 8000
 
-Migration'dan önce her zaman yedek alın. Sunucu kodu değiştiğinde çalışan sunucu yeniden
-başlatılmalıdır.
+Migration'dan önce her zaman yedek alın. `sema_dogrula.py` çıktısında `ŞEMA UYUMLU` görmeden sunucuyu başlatmayın.
+Sunucu kodu değiştiğinde çalışan sunucu yeniden başlatılmalıdır.
+
+### Veritabanı şeması kontrolü (`sema_dogrula.py`)
+
+Kod yeni bir tablo ya da sütun beklediği hâlde veritabanında yoksa (migration çalıştırılmamış ya da atlanmış), kullanıcılar
+ekranda **"Veritabanı şeması sunucu sürümüyle uyumlu değil... python -m alembic upgrade head"** uyarısını görür
+(sunucu bu durumda 503 döner; hangi sütunun eksik olduğu `logs\sunucu.log` dosyasına yazılır).
+
+Kontrol aracı canlı veritabanına hiçbir şey yazmaz. Aynı PostgreSQL sunucusunda geçici bir veritabanı oluşturup migration'ları
+baştan çalıştırır, canlı veritabanını onunla karşılaştırır, geçici veritabanını siler (yaklaşık 10-30 saniye):
+
+    python scripts/sema_dogrula.py              # özet
+    python scripts/sema_dogrula.py --ayrinti    # varsayılan değer / kural tanımı gibi ayrıntıları da listeler
+
+Veritabanı oluşturabilmesi için `.env` içinde tam yetkili kullanıcı gerekir (`DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD`;
+bunlar yoksa `DB_USER` / `DB_PASSWORD` kullanılır). Sonuçlar:
+
+| Son satır | Anlamı | Yapılacak |
+|---|---|---|
+| `ŞEMA UYUMLU` | Her şey yolunda | Bir şey yapmayın |
+| `ŞEMA ESKİ` | Alembic sürümü geride | `python -m alembic upgrade head`, sonra aracı tekrar çalıştırın |
+| `TUTARSIZ ŞEMA` | Sürüm güncel görünüyor ama bazı tablo/sütunlar eksik (bir migration atlanmış ya da tablolar elle değiştirilmiş) | `alembic upgrade head` bunu **düzeltmez**; yedek alın ve bir geliştiriciye danışın |
+
+`FAZLA` olarak listelenen nesneler (eski sürümlerden kalan sütun gibi) genellikle zararsızdır, kontrolü başarısız saymaz.
 
 ## Bilinen sınırlar
 

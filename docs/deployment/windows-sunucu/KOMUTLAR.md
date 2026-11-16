@@ -46,9 +46,11 @@ Proje ortamında:
 ```powershell
 alembic current
 alembic heads
+python scripts/sema_dogrula.py
 ```
 
 Migration uygulamadan önce yedek ve veritabanı bağlantısı doğrulanmalıdır.
+`sema_dogrula.py`, tabloların migration'ların üretmesi gereken şemayla aynı olduğunu doğrular (sonuç: `ŞEMA UYUMLU`).
 
 
 ## TKYS sunucusunu elle başlatma
