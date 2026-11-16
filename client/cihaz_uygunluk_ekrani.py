@@ -25,8 +25,8 @@ from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, sayfa_basligi, 
 RENKLER = {
     mantik.MUSAIT: ("#166534", "#DCFCE7"),
     mantik.KISMEN: ("#1D4ED8", "#DBEAFE"),
-    mantik.DOLU: ("#1E3A8A", "#93C5FD"),
-    mantik.REZERVASYON: ("#1E3A8A", "#93C5FD"),
+    mantik.DOLU: ("#FFFFFF", "#2563EB"),
+    mantik.REZERVASYON: ("#FFFFFF", "#2563EB"),
     mantik.BAKIM: ("#854D0E", "#FEF3C7"),
     mantik.KALIBRASYON: ("#6D28D9", "#EDE9FE"),
     mantik.ARIZA: ("#991B1B", "#FEE2E2"),
@@ -295,7 +295,7 @@ class CihazUygunlukEkrani(QWidget):
         self.arama.textChanged.connect(self._doldur)
 
         self.cip_musait = sayi_cipi("bugün 0 müsait", "#166534", "#DCFCE7")
-        self.cip_dolu = sayi_cipi("0 dolu", "#1E3A8A", "#BFDBFE")
+        self.cip_dolu = sayi_cipi("0 tam rezerve", "#FFFFFF", "#2563EB")
         self.cip_bakim = sayi_cipi("0 bakımda", "#854D0E", "#FEF3C7")
         self.cip_kalibrasyon = sayi_cipi("0 kalibrasyonda", "#6D28D9", "#EDE9FE")
         self.cip_ariza = sayi_cipi("0 arızalı", "#991B1B", "#FEE2E2")
@@ -518,8 +518,8 @@ class CihazUygunlukEkrani(QWidget):
             for sira, gun in enumerate(self.gunler):
                 durum = mantik.gun_durumu(donemler, gun, simdi)
                 metin = mantik.KOD_ADLARI[durum.kod]
-                if durum.kod == mantik.KISMEN:
-                    metin += f"\n{durum.dolu_dakika // 60} sa {durum.dolu_dakika % 60:02d} dk" if durum.dolu_dakika else "\nmesai dışı"
+                if durum.kod in (mantik.KISMEN, mantik.DOLU) and durum.rezervasyonlar:
+                    metin += "\n" + mantik.saat_araligi_metni(durum.rezervasyonlar)          # hangi saatlerde rezerve
                 item = _renkli(_merkez(metin), durum.kod, kalin=(gun == bugun))
                 item.setToolTip(mantik.gun_ipucu(gun, durum))
                 self.tablo.setItem(satir, ILK_GUN_SUTUNU + sira, item)
@@ -543,7 +543,7 @@ class CihazUygunlukEkrani(QWidget):
     def _sayaclari_guncelle(self):
         ozet = mantik.bugun_ozeti((self.bugun_verisi or self.hafta_verisi)["cihazlar"], self._bugun(), self._simdi())
         self.cip_musait.setText(f"bugün {ozet['musait']} müsait")
-        self.cip_dolu.setText(f"{ozet['dolu']} dolu")
+        self.cip_dolu.setText(f"{ozet['dolu']} tam rezerve")
         self.cip_bakim.setText(f"{ozet['bakim']} bakımda")
         self.cip_kalibrasyon.setText(f"{ozet['kalibrasyon']} kalibrasyonda")
         self.cip_ariza.setText(f"{ozet['ariza']} arızalı")

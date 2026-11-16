@@ -114,7 +114,7 @@ def test_istek_dogru_adrese_parametreyle_ve_tokenla_gider(qt_app):
 def test_gun_hucreleri_durumlari_ve_aciklamalari_gosterir(qt_app):
     e, _ = ac()
     assert all(metin(e, 0, ILK_GUN_SUTUNU + i) == "Müsait" for i in range(7))
-    assert metin(e, 1, gun_sutunu(BUGUN)) == "Kısmen dolu\n2 sa 00 dk"
+    assert metin(e, 1, gun_sutunu(BUGUN)) == "Kısmen rezerve\n10:00–12:00"
     assert metin(e, 1, gun_sutunu(date(2026, 11, 3))) == "Müsait"
     assert [metin(e, 2, ILK_GUN_SUTUNU + i) for i in range(7)] == ["Arızalı"] * 7          # açık arıza pazartesiden itibaren
     assert [metin(e, 3, ILK_GUN_SUTUNU + i) for i in range(7)] == ["Müsait"] * 3 + ["Bakımda"] * 2 + ["Müsait"] * 2
@@ -158,7 +158,7 @@ def test_uyarilar_sutunu_kritik_ve_yaklasan(qt_app):
 
 def test_sayaclar_bugunun_durumunu_gosterir(qt_app):
     e, _ = ac()
-    assert e.cip_musait.text() == "bugün 3 müsait" and e.cip_dolu.text() == "0 dolu"
+    assert e.cip_musait.text() == "bugün 3 müsait" and e.cip_dolu.text() == "0 tam rezerve"
     assert e.cip_bakim.text() == "0 bakımda" and e.cip_ariza.text() == "1 arızalı" and e.cip_kdisi.text() == "1 kullanım dışı"
 
 
@@ -299,7 +299,7 @@ def dialog(cihaz_, gun, yetkiler, git=None, ac_=None, simdi=SIMDI):
 
 def test_detay_basligi_durumu_ve_saat_cizelgesi(qt_app):
     p = dialog(CIHAZLAR[1], BUGUN, tum_yetkiler(), MagicMock(), MagicMock())
-    assert p.lbl_durum.text() == "Kısmen dolu" and p.windowTitle() == "E-2 — 4 Kasım 2026 Çarşamba"
+    assert p.lbl_durum.text() == "Kısmen rezerve" and p.windowTitle() == "E-2 — 4 Kasım 2026 Çarşamba"
     assert len(p.cizelge_etiketleri) == 10 and p.cizelge_etiketleri[2].toolTip() == "10:00 – 11:00  Rezerve"
     assert p.cizelge_etiketleri[0].toolTip() == "08:00 – 09:00  Müsait"
     assert "Rezervasyon: 10:00 – 12:00" in p.satir_metinleri

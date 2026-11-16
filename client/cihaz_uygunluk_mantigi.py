@@ -22,7 +22,7 @@ REZERVASYON = "REZERVASYON"
 ENGEL_ONCELIGI = {KULLANIM_DISI: 4, ARIZA: 3, BAKIM: 2, KALIBRASYON: 1}
 
 KOD_ADLARI = {
-    MUSAIT: "Müsait", KISMEN: "Kısmen dolu", DOLU: "Dolu", BAKIM: "Bakımda",
+    MUSAIT: "Müsait", KISMEN: "Kısmen rezerve", DOLU: "Tam rezerve", BAKIM: "Bakımda",
     KALIBRASYON: "Kalibrasyonda", ARIZA: "Arızalı", KULLANIM_DISI: "Kullanım dışı",
 }
 CALISMA_BASLANGIC_SAATI = 8      # takvimdeki mesai penceresi (haftalik_takvim.py ile aynı: 08:00-18:00)
@@ -281,6 +281,15 @@ def uyari_satirlari(cihaz, bugun):
         else:
             satirlar.append((f"Bakım zamanı yaklaşıyor ({tarih_yazi(s)}, {(s - bugun).days} gün kaldı)", "uyari"))
     return satirlar
+
+
+def saat_araligi_metni(rezervasyonlar, en_cok=2):
+    """Gün hücresinde gösterilecek rezerve saat aralıkları: '09:00–11:00' (fazlası '+N' ile özetlenir)."""
+    parcalar = [f"{b:%H:%M}–{'24:00' if s.hour == 0 and s.minute == 0 else f'{s:%H:%M}'}" for b, s in rezervasyonlar]
+    metin = ", ".join(parcalar[:en_cok])
+    if len(parcalar) > en_cok:
+        metin += f" +{len(parcalar) - en_cok}"
+    return metin
 
 
 def gun_ipucu(gun, durum):

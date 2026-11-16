@@ -266,8 +266,7 @@ MENU = [
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",
              aciklama="Cihazların haftalık uygunluk takvimi",
-             aksiyon=[("＋  Rezervasyon Yap", "Cihaz rezervasyonu yapma"),
-                      ("⚠  Arıza Bildir", "Arıza kayıtlarını yönetme")]),
+             aksiyon=[]),                                   # rezervasyon/arıza: gün ayrıntısı ve kendi sayfaları
         dict(ikon="⚙️", ad="Cihaz Envanteri", izin="Cihaz envanterini yönetme",
              aciklama="Envanter kayıtları ve cihaz yönetimi",
              aksiyon=[("＋  Cihaz Ekle", "Cihaz ekleme"),
