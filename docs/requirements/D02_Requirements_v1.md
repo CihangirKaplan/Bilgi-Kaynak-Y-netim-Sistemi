@@ -646,7 +646,7 @@ aktif/arızalı/bakımda cihazlar, yaklaşan bakımlar, kalibrasyonlar ve
 
 açık arızalar gibi temel bilgileri göstermelidir.
 
-**FR-041 — Temel Raporlar:** Sistem, yetkili kullanıcılara cihaz raporları, danışma masası raporları ve öğrenci faaliyet/puan raporlarını sunmalıdır. Raporların kapsamı ve erişim izinleri ilgili modüllere göre belirlenmelidir.
+**FR-041 — Temel Raporlar:** Sistem, yetkili kullanıcılara cihaz raporları, danışma masası raporları, öğrenci faaliyet/puan raporları ve randevu raporları sunmalıdır. Raporlar ilgili modüllerin erişim izinlerine uygun olmalı; desteklenen filtreleme ve Excel dışa aktarma işlemleri gerçekleştirilebilmelidir.
 
 ## 5.9 Audit
 

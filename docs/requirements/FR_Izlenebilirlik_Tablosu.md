@@ -1,7 +1,7 @@
 # TKYS Fonksiyonel Gereksinim İzlenebilirlik Tablosu
 
 Bu tablo, `docs/requirements/D02_Requirements_v1.md` içindeki 67 fonksiyonel gereksinimin (FR) kodda ve testlerde
-karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 11 Kasım 2026, esas alınan sürüm: `develop` (`b524e50`).
+karşılığını gösterir. İlk hazırlanma: 6 Kasım 2026. Son güncelleme: 16 Kasım 2026, esas alınan sürüm: `develop` (`22be43f`).
 
 Durumlar:
 
@@ -16,16 +16,14 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | Durum | Adet | Maddeler |
 |---|---|---|
-| ✅ Karşılanıyor | 48 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
-| ⚠️ Kısmen | 18 | FR-013, FR-041, FR-052, FR-053, FR-054, FR-055, FR-056, FR-057, FR-058, FR-059, FR-060, FR-061, FR-062, FR-063, FR-064, FR-065, FR-066, FR-067 |
+| ✅ Karşılanıyor | 49 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
+| ⚠️ Kısmen | 17 | FR-013, FR-052, FR-053, FR-054, FR-055, FR-056, FR-057, FR-058, FR-059, FR-060, FR-061, FR-062, FR-063, FR-064, FR-065, FR-066, FR-067 |
 | ❌ Karşılanmıyor | 1 | FR-012 |
 
 ## Açık işler
 
 1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
    bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
-2. **FR-041 Temel raporlar:** D02'de cihaz, danışma masası ve öğrenci faaliyet/puan raporları kapsamı tanımlandı. Doğrudan test kapsamı ayrıca gözden geçirilecek.
-
 
 ## Tablo
 
@@ -108,7 +106,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
 | FR-040 | Dashboard | ✅ | `dashboard_ekrani.py`, `/api/dashboard/*` (özet, bugünkü randevular ve rezervasyonlar, yaklaşan işlemler) | `test_dashboard_kalibrasyondaki_cihaz.py`, `test_dashboard_cihaz_ozeti_izni.py`, `test_bakim_uyari_suresi.py` Ek: özet kartları tıklanabilir, tablolar kaydırılabilir, yaklaşan işlemler listesi 50 kayıtla sınırlı (`test_dashboard_kart_tiklama.py`, `test_dashboard_tablo_kaydirma.py`, `test_dashboard_tekerlek_kilidi.py`, `test_yaklasan_islemler_siniri.py`). |
-| FR-041 | Temel raporlar | ⚠️ | `GET /api/cihaz-raporlari`, `cihaz_raporlari_ekrani.py`, `rapor_excel.py` (cihaz Excel'i); `GET /api/danisma/raporlar`, `danisma_masasi_raporlari.py`, `danisma_rapor_excel.py` (danışma masası raporu ve Excel'i; pasif öğrenciler "Pasif" olarak görünür) | `test_cihaz_raporlari.py`, `test_rapor_excel.py`, `test_danisma_rapor_excel.py`. Ek: öğrenci puan raporu (`GET /api/puan-raporu`, `puan_raporu_ekrani.py`, `puan_rapor_excel.py`; en yüksek puanlı en üstte, pasifler "Pasif" olarak görünür, Excel'e aktarılır; `test_puan_raporu.py`). Not: "V1.0 raporları" listesi dokümanda tanımlı değil |
+| FR-041 | Temel raporlar | ✅ | `GET /api/cihaz-raporlari`, `GET /api/danisma/raporlar`, `GET /api/puan-raporu`, `GET /api/randevu-raporu`; ilgili PySide6 rapor ekranları ve Excel dışa aktarma modülleri | `test_cihaz_raporlari.py`, `test_danisma_rapor_excel.py`, `test_puan_raporu.py`, `test_randevu_raporu.py`, `test_rapor_excel.py` (164 test başarılı, 16.11.2026). Gerçek PostgreSQL testi: `test_randevu_raporu_pg_quality.py` (bu doğrulamada çalıştırılmadı). |
 
 ### 5.9 Audit
 
