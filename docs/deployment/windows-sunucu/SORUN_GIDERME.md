@@ -45,9 +45,18 @@ Portu kullanan işlemi belirlemeden sonlandırmayın.
 ```powershell
 alembic current
 alembic heads
+python scripts/sema_dogrula.py
 ```
 
 Veritabanı yedeği ve migration zinciri doğrulanmadan `upgrade` veya `downgrade` çalıştırmayın.
+
+## Ekranda "Veritabanı şeması sunucu sürümüyle uyumlu değil" uyarısı
+
+Sunucu kodu, veritabanında olmayan bir tablo ya da sütun bekliyor. `python scripts/sema_dogrula.py` çalıştırın:
+
+- `ŞEMA ESKİ` derse: `python -m alembic upgrade head`, sonra sunucuyu yeniden başlatın.
+- `TUTARSIZ ŞEMA` derse: `alembic upgrade head` çözmez (sürüm güncel görünür ama nesneler eksiktir). Yedek alın ve bir geliştiriciye danışın.
+- Hangi sütunun eksik olduğu `logs\sunucu.log` dosyasında "Veritabanı şeması uyumsuz" satırında yazar.
 
 ## Git güncelleme hatası
 
