@@ -84,32 +84,23 @@ jobs:
               --cov-branch --cov-report=
           done
 
-          echo "=== DIGER GUVENLI TESTLER ==="
-          COVERAGE_FILE=.coverage.other python -m pytest tests/ -q --tb=short \
-            --ignore=tests/unit \
-            --ignore=tests/acceptance \
-            --ignore=tests/integration/test_transaction_quality.py \
-            --ignore=tests/integration/test_randevu_transaction_quality.py \
-            --ignore=tests/integration/test_randevu_eszamanlilik_quality.py \
-            --ignore=tests/integration/test_audit_postgresql_quality.py \
-            --ignore=tests/integration/test_api_audit_rollback_quality.py \
-            --ignore=tests/integration/test_kullanici_personel_postgresql_quality.py \
-            --ignore=tests/integration/test_parola_sifirlama_pg_quality.py \
-            --ignore=tests/integration/test_ogrenci_yonetimi_postgresql_quality.py \
-            --ignore=tests/integration/test_faaliyet_turleri_postgresql_quality.py \
-            --ignore=tests/integration/test_admin_tum_izinler_pg_quality.py \
-            --ignore=tests/integration/test_kisisel_veri_ayrimi_pg_quality.py \
-            --ignore=tests/integration/test_randevu_iptal_durum_pg_quality.py \
-            --ignore=tests/integration/test_yas_terapi_gorusme_pg_quality.py \
-            --ignore=tests/integration/test_randevu_raporu_pg_quality.py \
-            --ignore=tests/integration/test_oda_kullanimi_pg_quality.py \
-            --ignore=tests/integration/test_girdi_fuzz_pg_quality.py \
-            --ignore=tests/integration/test_sema_dogrulama_pg_quality.py \
-            --ignore=tests/integration/test_yabanci_anahtar_indeks_pg_quality.py \
-            --ignore=tests/integration/test_kisitli_kullanici_pg_quality.py \
-            -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
-            --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
-            --cov-branch --cov-report=
+          echo "=== DIGER GUVENLI TESTLER (DOSYA BAZINDA) ==="
+          for dosya in tests/integration/test_*.py tests/security/test_*.py; do
+            case "$(basename "$dosya")" in
+              test_transaction_quality.py|test_randevu_transaction_quality.py|test_randevu_eszamanlilik_quality.py|test_audit_postgresql_quality.py|test_api_audit_rollback_quality.py|test_kullanici_personel_postgresql_quality.py|test_parola_sifirlama_pg_quality.py|test_ogrenci_yonetimi_postgresql_quality.py|test_faaliyet_turleri_postgresql_quality.py|test_admin_tum_izinler_pg_quality.py|test_kisisel_veri_ayrimi_pg_quality.py|test_randevu_iptal_durum_pg_quality.py|test_yas_terapi_gorusme_pg_quality.py|test_randevu_raporu_pg_quality.py|test_oda_kullanimi_pg_quality.py|test_girdi_fuzz_pg_quality.py|test_sema_dogrulama_pg_quality.py|test_yabanci_anahtar_indeks_pg_quality.py|test_kisitli_kullanici_pg_quality.py)
+                continue ;;
+            esac
+
+            ad="$(basename "$dosya" .py)"
+            grup="$(basename "$(dirname "$dosya")")"
+
+            echo "=== $dosya ==="
+
+            COVERAGE_FILE=".coverage.$grup.$ad" python -m pytest "$dosya" -q --tb=short \
+              -k "not test_gercek_eszamanli_cihaz_rezervasyonu" \
+              --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
+              --cov-branch --cov-report=
+          done
 
           echo "=== COVERAGE BIRLESTIR ==="
           python -m coverage combine
