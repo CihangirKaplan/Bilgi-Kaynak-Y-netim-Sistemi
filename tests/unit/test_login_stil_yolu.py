@@ -7,7 +7,9 @@ Not: `client.login_ekrani` içe aktarılınca genel `sys.excepthook` değişir (
 aktarılır ve kanca sonra eski haline getirilir (tüm oturumda başka testleri kilitlemesin).
 """
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -37,13 +39,23 @@ def test_stil_giris_dugmesi_ve_onay_isareti_kurallarini_icerir(login_ekrani):
         assert kural in stil
 
 
-def test_ekran_gercek_simge_dosyasiyla_acilir_ve_stil_ileri_bolulu(login_ekrani, tkys_qapplication):
-    ekran = login_ekrani.LoginEkrani()
-    assert "\\" not in ekran.styleSheet() and os.path.exists(login_ekrani.ONAY_ISARETI_DOSYASI)
-    assert ekran.goster.text() == "Şifreyi göster" and ekran.giris_btn.objectName() == "giris"
-    from PySide6.QtCore import QEvent
-    from PySide6.QtWidgets import QApplication
+def test_ekran_gercek_simge_dosyasiyla_acilir_ve_stil_ileri_bolulu():
+    """Gerçek giriş penceresi AYRI süreçte açılır: pencereyi pytest sürecinde oluşturmak, süreç kapanırken Qt'nin bellek temizliğinde
+    aralıklı "Segmentation fault" (çıkış kodu 139) üretiyordu; alt süreçte böyle bir çökme yalnızca bu testi etkiler."""
+    kod = """
+import os
+import client.login_ekrani as L
+from PySide6.QtWidgets import QApplication
 
-    ekran.close()
-    ekran.deleteLater()
-    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+app = QApplication([])
+ekran = L.LoginEkrani()
+assert chr(92) not in ekran.styleSheet() and os.path.exists(L.ONAY_ISARETI_DOSYASI)    # chr(92) = ters bölü
+assert ekran.goster.text() == "Şifreyi göster" and ekran.giris_btn.objectName() == "giris"
+ekran.close()
+print("giris ekrani tamam")
+"""
+    proje = Path(__file__).resolve().parents[2]
+    ortam = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONIOENCODING": "utf-8"}
+    sonuc = subprocess.run([sys.executable, "-c", kod], cwd=proje, env=ortam, capture_output=True, text=True, encoding="utf-8", timeout=60)
+    assert sonuc.returncode == 0, sonuc.stdout + sonuc.stderr
+    assert "giris ekrani tamam" in sonuc.stdout
