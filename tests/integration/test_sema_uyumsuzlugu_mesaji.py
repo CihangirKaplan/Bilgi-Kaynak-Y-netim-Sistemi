@@ -14,9 +14,26 @@ import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-import client.api_yoneticisi as api
 import server.girdi_korumasi as gk
 from server.sunucu import app, mevcut_kullanici_id
+
+
+class _GecikmeliApi:
+    """client.api_yoneticisi'ni (PySide6) test TOPLAMA aşamasında değil, ilk kullanımda içe aktarır.
+
+    Bu modül yüklenirken bir QObject oluşturur. Toplama aşamasında yüklenirse Qt, QApplication ve sunucu testlerinden
+    önce başlatılır ve CI'da aralıklı "Segmentation fault" (exit 139) görülür; projedeki diğer GUI testleri de bu yüzden
+    modülleri gecikmeli yükler (bkz. tests/conftest.py ve test_menu_yetkileri.py).
+    """
+
+    def __getattr__(self, ad):
+        if ad.startswith("_") or ad.startswith("pytest"):
+            raise AttributeError(ad)          # pytest toplarken modüldeki her nesnenin __test__ gibi özelliklerini yoklar; yüklemesin
+        import client.api_yoneticisi as modul
+        return getattr(modul, ad)
+
+
+api = _GecikmeliApi()
 
 SUTUN_HATASI = 'column "iptal_nedeni" does not exist\nLINE 1: SELECT iptal_nedeni FROM randevular'
 TABLO_HATASI = 'relation "yeni_tablo" does not exist'
