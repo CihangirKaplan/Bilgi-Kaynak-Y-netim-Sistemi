@@ -149,25 +149,25 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-059 | Görev başlatma | ⚠️ | `POST /api/danisma/oturum/baslat`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py` |
-| FR-060 | Görev bitirme | ⚠️ | `PATCH /api/danisma/oturum/bitir`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py`, `test_gui_danisma_gorev_quality.py` |
-| FR-061 | Görev geçmişi | ⚠️ | `GET /api/danisma/oturum/aktif`, `GET /api/danisma/oturum/gecmis` | `test_danisma_oturumu.py` |
-| FR-062 | Görev onayı ve yönetimi | ⚠️ | `GET /api/danisma/yonetim/oturumlar`, `PATCH /api/danisma/yonetim/oturumlar/{oturum_id}/onayla`, yönetim oluşturma/düzenleme uçları | `test_danisma_oturumu.py`, `test_danisma_onay_bildirimleri.py` |
-| FR-063 | Danışma masası raporları | ⚠️ | `GET /api/danisma/raporlar`; `client/danisma_masasi_raporlari.py`, `client/danisma_rapor_excel.py` | `test_danisma_rapor_excel.py` |
+| FR-059 | Görev başlatma | ⚠️ | `POST /api/danisma/oturum/baslat`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py`; Doğrulama: danışma masası görev başlatma testleri başarılı. |
+| FR-060 | Görev bitirme | ⚠️ | `PATCH /api/danisma/oturum/bitir`; `client/danisma_masasi_ekrani.py` | `test_danisma_oturumu.py`, `test_gui_danisma_gorev_quality.py`; Doğrulama: görev bitirme ve GUI kalite testleri başarılı. |
+| FR-061 | Görev geçmişi | ⚠️ | `GET /api/danisma/oturum/aktif`, `GET /api/danisma/oturum/gecmis` | `test_danisma_oturumu.py`; Doğrulama: aktif oturum ve görev geçmişi testleri başarılı. |
+| FR-062 | Görev onayı ve yönetimi | ⚠️ | `GET /api/danisma/yonetim/oturumlar`, `PATCH /api/danisma/yonetim/oturumlar/{oturum_id}/onayla`, yönetim oluşturma/düzenleme uçları | `test_danisma_oturumu.py`, `test_danisma_onay_bildirimleri.py`; Doğrulama: görev yönetimi, onay ve bildirim testleri başarılı. |
+| FR-063 | Danışma masası raporları | ⚠️ | `GET /api/danisma/raporlar`; `client/danisma_masasi_raporlari.py`, `client/danisma_rapor_excel.py` | `test_danisma_rapor_excel.py`; Doğrulama: danışma masası raporu ve Excel testleri başarılı. |
 
 ### 5.14 Parola yönetimi
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-064 | Parola sıfırlama talebi | ⚠️ | `POST /api/parola-sifirlama-talebi`; `client/parola_talebi_dialog.py` | `test_parola_sifirlama_talebi.py`, `test_parola_talebi_arayuz.py` |
-| FR-065 | Yönetici tarafından parola sıfırlama | ⚠️ | `POST /api/kullanicilar/{kullanici_id}/parola-sifirla` | `test_parola_sifirlama_quality.py`, `test_parola_sifirlama_audit_ui.py` |
-| FR-066 | Parola taleplerinin yönetimi | ⚠️ | `GET /api/parola-sifirlama-talepleri`, `PATCH /api/parola-sifirlama-talepleri/{talep_id}/kapat` | `test_parola_sifirlama_talebi.py`, `test_parola_talepleri_hata_yonetimi.py` |
+| FR-064 | Parola sıfırlama talebi | ⚠️ | `POST /api/parola-sifirlama-talebi`; `client/parola_talebi_dialog.py` | `test_parola_sifirlama_talebi.py`, `test_parola_talebi_arayuz.py`; Doğrulama: parola sıfırlama talebi API ve arayüz testleri başarılı. |
+| FR-065 | Yönetici tarafından parola sıfırlama | ⚠️ | `POST /api/kullanicilar/{kullanici_id}/parola-sifirla` | `test_parola_sifirlama_quality.py`, `test_parola_sifirlama_audit_ui.py`; Doğrulama: yönetici parola sıfırlama, audit ve arayüz testleri başarılı. |
+| FR-066 | Parola taleplerinin yönetimi | ⚠️ | `GET /api/parola-sifirlama-talepleri`, `PATCH /api/parola-sifirlama-talepleri/{talep_id}/kapat` | `test_parola_sifirlama_talebi.py`, `test_parola_talepleri_hata_yonetimi.py`; Doğrulama: parola taleplerinin yönetimi ve hata işleme testleri başarılı. |
 
 ### 5.15 Onay bildirimleri
 
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
-| FR-067 | Danışma masası onay bildirimleri | ⚠️ | `GET /api/danisma/yonetim/onay-bildirimleri`; `client/bildirim_paneli.py` | `test_danisma_onay_bildirimleri.py`, `test_dashboard_bildirim_tiklama.py` |
+| FR-067 | Danışma masası onay bildirimleri | ⚠️ | `GET /api/danisma/yonetim/onay-bildirimleri`; `client/bildirim_paneli.py` | `test_danisma_onay_bildirimleri.py`, `test_dashboard_bildirim_tiklama.py`; Doğrulama: onay bildirimleri ve dashboard etkileşim testleri başarılı. |
 
 ## Gereksinim listesi dışında eklenen güvenlik ve kullanılabilirlik işleri
 
