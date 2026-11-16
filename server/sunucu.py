@@ -7336,6 +7336,11 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
         if conn is not None:
             conn.rollback()
         raise HTTPException(status_code=500, detail="İzin güncellenirken bir hata oluştu.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 # =========================================================
 # AUDIT KAYITLARI — SALT OKUNUR
 # =========================================================
