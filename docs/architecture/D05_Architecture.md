@@ -313,11 +313,11 @@ Backend;
 
 ## 4.4. PostgreSQL Veritabanı
 
-PostgreSQL sistemin merkezi ve kalıcı veri katmanıdır.
+PostgreSQL, sistemin merkezi ve kalıcı veri katmanıdır. Güncel uygulama şemasında 29 işlevsel tablo bulunmaktadır. `alembic_version` ise veritabanı migration sürümünü izleyen teknik tablodur.
 
-Veritabanı dört ana iş alanında değerlendirilebilir:
+Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 
-### Kimlik, Kullanıcı ve Yetkilendirme
+### Kimlik, Kullanıcı ve Güvenlik
 
 - `roller`
 - `izinler`
@@ -325,14 +325,19 @@ Veritabanı dört ana iş alanında değerlendirilebilir:
 - `kullanicilar`
 - `personel`
 - `denetim_kayitlari`
+- `giris_captcha_kodlari`
+- `giris_istek_limitleri`
+- `parola_sifirlama_talepleri`
 
-### Öğrenci ve Faaliyet
+### Öğrenci, Personel Faaliyetleri ve Görevler
 
 - `ogrenciler`
 - `danisma_masasi_oturumlari`
 - `faaliyetler`
 - `faaliyet_birimleri`
 - `ogrenci_faaliyet_takip`
+- `ogrenci_kayit_erteleme_gecmisi`
+- `personel_faaliyet_kayitlari`
 
 ### Randevu ve Oda
 
@@ -340,6 +345,7 @@ Veritabanı dört ana iş alanında değerlendirilebilir:
 - `odalar`
 - `randevular`
 - `oda_etkinlikleri`
+- `psikolog_odalar`
 
 ### Cihaz ve Kaynak Yönetimi
 
@@ -352,7 +358,9 @@ Veritabanı dört ana iş alanında değerlendirilebilir:
 - `cihaz_bakim_planlari`
 - `cihaz_takip_parametreleri`
 
-Bu yapı sayesinde her operasyon kendi sorumluluğuna uygun tabloda tutulur ve tablolar yabancı anahtarlar üzerinden ilişkilendirilir.
+Tablolar arasındaki ilişkiler yabancı anahtarlar ve diğer veritabanı kısıtlarıyla desteklenir. Bununla birlikte, adı `_id` ile biten her sütunun mutlaka yabancı anahtar kısıtına sahip olduğu varsayılmaz.
+
+Tablo, sütun, veri tipi ve kısıtların ayrıntılı açıklamaları D04 Veri Sözlüğü'nde yer alır.
 
 ---
 
@@ -383,11 +391,38 @@ Böylece yetkiler doğrudan uygulama koduna sabitlenmek yerine veritabanı üzer
 
 ## 5.2. Kullanıcı ve Personel
 
-`kullanicilar` tablosu sisteme giriş yapabilen hesapları tutar. Kullanıcı adı, parola hash'i, rol ve hesap aktiflik durumu bu tabloda bulunur.
+`kullanicilar` tablosu sisteme giriş yapan hesapları,
+`personel` tablosu ise bu hesaplara bağlı personel
+kayıtlarını tutar.
 
-`personel` tablosu kullanıcı hesabıyla kurum personeli arasındaki operasyonel ilişkiyi kurar.
+İki tablo `personel.kullanici_id` üzerinden ilişkilendirilir.
+Bu alandaki UNIQUE kısıtı, bir kullanıcıya birden fazla
+personel kaydı bağlanmasını engeller.
 
-Parola hiçbir zaman açık metin olarak veritabanında tutulmaz; yalnızca güvenli parola hash'i saklanır.
+Kullanıcı oluşturma işlemi `POST /api/kullanicilar`
+endpoint'i üzerinden gerçekleştirilir.
+
+Backend, kullanıcı oluşturma, rol atama ve personel
+tanımlama yetkilerini kontrol eder.
+
+Kullanıcı oluşturma işlemi tek PostgreSQL transaction
+içerisinde gerçekleştirilir:
+
+1. Kullanıcı hesabı geçici parola hash'iyle ve
+   `ilk_giris_mi = TRUE` değeriyle oluşturulur.
+2. Role uygun benzersiz personel kodu üretilir.
+3. Kullanıcıya bağlı personel kaydı oluşturulur.
+4. Kullanıcı ve personel oluşturma işlemleri için
+   audit kayıtları eklenir.
+5. Rol `DANISMA_OGRENCISI` ise öğrenci kaydı
+   ve ilgili audit kaydı oluşturulur.
+6. Rol `PSIKOLOG` ise seçilen aktif odalar
+   `psikolog_odalar` tablosuna bağlanır.
+7. Bütün işlemler başarılıysa tek `COMMIT` yapılır.
+   Hata durumunda `ROLLBACK` uygulanır.
+
+Bu yaklaşım, kullanıcı hesabı oluşturulmasına rağmen
+personel kaydının eksik kalmasını önler.
 
 ## 5.3. Öğrenci Yapısı
 
@@ -429,47 +464,39 @@ Oturum yetkili onayına sunulur
 
 ## 5.5. Faaliyetler, Faaliyet Birimleri ve Öğrenci Faaliyet Takibi
 
-`faaliyetler` tablosu sistemde tanımlı faaliyetleri ve bu faaliyetlerin güncel puanlarını tutar.
+`faaliyetler` tablosu faaliyet tanımlarını ve güncel
+birim puanlarını tutar.
 
-Güncel başlangıç değerleri:
+`faaliyet_birimleri` tablosu faaliyet miktarlarının
+hangi birimle ifade edildiğini belirler.
+Örneğin `KISI` ve `SAAT`.
 
-| Faaliyet | Puan |
-|---|---:|
-| Yüz Yüze Anket | 5 |
-| Online Anket | 1 |
-| İç Tanıtım Görüşmesi | 3 |
-| Dış Tanıtım Görüşmesi | 10 |
-| Sponsorluk | 20 |
-| Sempozyum | 10 |
-| PsiLab Etkinliği | 3 |
+`ogrenci_faaliyet_takip` tablosunda öğrencinin
+gerçekleştirdiği faaliyet, miktar (`adet`),
+birim (`birim_id`), faaliyet tarihi ve kayıt
+anındaki birim puan (`kayit_puani`) saklanır.
 
-`faaliyet_birimleri` tablosu faaliyet kayıtlarında kullanılabilecek birimleri tutar. Başlangıçta `KISI` ve `SAAT` birimleri tanımlanmıştır.
+Yeni faaliyet kaydı oluşturulurken `faaliyetler.puan`
+değeri `kayit_puani` alanına kopyalanır.
 
-Birimler sabit bir ENUM olarak tutulmaz. Admin tarafından yönetilebilmesi gerektiği için ayrı tabloda saklanır. Bir birim artık kullanılmayacaksa geçmiş faaliyet kayıtlarını bozmamak için fiziksel olarak silinmek yerine `aktif_mi = FALSE` yapılarak pasifleştirilir.
+Toplam puan şu şekilde hesaplanır:
 
-`ogrenci_faaliyet_takip` tablosu bir öğrencinin hangi faaliyeti yaptığını; `adet`, `birim_id`, faaliyet tarihi, açıklama ve onay bilgileriyle birlikte tutar. `birim_id`, `faaliyet_birimleri` tablosuna yabancı anahtar ile bağlıdır.
+`toplam_puan = adet × kayit_puani`
 
-`adet` alanı yapılan miktarı, birim ise bu miktarın ne ifade ettiğini belirtir.
+Örneğin birim puanı 5 olan bir faaliyetten
+4 adet gerçekleştirilirse toplam puan 20 olur.
 
-Örnek:
+Faaliyetin güncel puanı sonradan değiştirilse bile
+önceki kayıtların `kayit_puani` değeri otomatik
+olarak değişmez.
 
-```text
-takip_id = 1 → Öğrenci 5 → Yüz Yüze Anket → 4 KISI
-takip_id = 2 → Öğrenci 5 → Online Anket     → 10 KISI
-takip_id = 3 → Öğrenci 5 → Sempozyum        → 3 SAAT
-```
+Böylece geçmiş faaliyet kayıtlarının puanları korunur.
 
-Toplam puan ayrı bir sütunda saklanmaz:
-
-```text
-Toplam puan = adet × faaliyetler.puan
-```
-
-Birim, `adet` değerinin anlamını belirtir; mevcut puan hesaplama formülünü değiştirmez.
-
-Bu tasarımda faaliyet puanı daha sonra değiştirilirse hesaplama yeni/güncel puan üzerinden yapılır.
-
----
+`kayit_puani` sütununu ekleyen Alembic migration,
+önceden mevcut kayıtların puanlarını migration
+anındaki faaliyet puanlarıyla doldurmuştur.
+Migration öncesindeki eski puan değişiklikleri
+geriye dönük olarak yeniden oluşturulmamıştır.
 
 # 6. Randevu ve Oda Yönetimi
 
@@ -554,9 +581,17 @@ Bu ayrım RBAC matrisinde de ayrı izinlerle korunur.
 
 ## 7.1. Cihaz Durumları
 
-Cihazın operasyonel durumu `cihaz_durumu` ENUM'u ile sınırlandırılmıştır.
+Cihazların operasyonel durumu `cihazlar.durum`
+sütununda saklanır.
 
-Tanımlı durumlar:
+Güncel PostgreSQL veritabanında bu sütunun
+veri tipi `VARCHAR(50)`'dir.
+
+Veritabanında `cihaz_durumu` adlı bir ENUM tipi
+tanımlı olsa da `cihazlar.durum` sütunu
+doğrudan bu ENUM tipini kullanmamaktadır.
+
+Sistemde kullanılan cihaz durumları:
 
 - `Kullanima_Hazir`
 - `Rezerve`
@@ -566,7 +601,9 @@ Tanımlı durumlar:
 - `Kalibrasyonda`
 - `Kullanim_Disi`
 
-Bu sayede cihaz durumu serbest metin olarak değil, sistem tarafından bilinen değerlerden biri olarak tutulur.
+Cihaz durumu değişiklikleri backend iş kuralları,
+veri doğrulama ve yetkilendirme kontrolleri
+kapsamında gerçekleştirilir.
 
 ## 7.2. Bölümler
 
@@ -855,9 +892,19 @@ Mevcut örnek değerler:
 
 ## 10.3. Zaman Aralığı Kontrolleri
 
-Randevu, cihaz rezervasyonu ve oda etkinliği gibi başlangıç/bitiş zamanı bulunan işlemlerde bitiş zamanı başlangıç zamanından sonra olmalıdır.
+Randevu, cihaz rezervasyonu ve oda etkinliği gibi başlangıç ve bitiş zamanı bulunan işlemlerde bitiş zamanı başlangıç zamanından sonra olmalıdır.
 
-Ayrıca aynı kaynak için çakışan aktif kayıtların engellenmesi backend iş kuralıdır.
+Aynı kaynak için çakışan kayıtların önlenmesi yalnızca istemci veya backend sorgularına bırakılmamıştır.
+
+PostgreSQL üzerinde aşağıdaki EXCLUDE kısıtları bulunmaktadır:
+
+- `cihaz_rezervasyon_cakisma`: Aynı cihaz için çakışan rezervasyonları önlemeye yöneliktir.
+- `oda_randevu_cakisma`: Aynı oda için çakışan randevuları önlemeye yöneliktir.
+- `psikolog_randevu_cakisma`: Aynı psikolog için çakışan randevuları önlemeye yöneliktir.
+
+Bu kısıtlar, tanımlandıkları durum ve zaman aralığı koşulları kapsamında veritabanı seviyesinde çakışmaları engeller.
+
+Backend tarafında ayrıca giriş doğrulama, iş kuralları ve transaction yönetimi uygulanır. Böylece eşzamanlı isteklerde veri tutarlılığı desteklenir.
 
 ## 10.4. Cihaz Rezervasyonu
 
@@ -875,44 +922,61 @@ Görev tamamlandıktan sonra sonraki görev tarihi tanımlı `periyot_gun` bilgi
 
 ## 10.7. Öğrenci Faaliyet Puanı ve Birimi
 
-Faaliyet puanının tek kaynağı `faaliyetler.puan` alanıdır.
+Faaliyetlerin güncel birim puanı `faaliyetler.puan`
+alanında tutulur.
 
-`ogrenci_faaliyet_takip` tablosunda ayrı bir toplam puan veya geçmiş puan kopyası tutulmaz. Kayıtta `adet` ile birlikte `birim_id` de saklanır.
+Yeni faaliyet kaydı oluşturulduğunda bu değer
+`ogrenci_faaliyet_takip.kayit_puani` alanına kopyalanır.
+
+Toplam puan hesaplaması:
+
+`toplam_puan = adet × kayit_puani`
 
 Örnek:
 
-```text
-Yüz Yüze Anket puanı = 5
-Öğrencinin yaptığı adet = 4
-Birim = KISI
+- Faaliyet miktarı: 4
+- Kayıt anındaki birim puan: 5
+- Toplam puan: 20
 
-Toplam = 4 × 5 = 20
-```
+Faaliyetin güncel puanı daha sonra 6 yapılırsa
+önceki kaydın toplam puanı 20 olarak kalır.
 
-Birim, `adet` değerinin neyi ifade ettiğini belirtir ve puan formülünü değiştirmez.
+Yeni faaliyet kayıtları ise güncel 6 puan
+üzerinden oluşturulur.
 
-Puan daha sonra 6 yapılırsa hesaplama güncel değere göre:
-
-```text
-4 × 6 = 24
-```
-
-olur.
-
-Pasifleştirilmiş bir faaliyet birimi yeni kayıtlarda seçilememelidir; ancak geçmiş kayıtların referans bütünlüğünü korumak amacıyla mevcut kayıtlarla ilişkisi korunur.
-
----
+`birim_id`, faaliyet miktarının `KISI`,
+`SAAT` gibi hangi birimle ifade edildiğini belirler.
 
 # 11. Mimari Güvenlik İlkeleri
 
 ## 11.1. Kimlik Doğrulama
 
-- Parolalar açık metin saklanmayacaktır.
-- Güvenli parola hashleme yöntemi kullanılacaktır.
-- Pasif kullanıcıların sisteme girişi engellenecektir.
-- Eksik, geçersiz veya süresi dolmuş kimlik doğrulama bilgileri reddedilecektir.
+Kimlik doğrulama FastAPI backend üzerinde
+gerçekleştirilir.
 
-Kimlik doğrulama, kullanıcının kim olduğunu belirler. Yetkilendirme ise doğrulanmış kullanıcının hangi işlemleri yapabileceğini belirler. Bu iki kontrol birbirinden ayrıdır.
+Kullanıcı parolaları açık metin olarak değil,
+hash değerleriyle saklanır.
+
+Başarılı giriş sonrasında JWT oluşturulur.
+
+JWT geçerlilik süresi `JWT_EXPIRE_MINUTES`
+ortam değişkeniyle belirlenir.
+Varsayılan değer **45 dakikadır**.
+
+Sunucu, korumalı endpoint'lerde token
+geçerliliğini kontrol eder.
+
+PySide6 masaüstü istemcisi JWT bitiş zamanını
+`QTimer` kullanarak her saniye kontrol eder.
+Süre dolduğunda oturum kapatma süreci başlatılır.
+
+Yeni kullanıcılar `ilk_giris_mi = TRUE`
+değeriyle ve geçici parolayla oluşturulur.
+
+JWT içerisinde parola hash'i doğrudan saklanmaz.
+Parola hash'inden üretilen özet kullanılarak
+parola değişikliğinden sonra eski tokenların
+geçerliliği denetlenebilir.
 
 ## 11.2. Yetkilendirme
 
@@ -951,9 +1015,9 @@ Veritabanı parolaları, uygulama anahtarları ve diğer secret değerler kaynak
 
 ## 11.7. Denetim Kayıtları (Audit)
 
-Sistemde kritik işlemler audit kayıtlarıyla izlenecektir.
+Sistemde kritik işlemler `denetim_kayitlari` tablosu üzerinden izlenir.
 
-Tanımlı temel olay türleri:
+Temel audit olayları arasında aşağıdakiler bulunmaktadır:
 
 - `LOGIN`
 - `LOGIN_FAILED`
@@ -963,17 +1027,37 @@ Tanımlı temel olay türleri:
 - `ROLE_CHANGE`
 - `DEVICE_STATUS_CHANGE`
 
-Örneğin randevu oluşturma `CREATE`, randevu düzenleme `UPDATE`, randevu iptali `CANCEL` olarak kaydedilebilir.
+Örneğin randevu oluşturma, düzenleme ve iptal işlemleri ilgili olay türleriyle kaydedilebilir.
 
-`LOGIN_FAILED` olayında geçerli bir kullanıcı bulunmayabileceği için audit kaydındaki `kullanici_id` alanı NULL olabilir.
+Kullanıcı, personel ve gerektiğinde danışma öğrencisi oluşturma işlemlerinde audit kayıtları aynı PostgreSQL transaction içerisinde oluşturulur. Böylece işlem geri alınırsa ilişkili audit kayıtları da geri alınır.
 
-Normal kullanıcıların audit kayıtlarını değiştirmesine veya silmesine izin verilmemelidir.
+`LOGIN_FAILED` olayında geçerli bir kullanıcı belirlenemeyebileceğinden `kullanici_id` alanı NULL olabilir.
+
+Audit kayıtlarına erişim rol ve izin kontrolleriyle sınırlandırılır. Normal kullanıcılar bu kayıtları değiştiremez veya silemez.
+
+Audit olay türlerinin tam listesi ve tablo yapısı için D04 Veri Sözlüğü esas alınır.
 
 ## 11.8. Tekrarlanan Giriş Denemelerine Karşı Koruma
 
-Başarısız girişlerin sınırsız şekilde denenmesine izin verilmemelidir.
+Sunucu, tekrarlanan başarısız giriş denemelerini
+kontrol eder.
 
-Rate-control veya belirli sayıda başarısız girişten sonra geçici hesap kilitleme uygulanabilir. Kesin mekanizma geliştirme aşamasında belirlenebilir.
+Belirlenen sınırların aşılması durumunda
+hesap geçici olarak kilitlenebilir.
+
+Bu mekanizma, parola tahminine dayalı
+tekrarlı giriş girişimlerine karşı koruma sağlar.
+
+Parola sıfırlama işlemleri için aşağıdaki
+API işlevleri bulunmaktadır:
+
+- Parola sıfırlama talebi oluşturma
+- Yetkili tarafından talepleri listeleme
+- Kullanıcı parolasını sıfırlama
+- Parola sıfırlama talebini kapatma
+
+Bu işlemler sunucu tarafındaki yetkilendirme
+ve denetim mekanizmalarıyla birlikte çalışır.
 
 ## 11.9. Yedek Güvenliği
 
@@ -983,33 +1067,53 @@ Veritabanı yedekleri de üretim verisi kadar korunmalıdır. Yedek dosyalarına
 
 # 12. Mimari Kararlar ve Sınırlar
 
-- PySide6 masaüstü istemci kullanılacaktır.
-- FastAPI backend kullanılacaktır.
-- Merkezi veritabanı PostgreSQL olacaktır.
-- İstemciler PostgreSQL'e doğrudan bağlanmayacaktır.
-- İletişim REST API üzerinden gerçekleştirilecektir.
-- Kimlik doğrulama ve yetkilendirme backend tarafında uygulanacaktır.
-- Sistem rol ve izin tabanlı RBAC kullanacaktır.
-- Güncel roller `PSIKOLOG`, `MEMUR`, `MUDUR`, `DANISMA_OGRENCISI`, `PROJE_ASISTANI` ve `ADMIN` olacaktır.
-- ADMIN sistemin süper kullanıcı rolüdür ve bütün izinlere sahiptir.
-- Yeni izinler ADMIN rolüne otomatik olarak bağlanacaktır.
-- Gönüllü ve danışma masası öğrencileri ortak `ogrenciler` tablosunda tutulacaktır.
-- Öğrenci türü `GONULLU` veya `DANISMA_MASASI` olacaktır.
-- Danışma masası görev zamanları `danisma_masasi_oturumlari` tablosunda tutulacaktır.
-- Öğrenci faaliyetleri `ogrenci_faaliyet_takip` tablosunda tutulacaktır.
-- Faaliyet puanları `faaliyetler` tablosundaki güncel değer üzerinden hesaplanacaktır.
-- Faaliyet birimleri `faaliyet_birimleri` tablosunda tutulacak ve faaliyet kayıtları `ogrenci_faaliyet_takip.birim_id` ile bu tabloya bağlanacaktır.
-- Faaliyet birimleri Admin tarafından yönetilecektir; kullanılmayacak birimler geçmiş kayıtları korumak için silinmek yerine pasifleştirilecektir.
-- Danışan kodu kalıcı ve benzersiz operasyonel kod olacaktır.
-- Danışan kodu ile gerçek kimlik bilgileri arasında sistem içinde eşleştirme tutulmayacaktır.
+TKYS'nin güncel mimari kararları aşağıda özetlenmiştir.
+
+### Uygulama Mimarisi
+
+- Masaüstü istemci PySide6 ile geliştirilmiştir.
+- Backend FastAPI üzerinde çalışır.
+- Merkezi veritabanı PostgreSQL'dir.
+- İstemciler veritabanına doğrudan bağlanmaz; REST API kullanır.
+- Kimlik doğrulama, yetkilendirme ve iş kuralları sunucu tarafında uygulanır.
+
+### Kimlik ve Yetkilendirme
+
+- Sistem JWT tabanlı kimlik doğrulama kullanır.
+- JWT geçerlilik süresi varsayılan olarak 45 dakikadır.
+- Sistem rol ve izin tabanlı RBAC kullanır.
+- Temel roller `PSIKOLOG`, `MEMUR`, `MUDUR`, `DANISMA_OGRENCISI`, `PROJE_ASISTANI` ve `ADMIN` olarak tanımlanmıştır.
+- ADMIN sistemin süper kullanıcı rolüdür.
+- Kullanıcı, personel, ilgili audit kayıtları ve role bağlı ek kayıtlar tek transaction içerisinde oluşturulur.
+- Yeni kullanıcılar geçici parola ve ilk giriş bilgisiyle oluşturulur.
+
+### Öğrenci ve Faaliyet Yönetimi
+
+- Gönüllü ve danışma masası öğrencileri ortak `ogrenciler` tablosunda tutulur.
+- Öğrenci türleri `GONULLU` ve `DANISMA_MASASI` olarak tanımlanmıştır.
+- Danışma masası görevleri `danisma_masasi_oturumlari` tablosunda takip edilir.
+- Öğrenci faaliyetleri `ogrenci_faaliyet_takip` tablosunda saklanır.
+- Faaliyet kayıtlarının birim puanı `kayit_puani` alanında korunur.
+- Toplam faaliyet puanı `adet × kayit_puani` formülüyle hesaplanır.
+- Faaliyet birimleri `faaliyet_birimleri` tablosunda yönetilir.
+
+### Randevu ve Cihaz Yönetimi
+
+- Danışan kodu kalıcı ve benzersiz operasyonel koddur.
+- Danışan kodlarıyla gerçek kimlik bilgileri arasında sistem içinde eşleştirme tutulmaz.
 - Randevu ve cihaz rezervasyonu bağımsız süreçlerdir.
-- Oda etkinlikleri randevulardan ayrı olarak tutulacaktır.
-- Cihaz arıza, bakım ve kalibrasyon geçmişleri ayrı tablolarda tutulacaktır.
-- Periyodik cihaz görevleri `cihaz_bakim_planlari` tablosuyla takip edilecektir.
-- Cihaza göre değişebilen takip özellikleri `cihaz_takip_parametreleri` tablosunda tutulacaktır.
-- Mevcut son şemada proje bilgisi cihaz rezervasyonundaki `proje_turu` ve `proje_adi_aciklamasi` alanlarıyla tutulmaktadır; ayrı bir `projeler` tablosu bulunmamaktadır.
-- Mevcut son şemada ayrı bir kalıcı `bildirimler` tablosu bulunmamaktadır.
-- Sistem V1.0 kapsamında dış internet erişimine açık olmayacaktır.
+- Oda etkinlikleri randevulardan ayrı tutulur.
+- Cihaz arıza, bakım ve kalibrasyon geçmişleri ayrı tablolarda saklanır.
+- Periyodik cihaz görevleri `cihaz_bakim_planlari` tablosuyla takip edilir.
+- Cihaza göre değişen takip özellikleri `cihaz_takip_parametreleri` tablosunda tutulur.
+- Cihaz durumunun güncel sütun tipi `VARCHAR(50)`'dir.
+- Randevu ve cihaz rezervasyonlarında PostgreSQL EXCLUDE kısıtları kullanılır.
+
+### Sistem Sınırları
+
+- Mevcut şemada proje bilgileri cihaz rezervasyonundaki `proje_turu` ve `proje_adi_aciklamasi` alanlarıyla tutulur; ayrı bir `projeler` tablosu bulunmaz.
+- Ayrı bir kalıcı `bildirimler` tablosu bulunmaz.
+- V1.0 kapsamında sistemin dış internete açık olmaması hedeflenir.
 
 ---
 
