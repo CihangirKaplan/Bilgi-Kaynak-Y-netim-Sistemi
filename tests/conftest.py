@@ -34,6 +34,7 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_randevu_iptal_durum_pg_quality.py",
     "test_yas_terapi_gorusme_pg_quality.py",
     "test_randevu_raporu_pg_quality.py",
+    "test_oda_kullanimi_pg_quality.py",
     "test_girdi_fuzz_pg_quality.py",
     "test_yabanci_anahtar_indeks_pg_quality.py",
     "test_kisitli_kullanici_pg_quality.py",

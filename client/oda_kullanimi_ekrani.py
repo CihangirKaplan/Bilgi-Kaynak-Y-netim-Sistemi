@@ -1,0 +1,543 @@
+"""TKYS - Oda Kullanımı: odaların günlük ve haftalık doluluğu.
+
+İki görünüm vardır: Gün (seçili günde tüm odalar yan yana) ve Hafta (seçili odanın haftası). Randevular renkli bloklar olarak
+gösterilir (renkler Randevu Yönetimi'ndeki durum renkleriyle aynıdır); iptal edilenler gösterilmez. Psikolog, başkalarının
+randevularında yalnızca "Dolu" bilgisini görür (sunucu uygular). Sayfa yalnızca görüntülemedir.
+"""
+
+from datetime import date, datetime, timedelta
+
+import requests
+from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.randevu_ekranlari import DURUM_ETIKETLERI, DURUM_RENKLERI, SAAT_LISTESI
+from client.siniflandirma import gorusme_etiketi
+
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView, QButtonGroup, QComboBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+)
+
+GUN_KISA = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+GUN_UZUN = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+AY_UZUN = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+AY_KISA = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
+CALISMA_GUNU_SAYISI = 5            # Pazartesi-Cuma; hafta sonu randevu verilmez
+GIZLI_RENK = ("#F1F5F9", "#64748B")
+
+
+# ------------------------------------------------------------------ saf işlevler (arayüzden bağımsız, testlenebilir)
+def hafta_basi(gun):
+    return gun - timedelta(days=gun.weekday())
+
+
+def hafta_basligi(pazartesi):
+    """'10 – 16 Kasım 2026'; ay ya da yıl değişirse '28 Eki – 3 Kas 2026' / '29 Ara 2026 – 4 Oca 2027'."""
+    pazar = pazartesi + timedelta(days=6)
+    if pazartesi.year != pazar.year:
+        return f"{pazartesi.day} {AY_KISA[pazartesi.month - 1]} {pazartesi.year} – {pazar.day} {AY_KISA[pazar.month - 1]} {pazar.year}"
+    if pazartesi.month != pazar.month:
+        return f"{pazartesi.day} {AY_KISA[pazartesi.month - 1]} – {pazar.day} {AY_KISA[pazar.month - 1]} {pazar.year}"
+    return f"{pazartesi.day} – {pazar.day} {AY_UZUN[pazar.month - 1]} {pazar.year}"
+
+
+def zaman(metin):
+    if not metin:
+        return None
+    try:
+        return datetime.fromisoformat(str(metin).split(".")[0])
+    except ValueError:
+        return None
+
+
+def saat_dilimleri(randevular):
+    """Satır saatleri: randevu formundaki saat listesi; dışında kalan (eski) bir randevu varsa aralık onu da kapsar."""
+    saatler = {int(s.split(":")[0]) for s in SAAT_LISTESI}
+    for r in randevular:
+        bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
+        if bas is not None:
+            saatler.add(bas.hour)
+            if bit is not None and bit > bas:
+                saatler.update(range(bas.hour, bas.hour + _kapsanan_saat(bas, bit)))
+    return list(range(min(saatler), max(saatler) + 1))
+
+
+def _kapsanan_saat(bas, bit):
+    """Randevunun kapladığı saat dilimi sayısı (en az 1)."""
+    if bit is None or bit <= bas:
+        return 1
+    dakika = (bit - bas).total_seconds() / 60
+    return max(1, int(-(-dakika // 60)))
+
+
+def blok_haritasi(randevular):
+    """{(oda_id, gün, saat): [randevu, ...]} – randevunun BAŞLADIĞI saat dilimine konur (süre _kapsanan_saat ile alınır)."""
+    harita = {}
+    for r in randevular:
+        bas = zaman(r.get("baslangic_zamani"))
+        if bas is None:
+            continue
+        harita.setdefault((r.get("oda_id"), bas.date(), bas.hour), []).append(r)
+    return harita
+
+
+def doluluk_hesapla(randevular, odalar, gunler, saatler):
+    """Aktif odalar x çalışma günleri x saat dilimleri üzerinden doluluk.
+
+    Döndürür: {"toplam": n, "dolu": n, "oran": 0..1 | None, "odalar": {oda_id: {"dolu", "toplam", "oran"}}, "en_yogun": oda ya da None}.
+    Yalnızca aktif odalar ve Pazartesi-Cuma günleri sayılır; her randevu kapladığı saat dilimi kadar dolu sayar."""
+    aktif = [o for o in odalar if o.get("aktif_mi", True)]
+    calisma_gunleri = [g for g in gunler if g.weekday() < CALISMA_GUNU_SAYISI]
+    saat_kumesi = set(saatler)
+    toplam_oda = len(calisma_gunleri) * len(saatler)
+    dolu_slotlar = {o["oda_id"]: set() for o in aktif}
+    for r in randevular:
+        bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
+        oda = r.get("oda_id")
+        if bas is None or oda not in dolu_slotlar or bas.date() not in calisma_gunleri:
+            continue
+        for sira in range(_kapsanan_saat(bas, bit)):
+            if bas.hour + sira in saat_kumesi:
+                dolu_slotlar[oda].add((bas.date(), bas.hour + sira))
+    odalar_ozet = {
+        oda: {"dolu": len(slotlar), "toplam": toplam_oda, "oran": (len(slotlar) / toplam_oda) if toplam_oda else None}
+        for oda, slotlar in dolu_slotlar.items()
+    }
+    toplam = toplam_oda * len(aktif)
+    dolu = sum(len(s) for s in dolu_slotlar.values())
+    en_yogun = None
+    if dolu:
+        en_yogun_id = max(odalar_ozet, key=lambda k: (odalar_ozet[k]["dolu"], -k))
+        en_yogun = next(o for o in aktif if o["oda_id"] == en_yogun_id)
+    return {"toplam": toplam, "dolu": dolu, "oran": (dolu / toplam) if toplam else None, "odalar": odalar_ozet, "en_yogun": en_yogun}
+
+
+def yuzde(oran):
+    return "—" if oran is None else f"%{round(oran * 100)}"
+
+
+# ------------------------------------------------------------------ arayüz
+class OdaKullanimiEkrani(QWidget):
+    NAVY = "#16294B"
+    SATIR_YUKSEKLIGI = 50
+
+    def __init__(self, api_url, token, parent=None):
+        super().__init__(parent)
+        self.api_url = api_url.rstrip("/")
+        self.token = token
+        self.bugun = date.today()
+        self.pazartesi = hafta_basi(self.bugun)
+        self.secili_gun = self.bugun
+        self.gorunum = "gun"                     # "gun" | "hafta"
+        self.odalar = []
+        self.randevular = []
+        self._yukleniyor = False
+
+        self._arayuz_kur()
+        self.yenile()
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.token}"}
+
+    # ------------------------------------------------------------------ arayüz kurulumu
+    def _kart(self, baslik, renk):
+        kart = QFrame()
+        kart.setStyleSheet("QFrame { background: white; border: 1px solid #E3EAF5; border-radius: 10px; } QLabel { border: none; }")
+        icerik = QVBoxLayout(kart)
+        icerik.setContentsMargins(14, 9, 14, 9)
+        icerik.setSpacing(1)
+        etiket = QLabel(baslik)
+        etiket.setStyleSheet("color: #697993; font-size: 12px;")
+        deger = QLabel("—")
+        deger.setStyleSheet(f"color: {renk}; font-size: 22px; font-weight: bold;")
+        alt = QLabel("")
+        alt.setStyleSheet("color: #8A98B0; font-size: 11px;")
+        alt.setWordWrap(True)
+        icerik.addWidget(etiket)
+        icerik.addWidget(deger)
+        icerik.addWidget(alt)
+        return kart, etiket, deger, alt
+
+    def _arayuz_kur(self):
+        self.setObjectName("odaKullanimi")
+        self.setStyleSheet("""
+            QWidget#odaKullanimi { background: #EAF0FA; }
+            QLabel { color: #243653; }
+            QPushButton#gezinme { background: white; color: #243653; border: 1px solid #C9D6EA; border-radius: 8px;
+                padding: 7px 14px; font-weight: bold; }
+            QPushButton#gezinme:hover { background: #F2F6FD; }
+            QPushButton#segment { background: white; color: #243653; border: 1px solid #C9D6EA; padding: 7px 18px; font-weight: bold; }
+            QPushButton#segment:checked { background: #16294B; color: white; border-color: #16294B; }
+            QComboBox { background: white; color: #243653; border: 1px solid #C9D6EA; border-radius: 8px; padding: 6px 10px; min-width: 150px; }
+        """)
+        ana = QVBoxLayout(self)
+        ana.setContentsMargins(20, 16, 20, 16)
+        ana.setSpacing(10)
+
+        # ---- gezinme satırı
+        ust = QHBoxLayout()
+        ust.setSpacing(8)
+        self.btn_bugun = QPushButton("Bugün")
+        self.btn_geri = QPushButton("‹")
+        self.btn_ileri = QPushButton("›")
+        for dugme in (self.btn_bugun, self.btn_geri, self.btn_ileri):
+            dugme.setObjectName("gezinme")
+            dugme.setCursor(Qt.PointingHandCursor)
+        self.btn_geri.setFixedWidth(40)
+        self.btn_ileri.setFixedWidth(40)
+        self.lbl_baslik = QLabel("")
+        self.lbl_baslik.setStyleSheet("color: #16294B; font-size: 19px; font-weight: bold; padding-left: 8px;")
+        ust.addWidget(self.btn_bugun)
+        ust.addWidget(self.btn_geri)
+        ust.addWidget(self.btn_ileri)
+        ust.addWidget(self.lbl_baslik)
+        ust.addStretch(1)
+        self.etiket_oda = QLabel("Oda:")
+        self.oda_sec = QComboBox()
+        ust.addWidget(self.etiket_oda)
+        ust.addWidget(self.oda_sec)
+        ust.addSpacing(10)
+        self.btn_gun = QPushButton("Gün")
+        self.btn_hafta = QPushButton("Hafta")
+        for dugme in (self.btn_gun, self.btn_hafta):
+            dugme.setObjectName("segment")
+            dugme.setCheckable(True)
+            dugme.setCursor(Qt.PointingHandCursor)
+        self.btn_gun.setStyleSheet("QPushButton { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }")
+        self.btn_hafta.setStyleSheet("QPushButton { border-top-right-radius: 8px; border-bottom-right-radius: 8px; border-left: none; }")
+        self.gorunum_grubu = QButtonGroup(self)
+        self.gorunum_grubu.setExclusive(True)
+        self.gorunum_grubu.addButton(self.btn_gun)
+        self.gorunum_grubu.addButton(self.btn_hafta)
+        self.btn_gun.setChecked(True)
+        ust.addWidget(self.btn_gun)
+        ust.addWidget(self.btn_hafta)
+        ana.addLayout(ust)
+
+        # ---- gün şeridi
+        serit = QHBoxLayout()
+        serit.setSpacing(8)
+        self.gun_dugmeleri = []
+        self.gun_grubu = QButtonGroup(self)
+        self.gun_grubu.setExclusive(True)
+        for i in range(7):
+            dugme = QPushButton("")
+            dugme.setCheckable(True)
+            dugme.setCursor(Qt.PointingHandCursor)
+            dugme.setMinimumHeight(42)
+            self.gun_grubu.addButton(dugme, i)
+            self.gun_dugmeleri.append(dugme)
+            serit.addWidget(dugme, 1)
+        ana.addLayout(serit)
+
+        # ---- özet kartları
+        kartlar = QHBoxLayout()
+        kartlar.setSpacing(12)
+        self.kartlar = {}
+        for anahtar, baslik, renk in [
+            ("oda", "Aktif Oda", self.NAVY), ("gun", "Bugün", "#285CE6"),
+            ("doluluk", "Haftalık Doluluk", "#16803C"), ("yogun", "En Yoğun Oda", "#B86B08"),
+        ]:
+            kart, etiket, deger, alt = self._kart(baslik, renk)
+            self.kartlar[anahtar] = (etiket, deger, alt)
+            kartlar.addWidget(kart, 1)
+        ana.addLayout(kartlar)
+
+        # ---- ızgara
+        self.cerceve = QFrame()
+        self.cerceve.setStyleSheet("QFrame#izgaraCercevesi { background: white; border: 1px solid #E3EAF5; border-radius: 12px; }")
+        self.cerceve.setObjectName("izgaraCercevesi")
+        cerceve_yerlesim = QVBoxLayout(self.cerceve)
+        cerceve_yerlesim.setContentsMargins(6, 6, 6, 6)
+        self.tablo = QTableWidget()
+        self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tablo.setSelectionMode(QAbstractItemView.NoSelection)
+        self.tablo.setShowGrid(True)
+        self.tablo.setFocusPolicy(Qt.NoFocus)
+        # Satırlar mevcut yüksekliği eşit paylaşır (sığıyorsa kaydırma çubuğu çıkmaz); en az SATIR_YUKSEKLIGI yüksekliğinde kalır.
+        self.tablo.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tablo.verticalHeader().setMinimumSectionSize(self.SATIR_YUKSEKLIGI)
+        self.tablo.verticalHeader().setFixedWidth(62)
+        self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tablo.horizontalHeader().setFixedHeight(42)
+        self.tablo.setStyleSheet("""
+            QTableWidget { background: white; border: none; gridline-color: #EEF2F8; color: #243653; }
+            QTableCornerButton::section { background: white; border: none; border-bottom: 1px solid #E3EAF5; border-right: 1px solid #E3EAF5; }
+            QHeaderView::section { background: white; color: #16294B; font-weight: bold; font-size: 12px; padding: 4px;
+                border: none; border-bottom: 1px solid #E3EAF5; border-right: 1px solid #EEF2F8; }
+            QHeaderView::section:vertical { color: #8A98B0; font-weight: normal; border-bottom: 1px solid #EEF2F8; border-right: 1px solid #E3EAF5;
+                padding-right: 8px; }
+        """)
+        cerceve_yerlesim.addWidget(self.tablo)
+        self.bos_mesaj = QLabel("")
+        self.bos_mesaj.setAlignment(Qt.AlignCenter)
+        self.bos_mesaj.setStyleSheet("color: #697993; font-size: 14px; padding: 40px;")
+        self.bos_mesaj.hide()
+        cerceve_yerlesim.addWidget(self.bos_mesaj)
+        ana.addWidget(self.cerceve, 1)
+
+        # ---- gösterge ve durum
+        alt = QHBoxLayout()
+        alt.setSpacing(16)
+        for kod in ("PLANLANDI", "TAMAMLANDI", "GELMEDI"):
+            bg, fg = DURUM_RENKLERI[kod]
+            nokta = QLabel(f"<span style='color:{fg}; font-size:15px;'>■</span>  {DURUM_ETIKETLERI[kod]}")
+            nokta.setStyleSheet("color: #243653; font-size: 12px;")
+            alt.addWidget(nokta)
+        gizli = QLabel(f"<span style='color:{GIZLI_RENK[1]}; font-size:15px;'>■</span>  Dolu (başka psikolog)")
+        gizli.setStyleSheet("color: #243653; font-size: 12px;")
+        alt.addWidget(gizli)
+        iptal = QLabel("İptal edilen randevular gösterilmez")
+        iptal.setStyleSheet("color: #8A98B0; font-size: 12px;")
+        alt.addWidget(iptal)
+        alt.addStretch(1)
+        self.durum_etiketi = QLabel("")
+        self.durum_etiketi.setStyleSheet("color: #8A98B0; font-size: 12px;")
+        alt.addWidget(self.durum_etiketi)
+        ana.addLayout(alt)
+
+        self.btn_bugun.clicked.connect(self.bugune_git)
+        self.btn_geri.clicked.connect(self.onceki_hafta)
+        self.btn_ileri.clicked.connect(self.sonraki_hafta)
+        self.btn_gun.clicked.connect(self._gun_gorunumu)
+        self.btn_hafta.clicked.connect(self._hafta_gorunumu)
+        self.gun_grubu.idClicked.connect(self._gun_secildi)
+        self.oda_sec.currentIndexChanged.connect(self._oda_degisti)
+
+    # ------------------------------------------------------------------ gezinme
+    def bugune_git(self):
+        self.bugun = date.today()
+        self.secili_gun = self.bugun
+        self._haftayi_ac(hafta_basi(self.bugun))
+
+    def onceki_hafta(self):
+        self._haftayi_ac(self.pazartesi - timedelta(days=7), korunan_gun_farki=True)
+
+    def sonraki_hafta(self):
+        self._haftayi_ac(self.pazartesi + timedelta(days=7), korunan_gun_farki=True)
+
+    def _haftayi_ac(self, pazartesi, korunan_gun_farki=False):
+        if korunan_gun_farki:
+            self.secili_gun = pazartesi + timedelta(days=(self.secili_gun - self.pazartesi).days)
+        self.pazartesi = pazartesi
+        self.yenile()
+
+    def _gun_gorunumu(self):
+        self.gorunum = "gun"
+        self._goster()
+
+    def _hafta_gorunumu(self):
+        self.gorunum = "hafta"
+        self._goster()
+
+    def _gun_secildi(self, sira):
+        self.secili_gun = self.pazartesi + timedelta(days=sira)
+        self.gorunum = "gun"
+        self.btn_gun.setChecked(True)
+        self._goster()
+
+    def _oda_degisti(self, *_):
+        if self.gorunum == "hafta":
+            self._goster()
+
+    # ------------------------------------------------------------------ veri
+    def yenile(self):
+        if self._yukleniyor:
+            return
+        self._yukleniyor = True
+        try:
+            try:
+                yanit = oturum_kontrollu_istek(
+                    "GET", f"{self.api_url}/api/oda-kullanimi", headers=self._headers(), timeout=10,
+                    params={"baslangic": self.pazartesi.isoformat(), "bitis": (self.pazartesi + timedelta(days=6)).isoformat()},
+                )
+                if oturum_hatasi_mi(yanit):
+                    return
+                yanit.raise_for_status()
+                veri = yanit.json()
+            except (requests.RequestException, ValueError) as hata:
+                QMessageBox.warning(self, "Oda Kullanımı", f"Oda kullanım bilgisi alınamadı:\n{hata}")
+                return
+        finally:
+            self._yukleniyor = False
+        self.odalar = veri.get("odalar", [])
+        self.randevular = veri.get("randevular", [])
+        self._oda_listesini_doldur()
+        self._goster()
+        self.durum_etiketi.setText(f"Son güncelleme: {datetime.now().strftime('%H:%M')}")
+
+    def _aktif_odalar(self):
+        return [o for o in self.odalar if o.get("aktif_mi", True)]
+
+    def _oda_listesini_doldur(self):
+        onceki = self.oda_sec.currentData()
+        self.oda_sec.blockSignals(True)
+        self.oda_sec.clear()
+        for oda in self._aktif_odalar():
+            self.oda_sec.addItem(str(oda.get("oda_adi")), oda.get("oda_id"))
+        indeks = self.oda_sec.findData(onceki) if onceki is not None else -1
+        self.oda_sec.setCurrentIndex(max(indeks, 0))
+        self.oda_sec.blockSignals(False)
+
+    # ------------------------------------------------------------------ görünüm
+    def _gunler(self):
+        return [self.pazartesi + timedelta(days=i) for i in range(7)]
+
+    def _goster(self):
+        saatler = saat_dilimleri(self.randevular)
+        gunler = self._gunler()
+        self.lbl_baslik.setText(hafta_basligi(self.pazartesi))
+        hafta_modu = self.gorunum == "hafta"
+        self.etiket_oda.setVisible(hafta_modu)
+        self.oda_sec.setVisible(hafta_modu)
+        self.btn_gun.setChecked(not hafta_modu)
+        self.btn_hafta.setChecked(hafta_modu)
+        self._serit_doldur(gunler)
+        self._kartlari_doldur(gunler, saatler)
+        self._izgara_doldur(gunler, saatler)
+
+    def _serit_doldur(self, gunler):
+        sayilar = {}
+        for r in self.randevular:
+            bas = zaman(r.get("baslangic_zamani"))
+            if bas is not None:
+                sayilar[bas.date()] = sayilar.get(bas.date(), 0) + 1
+        for i, (dugme, gun) in enumerate(zip(self.gun_dugmeleri, gunler)):
+            sayi = sayilar.get(gun, 0)
+            dugme.setText(f"{GUN_KISA[i]}  {gun.day}\n{sayi} randevu" if sayi else f"{GUN_KISA[i]}  {gun.day}\n—")
+            bugun, secili, hafta_sonu = gun == self.bugun, gun == self.secili_gun and self.gorunum == "gun", i >= CALISMA_GUNU_SAYISI
+            dugme.setChecked(secili)
+            kenar = "#285CE6" if bugun else "#D5DFEF"
+            yazi = "#8A98B0" if hafta_sonu else "#243653"
+            dugme.setStyleSheet(
+                f"QPushButton {{ background: white; color: {yazi}; border: 2px solid {kenar}; border-radius: 10px; font-weight: bold; padding: 4px; }}"
+                "QPushButton:hover { background: #F2F6FD; }"
+                "QPushButton:checked { background: #16294B; color: white; border-color: #16294B; }"
+            )
+
+    def _kartlari_doldur(self, gunler, saatler):
+        aktif = self._aktif_odalar()
+        etiket, deger, alt = self.kartlar["oda"]
+        deger.setText(str(len(aktif)))
+        pasif = len(self.odalar) - len(aktif)
+        alt.setText(f"{pasif} pasif oda" if pasif else f"toplam {len(self.odalar)} oda")
+
+        gun_randevulari = [r for r in self.randevular if (zaman(r.get("baslangic_zamani")) or datetime.min).date() == self.secili_gun]
+        etiket, deger, alt = self.kartlar["gun"]
+        etiket.setText("Bugün" if self.secili_gun == self.bugun else f"{self.secili_gun.day} {AY_UZUN[self.secili_gun.month - 1]}")
+        deger.setText(str(len(gun_randevulari)))
+        parcalar = []
+        for kod, ad in (("TAMAMLANDI", "tamamlandı"), ("PLANLANDI", "planlı"), ("GELMEDI", "gelmedi")):
+            sayi = sum(1 for r in gun_randevulari if r.get("durum") == kod)
+            if sayi:
+                parcalar.append(f"{sayi} {ad}")
+        alt.setText(" · ".join(parcalar) or "randevu yok")
+
+        ozet = doluluk_hesapla(self.randevular, self.odalar, gunler, saatler)
+        etiket, deger, alt = self.kartlar["doluluk"]
+        deger.setText(yuzde(ozet["oran"]))
+        alt.setText(f"{ozet['dolu']} / {ozet['toplam']} saat dilimi dolu" if ozet["toplam"] else "aktif oda yok")
+        etiket, deger, alt = self.kartlar["yogun"]
+        if ozet["en_yogun"] is None:
+            deger.setText("—")
+            alt.setText("bu hafta randevu yok")
+        else:
+            deger.setText(str(ozet["en_yogun"].get("oda_adi")))
+            alt.setText(f"{yuzde(ozet['odalar'][ozet['en_yogun']['oda_id']]['oran'])} doluluk")
+
+    # ------------------------------------------------------------------ ızgara
+    def _blok(self, r):
+        """Bir randevuyu renkli blok olarak çizer; başkasının randevusunda (kimlik gelmediyse) yalnızca 'Dolu' görünür."""
+        gizli = r.get("psikolog") is None and r.get("danisan_kod_id") is None
+        bg, fg = GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"])
+        kutu = QFrame()
+        kutu.setObjectName("blok")
+        kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
+        yerlesim = QVBoxLayout(kutu)
+        yerlesim.setContentsMargins(9, 3, 6, 3)
+        yerlesim.setSpacing(0)
+        bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
+        saat = f"{bas:%H:%M} – {bit:%H:%M}" if bas and bit else ""
+        if gizli:
+            satirlar = [("Dolu", f"color: {fg}; font-weight: bold; font-size: 13px;"), (saat, f"color: {fg}; font-size: 11px;")]
+        else:
+            ek = " · " + gorusme_etiketi(r.get("gorusme_tipi")) if r.get("gorusme_tipi") == "ONLINE" else ""
+            satirlar = [
+                (str(r.get("psikolog") or "—"), f"color: {fg}; font-weight: bold; font-size: 13px;"),
+                (str(r.get("danisan_kod_id") or "—"), f"color: {fg}; font-size: 11px;"),
+                (f"{saat}{ek}", f"color: {fg}; font-size: 10px;"),
+            ]
+        for metin, stil in satirlar:
+            etiket = QLabel(metin)
+            etiket.setStyleSheet(stil)
+            yerlesim.addWidget(etiket)
+        yerlesim.addStretch(1)
+        return kutu
+
+    def _izgara_doldur(self, gunler, saatler):
+        aktif = self._aktif_odalar()
+        self.tablo.clearSpans()
+        self.tablo.clearContents()
+        if not aktif:
+            self.tablo.setVisible(False)
+            self.bos_mesaj.setText("Tanımlı aktif oda yok.")
+            self.bos_mesaj.setVisible(True)
+            return
+        self.tablo.setVisible(True)
+        self.bos_mesaj.setVisible(False)
+
+        harita = blok_haritasi(self.randevular)
+        ozet = doluluk_hesapla(self.randevular, self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
+        if self.gorunum == "gun":
+            sutunlar = [(o["oda_id"], f"{o.get('oda_adi')}\n{yuzde(ozet['odalar'][o['oda_id']]['oran'])} dolu") for o in aktif]
+            anahtar = lambda sutun, saat: (sutun[0], self.secili_gun, saat)
+        else:
+            oda_id = self.oda_sec.currentData()
+            sutunlar = [(g, f"{GUN_KISA[i]} {g.day}") for i, g in enumerate(gunler)]
+            anahtar = lambda sutun, saat: (oda_id, sutun[0], saat)
+
+        self.tablo.setColumnCount(len(sutunlar))
+        self.tablo.setRowCount(len(saatler))
+        self.tablo.setHorizontalHeaderLabels([etiket for _, etiket in sutunlar])
+        self.tablo.setVerticalHeaderLabels([f"{s:02d}:00" for s in saatler])
+
+        yerlesenler = set()
+        for sutun_no, sutun in enumerate(sutunlar):
+            hafta_sonu = self.gorunum == "hafta" and sutun[0].weekday() >= CALISMA_GUNU_SAYISI
+            for satir_no, saat in enumerate(saatler):
+                if hafta_sonu:                                   # hafta sonu sütunu soluk görünür
+                    oge = QTableWidgetItem("")
+                    oge.setBackground(self._renk("#F8FAFC"))
+                    self.tablo.setItem(satir_no, sutun_no, oge)
+                if (satir_no, sutun_no) in yerlesenler:
+                    continue
+                kayitlar = harita.get(anahtar(sutun, saat), [])
+                if not kayitlar:
+                    continue
+                r = kayitlar[0]
+                kapsam = min(_kapsanan_saat(zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))), len(saatler) - satir_no)
+                self.tablo.setCellWidget(satir_no, sutun_no, self._blok_kapsayici(r, len(kayitlar)))
+                if kapsam > 1:
+                    self.tablo.setSpan(satir_no, sutun_no, kapsam, 1)
+                    yerlesenler.update((satir_no + k, sutun_no) for k in range(1, kapsam))
+        self._simdiki_saate_kaydir(saatler)
+
+    def _blok_kapsayici(self, r, adet):
+        """Blok + (aynı hücrede birden fazla randevu varsa) '+N' bilgisi."""
+        blok = self._blok(r)
+        if adet > 1:
+            ek = QLabel(f"+{adet - 1}")
+            ek.setStyleSheet("color: #64748B; font-size: 10px; font-weight: bold; background: transparent; border: none;")
+            blok.layout().addWidget(ek)
+        return blok
+
+    @staticmethod
+    def _renk(kod):
+        from PySide6.QtGui import QColor
+        return QColor(kod)
+
+    def _simdiki_saate_kaydir(self, saatler):
+        """Bugünün görünümünde şimdiki saat satırı görünür olsun (satır sayısı fazlaysa)."""
+        simdi = datetime.now().hour
+        if simdi in saatler and self.secili_gun == self.bugun:
+            self.tablo.scrollTo(self.tablo.model().index(saatler.index(simdi), 0), QAbstractItemView.PositionAtCenter)
