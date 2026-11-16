@@ -42,19 +42,19 @@ def test_rezervasyon_api_durumlari_dogru_dondurur():
             1, "CHZ-001", "EEG",
             simdi - timedelta(days=2),
             simdi - timedelta(days=1),
-            False,
+            False, "Oda-1", "Araştırma", "Pilot çalışma", 4, "Psikoloji",
         ),
         (
             2, "CHZ-002", "X-Ray",
             simdi + timedelta(hours=1),
             simdi + timedelta(hours=2),
-            False,
+            False, None, None, None, None, None,                       # oda ve proje bilgisi girilmemiş (LEFT JOIN: oda boş olabilir)
         ),
         (
             3, "CHZ-003", "EKG",
             simdi - timedelta(days=1),
             simdi + timedelta(hours=1),
-            True,
+            True, "Oda-2", "Test", "", 4, "Psikoloji",
         ),
     ]
 
@@ -66,6 +66,14 @@ def test_rezervasyon_api_durumlari_dogru_dondurur():
         "Aktif",
         "İptal Edildi",
     ]
+
+    assert sonuc[0]["cihaz_id"] == "CHZ-001 - EEG"                       # eski alan değişmeden kalır (geriye uyumluluk)
+    assert (sonuc[0]["envanter_kodu"], sonuc[0]["cihaz_adi"]) == ("CHZ-001", "EEG")
+    assert (sonuc[0]["oda_adi"], sonuc[0]["proje_turu"], sonuc[0]["proje_adi_aciklamasi"]) == ("Oda-1", "Araştırma", "Pilot çalışma")
+    assert sonuc[1]["oda_adi"] is None and sonuc[1]["proje_turu"] is None
+    assert (sonuc[0]["bolum_id"], sonuc[0]["bolum_adi"]) == (4, "Psikoloji") and sonuc[1]["bolum_adi"] is None
+    sorgu = str(cursor.execute.call_args.args[0])
+    assert "LEFT JOIN bolumler" in sorgu and "LEFT JOIN odalar" in sorgu                                  # odası seçilmemiş rezervasyon listeden düşmemeli
 
     conn.close.assert_called_once()
 
@@ -119,13 +127,13 @@ def test_tamamlanan_rezervasyonda_iptal_butonu_yok(qt_app):
 
     assert tablo.rowCount() == 3
 
-    assert tablo.item(0, 4).text() == "Tamamlandı"
-    assert tablo.cellWidget(0, 5) is None
+    assert tablo.item(0, 5).text() == "Tamamlandı"
+    assert tablo.cellWidget(0, 6) is None
 
-    assert tablo.item(1, 4).text() == "Aktif"
-    assert tablo.cellWidget(1, 5) is not None
+    assert tablo.item(1, 5).text() == "Aktif"
+    assert tablo.cellWidget(1, 6) is not None
 
-    assert tablo.item(2, 4).text() == "İptal Edildi"
-    assert tablo.cellWidget(2, 5) is None
+    assert tablo.item(2, 5).text() == "İptal Edildi"
+    assert tablo.cellWidget(2, 6) is None
 
     ekran.close()
