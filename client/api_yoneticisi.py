@@ -31,10 +31,32 @@ class OturumOlaylari(QObject):
 oturum_olaylari = OturumOlaylari()
 
 
+SEMA_UYUMSUZ_KODU = "SEMA_UYUMSUZ"
+
+
+def sema_uyumsuz_detayi(yanit):
+    """Sunucu "veritabanı şeması eski" (503 + kod=SEMA_UYUMSUZ) dediyse anlaşılır mesajı, değilse None döndürür."""
+    if getattr(yanit, "status_code", None) != 503:
+        return None
+    try:
+        veri = yanit.json()
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if isinstance(veri, dict) and veri.get("kod") == SEMA_UYUMSUZ_KODU and isinstance(veri.get("detail"), str):
+        return veri["detail"]
+    return None
+
+
 def oturum_kontrollu_istek(method, url, **kwargs):
     """HTTP istegi gonderir ve token hatalarini bildirir."""
 
     yanit = requests.request(method, url, **kwargs)
+
+    detay = sema_uyumsuz_detayi(yanit)
+    if detay:
+        # raise_for_status() hatası "503 Server Error: <bu metin> for url: ..." olur; ekranlar bunu olduğu gibi gösterir.
+        yanit.reason = detay
+        return yanit
 
     if yanit.status_code != 401:
         return yanit
@@ -125,6 +147,10 @@ def api_hata_mesaji(yanit=None, hata=None):
         422: "Girilen bilgiler geçersiz. Lütfen kontrol edin.",
         429: "Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin.",
     }
+
+    detay = sema_uyumsuz_detayi(yanit)
+    if detay:
+        return detay
 
     if durum in mesajlar:
         return mesajlar[durum]
