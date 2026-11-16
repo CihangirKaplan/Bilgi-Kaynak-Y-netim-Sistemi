@@ -273,7 +273,6 @@ erDiagram
         string hedef_tablo
         int hedef_kayit_id
         timestamp olusturulma_tarihi
-        string version_num PK
     }
 
     %% Veritabanında tanımlı FK ilişkileri
@@ -321,7 +320,7 @@ erDiagram
 - PK, FK ve UK işaretleri D04'teki veritabanı kısıtlarına dayanır.
 - İlişki çizgileri FK bağlantılarını gösterir. Kesin zorunluluk, NULL ve UNIQUE kuralları için D04 Veri Sözlüğü esas alınmalıdır.
 - `personel_faaliyet_kayitlari.personel_id` sütununda veritabanı FK kısıtı bulunmadığından personel tablosuna ilişki çizilmemiştir.
-- `cihazlar.durum`, `ogrenciler.tur` ve `denetim_kayitlari.olay_turu` VARCHAR alanlarıdır; PostgreSQL ENUM sütunları değildir.
+- `ogrenciler.tur` (`ogrenci_turu`) ve `denetim_kayitlari.olay_turu` (`denetim_olay_turu`) PostgreSQL ENUM sütunlarıdır. `cihazlar.durum` canlı veritabanında VARCHAR, test veritabanında `cihaz_durumu` ENUM tipindedir; bu şema uyumsuzluğu ayrıca giderilmelidir.
 
 ## Rezervasyon ve randevu çakışma kısıtları
 

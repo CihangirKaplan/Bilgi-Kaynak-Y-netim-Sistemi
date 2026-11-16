@@ -330,7 +330,7 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `ad_soyad` | VARCHAR(100) | NOT NULL | Öğrencinin adı ve soyadı. |
 | `ogrenci_numarasi` | VARCHAR(50) | UNIQUE; NOT NULL | Öğrencinin benzersiz öğrenci numarası. |
 | `telefon` | VARCHAR(20) | NULL | Öğrencinin iletişim telefonu. |
-| `tur` | VARCHAR(14) | NOT NULL | Öğrenci türünü tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
+| `tur` | `ogrenci_turu` (ENUM) | NOT NULL | Öğrenci türü: `GONULLU` veya `DANISMA_MASASI`. |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Öğrenci kaydının etkinlik durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Öğrenci kaydının oluşturulma zamanı. |
 
@@ -422,7 +422,7 @@ Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
 | :--- | :--- | :--- | :--- |
 | `denetim_id` | BIGSERIAL (BIGINT) | PK; NOT NULL | Audit kaydının benzersiz kimliği. |
 | `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | İşlemi yapan kullanıcı (Failed login durumunda NULL olabilir). |
-| `olay_turu` | VARCHAR(22) | NOT NULL | Denetim olay türünü tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
+| `olay_turu` | `denetim_olay_turu` (ENUM) | NOT NULL | Denetim olayının PostgreSQL ENUM türü. Geçerli değerler belgenin ENUM bölümünde listelenmiştir. |
 | `hedef_tablo` | VARCHAR(100) | NULL | Veri değişikliğinden etkilenen tablo. |
 | `hedef_kayit_id` | INTEGER | NULL | Değiştirilen/Silinen kaydın PK değeri. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Olayın gerçekleştiği tam zaman. |
