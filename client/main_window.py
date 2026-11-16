@@ -831,7 +831,8 @@ QLabel {
         # ---------------- SAĞ ALAN ----------------
         sag = QWidget()
         sag_l = QVBoxLayout(sag)
-        sag_l.setContentsMargins(28, 24, 28, 18)
+        self.sag_yerlesim = sag_l                 # sayfa_ac kompakt sayfalar için kenar boşluklarını değiştirir
+        sag_l.setContentsMargins(*self.SAYFA_KENAR_BOSLUKLARI)
         sag_l.setSpacing(20)
 
         topbar = QFrame()
@@ -1770,6 +1771,9 @@ QLabel {
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
         "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
     }
+    # Sağ panelin sayfa çevresindeki boşlukları (sol, üst, sağ, alt). Tablo/takvim gibi dikey alan isteyen sayfalar daha dar boşlukla açılır.
+    SAYFA_KENAR_BOSLUKLARI = (28, 24, 28, 18)
+    KOMPAKT_SAYFALAR = {"Oda Kullanımı": (28, 6, 28, 6)}
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
 
     def _sayfayi_yenile(self, ad):
@@ -1800,6 +1804,7 @@ QLabel {
             envanter.durum_filtresini_temizle()
 
         self.master_stack.setCurrentIndex(0)
+        self.sag_yerlesim.setContentsMargins(*self.KOMPAKT_SAYFALAR.get(ad, self.SAYFA_KENAR_BOSLUKLARI))
         self.stack.setCurrentIndex(idx)
         self._sayfayi_yenile(ad)
 
