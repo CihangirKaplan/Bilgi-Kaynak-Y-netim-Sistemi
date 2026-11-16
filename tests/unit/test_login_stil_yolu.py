@@ -41,4 +41,9 @@ def test_ekran_gercek_simge_dosyasiyla_acilir_ve_stil_ileri_bolulu(login_ekrani,
     ekran = login_ekrani.LoginEkrani()
     assert "\\" not in ekran.styleSheet() and os.path.exists(login_ekrani.ONAY_ISARETI_DOSYASI)
     assert ekran.goster.text() == "Şifreyi göster" and ekran.giris_btn.objectName() == "giris"
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
     ekran.close()
+    ekran.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
