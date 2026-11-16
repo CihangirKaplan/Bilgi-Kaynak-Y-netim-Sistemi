@@ -4898,6 +4898,56 @@ def randevu_raporu_secenekleri(
         if conn is not None: conn.close()
 
 
+@app.get("/api/oda-kullanimi")
+def oda_kullanimi(
+    baslangic: date,
+    bitis: date,
+    kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE")),
+):
+    """Oda Kullanımı sayfası: odalar ve seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular.
+
+    Psikolog, başkalarının randevularında yalnızca "dolu" bilgisini görür: o satırlarda psikolog adı, danışan kodu ve görüşme tipi
+    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. En çok 62 günlük aralık istenebilir."""
+    if baslangic > bitis:
+        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
+    if (bitis - baslangic).days > 62:
+        raise HTTPException(status_code=422, detail="En çok 62 günlük aralık istenebilir.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+
+        cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_adi, oda_id;")
+        odalar = [{"oda_id": o[0], "oda_adi": o[1], "kapasite": o[2], "aktif_mi": o[3]} for o in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT r.randevu_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, ku.kullanici_adi, r.danisan_kod_id,
+                   r.gorusme_tipi, (p.kullanici_id = %s) AS benim
+            FROM randevular r
+            LEFT JOIN personel p ON p.personel_id = r.psikolog_id
+            LEFT JOIN kullanicilar ku ON ku.kullanici_id = p.kullanici_id
+            WHERE r.durum <> 'IPTAL_EDILDI' AND r.baslangic_zamani >= %s AND r.baslangic_zamani < %s
+            ORDER BY r.baslangic_zamani, r.randevu_id;
+        """, (kullanici_id, datetime.combine(baslangic, datetime.min.time()), datetime.combine(bitis, datetime.min.time()) + timedelta(days=1)))
+        randevular = []
+        for k in cursor.fetchall():
+            gorunur = (not psikolog_mu) or bool(k[8])
+            randevular.append({
+                "randevu_id": k[0], "oda_id": k[1], "baslangic_zamani": k[2], "bitis_zamani": k[3], "durum": k[4],
+                "psikolog": k[5] if gorunur else None, "danisan_kod_id": k[6] if gorunur else None,
+                "gorusme_tipi": k[7] if gorunur else None, "benim": bool(k[8]),
+            })
+        return {"odalar": odalar, "randevular": randevular}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 @app.get("/api/randevu-raporu")
 def randevu_raporu(
     baslangic: _ogr_date | None = None,

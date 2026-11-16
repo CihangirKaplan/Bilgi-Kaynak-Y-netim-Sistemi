@@ -20,7 +20,6 @@ from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QColor
 from client.randevu_ekranlari import RandevuOlusturFormu
-from client.haftalik_takvim import HaftalikTakvimEkrani
 from client.cihaz_ekranlari import CihazYonetimEkrani
 from client.cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from client.cihaz_ariza_ekranlari import ArizaYonetimEkrani
@@ -763,23 +762,6 @@ QLabel {
         # INDEX 0: Normal Dashboard (Sol Menü + Sağ İçerik)
         ana_widget = QWidget()
         self.master_stack.addWidget(ana_widget)
-
-        # INDEX 1: Tam Ekran Takvim (Üstünde Geri Ok Butonu ile)
-        self.tam_ekran_takvim = QWidget()
-        self.tam_ekran_takvim.setStyleSheet("background-color: white;")
-        te_layout = QVBoxLayout(self.tam_ekran_takvim)
-        te_layout.setContentsMargins(0, 0, 0, 0)
-        te_layout.setSpacing(0)
-
-
-        # 1. Önce takvim sayfasını (widget) oluştur
-        self.takvim_widget = HaftalikTakvimEkrani(api_url=self.api_url, token=self.token)
-        # 2. Sonra takvimin içindeki yeni geri ok butonuna tıklama görevi ver
-        self.takvim_widget.btn_ana_ekrana_don.clicked.connect(self.ana_ekrana_don)
-        # 3. Son olarak oluşturulan takvimi tam ekran alanına (layout) yerleştir
-        te_layout.addWidget(self.takvim_widget)
-
-        self.master_stack.addWidget(self.tam_ekran_takvim) # INDEX 1 olarak eklendi
 
         # Ana layout (Sol menü ve sağ panel) Index 0'ın içine kurulmaya devam ediyor
         ana = QHBoxLayout(ana_widget)
@@ -1784,6 +1766,7 @@ QLabel {
         # Oda tablosu ana pencerenin kendi içinde olduğundan ekran yerine None (= ana pencerenin kendisi) yazılır.
         "Oda Yönetimi": (None, "odalari_getir"),
         "Danışanlar": ("danisanlar_ekrani", "verileri_cek"),
+        "Oda Kullanımı": ("oda_kullanimi_ekrani", "yenile"),
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
         "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
     }
@@ -1816,12 +1799,8 @@ QLabel {
         if ad == "Cihaz Envanteri" and envanter is not None:
             envanter.durum_filtresini_temizle()
 
-        if ad == "Oda Kullanımı":
-            self.master_stack.setCurrentIndex(1)
-            self.stack.setCurrentIndex(idx)
-        else:
-            self.master_stack.setCurrentIndex(0)
-            self.stack.setCurrentIndex(idx)
+        self.master_stack.setCurrentIndex(0)
+        self.stack.setCurrentIndex(idx)
         self._sayfayi_yenile(ad)
 
     def ogrenciler_sayfasina_git(self, yeni_ekle=False):
@@ -2202,6 +2181,11 @@ QLabel {
             )
             lay.addWidget(self.aktif_personel_ekrani, 1)
             
+        elif oge["ad"] == "Oda Kullanımı":
+            from client.oda_kullanimi_ekrani import OdaKullanimiEkrani
+            self.oda_kullanimi_ekrani = OdaKullanimiEkrani(api_url=self.api_url, token=self.token)
+            lay.addWidget(self.oda_kullanimi_ekrani, 1)
+
         elif oge["ad"] == "Oda Yönetimi":
             ik = kart_olustur()
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
