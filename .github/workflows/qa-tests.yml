@@ -66,10 +66,14 @@ jobs:
           # Her pytest süreci coverage verisini ayrı dosyaya yazar.
           export COVERAGE_FILE=".coverage"
 
-          echo "=== UNIT ==="
-          COVERAGE_FILE=.coverage.unit python -m pytest tests/unit -q --tb=short \
-            --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
-            --cov-branch --cov-report=
+          echo "=== UNIT (DOSYA BAZINDA) ==="
+          for dosya in tests/unit/test_*.py; do
+            ad="$(basename "$dosya" .py)"
+            echo "=== $dosya ==="
+            COVERAGE_FILE=".coverage.unit.$ad" python -m pytest "$dosya" -q --tb=short \
+              --cov=server.sunucu --cov=server.guvenlik --cov=server.denetim \
+              --cov-branch --cov-report=
+          done
 
           echo "=== ACCEPTANCE (DOSYA BAZINDA) ==="
           for dosya in tests/acceptance/test_*.py; do
