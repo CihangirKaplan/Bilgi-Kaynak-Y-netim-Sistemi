@@ -30,7 +30,7 @@ def main():
             "/TN", gorev_adi,
             "/TR", komut,
             "/SC", "DAILY",
-            "/ST", "02:00",
+            "/ST", "05:00",
             "/RU", "SYSTEM",
             "/RL", "HIGHEST",
             "/F",
