@@ -1,6 +1,6 @@
 # TKYS - Güncel Veritabanı ER Diyagramı
 
-Bu diyagram, `D04_Data_Dictionary.md` belgesinde tanımlanan 30 uygulama tablosunu esas alır.
+Bu diyagram, `D04_Data_Dictionary.md` belgesinde tanımlanan 29 uygulama tablosunu esas alır.
 
 ```mermaid
 erDiagram
@@ -263,16 +263,6 @@ erDiagram
         timestamp olusturulma_tarihi
     }
 
-    personel_faaliyet_kayitlari {
-        int kayit_id PK
-        int personel_id
-        int faaliyet_id FK
-        int birim_id FK
-        int miktar
-        int toplam_puan
-        timestamp kayit_tarihi
-    }
-
     denetim_kayitlari {
         bigint denetim_id PK
         int kullanici_id FK
@@ -315,18 +305,15 @@ erDiagram
     faaliyet_birimleri ||--o{ ogrenci_faaliyet_takip : "birim_id"
     ogrenciler o|--o{ ogrenci_kayit_erteleme_gecmisi : "ogrenci_id"
     kullanicilar o|--o{ ogrenci_kayit_erteleme_gecmisi : "erteleyen_kullanici_id"
-    faaliyetler o|--o{ personel_faaliyet_kayitlari : "faaliyet_id"
-    faaliyet_birimleri o|--o{ personel_faaliyet_kayitlari : "birim_id"
     kullanicilar o|--o{ denetim_kayitlari : "kullanici_id"
 ```
 
 ## Diyagram notları
 
-- Diyagramda 30 uygulama tablosu bulunmaktadır.
+- Diyagramda 29 uygulama tablosu bulunmaktadır.
 - `alembic_version` teknik migration tablosudur; uygulama ER diyagramına dahil edilmemiştir.
 - PK, FK ve UK işaretleri D04'teki veritabanı kısıtlarına dayanır.
 - İlişki çizgileri FK bağlantılarını gösterir. Kesin zorunluluk, NULL ve UNIQUE kuralları için D04 Veri Sözlüğü esas alınmalıdır.
-- `personel_faaliyet_kayitlari.personel_id` sütununda veritabanı FK kısıtı bulunmadığından personel tablosuna ilişki çizilmemiştir.
 - `ogrenciler.tur` (`ogrenci_turu`) ve `denetim_kayitlari.olay_turu` (`denetim_olay_turu`) PostgreSQL ENUM sütunlarıdır. `cihazlar.durum` canlı veritabanında VARCHAR, test veritabanında `cihaz_durumu` ENUM tipindedir; bu şema uyumsuzluğu ayrıca giderilmelidir.
 
 ## Rezervasyon ve randevu çakışma kısıtları

@@ -413,18 +413,6 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `erteleyen_kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | Erteleme işlemini yapan kullanıcı. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Erteleme kaydının oluşturulma zamanı. |
 
-### Tablo: `personel_faaliyet_kayitlari`
-
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `kayit_id` | SERIAL (INTEGER) | PK; NOT NULL | Personel faaliyet kaydının benzersiz kimliği. |
-| `personel_id` | INTEGER | NOT NULL | Personel kimliği; mevcut veritabanında bu sütuna tanımlanmış FK kısıtı bulunmuyor. |
-| `faaliyet_id` | INTEGER | FK → `faaliyetler(faaliyet_id)`; NULL | Varsa ilgili faaliyet türü. |
-| `birim_id` | INTEGER | FK → `faaliyet_birimleri(birim_id)`; NULL | Varsa faaliyet miktarının birimi. |
-| `miktar` | INTEGER | NOT NULL | Kaydedilen faaliyet miktarı. |
-| `toplam_puan` | INTEGER | NOT NULL | Faaliyet kaydına ait toplam puan. |
-| `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Faaliyet kaydının zamanı. |
-
 ## 5. Denetim (Audit) Modülü
 
 Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
