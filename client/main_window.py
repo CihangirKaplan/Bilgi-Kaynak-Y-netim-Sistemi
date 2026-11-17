@@ -92,6 +92,7 @@ IZIN_LISTESI = [
     ("Kullanıcı pasifleştirme",              "Kullanıcı & Denetim","HHEHHE"),
     ("Rol atama/değiştirme",                 "Kullanıcı & Denetim","HHEHHE"),
     ("Audit kayıtlarını inceleme",           "Kullanıcı & Denetim","HHEHHE"),
+    ("Yönetim raporlarını görüntüleme",      "Kullanıcı & Denetim","HHEHHE"),
     ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
     ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
     ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
@@ -139,6 +140,7 @@ IZIN_KODLARI = {
     "Kullanıcı parola sıfırlama": ("KULLANICI_PAROLA_SIFIRLA",),
     "Rol atama/değiştirme": ("ROL_ATAMA_DEGISTIRME",),
     "Audit kayıtlarını inceleme": ("AUDIT_KAYITLARI_INCELE",),
+    "Yönetim raporlarını görüntüleme": ("YONETIM_RAPORLARI_GORUNTULE",),
     "Danışma masası oturumunu yönetme": ("DANISMA_OTURUMU_YONET",),
     "Danışma masası yönetimi": ("DANISMA_OTURUMU_YONETIM",),
     "Danışma masası raporlarını görüntüleme": ("DANISMA_OTURUMU_GORUNTULE",),
@@ -291,6 +293,10 @@ MENU = [
 
     ]),
     ("YÖNETİM & DENETİM", [
+        dict(ikon="📊", ad="Yönetim Raporları ve İstatistikler",
+             izin="Yönetim raporlarını görüntüleme",
+             aciklama="Merkezin günlük, haftalık ve aylık faaliyet istatistikleri",
+             aksiyon=[]),
         dict(ikon="👥", ad="Kullanıcı & Personel", izin="Kullanıcı oluşturma",
              aciklama="Kullanıcı, personel ve rol atama işlemleri",
              aksiyon=[("＋  Kullanıcı Oluştur", "Kullanıcı oluşturma"),
@@ -1917,8 +1923,22 @@ QLabel {
         h.addWidget(rozet, 0, Qt.AlignVCenter)
         lay.addWidget(hero)
 
-        erisilebilir = [o for _, og in MENU for o in og
-                        if o["izin"] is not None and izin_var(rol, o["izin"])]
+        # Ana Kontrol Paneli: yalnızca öncelikli hızlı erişimler.
+        # Diğer modüller MENU ve sol menüde yer almaya devam eder.
+        hizli_erisim_adlari = {
+            "Randevu Yönetimi",
+            "Danışma Masası Yönetimi",
+            "Cihaz Rezervasyonu",
+            "Öğrenciler",
+            "Yönetim Raporları ve İstatistikler",
+        }
+
+        erisilebilir = [
+            o for _, og in MENU for o in og
+            if o["izin"] is not None
+            and izin_var(rol, o["izin"])
+            and o["ad"] in hizli_erisim_adlari
+        ]
 
         # Randevu listesi her rolde, cihaz özeti yalnızca cihaz envanteri iznine sahip rollerde gösterilir.
         # Bu özetin sunucu uçları da aynı izni ister; izin rol adına değil veritabanındaki yetkiye bağlıdır.
@@ -1932,6 +1952,24 @@ QLabel {
             parola_talepleri_goster=self._parola_talepleri_gorebilir_mi(),
         )
         lay.addWidget(self.istatistik_paneli)
+
+        # Günlük faaliyetler yalnızca yönetim rollerine gösterilir.
+        # Sunucu ayrıca YONETIM_RAPORLARI_GORUNTULE iznini doğrular.
+        self.gunluk_akis_paneli = None
+
+        if str(rol).lower() in ("admin", "mudur"):
+            from client.dashboard_gunluk_akis import DashboardGunlukAkis
+
+            self.gunluk_akis_paneli = DashboardGunlukAkis(
+                api_url=self.api_url,
+                token=self.token,
+                sayfa_ac=lambda hedef: self._karttan_sayfaya_git(
+                    hedef, None
+                ),
+                sayfa_izinli_mi=self._sayfa_izinli_mi,
+            )
+            lay.addWidget(self.gunluk_akis_paneli)
+            self.gunluk_akis_paneli.verileri_yukle()
 
         baslik = QLabel("Hızlı Erişim")
         baslik.setStyleSheet("font-size:17px; font-weight:800; color:#0A1F5C;")
@@ -2058,7 +2096,16 @@ QLabel {
             lay.addLayout(ab)
 
         # 3. SAYFA İÇERİĞİNİN (TABLOLARIN vs.) YÜKLENDİĞİ YER
-        if oge["ad"] == "Danışma Masası":
+        if oge["ad"] == "Yönetim Raporları ve İstatistikler":
+            from client.yonetim_raporlari_panel import YonetimRaporlariEkrani
+
+            self.yonetim_raporlari_ekrani = YonetimRaporlariEkrani(
+                api_url=self.api_url,
+                token=self.token
+            )
+            lay.addWidget(self.yonetim_raporlari_ekrani, 1)
+
+        elif oge["ad"] == "Danışma Masası":
             from client.danisma_masasi_ekrani import DanismaMasasiEkrani
             self.danisma_ekrani = DanismaMasasiEkrani(
                 api_url=self.api_url,
