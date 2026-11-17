@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-YEDEK_KLASORU = Path(__file__).resolve().parents[2] / "backups"
+YEDEK_KLASORU = Path(os.getenv("TKYS_BACKUP_DIR") or (Path(__file__).resolve().parents[2] / "backups")).resolve()
 GECERLI_AD = re.compile(r"^[A-Za-z0-9_]{1,63}$")
 
 

@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-YEDEK_KLASORU = Path(__file__).resolve().parents[2] / "backups"
+YEDEK_KLASORU = Path(os.getenv("TKYS_BACKUP_DIR") or (Path(__file__).resolve().parents[2] / "backups")).resolve()
 GECERLI_AD = re.compile(r"^[A-Za-z0-9_]{1,63}$")
 
 
@@ -26,7 +26,7 @@ def dosya_deseni(veritabani):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--days", type=int, default=14)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument(
         "--database",
