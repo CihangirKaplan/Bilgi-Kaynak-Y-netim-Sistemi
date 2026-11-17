@@ -5129,10 +5129,13 @@ def oda_kullanimi(
     bitis: date,
     kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE")),
 ):
-    """Oda Kullanımı sayfası: odalar ve seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular.
+    """Oda Kullanımı sayfası: odalar, seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular ve
+    odası seçilmiş iptal edilmemiş cihaz rezervasyonları.
 
     Psikolog, başkalarının randevularında yalnızca "dolu" bilgisini görür: o satırlarda psikolog adı, danışan kodu ve görüşme tipi
-    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. En çok 62 günlük aralık istenebilir."""
+    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. Cihaz rezervasyonunda odanın o saatlerde cihaz
+    kullanımı nedeniyle dolu olduğu herkese görünür; cihaz adı ve bölüm yalnızca CIHAZ_REZERVASYON iznine sahip rollere gelir
+    (izni olmayanda bu iki alan boş döner). En çok 62 günlük aralık istenebilir."""
     if baslangic > bitis:
         raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
     if (bitis - baslangic).days > 62:
@@ -5143,9 +5146,18 @@ def oda_kullanimi(
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        cursor.execute(
+            """
+            SELECT r.rol_adi,
+                   COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
+                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'CIHAZ_REZERVASYON'), 0)
+            FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;
+            """,
+            (kullanici_id,),
+        )
         rol = cursor.fetchone()
         psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+        cihaz_detayi_gorur = rol is not None and rol[1] == 1
 
         cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_adi, oda_id;")
         odalar = [{"oda_id": o[0], "oda_adi": o[1], "kapasite": o[2], "aktif_mi": o[3]} for o in cursor.fetchall()]
@@ -5167,7 +5179,24 @@ def oda_kullanimi(
                 "psikolog": k[5] if gorunur else None, "danisan_kod_id": k[6] if gorunur else None,
                 "gorusme_tipi": k[7] if gorunur else None, "benim": bool(k[8]),
             })
-        return {"odalar": odalar, "randevular": randevular}
+
+        # Cihaz rezervasyonu odayı seçilen saatlerde tamamen doldurur. Aralıkla kesişen (gün sınırını aşanlar dahil) iptal edilmemiş,
+        # odası seçilmiş rezervasyonlar döner.
+        cursor.execute("""
+            SELECT cr.rezervasyon_id, cr.kullanilacak_oda_id, cr.baslangic_zamani, cr.bitis_zamani, c.cihaz_adi, b.bolum_adi
+            FROM cihaz_rezervasyonlari cr
+            JOIN cihazlar c ON c.cihaz_id = cr.cihaz_id
+            LEFT JOIN bolumler b ON b.bolum_id = cr.bolum_id
+            WHERE COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE AND cr.kullanilacak_oda_id IS NOT NULL
+              AND cr.baslangic_zamani < %s AND cr.bitis_zamani > %s
+            ORDER BY cr.baslangic_zamani, cr.rezervasyon_id;
+        """, (datetime.combine(bitis, datetime.min.time()) + timedelta(days=1), datetime.combine(baslangic, datetime.min.time())))
+        rezervasyonlar = [
+            {"rezervasyon_id": k[0], "oda_id": k[1], "baslangic_zamani": k[2], "bitis_zamani": k[3],
+             "cihaz_adi": k[4] if cihaz_detayi_gorur else None, "bolum_adi": k[5] if cihaz_detayi_gorur else None}
+            for k in cursor.fetchall()
+        ]
+        return {"odalar": odalar, "randevular": randevular, "rezervasyonlar": rezervasyonlar}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
