@@ -140,6 +140,45 @@ def sil_onayi(parent, baslik, mesaj):
     return kutu.clickedButton() is evet
 
 
+KIMLIK_ROLU = Qt.UserRole + 7           # satırın kayıt kimliği (ilk sütundaki öğede saklanır)
+
+
+def satira_kimlik_ata(tablo, satir, kimlik):
+    """Satırın kayıt kimliğini saklar; çift tıklamada hangi kaydın açılacağı buradan bulunur."""
+    item = tablo.item(satir, 0)
+    if item is None:
+        item = QTableWidgetItem("")
+        tablo.setItem(satir, 0, item)
+    item.setData(KIMLIK_ROLU, kimlik)
+
+
+def satir_kimligi(tablo, satir):
+    item = tablo.item(satir, 0)
+    return item.data(KIMLIK_ROLU) if item is not None else None
+
+
+def cift_tikla_ac(tablo, islev):
+    """Satıra çift tıklanınca islev(kayit_kimligi) çağrılır (kimliği atanmamış satırlar yok sayılır).
+
+    Satır sonundaki simge düğmeleri kendi tıklamasını yakalar; çift tıklama yalnızca satırın geri kalanında çalışır."""
+    def tiklandi(satir, _sutun):
+        kimlik = satir_kimligi(tablo, satir)
+        if kimlik is not None:
+            islev(kimlik)
+    tablo.cellDoubleClicked.connect(tiklandi)
+
+
+def tehlike_dugmesi(yazi, tikla):
+    """Düzenleme pencerelerinin altındaki silme / iptal düğmesi (kırmızı çerçeveli)."""
+    d = QPushButton(yazi)
+    d.setObjectName("tehlike")
+    d.setCursor(Qt.PointingHandCursor)
+    d.setStyleSheet("QPushButton#tehlike { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 10px; "
+                    "padding: 11px; font-size: 13px; font-weight: 800; } QPushButton#tehlike:hover { background: #FEE2E2; }")
+    d.clicked.connect(tikla)
+    return d
+
+
 def sayi_cipi(yazi, renk="#1D4ED8", arka="#DBEAFE"):
     c = QLabel(yazi)
     c.setStyleSheet(f"background: {arka}; color: {renk}; border-radius: 12px; "

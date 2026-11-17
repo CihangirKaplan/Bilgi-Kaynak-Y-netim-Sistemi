@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 
@@ -175,6 +176,7 @@ class ArizaYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(4, 110)
         self.tablo.setColumnWidth(6, 90)
 
+        cift_tikla_ac(self.tablo, self.ariza_duzenle_form_ac)                  # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz arıza kaydı yok.")
 
         kart = QFrame()
@@ -232,6 +234,7 @@ class ArizaYonetimEkrani(QWidget):
                 self.tablo.setCellWidget(satir, 6, tek_islem_butonu(
                     lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id),
                     "✎", "Düzenle / Çöz"))
+                satira_kimlik_ata(self.tablo, satir, ariza_id)      # yalnızca düzenlenebilir (yetkili + açık) satırlar çift tıkla açılır
 
         self.cip_toplam.setText(f"{len(arizalar)} kayıt")
         self.cip_acik.setText(f"{acik} açık")

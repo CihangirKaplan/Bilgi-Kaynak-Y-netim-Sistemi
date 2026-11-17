@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from client.api_yoneticisi import api_hata_mesaji
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, hap, islem_butonlari, metin_item, sayfa_basligi, sayi_cipi,
     sil_onayi, tablo_olustur, tarih_goster, yenile_butonu_olustur,
@@ -84,11 +85,12 @@ def periyot_metni(gun):
 class PlanFormu(QDialog):
     """Yeni plan ekleme / mevcut planı düzenleme penceresi."""
 
-    def __init__(self, api_url, token, plan=None, ebeveyn=None):
+    def __init__(self, api_url, token, plan=None, ebeveyn=None, sil_fn=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
         self.token = token
         self.plan = plan                         # None -> yeni plan
+        self.sil_fn = sil_fn                     # verilirse (düzenleme) pencerenin altında 'sil' düğmesi görünür
         self._tarih_elle_degisti = False
         self.setWindowTitle("Planı Düzenle" if plan else "Yeni Bakım / Kalibrasyon Planı")
         self.setMinimumWidth(460)
@@ -190,6 +192,14 @@ class PlanFormu(QDialog):
         butonlar.addWidget(self.btn_vazgec)
         butonlar.addWidget(self.btn_kaydet, 1)
         ana.addLayout(butonlar)
+        self.btn_sil = None
+        if self.sil_fn and self.plan:
+            self.btn_sil = tehlike_dugmesi("Bu planı sil", self.sil)
+            ana.addWidget(self.btn_sil)
+
+    def sil(self):
+        if self.sil_fn and self.sil_fn():
+            self.accept()
 
     # ----------------------------------------------------------------- etkileşim
     def hazir_secildi(self, indeks):
@@ -380,6 +390,7 @@ class BakimPlanlariEkrani(QWidget):
         self.tablo.setColumnWidth(5, 190)
         self.tablo.setColumnWidth(6, 110)
 
+        cift_tikla_ac(self.tablo, self.plan_duzenle)                           # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("")
         kart = QFrame()
         kart.setObjectName("kart")
@@ -448,6 +459,7 @@ class BakimPlanlariEkrani(QWidget):
             self.tablo.setCellWidget(i, 6, islem_butonlari(
                 lambda _=False, pid=p["plan_id"]: self.plan_duzenle(pid),
                 lambda _=False, pid=p["plan_id"]: self.plan_sil(pid)))
+            satira_kimlik_ata(self.tablo, i, p["plan_id"])
             yaklasan += durum == "Yaklaşıyor"
             gecmis += durum == "Gecikmiş"
 
@@ -478,25 +490,27 @@ class BakimPlanlariEkrani(QWidget):
     def plan_duzenle(self, plan_id):
         plan = self.planlar.get(plan_id)
         if plan:
-            form = PlanFormu(self.api_url, self.token, plan, self)
+            form = PlanFormu(self.api_url, self.token, plan, self, sil_fn=lambda: self.plan_sil(plan_id))
             if form.exec():
                 self.verileri_yukle()
 
     def plan_sil(self, plan_id):
+        """Onay ister ve planı siler; silindiyse True döner (düzenleme penceresi buna bakıp kapanır)."""
         plan = self.planlar.get(plan_id)
         if not plan:
-            return
+            return False
         if not sil_onayi(self, "Planı Sil",
                          f"“{plan['cihaz_adi']}” cihazının “{plan['gorev_turu']}” planı silinsin mi?"):
-            return
+            return False
         try:
             cevap = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/bakim-planlari/{plan_id}",
                                            headers=self.basliklar, timeout=10)
             if oturum_hatasi_mi(cevap):
-                return
+                return False
             if cevap.status_code == 200:
                 self.verileri_yukle()
-            else:
-                QMessageBox.warning(self, "Silinemedi", hata_metni(cevap, "Plan silinemedi."))
+                return True
+            QMessageBox.warning(self, "Silinemedi", hata_metni(cevap, "Plan silinemedi."))
         except Exception:
             QMessageBox.critical(self, "Bağlantı hatası", "Sunucuya ulaşılamadı. Lütfen tekrar deneyin.")
+        return False
