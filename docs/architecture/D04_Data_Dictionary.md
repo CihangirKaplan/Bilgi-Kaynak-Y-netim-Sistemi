@@ -53,7 +53,6 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `cihaz_adi` | VARCHAR(100) | NOT NULL | Cihazın genel adı. |
 | `marka_model` | VARCHAR(100) | NULL | Cihazın marka ve modeli. |
 | `seri_no` | VARCHAR(100) | UNIQUE; NULL | Üretici seri numarası. |
-| `zimmetli_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Cihazın sabit olarak bulunduğu oda. |
 | `durum` | VARCHAR(50) | NULL; DEFAULT `'Kullanılabilir'::character varying` | Cihazın durumunu tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
 | `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Sisteme eklenme zamanı. |
 

@@ -527,7 +527,7 @@ Her oda için;
 
 saklanır.
 
-Oda bilgisi hem randevular hem oda etkinlikleri hem de cihazların zimmetli oda bilgisi tarafından kullanılabilir.
+Oda bilgisi hem randevular hem oda etkinlikleri hem de cihaz rezervasyonları (kullanılacak oda) tarafından kullanılır.
 
 ## 6.3. Randevular
 
@@ -620,7 +620,6 @@ Her cihaz için;
 - cihaz adı,
 - marka/model,
 - seri numarası,
-- zimmetli oda,
 - cihaz durumu,
 - kayıt tarihi
 

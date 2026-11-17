@@ -17,7 +17,6 @@ CREATE TABLE cihazlar (
     cihaz_adi VARCHAR(100) NOT NULL,
     marka_model VARCHAR(100),
     seri_no VARCHAR(100) UNIQUE,
-    zimmetli_oda_id INT REFERENCES odalar(oda_id), 
     durum cihaz_durumu DEFAULT 'Kullanima_Hazir',
     kayit_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

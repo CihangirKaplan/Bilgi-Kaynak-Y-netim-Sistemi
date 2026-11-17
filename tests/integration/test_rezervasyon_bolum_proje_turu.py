@@ -177,14 +177,15 @@ def test_gecerli_bolumle_rezervasyon_bolum_kimligini_kaydeder():
 
 
 # ---------------------------------------------------------------- rezervasyonda oda: yalnızca cihaz odaları
-def test_cihaz_odalari_yalniz_cihazin_zimmetli_oldugu_aktif_odalari_listeler():
+def test_rezervasyon_odalari_psikologa_atanmamis_aktif_odalari_listeler():
     conn, imlec = baglanti(satirlar=[(1, "Cihaz Odası"), (3, "Lab")])
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         sonuc = sunucu.cihaz_odalarini_listele(kullanici_id=1)
     assert sonuc == [{"oda_id": 1, "oda_adi": "Cihaz Odası", "aktif_mi": True}, {"oda_id": 3, "oda_adi": "Lab", "aktif_mi": True}]
     sorgu = sorgular(imlec)[0]
-    assert "JOIN cihazlar c ON c.zimmetli_oda_id = o.oda_id" in sorgu and "o.aktif_mi = TRUE" in sorgu
-    assert "psikolog_odalar" not in sorgu                                                # psikolog atamasından bağımsız, cihaz ilişkisine bakar
+    assert "o.aktif_mi = TRUE" in sorgu
+    assert "NOT EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.oda_id = o.oda_id)" in sorgu     # psikologa atanan oda gelmez
+    assert "zimmetli" not in sorgu and "cihazlar" not in sorgu                                      # cihaz tablosuna bağlı değil
 
 
 def oda_ile_rezervasyon(oda_id, oda_cihaz_odasi_mi):
@@ -195,7 +196,7 @@ def oda_ile_rezervasyon(oda_id, oda_cihaz_odasi_mi):
 
     def bir():
         s = imlec.son
-        if "zimmetli_oda_id" in s:
+        if "psikolog_odalar" in s:
             return (1,) if oda_cihaz_odasi_mi else None
         if "FROM cihazlar" in s and "durum" in s:
             return ("Kullanima_Hazir",)
@@ -214,13 +215,13 @@ def oda_ile_rezervasyon(oda_id, oda_cihaz_odasi_mi):
             return h, imlec
 
 
-def test_cihaz_odasi_olmayan_odayla_rezervasyon_422_verir():
+def test_psikologa_atanmis_odayla_rezervasyon_422_verir():
     sonuc, imlec = oda_ile_rezervasyon(oda_id=8, oda_cihaz_odasi_mi=False)
-    assert isinstance(sonuc, HTTPException) and sonuc.status_code == 422 and "cihaz odası" in sonuc.detail
+    assert isinstance(sonuc, HTTPException) and sonuc.status_code == 422 and "Seçilen oda" in sonuc.detail
     assert not [s for s in sorgular(imlec) if "INSERT INTO cihaz_rezervasyonlari" in s]
 
 
-def test_cihaz_odasiyla_rezervasyon_kaydedilir():
+def test_psikologa_atanmamis_odayla_rezervasyon_kaydedilir():
     sonuc, imlec = oda_ile_rezervasyon(oda_id=1, oda_cihaz_odasi_mi=True)
     assert not isinstance(sonuc, HTTPException), getattr(sonuc, "detail", "")
     assert [s for s in sorgular(imlec) if "INSERT INTO cihaz_rezervasyonlari" in s]

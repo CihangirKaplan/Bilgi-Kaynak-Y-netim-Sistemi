@@ -401,7 +401,6 @@ class CihazModeli(BaseModel):
     cihaz_adi: str
     marka_model: Optional[str] = None
     seri_no: Optional[str] = None
-    zimmetli_oda_id: Optional[int] = None
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-002: Cihaz Ekleme Modeli (Girdi)
@@ -410,7 +409,6 @@ class CihazOlusturModeli(BaseModel):
     cihaz_adi: str = Field(min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
-    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-003, DEVICE-004, DEVICE-005: Cihaz Güncelleme/Durum Değiştirme Modeli
@@ -418,7 +416,6 @@ class CihazGuncelleModeli(BaseModel):
     cihaz_adi: Optional[str] = Field(default=None, min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
-    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
     durum: Optional[CihazDurumu] = None
 
 # RES-001: Cihaz Rezervasyonu Oluşturma Modeli

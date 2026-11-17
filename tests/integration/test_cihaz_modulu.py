@@ -91,7 +91,6 @@ def test_cihaz_ekle_ayni_envanter_kodu_409():
         {"envanter_kodu": "", "cihaz_adi": "EEG"},
         {"envanter_kodu": "X" * 51, "cihaz_adi": "EEG"},
         {"envanter_kodu": "CHZ-1", "cihaz_adi": ""},
-        {"envanter_kodu": "CHZ-1", "cihaz_adi": "EEG", "zimmetli_oda_id": -1},
         {"envanter_kodu": "CHZ-1", "cihaz_adi": "EEG", "durum": "GECERSIZ"},
     ],
 )

@@ -60,15 +60,11 @@ class CihazIslemFormu(QDialog):
         for db_degeri, (ad, _renk, _arka) in DURUMLAR.items():
             self.cmb_durum.addItem(ad, db_degeri)         # gösterilen ad + sunucunun anladığı değer
 
-        self.cmb_oda = QComboBox()
-        self.cmb_oda.addItem("Oda Seçiniz (Opsiyonel)", None)
-        self.odalari_yukle()
 
         form_layout.addRow("Envanter Kodu (*):", self.txt_envanter)
         form_layout.addRow("Cihaz Adı (*):", self.txt_ad)
         form_layout.addRow("Marka / Model:", self.txt_marka)
         form_layout.addRow("Seri No:", self.txt_seri)
-        form_layout.addRow("Zimmetli Oda:", self.cmb_oda)
         
         if islem_turu == "GUNCELLE":
             self.txt_envanter.setReadOnly(True)                  # gri görünüm FORM_STIL'den gelir
@@ -83,26 +79,11 @@ class CihazIslemFormu(QDialog):
         self.btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(self.btn_kaydet)
 
-    def odalari_yukle(self):
-        try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers={"Authorization": f"Bearer {self.token}"})
-            if oturum_hatasi_mi(cevap):
-                return
-            if cevap.status_code == 200:
-                for oda in cevap.json():
-                    if oda.get("aktif_mi"):
-                        self.cmb_oda.addItem(oda["oda_adi"], oda["oda_id"])
-        except:
-            pass
-
     def formu_doldur(self):
         self.txt_envanter.setText(self.cihaz_veri.get("envanter_kodu", ""))
         self.txt_ad.setText(self.cihaz_veri.get("cihaz_adi", ""))
         self.txt_marka.setText(self.cihaz_veri.get("marka_model", ""))
         self.txt_seri.setText(self.cihaz_veri.get("seri_no", ""))
-        oda_indeks = self.cmb_oda.findData(self.cihaz_veri.get("zimmetli_oda_id"))
-        if oda_indeks >= 0:
-            self.cmb_oda.setCurrentIndex(oda_indeks)
         indeks = self.cmb_durum.findData(self.cihaz_veri.get("durum"))
         if indeks >= 0:                                    # bilinmeyen değerde ilk seçeneğe sessizce düşme
             self.cmb_durum.setCurrentIndex(indeks)
@@ -122,10 +103,6 @@ class CihazIslemFormu(QDialog):
             "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
         }
         
-        secili_oda = self.cmb_oda.currentData()
-        if secili_oda:
-            veri["zimmetli_oda_id"] = secili_oda
-
         headers = {"Authorization": f"Bearer {self.token}"}
         
         try:

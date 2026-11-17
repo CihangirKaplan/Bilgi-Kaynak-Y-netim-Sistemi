@@ -240,7 +240,7 @@ def test_form_yalniz_cihaz_odalarini_ister_psikolog_odalarini_degil(form_ac):
     assert kutu_metinleri(f.cmb_oda) == ["Cihaz Odası A"] and f.cmb_oda.currentData() == 5
 
 
-def test_cihaza_bagli_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
+def test_uygun_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
     class OdasizSunucu(SahteSunucu):
         def __call__(self, yontem, url, **kw):
             if url.endswith("/api/cihaz-odalari"):
@@ -249,8 +249,8 @@ def test_cihaza_bagli_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
             return super().__call__(yontem, url, **kw)
 
     f = form_ac(OdasizSunucu())
-    assert kutu_metinleri(f.cmb_oda) == ["Cihaza bağlı oda yok"] and f.cmb_oda.currentData() is None
-    assert "zimmetli" in f.cmb_oda.toolTip()
+    assert kutu_metinleri(f.cmb_oda) == ["Uygun oda yok"] and f.cmb_oda.currentData() is None
+    assert "Oda Yönetimi" in f.cmb_oda.toolTip()
 
 
 def test_form_liste_alinamazsa_yine_acilir(form_ac):
