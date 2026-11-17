@@ -21,6 +21,7 @@ IZINLI_HOSTLAR = {
 
 POSTGRESQL_TEST_DOSYALARI = {
     "test_ogrenci_yonetimi_postgresql_quality.py",
+    "test_psikolog_planli_randevu_pg_quality.py",
     "test_faaliyet_turleri_postgresql_quality.py",
     "test_kullanici_personel_postgresql_quality.py",
     "test_parola_sifirlama_pg_quality.py",
@@ -35,6 +36,7 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_randevu_iptal_durum_pg_quality.py",
     "test_yas_terapi_gorusme_pg_quality.py",
     "test_randevu_raporu_pg_quality.py",
+    "test_psikolog_pasif_oda_pg_quality.py",
     "test_oda_kullanimi_pg_quality.py",
     "test_girdi_fuzz_pg_quality.py",
     "test_sema_dogrulama_pg_quality.py",

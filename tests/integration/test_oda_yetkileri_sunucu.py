@@ -107,7 +107,7 @@ def test_cihaz_rezervasyonlu_odaya_yetki_verilemez_ve_uyari_doner():
 
 
 def test_oda_yetkisi_guncellenirken_mevcut_atamalar_denetimden_muaf_tutulur():
-    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], []])
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], [], []])
     assert istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]}).status_code == 200
     sql, parametreler = next(c.args for c in cursor.execute.call_args_list if "FROM cihaz_rezervasyonlari cr" in c.args[0])
     assert parametreler == ([2, 3], 11)                                                      # 11 numaralı psikologa zaten atanmış odalar sayılmaz
@@ -115,11 +115,32 @@ def test_oda_yetkisi_guncellenirken_mevcut_atamalar_denetimden_muaf_tutulur():
 
 
 def test_cihaz_rezervasyonu_denetimi_iptalleri_ve_biten_rezervasyonlari_saymaz():
-    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,)], []])
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,)], [], []])
     istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2]})
     sql = next(c.args[0] for c in cursor.execute.call_args_list if "FROM cihaz_rezervasyonlari cr" in c.args[0])
     assert "COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE" in sql and "cr.bitis_zamani > NOW()" in sql
     assert "cr.kullanilacak_oda_id = ANY(%s)" in sql
+
+
+def test_planli_randevusu_olan_odayi_kaldirmak_409_verir_ve_uyari_doner():
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,)], [], [("Görüşme Odası-1", 2)]])
+    yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2]})
+    assert yanit.status_code == 409
+    detay = yanit.json()["detail"]
+    assert "Görüşme Odası-1 (2 randevu)" in detay and "planlı randevu var" in detay and "iptal edin" in detay
+    assert not yazma_sorgusu_var_mi(cursor)                                                 # atama değişmez
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called()
+
+
+def test_planli_randevu_denetimi_yalnizca_kaldirilan_aktif_odalarin_bugunden_sonrasini_sayar():
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], [], []])
+    istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]})
+    sql, parametreler = next(c.args for c in cursor.execute.call_args_list if "FROM randevular r" in c.args[0])
+    assert parametreler == (11, [2, 3])                                                      # psikolog ve yeni oda kümesi
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql          # geçmiş "Planlandı" ve iptaller engellemez
+    assert "r.oda_id <> ALL(%s)" in sql and "o.aktif_mi = TRUE" in sql                        # yalnızca kaldırılan aktif odalar
+    assert "EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)" in sql   # şu an atanmış odalar
 
 
 def test_pasif_ya_da_olmayan_odaya_yetki_verilemez():
@@ -133,7 +154,7 @@ def test_pasif_ya_da_olmayan_odaya_yetki_verilemez():
 
 
 def test_oda_yetkileri_kumeye_esitlenir_ve_denetim_kaydi_dusulur():
-    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], []])      # ikinci liste: cihaz rezervasyonlu oda yok
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], [], []])      # 2. liste: cihaz rezervasyonlu oda yok, 3. liste: kaldırılan odalarda planlı randevu yok
     yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [3, 2, 3]})
 
     assert yanit.status_code == 200

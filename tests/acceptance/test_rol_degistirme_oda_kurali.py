@@ -26,11 +26,13 @@ ROL_ID = {"PSIKOLOG": 1, "MEMUR": 2, "MUDUR": 3}
 
 
 # ------------------------------------------------------------------ sunucu
-def rol_degistir(hedef_rol, yeni_rol, oda_idleri=None, aktif_odalar=(), personel_kodlari=(), rezervasyonlu=()):
+def rol_degistir(hedef_rol, yeni_rol, oda_idleri=None, aktif_odalar=(), personel_kodlari=(), rezervasyonlu=(), planli=()):
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [("ADMIN",), (hedef_rol,), (yeni_rol,), (20, "PER-X-001")]
     fetchall = []
+    if hedef_rol == "PSIKOLOG" and yeni_rol != "PSIKOLOG":
+        fetchall.append(list(planli))                   # planlı randevu sorgusu: [(oda_adi, randevu_sayisi)]
     if yeni_rol == "PSIKOLOG":
         fetchall.append([(o,) for o in aktif_odalar])   # oda doğrulama sorgusu
         fetchall.append(list(rezervasyonlu))            # cihaz rezervasyonlu oda sorgusu: [(oda_adi, rezervasyon_sayisi)]
@@ -81,6 +83,25 @@ def test_cihaz_rezervasyonlu_odayla_psikolog_olunamaz_ve_uyari_doner():
     assert not any(s.strip().upper().startswith("INSERT INTO PSIKOLOG_ODALAR") for s in sorgular(cursor))
     conn.commit.assert_not_called()
     conn.rollback.assert_called_once()
+
+
+def test_planli_randevusu_olan_psikolog_baska_role_gecemez_ve_uyari_doner():
+    conn, cursor, _, hata = rol_degistir("PSIKOLOG", "MEMUR", planli=[("EEG Odası", 1), ("Oda-2", 2)])
+    assert hata.status_code == 409
+    assert "3 planlı randevusu var" in hata.detail and "iptal edin" in hata.detail
+    assert not rol_guncellendi_mi(cursor)                                   # rol değişmez
+    assert not any(s.strip().upper().startswith("DELETE FROM PSIKOLOG_ODALAR") for s in sorgular(cursor))   # odalar da kalkmaz
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called_once()
+
+
+def test_planli_randevu_sorgusu_bugunden_sonrasini_sayar_ve_psikolog_olmayanda_sorulmaz():
+    _, cursor, _, hata = rol_degistir("PSIKOLOG", "MEMUR")
+    assert hata is None
+    sql = next(c.args[0] for c in cursor.execute.call_args_list if "FROM randevular r" in c.args[0])
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql
+    _, cursor, _, hata = rol_degistir("MEMUR", "MUDUR")
+    assert hata is None and not any("FROM randevular" in s for s in sorgular(cursor))
 
 
 def test_psikolog_olunurken_odalar_yazilir():
