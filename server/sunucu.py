@@ -3078,6 +3078,11 @@ def cihaz_guncelle(
 
         return {"durum": "basarili", "mesaj": "Cihaz güncellendi."}
 
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=409, detail="Bu seri no başka bir cihazda kullanımda.")
+
     except Exception:
         if conn is not None:
             conn.rollback()
@@ -3582,43 +3587,24 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT a.ariza_id, c.cihaz_adi, a.ariza_aciklamasi, a.cozuldu_mu, a.bildirim_tarihi
+            SELECT a.ariza_id, c.cihaz_adi, a.ariza_baslik, a.ariza_aciklamasi, a.aciliyet,
+                   a.cozuldu_mu, a.bildirim_tarihi
             FROM cihaz_arizalari a
             JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
             ORDER BY a.bildirim_tarihi DESC;
         """)
-        kayitlar = cursor.fetchall()
-
-        sonuc = []
-        for kayit in kayitlar:
-            tam_metin = kayit[2] if kayit[2] else ""
-            aciliyet_derecesi = "Belirtilmedi"
-            baslik = tam_metin
-            aciklama = ""
-
-            # DB'den gelen "[Kritik] Başlık - Açıklama" formatını form için 3'e bölüyoruz
-            if tam_metin.startswith("[") and "]" in tam_metin:
-                bol = tam_metin.split("]", 1)
-                aciliyet_derecesi = bol[0].replace("[", "").strip()
-                kalan = bol[1].strip()
-                if "-" in kalan:
-                    baslik, aciklama = kalan.split("-", 1)
-                    baslik = baslik.strip()
-                    aciklama = aciklama.strip()
-                else:
-                    baslik = kalan
-
-            durum_metni = "Çözüldü" if kayit[3] else "Açık"
-            sonuc.append({
-                "ariza_id": kayit[0],
-                "cihaz_adi": kayit[1],
-                "ariza_baslik": baslik,
-                "ariza_aciklama": aciklama, # Artık form için bunu da gönderiyoruz
-                "aciliyet": aciliyet_derecesi,
-                "durum": durum_metni,
-                "bildirim_tarihi": kayit[4].isoformat() if hasattr(kayit[4], 'isoformat') else str(kayit[4])
-            })
-        return sonuc
+        return [
+            {
+                "ariza_id": k[0],
+                "cihaz_adi": k[1],
+                "ariza_baslik": k[2],
+                "ariza_aciklama": k[3],
+                "aciliyet": k[4],
+                "durum": "Çözüldü" if k[5] else "Açık",
+                "bildirim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
+            }
+            for k in cursor.fetchall()
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -3644,14 +3630,12 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_ko
         kullanici = cursor.fetchone()
         bildiren_kisi = kullanici[0] if kullanici else f"Kullanıcı-{kullanici_id}"
 
-        # 3. Tabloda Başlık ve Aciliyet sütunları olmadığı için hepsini anlamlı bir metin olarak birleştiriyoruz
-        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-
-        # 4. Arıza kaydını birebir veritabanı şemana uygun ekle
+        # 3. Arıza kaydını ekle (başlık ve aciliyet kendi sütunlarında tutulur)
         cursor.execute("""
-            INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_aciklamasi, bildirim_tarihi, cozuldu_mu)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, FALSE) RETURNING ariza_id;
-        """, (ariza.cihaz_id, bildiren_kisi, tam_aciklama))
+            INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_baslik, ariza_aciklamasi, aciliyet,
+                                         bildirim_tarihi, cozuldu_mu)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, FALSE) RETURNING ariza_id;
+        """, (ariza.cihaz_id, bildiren_kisi, ariza.ariza_baslik.strip(), ariza.ariza_aciklama.strip(), ariza.aciliyet))
         ariza_id = cursor.fetchone()[0]
 
         # 5. Cihazı 'Arizali' yap; bakımda/kalibrasyonda/kullanım dışı cihazın durumu korunur.
@@ -3715,18 +3699,16 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
             raise HTTPException(status_code=404, detail="Arıza kaydı bulunamadı.")
         cihaz_id = kayit[0]
 
-        # Tekrar veritabanı formatına (Tam Metin) dönüştür
-        tam_aciklama = f"[{ariza.aciliyet}] {ariza.ariza_baslik} - {ariza.ariza_aciklama}"
-
         # Çözüldüyse çözüm tarihini anlık at, çözülmediyse NULL (Boş) yap
         cozum_sql = "CURRENT_TIMESTAMP" if ariza.cozuldu_mu else "NULL"
 
         # Arıza Tablosunu Güncelle
         cursor.execute(f"""
             UPDATE cihaz_arizalari
-            SET ariza_aciklamasi = %s, cozuldu_mu = %s, cozum_tarihi = {cozum_sql}
+            SET ariza_baslik = %s, ariza_aciklamasi = %s, aciliyet = %s,
+                cozuldu_mu = %s, cozum_tarihi = {cozum_sql}
             WHERE ariza_id = %s;
-        """, (tam_aciklama, ariza.cozuldu_mu, ariza_id))
+        """, (ariza.ariza_baslik.strip(), ariza.ariza_aciklama.strip(), ariza.aciliyet, ariza.cozuldu_mu, ariza_id))
 
         # Cihazın mevcut durumunu oku, satırı kilitle ve cihazın BAŞKA açık arızası var mı bak.
         cursor.execute(
@@ -3980,6 +3962,8 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
             cihaz_id, mevcut_bas, mevcut_bit = cursor.fetchone()
             baslangic = degisiklikler.get("bakim_baslangic_tarihi") or mevcut_bas
             bitis = degisiklikler.get("bakim_bitis_tarihi") or mevcut_bit
+            if baslangic is not None and bitis is not None and bitis < baslangic:
+                raise HTTPException(status_code=422, detail="Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
             # Yalnızca tarih aralığı gerçekten değiştiyse kontrol edilir (not/maliyet düzenlemesinde değil).
             if baslangic is not None and bitis is not None and (baslangic, bitis) != (mevcut_bas, mevcut_bit):
                 cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis)
@@ -4154,6 +4138,8 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
             cihaz_id, mevcut_bas, mevcut_bit = cursor.fetchone()
             baslangic = degisiklikler.get("kalibrasyon_baslangic_tarihi") or mevcut_bas
             bitis = degisiklikler.get("kalibrasyon_bitis_tarihi") or mevcut_bit
+            if baslangic is not None and bitis is not None and bitis < baslangic:
+                raise HTTPException(status_code=422, detail="Kalibrasyon bitiş tarihi, başlangıç tarihinden önce olamaz.")
             if baslangic is not None and bitis is not None and (baslangic, bitis) != (mevcut_bas, mevcut_bit):
                 cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis)
 
@@ -7764,7 +7750,7 @@ def cihaz_raporlari(
         cursor.execute(f"""
             SELECT t.ariza_id, c.envanter_kodu, c.cihaz_adi, t.bildiren_personel,
                    t.ariza_aciklamasi, t.bildirim_tarihi, t.cozum_tarihi, t.cozuldu_mu,
-                   t.cihaz_id
+                   t.cihaz_id, t.ariza_baslik, t.aciliyet
             FROM cihaz_arizalari t
             JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
             {where}
@@ -7776,7 +7762,10 @@ def cihaz_raporlari(
                 "cihaz_id": k[8],
                 "cihaz": f"{k[1]} - {k[2]}",
                 "bildiren_personel": k[3],
-                "ariza_aciklamasi": k[4],
+                "ariza_baslik": k[9],
+                "aciliyet": k[10],
+                # Raporda başlık ve açıklama tek metin olarak gösterilir.
+                "ariza_aciklamasi": f"{k[9]}: {k[4]}" if k[4] else k[9],
                 "bildirim_tarihi": _tarih_metni(k[5]),
                 "cozum_tarihi": _tarih_metni(k[6]),
                 "durum": "Çözüldü" if k[7] else "Açık",

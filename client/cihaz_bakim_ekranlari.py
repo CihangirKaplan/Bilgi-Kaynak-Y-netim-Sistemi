@@ -1,3 +1,4 @@
+from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
@@ -43,6 +44,7 @@ class YeniBakimFormu(QDialog):
 
         self.cmb_cihaz = QComboBox()
         self.txt_kisi = QLineEdit()
+        self.txt_kisi.setMaxLength(100)
         self.txt_islem = QTextEdit()
         self.txt_islem.setMaximumHeight(80)
         self.txt_maliyet = QLineEdit("0.0")
@@ -180,7 +182,7 @@ class YeniBakimFormu(QDialog):
                 self.accept()
             else:
                 # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
-                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
@@ -206,6 +208,7 @@ class BakimDuzenleFormu(QDialog):
         self.txt_cihaz = QLineEdit(bakim_verisi.get("cihaz_adi", ""))
         self.txt_cihaz.setReadOnly(True)
         self.txt_kisi = QLineEdit(bakim_verisi.get("bakim_yapan_kisi", ""))
+        self.txt_kisi.setMaxLength(100)
 
         maliyet_str = str(bakim_verisi.get("maliyet", "0.0"))
         self.txt_maliyet = QLineEdit(maliyet_str)
@@ -293,7 +296,7 @@ class BakimDuzenleFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
                 self.accept()
             else:
-                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
@@ -451,7 +454,7 @@ class BakimYonetimEkrani(QWidget):
             if res.status_code == 200:
                 self.verileri_yukle()
                 return True
-            hata = res.json().get("detail", "Bilinmeyen hata")
+            hata = hata_detayi_metni(res, "Bilinmeyen hata")
             QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
