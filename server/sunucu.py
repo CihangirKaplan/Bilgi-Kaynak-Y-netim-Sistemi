@@ -869,6 +869,9 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         psikolog_olacak = str(yeni_rol_adi).upper() == "PSIKOLOG"
         psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
         istenen_odalar = sorted(set(veri.oda_idleri or []))
+        if psikolog_idi and not psikolog_olacak:
+            # Psikologluktan çıkarken odaları kalkar: bugünden sonra planlı randevusu varsa önce iptal edilmeli.
+            psikolog_planli_randevulari_denetle(cursor, kullanici_id)
         if psikolog_olacak:
             if not istenen_odalar:
                 raise HTTPException(
@@ -1742,8 +1745,25 @@ def parola_sifirlama_talebini_kapat(
             conn.close()
 
 
+from pydantic import BaseModel as _DurumBaseModel, Field as _DurumField
+
+
+class DurumDegistirModeli(_DurumBaseModel):
+    """Psikolog aktifleştirilirken görüşme odaları seçilir; diğer durumlarda gövde gerekmez."""
+    oda_idleri: list[int] | None = _DurumField(default=None, max_length=100)
+
+
 @app.patch("/api/kullanicilar/{kullanici_id}/durum-degistir")
-def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
+def kullanici_durum_degistir(
+    kullanici_id: int,
+    veri: DurumDegistirModeli | None = None,
+    islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR")),
+):
+    """Kullanıcıyı aktif/pasif yapar (geçiş).
+
+    Psikolog pasife alınırken: bugünden sonra planlı randevusu varsa işlem 409 ile reddedilir; yoksa oda atamaları kaldırılır
+    (geçmiş randevular ve raporlar etkilenmez, çünkü oda bilgisi randevunun kendisinde durur). Psikolog aktife alınırken en az
+    bir görüşme odası seçilmelidir (oda_idleri); seçilen odalar cihaz rezervasyonu için kullanılıyorsa 409 döner."""
     conn = None
     cursor = None
     try:
@@ -1772,10 +1792,47 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
         # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
         yeni_durum = not mevcut_durum
 
+        psikolog_mu = str(hedef_rol).upper() == "PSIKOLOG"
+        istenen_odalar = sorted(set((veri.oda_idleri if veri is not None else None) or []))
+        psikolog_aktiflesiyor = psikolog_mu and yeni_durum
+        psikolog_pasiflesiyor = psikolog_mu and not yeni_durum
+
+        if istenen_odalar and not psikolog_aktiflesiyor:
+            raise HTTPException(status_code=422, detail="Oda seçimi yalnızca psikolog aktifleştirilirken yapılır.")
+
+        if psikolog_aktiflesiyor:
+            # Her psikologun en az bir (aktif) odası olmalı; pasife alınırken odalar kaldırıldığı için yeniden seçilir.
+            if not istenen_odalar:
+                raise HTTPException(status_code=422, detail="Psikolog aktifleştirilirken en az bir görüşme odası seçilmelidir.")
+            cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (istenen_odalar,))
+            if {k[0] for k in cursor.fetchall()} != set(istenen_odalar):
+                raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
+        elif psikolog_pasiflesiyor:
+            # Oda boşa düşeceği için bugünden sonraki planlı randevular önce iptal edilmeli. Geçmişte kalmış kayıtlar engellemez.
+            cursor.execute(
+                "SELECT COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
+                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW();",
+                (kullanici_id,),
+            )
+            planli = cursor.fetchone()[0]
+            if planli:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu psikologun bugünden sonra {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin.",
+                )
+
         # Her iki tabloyu da eşzamanlı güncelle
         cursor.execute("UPDATE kullanicilar SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
         cursor.execute("UPDATE personel SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
-        
+
+        if psikolog_mu:
+            # Pasifte oda ataması kalkar; aktifleşirken seçilen odalar yazılır (eski artık kayıtlar varsa değiştirilir).
+            cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
+            for oda_id in istenen_odalar:
+                cursor.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);", (kullanici_id, oda_id))
+            cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id))
+
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
         conn.commit()
 
@@ -2522,6 +2579,52 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
     oda_idleri: list[int] = _OdaYetkiField(min_length=1)
 
 
+def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri=None):
+    """Psikologun bugünden sonra planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
+
+    kalacak_oda_idleri verilmezse (rol değiştirme: tüm odalar kalkar) tüm planlı randevular sayılır. Verilirse (oda yetkisi
+    güncelleme) yalnızca psikologa şu an atanmış, yeni kümede olmayan ve aktif odalardaki planlı randevular sayılır.
+    Tarihi geçmiş "Planlandı" kayıtlar ve iptal edilmiş randevular engellemez."""
+    if kalacak_oda_idleri is None:
+        cursor.execute(
+            """
+            SELECT o.oda_adi, COUNT(*)
+            FROM randevular r
+            JOIN personel p ON p.personel_id = r.psikolog_id
+            JOIN odalar o ON o.oda_id = r.oda_id
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            GROUP BY o.oda_id, o.oda_adi
+            ORDER BY o.oda_adi;
+            """,
+            (kullanici_id,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT o.oda_adi, COUNT(*)
+            FROM randevular r
+            JOIN personel p ON p.personel_id = r.psikolog_id
+            JOIN odalar o ON o.oda_id = r.oda_id
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+              AND o.aktif_mi = TRUE AND r.oda_id <> ALL(%s)
+              AND EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)
+            GROUP BY o.oda_id, o.oda_adi
+            ORDER BY o.oda_adi;
+            """,
+            (kullanici_id, list(kalacak_oda_idleri)),
+        )
+    planlilar = cursor.fetchall()
+    if not planlilar:
+        return
+    if kalacak_oda_idleri is None:
+        toplam = sum(sayi for _, sayi in planlilar)
+        detay = f"Bu psikologun bugünden sonra {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin."
+    else:
+        ayrinti = ", ".join(f"{ad} ({sayi} randevu)" for ad, sayi in planlilar)
+        detay = f"Kaldırılmak istenen odalarda bugünden sonra planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin."
+    raise HTTPException(status_code=409, detail=detay)
+
+
 def cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=None):
     """Cihaz rezervasyonu için kullanılan oda psikologa atanamaz (409).
 
@@ -2605,6 +2708,7 @@ def psikolog_oda_yetkilerini_guncelle(
         if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
             raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
         cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
+        psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
         cursor.execute(
