@@ -165,7 +165,7 @@ class ArizaYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_acik, self.cip_cozulen]))
 
         self.tablo = tablo_olustur(["NO", "CİHAZ", "SORUN BAŞLIĞI", "ACİLİYET", "DURUM",
-                                    "BİLDİRİM TARİHİ", "İŞLEM"])
+                                    "BİLDİRİM TARİHİ", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)

@@ -77,3 +77,22 @@ def test_hata_detayi_her_bicimde_duz_metin_doner():
     assert hata_detayi_metni(_yanit(liste)) == "String should have at most 255 characters\nBitiş önce olamaz."
     assert isinstance(hata_detayi_metni(_yanit([])), str)
     assert hata_detayi_metni(SimpleNamespace(json=lambda: 1 / 0), "yedek") == "yedek"
+
+
+def test_cihaz_tablolari_ortali_ve_genis_bosluklu(monkeypatch):
+    """Cihaz yaşam döngüsü tablolarında metin hücreleri ortalanır; varsayılan tablo değişmez."""
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+    from client.tablo_tasarimi import (ORTALI_TABLO_STIL, TABLO_STIL, OrtaliTablo, metin_item, tablo_olustur)
+
+    QApplication.instance() or QApplication([])
+    ortali = tablo_olustur(["A", "B"], ortali=True)
+    duz = tablo_olustur(["A", "B"])
+    assert isinstance(ortali, OrtaliTablo) and not isinstance(duz, OrtaliTablo)
+    for tablo in (ortali, duz):
+        tablo.setRowCount(1)
+        tablo.setItem(0, 0, metin_item("x", kalin=True))
+    assert ortali.item(0, 0).textAlignment() & Qt.AlignHCenter
+    assert not duz.item(0, 0).textAlignment() & Qt.AlignHCenter
+    assert "padding: 6px 22px" in ORTALI_TABLO_STIL and "padding: 6px 10px" in TABLO_STIL

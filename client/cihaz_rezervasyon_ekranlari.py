@@ -202,7 +202,7 @@ class YeniRezervasyonFormu(QDialog):
             else:
                 self.cmb_cihaz.addItem("Sunucudan cihazlar alınamadı", None)
 
-            # ODALARI ÇEK: tüm aktif odalar (uygun odayı seçen kişi belirler)
+            # ODALARI ÇEK: aktif psikologlara atanmamış aktif odalar (psikologlara atanan görüşme odaları gelmez)
             res_oda = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihaz-odalari", headers=headers)
             if oturum_hatasi_mi(res_oda):
                 return
@@ -213,8 +213,8 @@ class YeniRezervasyonFormu(QDialog):
                     for o in uygun_odalar:
                         self.cmb_oda.addItem(o["oda_adi"], o["oda_id"])
                 else:
-                    self.cmb_oda.addItem("Aktif oda yok", None)
-                    self.cmb_oda.setToolTip("Aktif oda bulunamadı. Oda Yönetimi'ni kontrol edin.")
+                    self.cmb_oda.addItem("Uygun oda yok", None)
+                    self.cmb_oda.setToolTip("Psikologlara atanmamış aktif oda bulunamadı. Oda Yönetimi'ni kontrol edin.")
                 self._liste_uyarisi("Odalar", None)
             else:
                 self.cmb_oda.addItem("Odalar alınamadı", None)
@@ -663,7 +663,7 @@ class RezervasyonYonetimEkrani(QWidget):
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
             [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal]))
 
-        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"])
+        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)

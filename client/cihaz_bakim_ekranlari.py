@@ -330,7 +330,7 @@ class BakimYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
-                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"])
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)

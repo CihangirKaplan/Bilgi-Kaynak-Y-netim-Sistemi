@@ -283,7 +283,7 @@ class KalibrasyonYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "KURUM", "SERTİFİKA NO", "KALİBRASYON TARİHİ",
-                                    "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"])
+                                    "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)

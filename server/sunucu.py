@@ -624,6 +624,7 @@ def kullanici_olustur(
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -868,6 +869,9 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         psikolog_olacak = str(yeni_rol_adi).upper() == "PSIKOLOG"
         psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
         istenen_odalar = sorted(set(veri.oda_idleri or []))
+        if psikolog_idi and not psikolog_olacak:
+            # Psikologluktan çıkarken odaları kalkar: bugünden sonra planlı randevusu varsa önce iptal edilmeli.
+            psikolog_planli_randevulari_denetle(cursor, kullanici_id)
         if psikolog_olacak:
             if not istenen_odalar:
                 raise HTTPException(
@@ -883,6 +887,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -1740,8 +1745,25 @@ def parola_sifirlama_talebini_kapat(
             conn.close()
 
 
+from pydantic import BaseModel as _DurumBaseModel, Field as _DurumField
+
+
+class DurumDegistirModeli(_DurumBaseModel):
+    """Psikolog aktifleştirilirken görüşme odaları seçilir; diğer durumlarda gövde gerekmez."""
+    oda_idleri: list[int] | None = _DurumField(default=None, max_length=100)
+
+
 @app.patch("/api/kullanicilar/{kullanici_id}/durum-degistir")
-def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR"))):
+def kullanici_durum_degistir(
+    kullanici_id: int,
+    veri: DurumDegistirModeli | None = None,
+    islem_yapan_id: int = Depends(izin_kontrol("KULLANICI_PASIFLESTIR")),
+):
+    """Kullanıcıyı aktif/pasif yapar (geçiş).
+
+    Psikolog pasife alınırken: bugünden sonra planlı randevusu varsa işlem 409 ile reddedilir; yoksa oda atamaları kaldırılır
+    (geçmiş randevular ve raporlar etkilenmez, çünkü oda bilgisi randevunun kendisinde durur). Psikolog aktife alınırken en az
+    bir görüşme odası seçilmelidir (oda_idleri); seçilen odalar cihaz rezervasyonu için kullanılıyorsa 409 döner."""
     conn = None
     cursor = None
     try:
@@ -1770,10 +1792,47 @@ def kullanici_durum_degistir(kullanici_id: int, islem_yapan_id: int = Depends(iz
         # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
         yeni_durum = not mevcut_durum
 
+        psikolog_mu = str(hedef_rol).upper() == "PSIKOLOG"
+        istenen_odalar = sorted(set((veri.oda_idleri if veri is not None else None) or []))
+        psikolog_aktiflesiyor = psikolog_mu and yeni_durum
+        psikolog_pasiflesiyor = psikolog_mu and not yeni_durum
+
+        if istenen_odalar and not psikolog_aktiflesiyor:
+            raise HTTPException(status_code=422, detail="Oda seçimi yalnızca psikolog aktifleştirilirken yapılır.")
+
+        if psikolog_aktiflesiyor:
+            # Her psikologun en az bir (aktif) odası olmalı; pasife alınırken odalar kaldırıldığı için yeniden seçilir.
+            if not istenen_odalar:
+                raise HTTPException(status_code=422, detail="Psikolog aktifleştirilirken en az bir görüşme odası seçilmelidir.")
+            cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (istenen_odalar,))
+            if {k[0] for k in cursor.fetchall()} != set(istenen_odalar):
+                raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
+        elif psikolog_pasiflesiyor:
+            # Oda boşa düşeceği için bugünden sonraki planlı randevular önce iptal edilmeli. Geçmişte kalmış kayıtlar engellemez.
+            cursor.execute(
+                "SELECT COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
+                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW();",
+                (kullanici_id,),
+            )
+            planli = cursor.fetchone()[0]
+            if planli:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu psikologun bugünden sonra {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin.",
+                )
+
         # Her iki tabloyu da eşzamanlı güncelle
         cursor.execute("UPDATE kullanicilar SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
         cursor.execute("UPDATE personel SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
-        
+
+        if psikolog_mu:
+            # Pasifte oda ataması kalkar; aktifleşirken seçilen odalar yazılır (eski artık kayıtlar varsa değiştirilir).
+            cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
+            for oda_id in istenen_odalar:
+                cursor.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);", (kullanici_id, oda_id))
+            cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id))
+
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
         conn.commit()
 
@@ -2520,6 +2579,86 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
     oda_idleri: list[int] = _OdaYetkiField(min_length=1)
 
 
+def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri=None):
+    """Psikologun bugünden sonra planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
+
+    kalacak_oda_idleri verilmezse (rol değiştirme: tüm odalar kalkar) tüm planlı randevular sayılır. Verilirse (oda yetkisi
+    güncelleme) yalnızca psikologa şu an atanmış, yeni kümede olmayan ve aktif odalardaki planlı randevular sayılır.
+    Tarihi geçmiş "Planlandı" kayıtlar ve iptal edilmiş randevular engellemez."""
+    if kalacak_oda_idleri is None:
+        cursor.execute(
+            """
+            SELECT o.oda_adi, COUNT(*)
+            FROM randevular r
+            JOIN personel p ON p.personel_id = r.psikolog_id
+            JOIN odalar o ON o.oda_id = r.oda_id
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            GROUP BY o.oda_id, o.oda_adi
+            ORDER BY o.oda_adi;
+            """,
+            (kullanici_id,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT o.oda_adi, COUNT(*)
+            FROM randevular r
+            JOIN personel p ON p.personel_id = r.psikolog_id
+            JOIN odalar o ON o.oda_id = r.oda_id
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+              AND o.aktif_mi = TRUE AND r.oda_id <> ALL(%s)
+              AND EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)
+            GROUP BY o.oda_id, o.oda_adi
+            ORDER BY o.oda_adi;
+            """,
+            (kullanici_id, list(kalacak_oda_idleri)),
+        )
+    planlilar = cursor.fetchall()
+    if not planlilar:
+        return
+    if kalacak_oda_idleri is None:
+        toplam = sum(sayi for _, sayi in planlilar)
+        detay = f"Bu psikologun bugünden sonra {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin."
+    else:
+        ayrinti = ", ".join(f"{ad} ({sayi} randevu)" for ad, sayi in planlilar)
+        detay = f"Kaldırılmak istenen odalarda bugünden sonra planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin."
+    raise HTTPException(status_code=409, detail=detay)
+
+
+def cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=None):
+    """Cihaz rezervasyonu için kullanılan oda psikologa atanamaz (409).
+
+    "Kullanılan" = iptal edilmemiş ve henüz bitmemiş (süren ya da gelecekteki) cihaz rezervasyonu olan oda. Geçmişte kalmış
+    rezervasyonlar engellemez; kullanıcı gelecek rezervasyonları iptal ederek odayı serbest bırakabilir. haric_kullanici_id
+    verilirse o psikologa zaten atanmış odalar denetlenmez (oda yetkisi güncellenirken mevcut atamalar korunur)."""
+    if not oda_idleri:
+        return
+    cursor.execute(
+        """
+        SELECT o.oda_adi, COUNT(*)
+        FROM cihaz_rezervasyonlari cr
+        JOIN odalar o ON o.oda_id = cr.kullanilacak_oda_id
+        WHERE cr.kullanilacak_oda_id = ANY(%s)
+          AND COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE
+          AND cr.bitis_zamani > NOW()
+          AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.oda_id = cr.kullanilacak_oda_id AND po.kullanici_id = %s)
+        GROUP BY o.oda_id, o.oda_adi
+        ORDER BY o.oda_adi;
+        """,
+        (list(oda_idleri), haric_kullanici_id),
+    )
+    kullanilanlar = cursor.fetchall()
+    if kullanilanlar:
+        ayrinti = ", ".join(f"{ad} ({sayi} rezervasyon)" for ad, sayi in kullanilanlar)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cihaz rezervasyonu için kullanılan oda psikologa atanamaz: {ayrinti}. "
+                "Odayı psikologa atamak için önce bu odadaki süren ve gelecekteki cihaz rezervasyonlarını iptal edin."
+            ),
+        )
+
+
 def _hedef_psikolog_kontrol(cursor, hedef_kullanici_id: int, kilitle: bool = False):
     """Hedef kullanıcı var mı ve psikolog mu? Değilse uygun hatayı fırlatır."""
     cursor.execute(
@@ -2568,6 +2707,8 @@ def psikolog_oda_yetkilerini_guncelle(
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (oda_idleri,))
         if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
             raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+        cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
+        psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
         cursor.execute(
@@ -2687,12 +2828,20 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-CIHAZ_ODALARI_SORGUSU = "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE ORDER BY o.oda_adi"
+# Cihaz odası = aktif ve AKTİF bir psikologa atanmamış oda. Psikologlara atanan görüşme odaları cihaz rezervasyonuna kapalıdır;
+# pasif psikolog odayı tutmaz (atama kaydı kalmış olsa bile), yani oda cihaz rezervasyonuna açılır.
+CIHAZ_ODALARI_SORGUSU = (
+    "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
+    "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id "
+    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE) ORDER BY o.oda_adi"
+)
 
 
 @app.get("/api/cihaz-odalari")
 def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
-    """Cihaz rezervasyonunda seçilebilen odalar: tüm aktif odalar (rezervasyonu yapan kişi uygun odayı kendisi seçer)."""
+    """Cihaz rezervasyonunda seçilebilen odalar: aktif bir psikologa atanmamış aktif odalar.
+
+    Psikologlara atanan görüşme odaları listeye girmez."""
     conn = None
     cursor = None
     try:
@@ -3365,7 +3514,7 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if rez.kullanilacak_oda_id is not None:
                 cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
                 if cursor.fetchone() is None:
-                    raise HTTPException(status_code=422, detail="Seçilen oda bulunamadı veya aktif değil.")
+                    raise HTTPException(status_code=422, detail="Seçilen oda cihaz rezervasyonu için uygun değil (psikologa atanmış ya da aktif değil).")
 
             if rez.bolum_id is not None:
                 cursor.execute("SELECT 1 FROM bolumler WHERE bolum_id = %s AND aktif_mi IS NOT FALSE;", (rez.bolum_id,))
@@ -5070,10 +5219,13 @@ def oda_kullanimi(
     bitis: date,
     kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE")),
 ):
-    """Oda Kullanımı sayfası: odalar ve seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular.
+    """Oda Kullanımı sayfası: odalar, seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular ve
+    odası seçilmiş iptal edilmemiş cihaz rezervasyonları.
 
     Psikolog, başkalarının randevularında yalnızca "dolu" bilgisini görür: o satırlarda psikolog adı, danışan kodu ve görüşme tipi
-    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. En çok 62 günlük aralık istenebilir."""
+    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. Cihaz rezervasyonunda odanın o saatlerde cihaz
+    kullanımı nedeniyle dolu olduğu herkese görünür; cihaz adı ve bölüm yalnızca CIHAZ_REZERVASYON iznine sahip rollere gelir
+    (izni olmayanda bu iki alan boş döner). En çok 62 günlük aralık istenebilir."""
     if baslangic > bitis:
         raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
     if (bitis - baslangic).days > 62:
@@ -5084,9 +5236,18 @@ def oda_kullanimi(
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        cursor.execute(
+            """
+            SELECT r.rol_adi,
+                   COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
+                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'CIHAZ_REZERVASYON'), 0)
+            FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;
+            """,
+            (kullanici_id,),
+        )
         rol = cursor.fetchone()
         psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+        cihaz_detayi_gorur = rol is not None and rol[1] == 1
 
         cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_adi, oda_id;")
         odalar = [{"oda_id": o[0], "oda_adi": o[1], "kapasite": o[2], "aktif_mi": o[3]} for o in cursor.fetchall()]
@@ -5108,7 +5269,24 @@ def oda_kullanimi(
                 "psikolog": k[5] if gorunur else None, "danisan_kod_id": k[6] if gorunur else None,
                 "gorusme_tipi": k[7] if gorunur else None, "benim": bool(k[8]),
             })
-        return {"odalar": odalar, "randevular": randevular}
+
+        # Cihaz rezervasyonu odayı seçilen saatlerde tamamen doldurur. Aralıkla kesişen (gün sınırını aşanlar dahil) iptal edilmemiş,
+        # odası seçilmiş rezervasyonlar döner.
+        cursor.execute("""
+            SELECT cr.rezervasyon_id, cr.kullanilacak_oda_id, cr.baslangic_zamani, cr.bitis_zamani, c.cihaz_adi, b.bolum_adi
+            FROM cihaz_rezervasyonlari cr
+            JOIN cihazlar c ON c.cihaz_id = cr.cihaz_id
+            LEFT JOIN bolumler b ON b.bolum_id = cr.bolum_id
+            WHERE COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE AND cr.kullanilacak_oda_id IS NOT NULL
+              AND cr.baslangic_zamani < %s AND cr.bitis_zamani > %s
+            ORDER BY cr.baslangic_zamani, cr.rezervasyon_id;
+        """, (datetime.combine(bitis, datetime.min.time()) + timedelta(days=1), datetime.combine(baslangic, datetime.min.time())))
+        rezervasyonlar = [
+            {"rezervasyon_id": k[0], "oda_id": k[1], "baslangic_zamani": k[2], "bitis_zamani": k[3],
+             "cihaz_adi": k[4] if cihaz_detayi_gorur else None, "bolum_adi": k[5] if cihaz_detayi_gorur else None}
+            for k in cursor.fetchall()
+        ]
+        return {"odalar": odalar, "randevular": randevular, "rezervasyonlar": rezervasyonlar}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
