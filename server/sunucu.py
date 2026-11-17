@@ -624,6 +624,7 @@ def kullanici_olustur(
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -883,6 +884,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -2520,6 +2522,40 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
     oda_idleri: list[int] = _OdaYetkiField(min_length=1)
 
 
+def cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=None):
+    """Cihaz rezervasyonu için kullanılan oda psikologa atanamaz (409).
+
+    "Kullanılan" = iptal edilmemiş ve henüz bitmemiş (süren ya da gelecekteki) cihaz rezervasyonu olan oda. Geçmişte kalmış
+    rezervasyonlar engellemez; kullanıcı gelecek rezervasyonları iptal ederek odayı serbest bırakabilir. haric_kullanici_id
+    verilirse o psikologa zaten atanmış odalar denetlenmez (oda yetkisi güncellenirken mevcut atamalar korunur)."""
+    if not oda_idleri:
+        return
+    cursor.execute(
+        """
+        SELECT o.oda_adi, COUNT(*)
+        FROM cihaz_rezervasyonlari cr
+        JOIN odalar o ON o.oda_id = cr.kullanilacak_oda_id
+        WHERE cr.kullanilacak_oda_id = ANY(%s)
+          AND COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE
+          AND cr.bitis_zamani > NOW()
+          AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.oda_id = cr.kullanilacak_oda_id AND po.kullanici_id = %s)
+        GROUP BY o.oda_id, o.oda_adi
+        ORDER BY o.oda_adi;
+        """,
+        (list(oda_idleri), haric_kullanici_id),
+    )
+    kullanilanlar = cursor.fetchall()
+    if kullanilanlar:
+        ayrinti = ", ".join(f"{ad} ({sayi} rezervasyon)" for ad, sayi in kullanilanlar)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cihaz rezervasyonu için kullanılan oda psikologa atanamaz: {ayrinti}. "
+                "Odayı psikologa atamak için önce bu odadaki süren ve gelecekteki cihaz rezervasyonlarını iptal edin."
+            ),
+        )
+
+
 def _hedef_psikolog_kontrol(cursor, hedef_kullanici_id: int, kilitle: bool = False):
     """Hedef kullanıcı var mı ve psikolog mu? Değilse uygun hatayı fırlatır."""
     cursor.execute(
@@ -2568,6 +2604,7 @@ def psikolog_oda_yetkilerini_guncelle(
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (oda_idleri,))
         if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
             raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+        cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
         cursor.execute(
@@ -2687,12 +2724,20 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-CIHAZ_ODALARI_SORGUSU = "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE ORDER BY o.oda_adi"
+# Cihaz odası = aktif ve AKTİF bir psikologa atanmamış oda. Psikologlara atanan görüşme odaları cihaz rezervasyonuna kapalıdır;
+# pasif psikolog odayı tutmaz (atama kaydı kalmış olsa bile), yani oda cihaz rezervasyonuna açılır.
+CIHAZ_ODALARI_SORGUSU = (
+    "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
+    "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id "
+    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE) ORDER BY o.oda_adi"
+)
 
 
 @app.get("/api/cihaz-odalari")
 def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
-    """Cihaz rezervasyonunda seçilebilen odalar: tüm aktif odalar (rezervasyonu yapan kişi uygun odayı kendisi seçer)."""
+    """Cihaz rezervasyonunda seçilebilen odalar: aktif bir psikologa atanmamış aktif odalar.
+
+    Psikologlara atanan görüşme odaları listeye girmez."""
     conn = None
     cursor = None
     try:
@@ -3360,7 +3405,7 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if rez.kullanilacak_oda_id is not None:
                 cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
                 if cursor.fetchone() is None:
-                    raise HTTPException(status_code=422, detail="Seçilen oda bulunamadı veya aktif değil.")
+                    raise HTTPException(status_code=422, detail="Seçilen oda cihaz rezervasyonu için uygun değil (psikologa atanmış ya da aktif değil).")
 
             if rez.bolum_id is not None:
                 cursor.execute("SELECT 1 FROM bolumler WHERE bolum_id = %s AND aktif_mi IS NOT FALSE;", (rez.bolum_id,))

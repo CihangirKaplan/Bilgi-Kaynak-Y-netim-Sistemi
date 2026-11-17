@@ -6,6 +6,7 @@ Psikolog oda yetkileri (kural: her psikologun en az bir odası olmalı; odanın 
 - Psikolog oluştururken en az bir aktif oda zorunlu; diğer rollere oda verilemez
 - Bir psikologun tek aktif odası pasife alınamaz
 - /api/personel ekranda görünen rol adını (gorunen_ad) da döndürür
+- Cihaz rezervasyonu için kullanılan (süren ya da gelecekteki rezervasyonu olan) oda psikologa atanamaz (409 + uyarı metni)
 """
 
 from unittest.mock import MagicMock, patch
@@ -94,6 +95,33 @@ def test_oda_yetkisi_psikolog_olmayana_yazilamaz():
     conn.commit.assert_not_called()
 
 
+def test_cihaz_rezervasyonlu_odaya_yetki_verilemez_ve_uyari_doner():
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], [("EEG Odası", 2)]])
+    yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]})
+    assert yanit.status_code == 409
+    detay = yanit.json()["detail"]
+    assert "EEG Odası (2 rezervasyon)" in detay and "psikologa atanamaz" in detay and "iptal edin" in detay
+    assert not yazma_sorgusu_var_mi(cursor)                                                 # atama hiç yazılmaz
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called()
+
+
+def test_oda_yetkisi_guncellenirken_mevcut_atamalar_denetimden_muaf_tutulur():
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], []])
+    assert istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]}).status_code == 200
+    sql, parametreler = next(c.args for c in cursor.execute.call_args_list if "FROM cihaz_rezervasyonlari cr" in c.args[0])
+    assert parametreler == ([2, 3], 11)                                                      # 11 numaralı psikologa zaten atanmış odalar sayılmaz
+    assert "NOT EXISTS (SELECT 1 FROM psikolog_odalar po" in sql and "po.kullanici_id = %s" in sql
+
+
+def test_cihaz_rezervasyonu_denetimi_iptalleri_ve_biten_rezervasyonlari_saymaz():
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,)], []])
+    istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2]})
+    sql = next(c.args[0] for c in cursor.execute.call_args_list if "FROM cihaz_rezervasyonlari cr" in c.args[0])
+    assert "COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE" in sql and "cr.bitis_zamani > NOW()" in sql
+    assert "cr.kullanilacak_oda_id = ANY(%s)" in sql
+
+
 def test_pasif_ya_da_olmayan_odaya_yetki_verilemez():
     conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,)]])  # 3 numaralı oda aktif değil
     yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]})
@@ -105,7 +133,7 @@ def test_pasif_ya_da_olmayan_odaya_yetki_verilemez():
 
 
 def test_oda_yetkileri_kumeye_esitlenir_ve_denetim_kaydi_dusulur():
-    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)]])
+    conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], []])      # ikinci liste: cihaz rezervasyonlu oda yok
     yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [3, 2, 3]})
 
     assert yanit.status_code == 200
@@ -158,8 +186,11 @@ def test_atamalar_ucu_yalnizca_aktif_kullanicilari_listeler_psikologsuz_oda_yok_
 
 
 # ------------------------------------------------------------------ Psikolog oluşturma kuralı
-def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3)):
-    """kullanici_olustur için sahte veritabanı: istenen odalardan yalnızca aktif olanlar döner."""
+def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3), rezervasyonlu=None):
+    """kullanici_olustur için sahte veritabanı: istenen odalardan yalnızca aktif olanlar döner.
+
+    rezervasyonlu: {oda_id: oda_adi}; istenen odalar arasında bunlar varsa cihaz rezervasyonu sorgusu o odaları döndürür."""
+    rezervasyonlu = rezervasyonlu or {}
     conn = MagicMock()
     cursor = conn.cursor.return_value
     durum = {"sorgu": "", "parametreler": None}
@@ -185,6 +216,8 @@ def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3)):
     def fetchall():
         if "FROM ODALAR" in durum["sorgu"]:
             return [(o,) for o in durum["parametreler"][0] if o in aktif_odalar]
+        if "FROM CIHAZ_REZERVASYONLARI" in durum["sorgu"]:
+            return [(ad, 1) for oda, ad in rezervasyonlu.items() if oda in durum["parametreler"][0]]
         return []
 
     cursor.execute.side_effect = execute
@@ -236,6 +269,18 @@ def test_psikolog_olmayana_oda_verilemez(rol, rol_id, ekstra):
     assert hata.status_code == 422
     assert "psikolog" in hata.detail
     assert not kullanici_eklendi_mi(cursor)
+
+
+def test_psikolog_cihaz_rezervasyonlu_odayla_olusturulamaz():
+    conn, cursor = sahte_olusturma_veritabani("PSIKOLOG", (1, 2, 3), rezervasyonlu={2: "EEG Odası"})
+    yeni = KullaniciOlusturModeli(kullanici_adi="yeni_kisi", rol_id=1, oda_idleri=[1, 2])
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.gecici_parola_uret", return_value="Gecici123!"), \
+            patch("server.sunucu.parola_hashle", return_value="hash"):
+        with pytest.raises(HTTPException) as hata:
+            kullanici_olustur(yeni_kullanici=yeni, kullanici_id=10)
+    assert hata.value.status_code == 409 and "EEG Odası" in hata.value.detail and "psikologa atanamaz" in hata.value.detail
+    assert not kullanici_eklendi_mi(cursor)
+    conn.commit.assert_not_called()
 
 
 def test_psikolog_odalariyla_olusturulur_ve_odalar_kaydedilir():
