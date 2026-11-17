@@ -2,7 +2,9 @@
 
 İki görünüm vardır: Gün (seçili günde tüm odalar yan yana) ve Hafta (seçili odanın haftası). Randevular renkli bloklar olarak
 gösterilir (renkler Randevu Yönetimi'ndeki durum renkleriyle aynıdır); iptal edilenler gösterilmez. Psikolog, başkalarının
-randevularında yalnızca "Dolu" bilgisini görür (sunucu uygular). Sayfa yalnızca görüntülemedir.
+randevularında yalnızca "Dolu" bilgisini görür (sunucu uygular). Cihaz rezervasyonu odayı o saatlerde tamamen doldurur: yetkili
+roller cihaz adını ve bölümü görür, yetkisi olmayanlar odanın cihaz kullanımı nedeniyle dolu olduğunu görür. Takvim 08:00-18:00
+mesai saatlerini gösterir. Sayfa yalnızca görüntülemedir.
 """
 
 import textwrap
@@ -10,7 +12,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
-from client.randevu_ekranlari import DURUM_ETIKETLERI, DURUM_RENKLERI, SAAT_LISTESI
+from client.randevu_ekranlari import DURUM_ETIKETLERI, DURUM_RENKLERI
 from client.siniflandirma import gorusme_etiketi
 
 from PySide6.QtCore import QTimer, Qt
@@ -25,6 +27,8 @@ AY_UZUN = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "A�
 AY_KISA = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 CALISMA_GUNU_SAYISI = 5            # Pazartesi-Cuma; hafta sonu randevu verilmez
 GIZLI_RENK = ("#F1F5F9", "#64748B")
+CIHAZ_RENK = ("#F3E8FF", "#7E22CE")          # cihaz rezervasyonu (odanın cihaz kullanımı nedeniyle dolu olduğu saatler)
+ODA_TAKVIMI_SAATLERI = list(range(8, 18))     # mesai 08:00-18:00; her satır bir saat dilimi (son satır 17:00-18:00)
 
 
 # ------------------------------------------------------------------ saf işlevler (arayüzden bağımsız, testlenebilir)
@@ -51,10 +55,10 @@ def zaman(metin):
         return None
 
 
-def saat_dilimleri(randevular):
-    """Satır saatleri: randevu formundaki saat listesi; dışında kalan (eski) bir randevu varsa aralık onu da kapsar."""
-    saatler = {int(s.split(":")[0]) for s in SAAT_LISTESI}
-    for r in randevular:
+def saat_dilimleri(kayitlar):
+    """Satır saatleri: 08:00-18:00 mesai saatleri; dışında kalan (eski) bir randevu ya da rezervasyon varsa aralık onu da kapsar."""
+    saatler = set(ODA_TAKVIMI_SAATLERI)
+    for r in kayitlar:
         bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
         if bas is not None:
             saatler.add(bas.hour)
@@ -69,6 +73,29 @@ def _kapsanan_saat(bas, bit):
         return 1
     dakika = (bit - bas).total_seconds() / 60
     return max(1, int(-(-dakika // 60)))
+
+
+def rezervasyon_kayitlari(rezervasyonlar):
+    """Sunucudaki cihaz rezervasyonlarını randevu kayıtlarıyla aynı biçime çevirir (blok haritası ve doluluk aynı kodla çalışsın).
+
+    Gün sınırını aşan rezervasyon günlük parçalara bölünür (her parça kendi gününün başladığı saat diliminden çizilir).
+    cihaz_adi boşsa (yetkisi olmayan kullanıcı) blok yalnızca cihaz kullanımı nedeniyle dolu olarak görünür."""
+    kayitlar = []
+    for r in rezervasyonlar:
+        bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
+        if bas is None or bit is None or bit <= bas:
+            continue
+        gun = bas.date()
+        while gun <= (bit - timedelta(microseconds=1)).date():
+            gun_bas = datetime.combine(gun, datetime.min.time())
+            parca_bas, parca_bit = max(bas, gun_bas), min(bit, gun_bas + timedelta(days=1))
+            kayitlar.append({
+                "rezervasyon_id": r.get("rezervasyon_id"), "oda_id": r.get("oda_id"), "cihaz": True, "durum": "CIHAZ",
+                "baslangic_zamani": parca_bas.isoformat(), "bitis_zamani": parca_bit.isoformat(),
+                "cihaz_adi": r.get("cihaz_adi"), "bolum_adi": r.get("bolum_adi"), "psikolog": None, "danisan_kod_id": None,
+            })
+            gun += timedelta(days=1)
+    return kayitlar
 
 
 def blok_haritasi(randevular):
@@ -145,6 +172,7 @@ class OdaKullanimiEkrani(QWidget):
         self.gorunum = "gun"                     # "gun" | "hafta"
         self.odalar = []
         self.randevular = []
+        self.rezervasyonlar = []          # cihaz rezervasyonları (randevu biçiminde); randevu sayaçlarına girmez, doluluğa girer
         self._yukleniyor = False
 
         self._arayuz_kur()
@@ -302,7 +330,10 @@ class OdaKullanimiEkrani(QWidget):
         gizli = QLabel(f"<span style='color:{GIZLI_RENK[1]}; font-size:15px;'>■</span>  Dolu (başka psikolog)")
         gizli.setStyleSheet("color: #243653; font-size: 12px;")
         alt.addWidget(gizli)
-        iptal = QLabel("İptal edilen randevular gösterilmez")
+        cihaz = QLabel(f"<span style='color:{CIHAZ_RENK[1]}; font-size:15px;'>■</span>  Cihaz rezervasyonu")
+        cihaz.setStyleSheet("color: #243653; font-size: 12px;")
+        alt.addWidget(cihaz)
+        iptal = QLabel("İptal edilen randevu ve rezervasyonlar gösterilmez")
         iptal.setStyleSheet("color: #8A98B0; font-size: 12px;")
         alt.addWidget(iptal)
         alt.addStretch(1)
@@ -377,9 +408,14 @@ class OdaKullanimiEkrani(QWidget):
             self._yukleniyor = False
         self.odalar = veri.get("odalar", [])
         self.randevular = veri.get("randevular", [])
+        self.rezervasyonlar = rezervasyon_kayitlari(veri.get("rezervasyonlar", []))
         self._oda_listesini_doldur()
         self._goster()
         self.durum_etiketi.setText(f"Son güncelleme: {datetime.now().strftime('%H:%M')}")
+
+    def _tum_kayitlar(self):
+        """Odayı dolduran her şey: randevular ve cihaz rezervasyonları (ızgara ve doluluk için)."""
+        return self.randevular + self.rezervasyonlar
 
     def _aktif_odalar(self):
         return [o for o in self.odalar if o.get("aktif_mi", True)]
@@ -399,7 +435,7 @@ class OdaKullanimiEkrani(QWidget):
         return [self.pazartesi + timedelta(days=i) for i in range(7)]
 
     def _goster(self):
-        saatler = saat_dilimleri(self.randevular)
+        saatler = saat_dilimleri(self._tum_kayitlar())
         gunler = self._gunler()
         self.lbl_baslik.setText(hafta_basligi(self.pazartesi))
         hafta_modu = self.gorunum == "hafta"
@@ -448,23 +484,25 @@ class OdaKullanimiEkrani(QWidget):
                 parcalar.append(f"{sayi} {ad}")
         alt.setText(" · ".join(parcalar) or "randevu yok")
 
-        ozet = doluluk_hesapla(self.randevular, self.odalar, gunler, saatler)
+        ozet = doluluk_hesapla(self._tum_kayitlar(), self.odalar, gunler, saatler)
         etiket, deger, alt = self.kartlar["doluluk"]
         deger.setText(yuzde(ozet["oran"]))
         alt.setText(f"{ozet['dolu']} / {ozet['toplam']} saat dilimi dolu" if ozet["toplam"] else "aktif oda yok")
         etiket, deger, alt = self.kartlar["yogun"]
         if ozet["en_yogun"] is None:
             deger.setText("—")
-            alt.setText("bu hafta randevu yok")
+            alt.setText("bu hafta kullanım yok")
         else:
             deger.setText(str(ozet["en_yogun"].get("oda_adi")))
             alt.setText(f"{yuzde(ozet['odalar'][ozet['en_yogun']['oda_id']]['oran'])} doluluk")
 
     # ------------------------------------------------------------------ ızgara
     def _blok(self, r):
-        """Bir randevuyu renkli blok olarak çizer; başkasının randevusunda (kimlik gelmediyse) yalnızca 'Dolu' görünür."""
-        gizli = r.get("psikolog") is None and r.get("danisan_kod_id") is None
-        bg, fg = GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"])
+        """Bir randevuyu ya da cihaz rezervasyonunu renkli blok olarak çizer; başkasının randevusunda (kimlik gelmediyse) yalnızca
+        'Dolu' görünür. Cihaz rezervasyonunda cihaz adı gelmediyse (yetkisiz kullanıcı) 'Dolu · Cihaz kullanımı' görünür."""
+        cihaz = bool(r.get("cihaz"))
+        gizli = r.get("cihaz_adi") is None if cihaz else (r.get("psikolog") is None and r.get("danisan_kod_id") is None)
+        bg, fg = CIHAZ_RENK if cihaz else (GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"]))
         kutu = QFrame()
         kutu.setObjectName("blok")
         kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
@@ -473,7 +511,19 @@ class OdaKullanimiEkrani(QWidget):
         yerlesim.setSpacing(0)
         bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
         saat = f"{bas:%H:%M} – {bit:%H:%M}" if bas and bit else ""
-        if gizli:
+        if cihaz and gizli:
+            satirlar = [
+                ("Dolu", f"color: {fg}; font-weight: bold; font-size: 12px;"),
+                ("Cihaz kullanımı", f"color: {fg}; font-size: 10px;"),
+                (saat, f"color: {fg}; font-size: 9px;"),
+            ]
+        elif cihaz:
+            satirlar = [
+                (str(r.get("cihaz_adi")), f"color: {fg}; font-weight: bold; font-size: 12px;"),
+                (str(r.get("bolum_adi") or "—"), f"color: {fg}; font-size: 10px;"),
+                (saat, f"color: {fg}; font-size: 9px;"),
+            ]
+        elif gizli:
             satirlar = [("Dolu", f"color: {fg}; font-weight: bold; font-size: 12px;"), (saat, f"color: {fg}; font-size: 10px;")]
         else:
             ek = " · " + gorusme_etiketi(r.get("gorusme_tipi")) if r.get("gorusme_tipi") == "ONLINE" else ""
@@ -501,8 +551,8 @@ class OdaKullanimiEkrani(QWidget):
         self.tablo.setVisible(True)
         self.bos_mesaj.setVisible(False)
 
-        harita = blok_haritasi(self.randevular)
-        ozet = doluluk_hesapla(self.randevular, self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
+        harita = blok_haritasi(self._tum_kayitlar())
+        ozet = doluluk_hesapla(self._tum_kayitlar(), self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
         if self.gorunum == "gun":
             sutunlar = [(o["oda_id"], oda_basligi(o.get("oda_adi"), yuzde(ozet["odalar"][o["oda_id"]]["oran"]))) for o in aktif]
             anahtar = lambda sutun, saat: (sutun[0], self.secili_gun, saat)
