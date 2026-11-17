@@ -53,7 +53,6 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `cihaz_adi` | VARCHAR(100) | NOT NULL | Cihazın genel adı. |
 | `marka_model` | VARCHAR(100) | NULL | Cihazın marka ve modeli. |
 | `seri_no` | VARCHAR(100) | UNIQUE; NULL | Üretici seri numarası. |
-| `zimmetli_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Cihazın sabit olarak bulunduğu oda. |
 | `durum` | VARCHAR(50) | NULL; DEFAULT `'Kullanılabilir'::character varying` | Cihazın durumunu tutan metin alanı; PostgreSQL ENUM sütunu değildir. |
 | `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Sisteme eklenme zamanı. |
 
@@ -88,7 +87,9 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `ariza_id` | SERIAL (INTEGER) | PK; NOT NULL | Arıza kaydının kimliği. |
 | `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Arızalanan cihaz. |
 | `bildiren_personel` | VARCHAR(100) | NULL | Arızayı tespit/ihbar eden kişi. |
+| `ariza_baslik` | VARCHAR(150) | NOT NULL | Arızanın kısa başlığı. |
 | `ariza_aciklamasi` | TEXT | NOT NULL | Arızanın detayı. |
+| `aciliyet` | VARCHAR(20) | NOT NULL; DEFAULT `Orta`; CHECK (`Düşük`, `Orta`, `Yüksek`, `Kritik`) | Arıza aciliyet derecesi. |
 | `bildirim_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Arızanın sisteme girildiği tarih. |
 | `cozum_tarihi` | TIMESTAMP | NULL | Arızanın giderildiği tarih. |
 | `cozuldu_mu` | BOOLEAN | NULL; DEFAULT `false` | Arıza onarım durumu. |
@@ -141,17 +142,6 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `uyari_suresi_gun` | INTEGER | NULL; DEFAULT `1` | Planlanan görev öncesindeki uyarı süresi (gün). |
 | `sonraki_gorev_tarihi` | DATE | NOT NULL | Görevin bir sonraki planlanan tarihi. |
 | `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Planın etkinlik durumu. |
-
-### Tablo: `cihaz_takip_parametreleri`
-
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `parametre_id` | SERIAL (INTEGER) | PK; NOT NULL | Takip parametresi kaydının benzersiz kimliği. |
-| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Parametrenin ilişkili olduğu cihaz. |
-| `parametre_adi` | VARCHAR(100) | NOT NULL | Takip edilen özelliğin adı. |
-| `parametre_degeri` | VARCHAR(100) | NOT NULL | Takip edilen özelliğin kayıtlı değeri. |
-| `birim` | VARCHAR(50) | NULL | Parametre değerinin ölçü birimi. |
-| `son_guncelleme` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Parametre kaydının son güncellenme zamanı. |
 
 ## 2. Randevu ve Oda Yönetimi Modülü
 
@@ -412,18 +402,6 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `yeni_uyari_tarihi` | DATE | NOT NULL | Erteleme sonucunda belirlenen yeni uyarı tarihi. |
 | `erteleyen_kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | Erteleme işlemini yapan kullanıcı. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Erteleme kaydının oluşturulma zamanı. |
-
-### Tablo: `personel_faaliyet_kayitlari`
-
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `kayit_id` | SERIAL (INTEGER) | PK; NOT NULL | Personel faaliyet kaydının benzersiz kimliği. |
-| `personel_id` | INTEGER | NOT NULL | Personel kimliği; mevcut veritabanında bu sütuna tanımlanmış FK kısıtı bulunmuyor. |
-| `faaliyet_id` | INTEGER | FK → `faaliyetler(faaliyet_id)`; NULL | Varsa ilgili faaliyet türü. |
-| `birim_id` | INTEGER | FK → `faaliyet_birimleri(birim_id)`; NULL | Varsa faaliyet miktarının birimi. |
-| `miktar` | INTEGER | NOT NULL | Kaydedilen faaliyet miktarı. |
-| `toplam_puan` | INTEGER | NOT NULL | Faaliyet kaydına ait toplam puan. |
-| `kayit_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Faaliyet kaydının zamanı. |
 
 ## 5. Denetim (Audit) Modülü
 

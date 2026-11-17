@@ -122,13 +122,13 @@ def test_ariza_duzenle_cozuldu_isareti_gonderilir(qt_app):
 # ------------------------------------------------------------------ envanter
 CIHAZLAR = [
     {"cihaz_id": 1, "envanter_kodu": "E-001", "cihaz_adi": "EEG Cihazı", "marka_model": "Brain X",
-     "seri_no": "S1", "zimmetli_oda_id": 5, "durum": "Kullanima_Hazir"},
+     "seri_no": "S1", "durum": "Kullanima_Hazir"},
     {"cihaz_id": 2, "envanter_kodu": "E-002", "cihaz_adi": "EKG", "marka_model": None,
-     "seri_no": None, "zimmetli_oda_id": None, "durum": "Arizali"},
+     "seri_no": None, "durum": "Arizali"},
     {"cihaz_id": 3, "envanter_kodu": "E-003", "cihaz_adi": "Tansiyon", "marka_model": "T",
-     "seri_no": "S3", "zimmetli_oda_id": None, "durum": "Bakimda"},
+     "seri_no": "S3", "durum": "Bakimda"},
     {"cihaz_id": 4, "envanter_kodu": "E-004", "cihaz_adi": "Spiro", "marka_model": "S",
-     "seri_no": "S4", "zimmetli_oda_id": None, "durum": "Kalibrasyonda"},
+     "seri_no": "S4", "durum": "Kalibrasyonda"},
 ]
 
 
@@ -182,11 +182,14 @@ def test_duzenleme_formu_arizali_cihazi_arizali_gosterir_ve_ezmez(qt_app):
     f.close()
 
 
-def test_duzenleme_formu_oda_secili_gelir_pasif_oda_listelenmez(qt_app):
+def test_duzenleme_formu_oda_alani_icermez_ve_gonderilen_veride_oda_yok(qt_app):
     f = form_ac(CIHAZLAR[0])
-    assert f.cmb_oda.currentData() == 5
-    assert [f.cmb_oda.itemData(i) for i in range(f.cmb_oda.count())] == [None, 5]
+    assert not hasattr(f, "cmb_oda")                                                     # zimmetli oda kaldırıldı
     assert f.cmb_durum.currentData() == "Kullanima_Hazir"
+    with patch.object(envanter, "oturum_kontrollu_istek", return_value=cevap(200, {})) as istek, \
+         patch.object(envanter.QMessageBox, "information"):
+        f.kaydet()
+    assert "zimmetli_oda_id" not in istek.call_args.kwargs["json"]
     f.close()
 
 

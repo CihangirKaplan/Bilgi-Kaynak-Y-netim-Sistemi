@@ -2,6 +2,7 @@
 
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
+from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel,
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 
@@ -58,6 +60,7 @@ class ArizaBildirimFormu(QDialog):
         self.cmb_aciliyet = QComboBox()
         self.cmb_aciliyet.addItems(ACILIYETLER)
         self.txt_baslik = QLineEdit()
+        self.txt_baslik.setMaxLength(150)
         self.txt_baslik.setPlaceholderText("Örn: Güç kablosu temassızlığı")
         self.txt_aciklama = QTextEdit()
         self.txt_aciklama.setPlaceholderText("Arızanın detaylarını, ne zaman fark edildiğini vb. belirtiniz...")
@@ -127,7 +130,7 @@ class ArizaBildirimFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
                 self.accept()
             else:
-                hata = str(cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.'))
+                hata = str(hata_detayi_metni(cevap, 'Bilinmeyen bir hata oluştu.'))
                 QMessageBox.critical(self, "Hata", hata)
         except Exception:
             QMessageBox.critical(self, "Bağlantı Hatası", "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.")
@@ -162,7 +165,7 @@ class ArizaYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_acik, self.cip_cozulen]))
 
         self.tablo = tablo_olustur(["NO", "CİHAZ", "SORUN BAŞLIĞI", "ACİLİYET", "DURUM",
-                                    "BİLDİRİM TARİHİ", "İŞLEM"])
+                                    "BİLDİRİM TARİHİ", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -175,6 +178,7 @@ class ArizaYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(4, 110)
         self.tablo.setColumnWidth(6, 90)
 
+        cift_tikla_ac(self.tablo, self.ariza_duzenle_form_ac)                  # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz arıza kaydı yok.")
 
         kart = QFrame()
@@ -232,6 +236,7 @@ class ArizaYonetimEkrani(QWidget):
                 self.tablo.setCellWidget(satir, 6, tek_islem_butonu(
                     lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id),
                     "✎", "Düzenle / Çöz"))
+                satira_kimlik_ata(self.tablo, satir, ariza_id)      # yalnızca düzenlenebilir (yetkili + açık) satırlar çift tıkla açılır
 
         self.cip_toplam.setText(f"{len(arizalar)} kayıt")
         self.cip_acik.setText(f"{acik} açık")
@@ -287,6 +292,7 @@ class ArizaDuzenleFormu(QDialog):
         self.cmb_aciliyet.setCurrentText(self.ariza_verisi.get("aciliyet", "Orta"))
 
         self.txt_baslik = QLineEdit(self.ariza_verisi.get("ariza_baslik", ""))
+        self.txt_baslik.setMaxLength(150)
 
         self.txt_aciklama = QTextEdit(self.ariza_verisi.get("ariza_aciklama", ""))
         self.txt_aciklama.setMaximumHeight(100)

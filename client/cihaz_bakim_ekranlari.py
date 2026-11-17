@@ -1,3 +1,4 @@
+from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
@@ -13,6 +14,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
@@ -42,6 +44,7 @@ class YeniBakimFormu(QDialog):
 
         self.cmb_cihaz = QComboBox()
         self.txt_kisi = QLineEdit()
+        self.txt_kisi.setMaxLength(100)
         self.txt_islem = QTextEdit()
         self.txt_islem.setMaximumHeight(80)
         self.txt_maliyet = QLineEdit("0.0")
@@ -179,17 +182,18 @@ class YeniBakimFormu(QDialog):
                 self.accept()
             else:
                 # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
-                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class BakimDuzenleFormu(QDialog):
-    def __init__(self, api_url, token, bakim_verisi, parent=None):
+    def __init__(self, api_url, token, bakim_verisi, parent=None, sil_fn=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
         self.bakim_verisi = bakim_verisi
+        self.sil_fn = sil_fn                      # verilirse pencerenin altında 'sil' düğmesi görünür
 
         self.setWindowTitle("Bakım Kaydını Düzenle")
         self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
@@ -204,6 +208,7 @@ class BakimDuzenleFormu(QDialog):
         self.txt_cihaz = QLineEdit(bakim_verisi.get("cihaz_adi", ""))
         self.txt_cihaz.setReadOnly(True)
         self.txt_kisi = QLineEdit(bakim_verisi.get("bakim_yapan_kisi", ""))
+        self.txt_kisi.setMaxLength(100)
 
         maliyet_str = str(bakim_verisi.get("maliyet", "0.0"))
         self.txt_maliyet = QLineEdit(maliyet_str)
@@ -244,6 +249,14 @@ class BakimDuzenleFormu(QDialog):
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(btn_kaydet)
+        self.btn_sil = None
+        if sil_fn:
+            self.btn_sil = tehlike_dugmesi("Bu bakım kaydını sil", self.sil)
+            layout.addWidget(self.btn_sil)
+
+    def sil(self):
+        if self.sil_fn and self.sil_fn():
+            self.accept()
 
     def kaydet(self):
         # TL Formatı Düzeltici
@@ -283,7 +296,7 @@ class BakimDuzenleFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
                 self.accept()
             else:
-                hata_mesaji = res.json().get("detail", "Bilinmeyen Sunucu Hatası")
+                hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
@@ -317,7 +330,7 @@ class BakimYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
-                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"])
+                                    "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -330,6 +343,7 @@ class BakimYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(5, 230)
         self.tablo.setColumnWidth(7, 110)
 
+        cift_tikla_ac(self.tablo, self.bakim_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
 
         kart = QFrame()
@@ -394,6 +408,7 @@ class BakimYonetimEkrani(QWidget):
             self.tablo.setCellWidget(i, 7, islem_butonlari(
                 lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
                 lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
+            satira_kimlik_ata(self.tablo, i, b["bakim_id"])
 
         self.cip_toplam.setText(f"{len(bakimlar)} kayıt")
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
@@ -420,25 +435,27 @@ class BakimYonetimEkrani(QWidget):
     def bakim_duzenle_ac(self, bakim_id):
         secili_bakim = self.bakim_detaylari.get(bakim_id)
         if secili_bakim:
-            form = BakimDuzenleFormu(self.api_url, self.token, secili_bakim, self)
+            form = BakimDuzenleFormu(self.api_url, self.token, secili_bakim, self, sil_fn=lambda: self.bakim_sil(bakim_id))
             if form.exec():
                 self.verileri_yukle()
 
     def bakim_sil(self, bakim_id):
+        """Onay ister ve kaydı siler; silindiyse True döner (düzenleme penceresi buna bakıp kapanır)."""
         kayit = self.bakim_detaylari.get(bakim_id)
         if not kayit:
-            return
+            return False
         if not sil_onayi(self, "Bakım Kaydını Sil",
                          f"“{kayit.get('cihaz_adi', '')}” cihazının bu bakım kaydı silinsin mi?"):
-            return
+            return False
         try:
             res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/bakimlar/{bakim_id}", headers=self.basliklar, timeout=10)
             if oturum_hatasi_mi(res):
-                return
+                return False
             if res.status_code == 200:
                 self.verileri_yukle()
-            else:
-                hata = res.json().get("detail", "Bilinmeyen hata")
-                QMessageBox.warning(self, "Silinemedi", hata)
+                return True
+            hata = hata_detayi_metni(res, "Bilinmeyen hata")
+            QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+        return False

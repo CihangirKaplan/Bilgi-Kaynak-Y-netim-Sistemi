@@ -16,6 +16,20 @@ TABLO_STIL = """
                            font-size: 11px; font-weight: 800; border: none; }
 """
 
+# Cihaz yaşam döngüsü tabloları: hücre metni ortalı, sütunlar arası daha geniş boşluk
+ORTALI_TABLO_STIL = (TABLO_STIL.replace("padding: 6px 10px", "padding: 6px 22px")
+                               .replace("padding: 12px 10px", "padding: 12px 22px"))
+
+
+class OrtaliTablo(QTableWidget):
+    """Tabloya konan her metin hücresini otomatik ortalar (hücre widget'ları kendi hizasını yönetir)."""
+
+    def setItem(self, satir, sutun, item):
+        if item is not None:
+            item.setTextAlignment(Qt.AlignCenter)
+        super().setItem(satir, sutun, item)
+
+
 # Form pencerelerinin (Yeni / Düzenle) ortak görünümü
 FORM_STIL = """
     QDialog { background: #F4F7FC; }
@@ -41,8 +55,9 @@ ARAMA_STIL = """
 """
 
 
-def tablo_olustur(kolonlar):
-    tablo = QTableWidget(0, len(kolonlar))
+def tablo_olustur(kolonlar, ortali=False):
+    """ortali=True: metinler hücrede ortalanır ve sütunlar arası boşluk artar (cihaz yaşam döngüsü ekranları)."""
+    tablo = OrtaliTablo(0, len(kolonlar)) if ortali else QTableWidget(0, len(kolonlar))
     tablo.setHorizontalHeaderLabels(kolonlar)
     tablo.horizontalHeader().setHighlightSections(False)
     tablo.verticalHeader().setVisible(False)
@@ -55,7 +70,7 @@ def tablo_olustur(kolonlar):
     tablo.setWordWrap(True)
     tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     tablo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    tablo.setStyleSheet(TABLO_STIL)
+    tablo.setStyleSheet(ORTALI_TABLO_STIL if ortali else TABLO_STIL)
     return tablo
 
 
@@ -138,6 +153,45 @@ def sil_onayi(parent, baslik, mesaj):
     kutu.setStyleSheet("QLabel { color: #0F2552; font-size: 13px; } QPushButton { padding: 8px 18px; }")
     kutu.exec()
     return kutu.clickedButton() is evet
+
+
+KIMLIK_ROLU = Qt.UserRole + 7           # satırın kayıt kimliği (ilk sütundaki öğede saklanır)
+
+
+def satira_kimlik_ata(tablo, satir, kimlik):
+    """Satırın kayıt kimliğini saklar; çift tıklamada hangi kaydın açılacağı buradan bulunur."""
+    item = tablo.item(satir, 0)
+    if item is None:
+        item = QTableWidgetItem("")
+        tablo.setItem(satir, 0, item)
+    item.setData(KIMLIK_ROLU, kimlik)
+
+
+def satir_kimligi(tablo, satir):
+    item = tablo.item(satir, 0)
+    return item.data(KIMLIK_ROLU) if item is not None else None
+
+
+def cift_tikla_ac(tablo, islev):
+    """Satıra çift tıklanınca islev(kayit_kimligi) çağrılır (kimliği atanmamış satırlar yok sayılır).
+
+    Satır sonundaki simge düğmeleri kendi tıklamasını yakalar; çift tıklama yalnızca satırın geri kalanında çalışır."""
+    def tiklandi(satir, _sutun):
+        kimlik = satir_kimligi(tablo, satir)
+        if kimlik is not None:
+            islev(kimlik)
+    tablo.cellDoubleClicked.connect(tiklandi)
+
+
+def tehlike_dugmesi(yazi, tikla):
+    """Düzenleme pencerelerinin altındaki silme / iptal düğmesi (kırmızı çerçeveli)."""
+    d = QPushButton(yazi)
+    d.setObjectName("tehlike")
+    d.setCursor(Qt.PointingHandCursor)
+    d.setStyleSheet("QPushButton#tehlike { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 10px; "
+                    "padding: 11px; font-size: 13px; font-weight: 800; } QPushButton#tehlike:hover { background: #FEE2E2; }")
+    d.clicked.connect(tikla)
+    return d
 
 
 def sayi_cipi(yazi, renk="#1D4ED8", arka="#DBEAFE"):

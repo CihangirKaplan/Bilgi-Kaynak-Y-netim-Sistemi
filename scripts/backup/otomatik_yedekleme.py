@@ -1,7 +1,7 @@
 """TKYS otomatik veritabanı yedekleme ve rotasyon görevi.
 
 Varsayılan olarak .env içindeki DB_NAME veritabanını yedekler, ardından o veritabanının
-7 günden eski yedeklerini temizler. Zamanlanmış görev (Windows/macOS) bu betiği
+14 günden eski yedeklerini temizler. Zamanlanmış görev (Windows/macOS) bu betiği
 parametresiz çalıştırır.
 """
 
@@ -22,7 +22,7 @@ SCRIPTS = PROJE / "scripts" / "backup"
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--database", default=os.getenv("DB_NAME"))
-    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--days", type=int, default=14)
     args = parser.parse_args(argv)
 
     if not args.database:

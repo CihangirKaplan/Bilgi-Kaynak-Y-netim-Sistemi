@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from server.sunucu import kullanici_durum_degistir
+from server.sunucu import DurumDegistirModeli, kullanici_durum_degistir
 
 
 def test_mudur_psikolog_kullanicisini_pasiflestirebilir():
@@ -10,6 +10,7 @@ def test_mudur_psikolog_kullanicisini_pasiflestirebilir():
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),         # İşlemi yapan kullanıcının rolü
         ("PSIKOLOG", True), # Hedef kullanıcının rolü ve aktiflik durumu
+        (0,),               # Bugünden sonra planlı randevu sayısı
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -105,10 +106,15 @@ def test_pasif_kullanici_yeniden_aktiflestirilebilir():
         ("MUDUR",),
         ("PSIKOLOG", False),
     ]
+    mock_cursor.fetchall.side_effect = [
+        [(3,)],  # seçilen oda aktif
+        [],      # cihaz rezervasyonu için kullanılan oda yok
+    ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         sonuc = kullanici_durum_degistir(
             kullanici_id=5,
+            veri=DurumDegistirModeli(oda_idleri=[3]),  # psikolog aktifleştirilirken oda seçilir
             islem_yapan_id=10,
         )
 
@@ -182,6 +188,7 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),
         ("PSIKOLOG", True),
+        (0,),  # bugünden sonra planlı randevu sayısı
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -196,9 +203,11 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
         if "INSERT INTO denetim_kayitlari" in call.args[0]
     ]
 
-    assert len(audit_cagrilari) == 1
+    # Psikolog pasife alınınca oda atamalarının kaldırılması da denetim kaydına yazılır.
+    assert len(audit_cagrilari) == 2
 
-    assert audit_cagrilari[0].args[1] == (
+    assert audit_cagrilari[0].args[1] == (10, "UPDATE", "psikolog_odalar", 5)
+    assert audit_cagrilari[1].args[1] == (
         10,             # İşlemi yapan kullanıcı
         "UPDATE",       # Audit olay türü
         "kullanicilar", # Hedef tablo
@@ -317,6 +326,7 @@ def test_mudur_http_uzerinden_kullanici_pasiflestirebilir():
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),
         ("PSIKOLOG", True),
+        (0,),  # bugünden sonra planlı randevu sayısı
     ]
 
     # Yetkili kullanıcının kimliğini taklit ediyoruz

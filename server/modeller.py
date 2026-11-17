@@ -401,7 +401,6 @@ class CihazModeli(BaseModel):
     cihaz_adi: str
     marka_model: Optional[str] = None
     seri_no: Optional[str] = None
-    zimmetli_oda_id: Optional[int] = None
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-002: Cihaz Ekleme Modeli (Girdi)
@@ -410,7 +409,6 @@ class CihazOlusturModeli(BaseModel):
     cihaz_adi: str = Field(min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
-    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-003, DEVICE-004, DEVICE-005: Cihaz Güncelleme/Durum Değiştirme Modeli
@@ -418,7 +416,6 @@ class CihazGuncelleModeli(BaseModel):
     cihaz_adi: Optional[str] = Field(default=None, min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
-    zimmetli_oda_id: Optional[int] = Field(default=None, gt=0)
     durum: Optional[CihazDurumu] = None
 
 # RES-001: Cihaz Rezervasyonu Oluşturma Modeli
@@ -430,6 +427,14 @@ class RezervasyonOlusturModeli(BaseModel):
     bitis_zamani: ZamanDamgasi
     proje_turu: Optional[str] = Field(default=None, max_length=50)
     proje_adi_aciklamasi: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("proje_turu", "proje_adi_aciklamasi", mode="before")
+    @classmethod
+    def bos_metin_yok_say(cls, deger):
+        """Boş ya da yalnızca boşluktan oluşan metin veritabanına '' değil NULL olarak yazılır."""
+        if isinstance(deger, str):
+            return deger.strip() or None
+        return deger
 
     @model_validator(mode="after")
     def ayni_dilim(self):
@@ -471,17 +476,21 @@ class ProjeTuruOlusturModeli(BaseModel):
 
 
 # FAIL-001: Arıza Bildirim Modeli
+ARIZA_ACILIYETLERI = ("Düşük", "Orta", "Yüksek", "Kritik")
+AciliyetTuru = Literal["Düşük", "Orta", "Yüksek", "Kritik"]
+
+
 class ArizaBildirimModeli(BaseModel):
     cihaz_id: int = Field(gt=0)
     ariza_baslik: str = Field(min_length=3, max_length=150)
     ariza_aciklama: str = Field(min_length=5)
-    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+    aciliyet: AciliyetTuru
 
 # FAIL-003: Arıza Güncelleme Modeli
 class ArizaGuncelleModeli(BaseModel):
     ariza_baslik: str = Field(min_length=3, max_length=150)
     ariza_aciklama: str = Field(min_length=2)
-    aciliyet: str # Düşük, Orta, Yüksek, Kritik
+    aciliyet: AciliyetTuru
     cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
 
 # ADM-API-004: Personel Güncelleme İstek Modeli
@@ -509,6 +518,12 @@ class KalibrasyonOlusturModeli(BaseModel):
     uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
     plan_id: Optional[int] = Field(default=None, gt=0)       # bu kaydın yerine getirdiği kalibrasyon planı
 
+    @model_validator(mode="after")
+    def bitis_baslangictan_once_olamaz(self):
+        if self.kalibrasyon_bitis_tarihi < self.kalibrasyon_baslangic_tarihi:
+            raise ValueError("Kalibrasyon bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        return self
+
 class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = Field(default=None, min_length=1, max_length=100)
     gecerlilik_tarihi: Optional[date] = None
@@ -517,30 +532,53 @@ class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_bitis_tarihi: Optional[date] = None     # YENİ EKLENDİ
     uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
 
+    @model_validator(mode="after")
+    def bitis_baslangictan_once_olamaz(self):
+        bas, bit = self.kalibrasyon_baslangic_tarihi, self.kalibrasyon_bitis_tarihi
+        if bas is not None and bit is not None and bit < bas:
+            raise ValueError("Kalibrasyon bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        return self
+
 # ==========================================
 # BAKIM YÖNETİMİ MODELLERİ (MNT)
 # ==========================================
+BAKIM_MALIYET_EN_FAZLA = 99_999_999.99      # veritabanı: DECIMAL(10, 2)
+
+
 class BakimOlusturModeli(BaseModel):
-    cihaz_id: int
+    cihaz_id: int = Field(gt=0)
     bakim_tarihi: date  # <-- SİSTEMİN ÇÖKMESİNİ ENGELLEYEN EKSİK PARÇA
-    bakim_yapan_kisi: str
-    yapilan_islem: str
-    maliyet: Optional[float] = 0.0
+    bakim_yapan_kisi: str = Field(min_length=1, max_length=100)
+    yapilan_islem: str = Field(min_length=1)
+    maliyet: Optional[float] = Field(default=0.0, ge=0, le=BAKIM_MALIYET_EN_FAZLA)
     bakim_baslangic_tarihi: date
     bakim_bitis_tarihi: date
     sonraki_bakim_tarihi: Optional[date] = None
     uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
     plan_id: Optional[int] = Field(default=None, gt=0)       # bu kaydın yerine getirdiği bakım planı
 
+    @model_validator(mode="after")
+    def bitis_baslangictan_once_olamaz(self):
+        if self.bakim_bitis_tarihi < self.bakim_baslangic_tarihi:
+            raise ValueError("Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        return self
+
 class BakimGuncelleModeli(BaseModel):
     bakim_tarihi: Optional[date] = None  # <-- DÜZENLEME İÇİN EKSİK PARÇA
-    bakim_yapan_kisi: Optional[str] = None
-    yapilan_islem: Optional[str] = None
-    maliyet: Optional[float] = None
+    bakim_yapan_kisi: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    yapilan_islem: Optional[str] = Field(default=None, min_length=1)
+    maliyet: Optional[float] = Field(default=None, ge=0, le=BAKIM_MALIYET_EN_FAZLA)
     bakim_baslangic_tarihi: Optional[date] = None
     bakim_bitis_tarihi: Optional[date] = None
     sonraki_bakim_tarihi: Optional[date] = None
     uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
+
+    @model_validator(mode="after")
+    def bitis_baslangictan_once_olamaz(self):
+        bas, bit = self.bakim_baslangic_tarihi, self.bakim_bitis_tarihi
+        if bas is not None and bit is not None and bit < bas:
+            raise ValueError("Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        return self
 
 
 # ==========================================

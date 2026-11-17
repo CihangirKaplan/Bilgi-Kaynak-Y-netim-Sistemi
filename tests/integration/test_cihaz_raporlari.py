@@ -32,9 +32,9 @@ def test_rapor_ozeti_ve_listeleri_dogru_doner():
           datetime(2026, 10, 2, 9, 0), date(2027, 10, 2), 1)],
         # arızalar
         [(1, "CHZ-1", "EEG", "Ayşe", "Ekran gitti",
-          datetime(2026, 10, 3, 9, 0), None, False, 1),
+          datetime(2026, 10, 3, 9, 0), None, False, 1, "Ekran arızası", "Yüksek"),
          (2, "CHZ-2", "EKG", "Fatma", "Kablo kopuk",
-          datetime(2026, 10, 4, 9, 0), datetime(2026, 10, 6, 9, 0), True, 2)],
+          datetime(2026, 10, 4, 9, 0), datetime(2026, 10, 6, 9, 0), True, 2, "Wi-Fi kopuyor", "Düşük")],
         # cihazların güncel durumu
         [(1, "CHZ-1", "EEG", "Marka X", "Bakimda"),
          (2, "CHZ-2", "EKG", None, "Kullanima_Hazir")],
@@ -67,6 +67,10 @@ def test_rapor_ozeti_ve_listeleri_dogru_doner():
     assert sonuc["bakimlar"][1]["bakim_bitis_tarihi"] == "2026-10-05T09:00:00"
     assert sonuc["bakimlar"][1]["sonraki_bakim_tarihi"] is None
     assert [a["durum"] for a in sonuc["arizalar"]] == ["Açık", "Çözüldü"]
+    # başlık ve aciliyet kendi sütunlarından gelir; rapor metni "başlık: açıklama" olur
+    assert sonuc["arizalar"][1]["ariza_baslik"] == "Wi-Fi kopuyor"
+    assert sonuc["arizalar"][1]["aciliyet"] == "Düşük"
+    assert sonuc["arizalar"][1]["ariza_aciklamasi"] == "Wi-Fi kopuyor: Kablo kopuk"
     conn.close.assert_called_once()
 
 

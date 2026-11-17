@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 
@@ -60,15 +61,11 @@ class CihazIslemFormu(QDialog):
         for db_degeri, (ad, _renk, _arka) in DURUMLAR.items():
             self.cmb_durum.addItem(ad, db_degeri)         # gösterilen ad + sunucunun anladığı değer
 
-        self.cmb_oda = QComboBox()
-        self.cmb_oda.addItem("Oda Seçiniz (Opsiyonel)", None)
-        self.odalari_yukle()
 
         form_layout.addRow("Envanter Kodu (*):", self.txt_envanter)
         form_layout.addRow("Cihaz Adı (*):", self.txt_ad)
         form_layout.addRow("Marka / Model:", self.txt_marka)
         form_layout.addRow("Seri No:", self.txt_seri)
-        form_layout.addRow("Zimmetli Oda:", self.cmb_oda)
         
         if islem_turu == "GUNCELLE":
             self.txt_envanter.setReadOnly(True)                  # gri görünüm FORM_STIL'den gelir
@@ -83,26 +80,44 @@ class CihazIslemFormu(QDialog):
         self.btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(self.btn_kaydet)
 
-    def odalari_yukle(self):
+        # Cihazlar silinmez (bakım, kalibrasyon, arıza ve rezervasyon geçmişi bağlıdır); yerine "kullanım dışına al" vardır.
+        self.btn_kullanim_disi = None
+        if islem_turu == "GUNCELLE" and (cihaz_veri or {}).get("durum") != "Kullanim_Disi":
+            self.btn_kullanim_disi = tehlike_dugmesi("Cihazı kullanım dışına al", self.kullanim_disi_yap)
+            layout.addWidget(self.btn_kullanim_disi)
+
+    def _kullanim_disi_onayi(self):
+        kutu = QMessageBox(self)
+        kutu.setIcon(QMessageBox.Warning)
+        kutu.setWindowTitle("Kullanım Dışına Al")
+        kutu.setText(f"“{(self.cihaz_veri or {}).get('cihaz_adi', '')}” cihazı kullanım dışına alınsın mı?")
+        kutu.setInformativeText("Cihaz kullanıma ve rezervasyona kapanır. Geçmiş kayıtları silinmez; durumu istediğin zaman yeniden değiştirebilirsin.")
+        evet = kutu.addButton("Evet, kullanım dışına al", QMessageBox.DestructiveRole)
+        kutu.addButton("Vazgeç", QMessageBox.RejectRole)
+        kutu.exec()
+        return kutu.clickedButton() is evet
+
+    def kullanim_disi_yap(self):
+        if not self._kullanim_disi_onayi():
+            return
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/odalar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("PATCH", f"{self.api_url}/api/cihazlar/{self.cihaz_veri['cihaz_id']}",
+                                           json={"durum": "Kullanim_Disi"}, headers={"Authorization": f"Bearer {self.token}"})
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                for oda in cevap.json():
-                    if oda.get("aktif_mi"):
-                        self.cmb_oda.addItem(oda["oda_adi"], oda["oda_id"])
-        except:
-            pass
+                QMessageBox.information(self, "Başarılı", "Cihaz kullanım dışına alındı.")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Hata", str(cevap.json().get("detail", "Bilinmeyen bir hata oluştu.")))
+        except Exception as e:
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
 
     def formu_doldur(self):
         self.txt_envanter.setText(self.cihaz_veri.get("envanter_kodu", ""))
         self.txt_ad.setText(self.cihaz_veri.get("cihaz_adi", ""))
         self.txt_marka.setText(self.cihaz_veri.get("marka_model", ""))
         self.txt_seri.setText(self.cihaz_veri.get("seri_no", ""))
-        oda_indeks = self.cmb_oda.findData(self.cihaz_veri.get("zimmetli_oda_id"))
-        if oda_indeks >= 0:
-            self.cmb_oda.setCurrentIndex(oda_indeks)
         indeks = self.cmb_durum.findData(self.cihaz_veri.get("durum"))
         if indeks >= 0:                                    # bilinmeyen değerde ilk seçeneğe sessizce düşme
             self.cmb_durum.setCurrentIndex(indeks)
@@ -122,10 +137,6 @@ class CihazIslemFormu(QDialog):
             "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
         }
         
-        secili_oda = self.cmb_oda.currentData()
-        if secili_oda:
-            veri["zimmetli_oda_id"] = secili_oda
-
         headers = {"Authorization": f"Bearer {self.token}"}
         
         try:
@@ -159,6 +170,7 @@ class CihazYonetimEkrani(QWidget):
         self.token = token
         self.yetkili_mi = yetkili_mi
         self.durum_filtresi = None          # None = hepsi; aksi halde yalnızca bu veritabanı durumundaki cihazlar
+        self.cihaz_detaylari = {}
         self.arayuzu_olustur()
 
     def arayuzu_olustur(self):
@@ -201,7 +213,7 @@ class CihazYonetimEkrani(QWidget):
         self.filtre_seridi.hide()
         layout.addWidget(self.filtre_seridi)
 
-        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"])
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -210,6 +222,7 @@ class CihazYonetimEkrani(QWidget):
         kb.setSectionResizeMode(4, QHeaderView.Fixed)
         self.tablo.setColumnWidth(4, 160)
 
+        cift_tikla_ac(self.tablo, self.cihaz_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır (yetkililer)
         self.bos_mesaj = bos_mesaj_olustur("Henüz cihaz kaydı yok.")
 
         kart = QFrame()
@@ -238,6 +251,7 @@ class CihazYonetimEkrani(QWidget):
             return
 
         hazir = bakimda = arizali = 0
+        self.cihaz_detaylari = {c.get("cihaz_id"): c for c in cihazlar}
         self.tablo.setRowCount(len(cihazlar))
         for satir, cihaz in enumerate(cihazlar):
             durum = cihaz.get("durum")
@@ -253,6 +267,7 @@ class CihazYonetimEkrani(QWidget):
             self.tablo.setItem(satir, 2, metin_item(cihaz.get("marka_model") or "-"))
             self.tablo.setItem(satir, 3, metin_item(cihaz.get("seri_no") or "-"))
             self.tablo.setCellWidget(satir, 4, durum_hapi(durum))
+            satira_kimlik_ata(self.tablo, satir, cihaz.get("cihaz_id"))
 
         self.cip_toplam.setText(f"{len(cihazlar)} cihaz")
         self.cip_hazir.setText(f"{hazir} kullanıma hazır")
@@ -299,6 +314,13 @@ class CihazYonetimEkrani(QWidget):
         if form.exec():
             self.verileri_yukle()
 
+    def cihaz_duzenle_ac(self, cihaz_id):
+        cihaz = self.cihaz_detaylari.get(cihaz_id)
+        if cihaz is None or not self.yetkili_mi:
+            return
+        if CihazIslemFormu(self.api_url, self.token, islem_turu="GUNCELLE", cihaz_veri=cihaz).exec():
+            self.verileri_yukle()
+
     def envanter_duzenle_liste_ac(self):
         liste_formu = CihazDuzenlemeListesi(self.api_url, self.token)
         liste_formu.exec()
@@ -324,7 +346,7 @@ class CihazDuzenlemeListesi(QDialog):
         lbl.setWordWrap(True)
         layout.addWidget(lbl)
 
-        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "DURUM", "İŞLEM"])
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "DURUM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)

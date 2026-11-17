@@ -313,7 +313,7 @@ Backend;
 
 ## 4.4. PostgreSQL Veritabanı
 
-PostgreSQL, sistemin merkezi ve kalıcı veri katmanıdır. Güncel uygulama şemasında 30 işlevsel tablo bulunmaktadır. `alembic_version` ise veritabanı migration sürümünü izleyen teknik tablodur.
+PostgreSQL, sistemin merkezi ve kalıcı veri katmanıdır. Güncel uygulama şemasında 29 işlevsel tablo bulunmaktadır. `alembic_version` ise veritabanı migration sürümünü izleyen teknik tablodur.
 
 Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 
@@ -329,7 +329,7 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `giris_istek_limitleri`
 - `parola_sifirlama_talepleri`
 
-### Öğrenci, Personel Faaliyetleri ve Görevler
+### Öğrenci Faaliyetleri ve Görevler
 
 - `ogrenciler`
 - `danisma_masasi_oturumlari`
@@ -337,7 +337,6 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `faaliyet_birimleri`
 - `ogrenci_faaliyet_takip`
 - `ogrenci_kayit_erteleme_gecmisi`
-- `personel_faaliyet_kayitlari`
 
 ### Randevu ve Oda
 
@@ -356,7 +355,6 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `cihaz_bakimlari`
 - `cihaz_kalibrasyonlari`
 - `cihaz_bakim_planlari`
-- `cihaz_takip_parametreleri`
 
 Tablolar arasındaki ilişkiler yabancı anahtarlar ve diğer veritabanı kısıtlarıyla desteklenir. Bununla birlikte, adı `_id` ile biten her sütunun mutlaka yabancı anahtar kısıtına sahip olduğu varsayılmaz.
 
@@ -528,7 +526,7 @@ Her oda için;
 
 saklanır.
 
-Oda bilgisi hem randevular hem oda etkinlikleri hem de cihazların zimmetli oda bilgisi tarafından kullanılabilir.
+Oda bilgisi hem randevular hem oda etkinlikleri hem de cihaz rezervasyonları (kullanılacak oda) tarafından kullanılır.
 
 ## 6.3. Randevular
 
@@ -621,7 +619,6 @@ Her cihaz için;
 - cihaz adı,
 - marka/model,
 - seri numarası,
-- zimmetli oda,
 - cihaz durumu,
 - kayıt tarihi
 
@@ -705,31 +702,6 @@ Tablodaki temel alanlar:
 - `aktif_mi`
 
 FastAPI, aktif planları kontrol ederek yaklaşan görevleri tespit edebilir. Mevcut veritabanı şemasında ayrı bir `bildirimler` tablosu tanımlı değildir; bu nedenle kalıcı bildirim kaydı bu D05 sürümünde ayrı bir veritabanı bileşeni olarak varsayılmamaktadır.
-
-## 7.9. Dinamik Cihaz Takip Parametreleri
-
-Her cihazın takip edilmesi gereken özellikleri aynı olmayabilir.
-
-```text
-EEG cihazı → Jel Miktarı → 450 ml
-Başka cihaz → Lamba Kullanımı → 1200 Saat
-```
-
-Bu nedenle her yeni özellik için `cihazlar` tablosuna yeni bir sütun eklemek yerine `cihaz_takip_parametreleri` kullanılır.
-
-Bu tablo;
-
-- cihazı,
-- parametre adını,
-- parametre değerini,
-- birimini,
-- son güncelleme zamanını
-
-tutar.
-
-Böylece cihazdan cihaza değişebilen takip değerleri daha esnek biçimde yönetilebilir.
-
----
 
 # 8. API Yapısı
 
@@ -1105,7 +1077,6 @@ TKYS'nin güncel mimari kararları aşağıda özetlenmiştir.
 - Oda etkinlikleri randevulardan ayrı tutulur.
 - Cihaz arıza, bakım ve kalibrasyon geçmişleri ayrı tablolarda saklanır.
 - Periyodik cihaz görevleri `cihaz_bakim_planlari` tablosuyla takip edilir.
-- Cihaza göre değişen takip özellikleri `cihaz_takip_parametreleri` tablosunda tutulur.
 - Cihaz durumunun güncel sütun tipi `VARCHAR(50)`'dir.
 - Randevu ve cihaz rezervasyonlarında PostgreSQL EXCLUDE kısıtları kullanılır.
 
