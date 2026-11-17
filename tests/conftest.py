@@ -28,6 +28,7 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_randevu_transaction_quality.py",
     "test_randevu_eszamanlilik_quality.py",
     "test_audit_postgresql_quality.py",
+    "test_cihaz_odalari_psikolog_haric_pg_quality.py",
     "test_api_audit_rollback_quality.py",
     "test_admin_tum_izinler_pg_quality.py",
     "test_kisisel_veri_ayrimi_pg_quality.py",
@@ -40,6 +41,7 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_yabanci_anahtar_indeks_pg_quality.py",
     "test_kisitli_kullanici_pg_quality.py",
     "test_gecici_parola_suresi_pg_quality.py",
+    "test_cihaz_odasi_atama_pg_quality.py",
 }
 
 

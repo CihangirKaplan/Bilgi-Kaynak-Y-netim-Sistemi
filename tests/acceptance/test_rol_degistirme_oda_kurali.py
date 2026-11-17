@@ -26,13 +26,14 @@ ROL_ID = {"PSIKOLOG": 1, "MEMUR": 2, "MUDUR": 3}
 
 
 # ------------------------------------------------------------------ sunucu
-def rol_degistir(hedef_rol, yeni_rol, oda_idleri=None, aktif_odalar=(), personel_kodlari=()):
+def rol_degistir(hedef_rol, yeni_rol, oda_idleri=None, aktif_odalar=(), personel_kodlari=(), rezervasyonlu=()):
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [("ADMIN",), (hedef_rol,), (yeni_rol,), (20, "PER-X-001")]
     fetchall = []
     if yeni_rol == "PSIKOLOG":
         fetchall.append([(o,) for o in aktif_odalar])   # oda doğrulama sorgusu
+        fetchall.append(list(rezervasyonlu))            # cihaz rezervasyonlu oda sorgusu: [(oda_adi, rezervasyon_sayisi)]
     fetchall.append(list(personel_kodlari))             # personel kodu sorgusu
     cursor.fetchall.side_effect = fetchall
 
@@ -70,6 +71,16 @@ def test_pasif_ya_da_olmayan_odayla_psikolog_olunamaz():
     assert "aktif" in hata.detail
     assert not rol_guncellendi_mi(cursor)
     conn.commit.assert_not_called()
+
+
+def test_cihaz_rezervasyonlu_odayla_psikolog_olunamaz_ve_uyari_doner():
+    conn, cursor, _, hata = rol_degistir("MEMUR", "PSIKOLOG", [2, 3], aktif_odalar=(2, 3), rezervasyonlu=[("EEG Odası", 1)])
+    assert hata.status_code == 409
+    assert "EEG Odası (1 rezervasyon)" in hata.detail and "psikologa atanamaz" in hata.detail
+    assert not rol_guncellendi_mi(cursor)                                   # rol de değişmez, oda da yazılmaz
+    assert not any(s.strip().upper().startswith("INSERT INTO PSIKOLOG_ODALAR") for s in sorgular(cursor))
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called_once()
 
 
 def test_psikolog_olunurken_odalar_yazilir():

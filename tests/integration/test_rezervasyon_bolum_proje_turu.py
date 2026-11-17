@@ -177,14 +177,16 @@ def test_gecerli_bolumle_rezervasyon_bolum_kimligini_kaydeder():
 
 
 # ---------------------------------------------------------------- rezervasyonda oda: yalnızca cihaz odaları
-def test_rezervasyon_odalari_tum_aktif_odalari_listeler():
+def test_rezervasyon_odalari_aktif_psikologa_atanmamis_aktif_odalari_listeler():
     conn, imlec = baglanti(satirlar=[(1, "Cihaz Odası"), (3, "Lab")])
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         sonuc = sunucu.cihaz_odalarini_listele(kullanici_id=1)
     assert sonuc == [{"oda_id": 1, "oda_adi": "Cihaz Odası", "aktif_mi": True}, {"oda_id": 3, "oda_adi": "Lab", "aktif_mi": True}]
     sorgu = sorgular(imlec)[0]
     assert "o.aktif_mi = TRUE" in sorgu
-    assert "psikolog_odalar" not in sorgu and "zimmetli" not in sorgu and "cihazlar" not in sorgu   # hiçbir oda türü elenmez: tüm aktif odalar
+    assert "FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id" in sorgu
+    assert "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE" in sorgu                              # aktif psikologa atanan oda gelmez; pasif psikolog odayı tutmaz
+    assert "zimmetli" not in sorgu and "cihazlar" not in sorgu                                      # cihaz tablosuna bağlı değil
 
 
 def oda_ile_rezervasyon(oda_id, oda_cihaz_odasi_mi):
@@ -214,13 +216,13 @@ def oda_ile_rezervasyon(oda_id, oda_cihaz_odasi_mi):
             return h, imlec
 
 
-def test_pasif_ya_da_olmayan_odayla_rezervasyon_422_verir():
+def test_psikologa_atanmis_odayla_rezervasyon_422_verir():
     sonuc, imlec = oda_ile_rezervasyon(oda_id=8, oda_cihaz_odasi_mi=False)
-    assert isinstance(sonuc, HTTPException) and sonuc.status_code == 422 and "oda bulunamadı veya aktif değil" in sonuc.detail
+    assert isinstance(sonuc, HTTPException) and sonuc.status_code == 422 and "cihaz rezervasyonu için uygun değil" in sonuc.detail
     assert not [s for s in sorgular(imlec) if "INSERT INTO cihaz_rezervasyonlari" in s]
 
 
-def test_aktif_odayla_rezervasyon_kaydedilir():
+def test_psikologa_atanmamis_odayla_rezervasyon_kaydedilir():
     sonuc, imlec = oda_ile_rezervasyon(oda_id=1, oda_cihaz_odasi_mi=True)
     assert not isinstance(sonuc, HTTPException), getattr(sonuc, "detail", "")
     assert [s for s in sorgular(imlec) if "INSERT INTO cihaz_rezervasyonlari" in s]
