@@ -313,7 +313,7 @@ Backend;
 
 ## 4.4. PostgreSQL Veritabanı
 
-PostgreSQL, sistemin merkezi ve kalıcı veri katmanıdır. Güncel uygulama şemasında 30 işlevsel tablo bulunmaktadır. `alembic_version` ise veritabanı migration sürümünü izleyen teknik tablodur.
+PostgreSQL, sistemin merkezi ve kalıcı veri katmanıdır. Güncel uygulama şemasında 29 işlevsel tablo bulunmaktadır. `alembic_version` ise veritabanı migration sürümünü izleyen teknik tablodur.
 
 Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 
@@ -329,7 +329,7 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `giris_istek_limitleri`
 - `parola_sifirlama_talepleri`
 
-### Öğrenci, Personel Faaliyetleri ve Görevler
+### Öğrenci Faaliyetleri ve Görevler
 
 - `ogrenciler`
 - `danisma_masasi_oturumlari`
@@ -337,7 +337,6 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `faaliyet_birimleri`
 - `ogrenci_faaliyet_takip`
 - `ogrenci_kayit_erteleme_gecmisi`
-- `personel_faaliyet_kayitlari`
 
 ### Randevu ve Oda
 
