@@ -68,6 +68,15 @@ class YeniRezervasyonFormu(QDialog):
         layout.addWidget(baslik)
         layout.addWidget(alt)
 
+        # Bölüm / proje türü / oda listeleri alınamazsa nedeni burada görünür (örn. migrasyon çalıştırılmamış).
+        self._liste_hatalari = {}
+        self.lbl_uyari = QLabel()
+        self.lbl_uyari.setWordWrap(True)
+        self.lbl_uyari.setStyleSheet("background: #FEE2E2; color: #991B1B; border-radius: 10px; font-size: 12px; "
+                                     "font-weight: 700; padding: 10px 14px;")
+        self.lbl_uyari.hide()
+        layout.addWidget(self.lbl_uyari)
+
         form_layout = QFormLayout()
         form_layout.setSpacing(14)
         form_layout.setLabelAlignment(Qt.AlignLeft)
@@ -204,8 +213,10 @@ class YeniRezervasyonFormu(QDialog):
                 else:
                     self.cmb_oda.addItem("Cihaza bağlı oda yok", None)
                     self.cmb_oda.setToolTip("Cihaz Envanteri'nde cihazın zimmetli odasını belirleyin.")
+                self._liste_uyarisi("Odalar", None)
             else:
                 self.cmb_oda.addItem("Odalar alınamadı", None)
+                self._liste_uyarisi("Odalar", api_hata_mesaji(res_oda))
 
             self.bolumleri_yukle()
             self.proje_turlerini_yukle()
@@ -213,12 +224,29 @@ class YeniRezervasyonFormu(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "Bağlantı Hatası", "Sunucuya bağlanırken bir sorun oluştu.")
 
-    def _liste_getir(self, yol):
-        """Sunucudan liste getirir; oturum/sunucu hatasında ya da bozuk yanıtta boş liste döner (form yine açılır)."""
-        cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers={"Authorization": f"Bearer {self.token}"})
-        if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+    def _liste_uyarisi(self, ad, metin):
+        """Formun üstündeki uyarıyı günceller: metin verilirse "<ad> alınamadı: ..." satırı eklenir, None ise o satır kalkar."""
+        if metin:
+            self._liste_hatalari[ad] = metin
+        else:
+            self._liste_hatalari.pop(ad, None)
+        self.lbl_uyari.setText("\n".join(f"⚠ {k} alınamadı: {m}" for k, m in self._liste_hatalari.items()))
+        self.lbl_uyari.setVisible(bool(self._liste_hatalari))
+
+    def _liste_getir(self, yol, ad):
+        """Sunucudan liste getirir. Alınamazsa (sunucu/şema/bağlantı hatası) boş liste döner, form yine açılır ve neden uyarıda yazar."""
+        try:
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers={"Authorization": f"Bearer {self.token}"})
+            if oturum_hatasi_mi(cevap):
+                return []                                                              # oturum süresi doldu: giriş ekranı ele alır
+            if cevap.status_code != 200:
+                self._liste_uyarisi(ad, api_hata_mesaji(cevap))
+                return []
+            veri = cevap.json()
+        except Exception as e:
+            self._liste_uyarisi(ad, api_hata_mesaji(hata=e))
             return []
-        veri = cevap.json()
+        self._liste_uyarisi(ad, None)
         return [k for k in veri if isinstance(k, dict)] if isinstance(veri, list) else []
 
     def _kutuyu_doldur(self, kutu, kayitlar, kimlik_alani, ad_alani, secilecek_ad=None, secilecek_kimlik=None):
@@ -240,11 +268,11 @@ class YeniRezervasyonFormu(QDialog):
             kutu.setCurrentIndex(hedef)
 
     def bolumleri_yukle(self, secilecek_kimlik=None):
-        self._kutuyu_doldur(self.cmb_bolum, self._liste_getir("/api/bolumler"), "bolum_id", "bolum_adi",
+        self._kutuyu_doldur(self.cmb_bolum, self._liste_getir("/api/bolumler", "Bölümler"), "bolum_id", "bolum_adi",
                             secilecek_kimlik=secilecek_kimlik)
 
     def proje_turlerini_yukle(self, secilecek_ad=None):
-        self._kutuyu_doldur(self.cmb_proje_turu, self._liste_getir("/api/proje-turleri"), "proje_turu_id", "ad",
+        self._kutuyu_doldur(self.cmb_proje_turu, self._liste_getir("/api/proje-turleri", "Proje türleri"), "proje_turu_id", "ad",
                             secilecek_ad=secilecek_ad)
 
     def _yeni_kayit_gonder(self, yol, veri, baslik):

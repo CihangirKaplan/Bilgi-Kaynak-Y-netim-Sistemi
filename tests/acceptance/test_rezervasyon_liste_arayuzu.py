@@ -263,6 +263,83 @@ def test_form_liste_alinamazsa_yine_acilir(form_ac):
     f = form_ac(ListeleriVermeyenSunucu())
     assert kutu_metinleri(f.cmb_bolum) == ["Bölüm seçin"] and kutu_metinleri(f.cmb_proje_turu) == ["Seçilmedi"]
     assert f.cmb_cihaz.count() == 1                                                      # cihaz listesi yine yüklenir
+    assert not f.lbl_uyari.isHidden()                                                    # sessiz kalmaz: neden yazılır
+    assert "Bölümler alınamadı" in f.lbl_uyari.text() and "Proje türleri alınamadı" in f.lbl_uyari.text()
+    assert "Sunucuda bir hata" in f.lbl_uyari.text()
+
+
+SEMA_YANITI = {"detail": "Veritabanı şeması sunucu sürümüyle uyumlu değil (eksik tablo ya da sütun). "
+                         "Sistem yöneticisi güncellemeyi çalıştırmalı: python -m alembic upgrade head", "kod": "SEMA_UYUMSUZ"}
+
+
+class TabloYokSunucu(SahteSunucu):
+    """proje_turleri tablosu yokken (migrasyon çalıştırılmamış) sunucunun verdiği yanıtı taklit eder."""
+
+    def __call__(self, yontem, url, **kw):
+        if url.endswith("/api/proje-turleri"):
+            self.istekler.append((yontem, "/api/proje-turleri", kw.get("json")))
+            return yanit(503, SEMA_YANITI)
+        return super().__call__(yontem, url, **kw)
+
+
+def test_liste_sorunsuzsa_uyari_gorunmez(form_ac):
+    f = form_ac()
+    assert f.lbl_uyari.isHidden() and f.lbl_uyari.text() == ""
+
+
+def test_migrasyon_calismamissa_uyari_ne_yapilacagini_soyler(form_ac):
+    f = form_ac(TabloYokSunucu())
+    metin = f.lbl_uyari.text()
+    assert not f.lbl_uyari.isHidden()
+    assert "Proje türleri alınamadı" in metin and "python -m alembic upgrade head" in metin
+    assert "Bölümler" not in metin and "Odalar" not in metin                             # yalnızca bozuk liste anılır
+    assert kutu_metinleri(f.cmb_bolum) == ["Bölüm seçin", "Psikoloji Bölümü", "Fizyoloji Bölümü"]    # diğer listeler yine dolu
+
+
+def test_yeni_tur_eklenirken_tablo_yoksa_sema_mesaji_gosterilir(modul, form_ac):
+    sunucu = TabloYokSunucu()
+    f = form_ac(sunucu)
+    with pencere_doldur(modul, modul.YeniProjeTuruPenceresi, txt_ad="Staj"), \
+         patch.object(modul, "oturum_kontrollu_istek", sunucu), patch.object(modul.QMessageBox, "warning") as uyari:
+        f.yeni_proje_turu_ekle()
+    uyari.assert_called_once()
+    assert "alembic upgrade head" in uyari.call_args.args[2]
+
+
+def test_oda_listesi_alinamazsa_uyari_yazilir(form_ac):
+    class OdaYetkisiz(SahteSunucu):
+        def __call__(self, yontem, url, **kw):
+            if url.endswith("/api/cihaz-odalari"):
+                return yanit(403)
+            return super().__call__(yontem, url, **kw)
+
+    f = form_ac(OdaYetkisiz())
+    assert kutu_metinleri(f.cmb_oda) == ["Odalar alınamadı"]
+    assert "Odalar alınamadı" in f.lbl_uyari.text() and "yetki" in f.lbl_uyari.text()
+
+
+def test_liste_istegi_baglanti_hatasi_verirse_uyari_yazilir_form_acilir(modul, form_ac):
+    import requests
+
+    class Kopuk(SahteSunucu):
+        def __call__(self, yontem, url, **kw):
+            if url.endswith("/api/bolumler"):
+                raise requests.exceptions.ConnectionError("gizli ayrıntı")
+            return super().__call__(yontem, url, **kw)
+
+    f = form_ac(Kopuk())
+    assert "Bölümler alınamadı" in f.lbl_uyari.text() and "Sunucuya bağlanılamadı" in f.lbl_uyari.text()
+    assert "gizli ayrıntı" not in f.lbl_uyari.text()
+    assert kutu_metinleri(f.cmb_proje_turu) == ["Seçilmedi", "Araştırma", "Test"]          # sonraki liste yine yüklenir
+
+
+def test_sorun_giderilince_uyari_kalkar(modul, form_ac):
+    f = form_ac(TabloYokSunucu())
+    assert not f.lbl_uyari.isHidden()
+    with patch.object(modul, "oturum_kontrollu_istek", SahteSunucu()):                    # migrasyon çalıştırıldı
+        f.proje_turlerini_yukle()
+    assert f.lbl_uyari.isHidden() and f.lbl_uyari.text() == ""
+    assert kutu_metinleri(f.cmb_proje_turu) == ["Seçilmedi", "Araştırma", "Test"]
 
 
 def test_form_kaydi_bolum_ve_proje_turuyle_gonderir(modul, form_ac):
