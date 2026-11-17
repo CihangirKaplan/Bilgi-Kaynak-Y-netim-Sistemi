@@ -2687,17 +2687,12 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-CIHAZ_ODALARI_SORGUSU = (
-    "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
-    "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.oda_id = o.oda_id) ORDER BY o.oda_adi"
-)
+CIHAZ_ODALARI_SORGUSU = "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE ORDER BY o.oda_adi"
 
 
 @app.get("/api/cihaz-odalari")
 def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
-    """Cihaz rezervasyonunda seçilebilen odalar: hiçbir psikologa atanmamış aktif odalar.
-
-    Psikologlara atanan görüşme odaları listeye girmez."""
+    """Cihaz rezervasyonunda seçilebilen odalar: tüm aktif odalar (rezervasyonu yapan kişi uygun odayı kendisi seçer)."""
     conn = None
     cursor = None
     try:
@@ -3365,12 +3360,36 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if rez.kullanilacak_oda_id is not None:
                 cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
                 if cursor.fetchone() is None:
-                    raise HTTPException(status_code=422, detail="Seçilen oda cihaz rezervasyonu için uygun değil (psikologa atanmış ya da aktif değil).")
+                    raise HTTPException(status_code=422, detail="Seçilen oda bulunamadı veya aktif değil.")
 
             if rez.bolum_id is not None:
                 cursor.execute("SELECT 1 FROM bolumler WHERE bolum_id = %s AND aktif_mi IS NOT FALSE;", (rez.bolum_id,))
                 if cursor.fetchone() is None:
                     raise HTTPException(status_code=422, detail="Bölüm bulunamadı veya aktif değil.")
+
+            if rez.kullanilacak_oda_id is not None:
+                # Aynı oda aynı saatte yalnızca tek rezervasyona verilir (başka bir CİHAZ için de olsa).
+                cursor.execute(
+                    """
+                    SELECT r.rezervasyon_id, r.baslangic_zamani, r.bitis_zamani, COALESCE(k.kullanici_adi, '-')
+                    FROM cihaz_rezervasyonlari r
+                    LEFT JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
+                    LEFT JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
+                    WHERE r.kullanilacak_oda_id = %s AND r.iptal_edildi_mi = FALSE
+                      AND r.baslangic_zamani < %s AND r.bitis_zamani > %s
+                    ORDER BY r.baslangic_zamani;
+                    """,
+                    (rez.kullanilacak_oda_id, rez.bitis_zamani, rez.baslangic_zamani),
+                )
+                oda_cakismalari = cursor.fetchall()
+                if oda_cakismalari:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=rezervasyon_cakisma_detayi(
+                            "Oda seçilen saat aralığında başka bir cihaz rezervasyonu için ayrılmış.",
+                            oda_cakismalari,
+                        ),
+                    )
 
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
             pers = cursor.fetchone()
@@ -3387,8 +3406,10 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if deneme == maksimum_deneme - 1:
                 raise HTTPException(status_code=503, detail="Rezervasyon işlemi eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin.")
             time.sleep(0.1 * (deneme + 1))
-        except ExclusionViolation:
+        except ExclusionViolation as hata:
             if conn is not None: conn.rollback()
+            if getattr(getattr(hata, "diag", None), "constraint_name", None) == "cihaz_rezervasyon_oda_cakisma":
+                raise HTTPException(status_code=409, detail="Oda seçilen saat aralığında başka bir cihaz rezervasyonu için ayrılmış.")
             raise HTTPException(status_code=409, detail="Cihaz seçilen saat aralığında zaten rezerve edilmiş.")
         finally:
             if cursor is not None: cursor.close()

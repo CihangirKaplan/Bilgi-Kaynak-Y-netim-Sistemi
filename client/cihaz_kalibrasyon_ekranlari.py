@@ -13,6 +13,7 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
+from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
@@ -165,11 +166,12 @@ class YeniKalibrasyonFormu(QDialog):
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
 
 class KalibrasyonDuzenleFormu(QDialog):
-    def __init__(self, api_url, token, veri, parent=None):
+    def __init__(self, api_url, token, veri, parent=None, sil_fn=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
         self.k_veri = veri
+        self.sil_fn = sil_fn                      # verilirse pencerenin altında 'sil' düğmesi görünür
 
         self.setWindowTitle("Kalibrasyon Kaydını Düzenle")
         self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
@@ -213,6 +215,14 @@ class KalibrasyonDuzenleFormu(QDialog):
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(self.kaydet)
         layout.addWidget(btn)
+        self.btn_sil = None
+        if sil_fn:
+            self.btn_sil = tehlike_dugmesi("Bu kalibrasyon kaydını sil", self.sil)
+            layout.addWidget(self.btn_sil)
+
+    def sil(self):
+        if self.sil_fn and self.sil_fn():
+            self.accept()
 
     def kaydet(self):
         veri = {
@@ -280,6 +290,7 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(4, 230)
         self.tablo.setColumnWidth(6, 110)
 
+        cift_tikla_ac(self.tablo, self.duzenle)                                # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz kalibrasyon kaydı yok.")
 
         kart = QFrame()
@@ -331,6 +342,7 @@ class KalibrasyonYonetimEkrani(QWidget):
             self.tablo.setCellWidget(i, 6, islem_butonlari(
                 lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
                 lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
+            satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
 
         self.cip_toplam.setText(f"{len(kayitlar)} kayıt")
         self.cip_yaklasan.setText(f"{yaklasan} süresi yaklaşan")
@@ -354,24 +366,26 @@ class KalibrasyonYonetimEkrani(QWidget):
             self.yukle()
 
     def duzenle(self, kid):
-        if KalibrasyonDuzenleFormu(self.api_url, self.token, self.detaylar[kid], self).exec():
+        if KalibrasyonDuzenleFormu(self.api_url, self.token, self.detaylar[kid], self, sil_fn=lambda: self.sil(kid)).exec():
             self.yukle()
 
     def sil(self, kid):
+        """Onay ister ve kaydı siler; silindiyse True döner (düzenleme penceresi buna bakıp kapanır)."""
         kayit = self.detaylar.get(kid)
         if not kayit:
-            return
+            return False
         if not sil_onayi(self, "Kalibrasyon Kaydını Sil",
                          f"“{kayit.get('cihaz_adi', '')}” cihazının bu kalibrasyon kaydı silinsin mi?"):
-            return
+            return False
         try:
             res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/kalibrasyonlar/{kid}", headers=self.basliklar, timeout=10)
             if oturum_hatasi_mi(res):
-                return
+                return False
             if res.status_code == 200:
                 self.yukle()
-            else:
-                hata = res.json().get("detail", "Bilinmeyen hata")
-                QMessageBox.warning(self, "Silinemedi", hata)
+                return True
+            hata = res.json().get("detail", "Bilinmeyen hata")
+            QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+        return False

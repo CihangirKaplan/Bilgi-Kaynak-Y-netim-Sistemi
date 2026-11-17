@@ -19,7 +19,7 @@ def test_windows_gorev_olusturma():
     assert "/SC" in komut
     assert "DAILY" in komut
     assert "/ST" in komut
-    assert "02:00" in komut
+    assert "05:00" in komut
     assert "/RU" in komut
     assert "SYSTEM" in komut
     assert calistir.call_args.kwargs["check"] is True

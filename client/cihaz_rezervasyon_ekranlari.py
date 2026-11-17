@@ -14,13 +14,13 @@ from client.api_yoneticisi import (
     api_hata_mesaji,
 )
 from client.tablo_tasarimi import (
-    FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi, sayi_cipi, tablo_olustur,
-    tek_islem_butonu, yenile_butonu_olustur,
+    FORM_STIL, bos_mesaj_olustur, cift_tikla_ac, hap, metin_item, satira_kimlik_ata, sayfa_basligi, sayi_cipi,
+    tablo_olustur, tehlike_dugmesi, tek_islem_butonu, yenile_butonu_olustur,
 )
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
-    "Cihaz seçtiğiniz saat aralığında başka bir iş için ayrılmış. İsterseniz çakışan "
+    "Seçtiğiniz cihaz ya da oda bu saat aralığında başka bir iş için ayrılmış. İsterseniz çakışan "
     "rezervasyonu iptal edip devam edebilirsiniz.",
     "Rezervasyonu yeniden dene",
 )
@@ -200,7 +200,7 @@ class YeniRezervasyonFormu(QDialog):
             else:
                 self.cmb_cihaz.addItem("Sunucudan cihazlar alınamadı", None)
 
-            # ODALARI ÇEK: psikologlara atanmamış aktif odalar (psikologlara atanan görüşme odaları gelmez)
+            # ODALARI ÇEK: tüm aktif odalar (uygun odayı seçen kişi belirler)
             res_oda = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihaz-odalari", headers=headers)
             if oturum_hatasi_mi(res_oda):
                 return
@@ -211,8 +211,8 @@ class YeniRezervasyonFormu(QDialog):
                     for o in uygun_odalar:
                         self.cmb_oda.addItem(o["oda_adi"], o["oda_id"])
                 else:
-                    self.cmb_oda.addItem("Uygun oda yok", None)
-                    self.cmb_oda.setToolTip("Psikologlara atanmamış aktif oda bulunamadı. Oda Yönetimi'ni kontrol edin.")
+                    self.cmb_oda.addItem("Aktif oda yok", None)
+                    self.cmb_oda.setToolTip("Aktif oda bulunamadı. Oda Yönetimi'ni kontrol edin.")
                 self._liste_uyarisi("Odalar", None)
             else:
                 self.cmb_oda.addItem("Odalar alınamadı", None)
@@ -543,6 +543,59 @@ class IptalOnayKutusu(QDialog):
 
 
 
+class RezervasyonDetayPenceresi(QDialog):
+    """Satıra çift tıklayınca açılan rezervasyon ayrıntısı. Rezervasyonlar düzenlenmez; aktif olanı (yetkili kullanıcı için)
+    pencerenin altındaki düğmeyle iptal edilir. `iptal_fn` verilmezse düğme görünmez."""
+    def __init__(self, rez, iptal_fn=None, parent=None):
+        super().__init__(parent)
+        self.rez = rez
+        self.iptal_fn = iptal_fn
+        self.setWindowTitle("Rezervasyon Ayrıntısı")
+        self.setMinimumWidth(480)
+        self.setStyleSheet(FORM_STIL)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(12)
+
+        baslik = QLabel(f"📌  {RezervasyonYonetimEkrani._cihaz_metni(rez)}")
+        baslik.setStyleSheet("font-size: 17px; font-weight: 800; color: #0A1F5C;")
+        layout.addWidget(baslik)
+
+        durum = rez.get("durum", "Aktif")
+        renk, arka = DURUM_RENKLERI.get(durum, ("#6B7280", "#F3F4F6"))
+        self.lbl_durum = QLabel(durum)
+        self.lbl_durum.setStyleSheet(f"background: {arka}; color: {renk}; border-radius: 12px; font-size: 12px; "
+                                     "font-weight: 800; padding: 5px 14px;")
+        self.lbl_durum.setMaximumWidth(150)
+        layout.addWidget(self.lbl_durum)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+        self.degerler = {
+            "Bölüm": rez.get("bolum_adi") or "—",
+            "Oda": rez.get("oda_adi") or "—",
+            "Tarih ve saat": zaman_araligi(rez.get("baslangic_zamani"), rez.get("bitis_zamani")),
+            "Proje türü": rez.get("proje_turu") or "—",
+            "Açıklama": rez.get("proje_adi_aciklamasi") or "—",
+        }
+        for ad, deger in self.degerler.items():
+            etiket = QLabel(deger)
+            etiket.setWordWrap(True)
+            etiket.setStyleSheet("font-size: 13px; font-weight: 600; color: #0F2552;")
+            form.addRow(ad, etiket)
+        layout.addLayout(form)
+
+        self.btn_iptal = None
+        if iptal_fn:
+            self.btn_iptal = tehlike_dugmesi("Rezervasyonu iptal et", self.iptal)
+            layout.addWidget(self.btn_iptal)
+
+    def iptal(self):
+        self.accept()                                          # ayrıntı kapanır, onay penceresi iptal akışında açılır
+        if self.iptal_fn:
+            self.iptal_fn()
+
+
 # Durum -> (yazı rengi, arka plan)
 DURUM_RENKLERI = {
     "Aktif": ("#166534", "#DCFCE7"),
@@ -609,6 +662,7 @@ class RezervasyonYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(SUTUN_DURUM, 130)
         self.tablo.setColumnWidth(SUTUN_ISLEM, 90)
 
+        cift_tikla_ac(self.tablo, self.rezervasyon_detay_ac)                   # satıra çift tıklayınca ayrıntı (ve iptal) açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz rezervasyon yok.")
 
         kart = QFrame()
@@ -663,6 +717,7 @@ class RezervasyonYonetimEkrani(QWidget):
         self.tablo.setRowCount(len(gorunen))
         for satir, rez in enumerate(gorunen):
             self.tablo.setItem(satir, 0, metin_item(self._cihaz_metni(rez), kalin=True))
+            satira_kimlik_ata(self.tablo, satir, rez.get("rezervasyon_id"))
             self.tablo.setItem(satir, 1, metin_item(str(rez.get("bolum_adi") or "—")))
             self.tablo.setItem(satir, 2, metin_item(str(rez.get("oda_adi") or "—")))
             proje = " – ".join(m for m in (rez.get("proje_turu"), rez.get("proje_adi_aciklamasi")) if m)
@@ -686,6 +741,13 @@ class RezervasyonYonetimEkrani(QWidget):
         self.bos_mesaj.setText("Aramaya uyan rezervasyon yok." if self.rezervasyonlar else "Henüz rezervasyon yok.")
         self.bos_mesaj.setVisible(bos)
         self.tablo.setVisible(not bos)
+
+    def rezervasyon_detay_ac(self, rezervasyon_id):
+        rez = next((r for r in self.rezervasyonlar if r.get("rezervasyon_id") == rezervasyon_id), None)
+        if rez is None:
+            return
+        iptal_fn = (lambda: self.rezervasyon_iptal_et(rezervasyon_id)) if rez.get("durum") == "Aktif" and self.yetkili_mi else None
+        RezervasyonDetayPenceresi(rez, iptal_fn, self).exec()
 
     def yeni_rezervasyon_olustur(self, **on_degerler):
         form = YeniRezervasyonFormu(self.api_url, self.token, **on_degerler)
