@@ -18,7 +18,6 @@ erDiagram
         string cihaz_adi
         string marka_model
         string seri_no UK
-        int zimmetli_oda_id FK
         string durum
         timestamp kayit_tarihi
     }
@@ -273,7 +272,6 @@ erDiagram
     }
 
     %% Veritabanında tanımlı FK ilişkileri
-    odalar o|--o{ cihazlar : "zimmetli_oda_id"
     cihazlar ||--o{ cihaz_rezervasyonlari : "cihaz_id"
     bolumler o|--o{ cihaz_rezervasyonlari : "bolum_id"
     personel o|--o{ cihaz_rezervasyonlari : "rezervasyonu_yapan_personel_id"

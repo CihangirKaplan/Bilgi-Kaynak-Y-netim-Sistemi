@@ -2688,16 +2688,16 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
         if conn is not None: conn.close()
 
 CIHAZ_ODALARI_SORGUSU = (
-    "SELECT DISTINCT o.oda_id, o.oda_adi FROM odalar o "
-    "JOIN cihazlar c ON c.zimmetli_oda_id = o.oda_id WHERE o.aktif_mi = TRUE ORDER BY o.oda_adi"
+    "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
+    "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.oda_id = o.oda_id) ORDER BY o.oda_adi"
 )
 
 
 @app.get("/api/cihaz-odalari")
 def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
-    """Cihaz rezervasyonunda seçilebilen odalar: en az bir cihazın zimmetli olduğu aktif odalar.
+    """Cihaz rezervasyonunda seçilebilen odalar: hiçbir psikologa atanmamış aktif odalar.
 
-    Psikologlara atanan görüşme odaları (cihazı olmayan odalar) listeye girmez."""
+    Psikologlara atanan görüşme odaları listeye girmez."""
     conn = None
     cursor = None
     try:
@@ -2995,8 +2995,8 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
             raise HTTPException(status_code=409, detail="Bu envanter kodu veya seri no zaten kullanımda.")
 
         cursor.execute(
-            "INSERT INTO cihazlar (envanter_kodu, cihaz_adi, marka_model, seri_no, zimmetli_oda_id, durum) VALUES (%s, %s, %s, %s, %s, %s) RETURNING cihaz_id;",
-            (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.zimmetli_oda_id, cihaz.durum.value)
+            "INSERT INTO cihazlar (envanter_kodu, cihaz_adi, marka_model, seri_no, durum) VALUES (%s, %s, %s, %s, %s) RETURNING cihaz_id;",
+            (cihaz.envanter_kodu, cihaz.cihaz_adi, cihaz.marka_model, cihaz.seri_no, cihaz.durum.value)
         )
         cihaz_id = cursor.fetchone()[0]
         denetim_kaydi_olustur(
@@ -3101,9 +3101,9 @@ def cihazlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_G
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, zimmetli_oda_id, durum, kayit_tarihi FROM cihazlar ORDER BY cihaz_id;")
+        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum, kayit_tarihi FROM cihazlar ORDER BY cihaz_id;")
         kayitlar = cursor.fetchall()
-        return [{"cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2], "marka_model": k[3], "seri_no": k[4], "zimmetli_oda_id": k[5], "durum": k[6], "kayit_tarihi": k[7]} for k in kayitlar]
+        return [{"cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2], "marka_model": k[3], "seri_no": k[4], "durum": k[5], "kayit_tarihi": k[6]} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3115,11 +3115,11 @@ def cihaz_detayi_getir(cihaz_id: int, kullanici_id: int = Depends(izin_kontrol("
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, zimmetli_oda_id, durum, kayit_tarihi FROM cihazlar WHERE cihaz_id = %s;", (cihaz_id,))
+        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum, kayit_tarihi FROM cihazlar WHERE cihaz_id = %s;", (cihaz_id,))
         kayit = cursor.fetchone()
         if kayit is None:
             raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
-        return {"cihaz_id": kayit[0], "envanter_kodu": kayit[1], "cihaz_adi": kayit[2], "marka_model": kayit[3], "seri_no": kayit[4], "zimmetli_oda_id": kayit[5], "durum": kayit[6], "kayit_tarihi": kayit[7]}
+        return {"cihaz_id": kayit[0], "envanter_kodu": kayit[1], "cihaz_adi": kayit[2], "marka_model": kayit[3], "seri_no": kayit[4], "durum": kayit[5], "kayit_tarihi": kayit[6]}
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -3365,7 +3365,7 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
             if rez.kullanilacak_oda_id is not None:
                 cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
                 if cursor.fetchone() is None:
-                    raise HTTPException(status_code=422, detail="Seçilen oda bir cihaz odası değil veya aktif değil.")
+                    raise HTTPException(status_code=422, detail="Seçilen oda cihaz rezervasyonu için uygun değil (psikologa atanmış ya da aktif değil).")
 
             if rez.bolum_id is not None:
                 cursor.execute("SELECT 1 FROM bolumler WHERE bolum_id = %s AND aktif_mi IS NOT FALSE;", (rez.bolum_id,))
