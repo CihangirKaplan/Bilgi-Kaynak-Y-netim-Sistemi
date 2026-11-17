@@ -236,11 +236,11 @@ def test_form_bolum_ve_proje_turu_listelerini_veritabanindan_doldurur(form_ac):
 def test_form_yalniz_cihaz_odalarini_ister_psikolog_odalarini_degil(form_ac):
     f = form_ac()
     yollar = [yol for _, yol, _ in f._sunucu.istekler]
-    assert "/api/cihaz-odalari" in yollar and "/api/odalar" not in yollar            # oda görüntüleme izni gerektirmeyen rezervasyon odaları ucu
+    assert "/api/cihaz-odalari" in yollar and "/api/odalar" not in yollar            # genel oda listesi (psikolog odaları dahil) kullanılmaz
     assert kutu_metinleri(f.cmb_oda) == ["Cihaz Odası A"] and f.cmb_oda.currentData() == 5
 
 
-def test_aktif_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
+def test_uygun_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
     class OdasizSunucu(SahteSunucu):
         def __call__(self, yontem, url, **kw):
             if url.endswith("/api/cihaz-odalari"):
@@ -249,7 +249,7 @@ def test_aktif_oda_yoksa_form_acik_kalir_ve_uyarir(modul, form_ac):
             return super().__call__(yontem, url, **kw)
 
     f = form_ac(OdasizSunucu())
-    assert kutu_metinleri(f.cmb_oda) == ["Aktif oda yok"] and f.cmb_oda.currentData() is None
+    assert kutu_metinleri(f.cmb_oda) == ["Uygun oda yok"] and f.cmb_oda.currentData() is None
     assert "Oda Yönetimi" in f.cmb_oda.toolTip()
 
 

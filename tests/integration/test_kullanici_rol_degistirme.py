@@ -80,9 +80,9 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
         ("MEMUR",),       # Atanacak yeni rol
         (20, "PER-PSK-003"),  # Mevcut personel
     ]
-    mock_cursor.fetchall.return_value = [
-        ("PER-MEM-001",),
-        ("PER-MEM-002",),
+    mock_cursor.fetchall.side_effect = [
+        [],  # bugünden sonra planlı randevu yok
+        [("PER-MEM-001",), ("PER-MEM-002",)],
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -298,6 +298,7 @@ def test_danisma_ogrencisine_kayitsiz_rol_atanamaz():
         ("DANISMA_OGRENCISI",),
         None,
     ]
+    cursor.fetchall.return_value = []  # bugünden sonra planlı randevu yok
 
     with patch("server.sunucu.psycopg2.connect", return_value=baglanti):
         with pytest.raises(HTTPException) as hata:

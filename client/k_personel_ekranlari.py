@@ -198,9 +198,17 @@ class KullaniciPersonelEkrani(QWidget):
             headers = {"Authorization": f"Bearer {self.token}"}
             # YENİ ENDPOINT'E GİDİYORUZ
             url = f"{self.api_url}/api/kullanicilar/{kullanici_id}/durum-degistir"
-            
+
+            # Psikolog pasife alınırken oda atamaları kaldırılır; aktifleştirirken görüşme odaları yeniden seçilir.
+            ek_istek = {}
+            if rol_kodu == "PSIKOLOG" and "Pasif" in mevcut_durum_metni:
+                oda_formu = AktiflestirmeOdaFormu(self.api_url, self.token, kullanici_id, kullanici_adi, self)
+                if oda_formu.exec() != QDialog.Accepted:
+                    return
+                ek_istek["json"] = {"oda_idleri": oda_formu.secilen_odalar}
+
             try:
-                res = oturum_kontrollu_istek("PATCH", url, headers=headers, timeout=5)
+                res = oturum_kontrollu_istek("PATCH", url, headers=headers, timeout=5, **ek_istek)
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
@@ -209,6 +217,9 @@ class KullaniciPersonelEkrani(QWidget):
                     self.verileri_cek() 
                 elif res.status_code == 403:
                     QMessageBox.warning(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))
+                elif res.status_code in (409, 422):
+                    # Örn. "Bu psikologun bugünden sonra N planlı randevusu var..." ya da cihaz rezervasyonlu oda uyarısı.
+                    QMessageBox.warning(self, "İşlem Yapılamadı", sunucu_hata_mesaji(res, "İşlem tamamlanamadı."))
                 else:
                     QMessageBox.critical(self, "Hata", f"Sunucu hatası: {res.status_code}")
             except Exception as e:
@@ -1453,6 +1464,26 @@ class OdaYetkileriFormu(QDialog):
                 QMessageBox.warning(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+
+
+class AktiflestirmeOdaFormu(OdaYetkileriFormu):
+    """Pasif psikolog aktifleştirilirken görüşme odalarını seçtirir (pasife alınırken oda atamaları kaldırılmıştır).
+
+    Seçim burada kaydedilmez; çağıran, seçilen odaları durum değiştirme isteğiyle sunucuya gönderir."""
+
+    def __init__(self, api_url, token, kullanici_id, kullanici_adi, ebeveyn=None):
+        super().__init__(api_url, token, kullanici_id, kullanici_adi, ebeveyn)
+        self.setWindowTitle("Aktifleştirme: Oda Seçimi")
+        self.btn_kaydet.setText("Aktifleştir")
+        self.secilen_odalar = []
+
+    def kaydet(self):
+        secilen = self.secilen_oda_idleri()
+        if not secilen:
+            QMessageBox.warning(self, "Eksik Seçim", "Psikolog aktifleştirilirken en az bir görüşme odası seçilmelidir.")
+            return
+        self.secilen_odalar = secilen
+        self.accept()
 
 
 class RolDegistirFormu(QDialog):
