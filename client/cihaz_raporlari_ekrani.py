@@ -9,6 +9,7 @@ from client.api_yoneticisi import (
 )
 
 from client.rapor_excel import excel_dosyasi_olustur
+from client.tablo_tasarimi import OrtaliTablo
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -63,7 +64,7 @@ class CihazRaporlariEkrani(QWidget):
         return f"{float(deger or 0):,.2f} ₺".replace(",", "X").replace(".", ",").replace("X", ".")
 
     def _tablo_olustur(self, basliklar):
-        tablo = QTableWidget()
+        tablo = OrtaliTablo()
         tablo.setColumnCount(len(basliklar))
         tablo.setHorizontalHeaderLabels(basliklar)
         tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -79,6 +80,7 @@ class CihazRaporlariEkrani(QWidget):
                 color: #243653;
                 border: 1px solid #E3EAF5;
             }
+            QTableWidget::item { padding: 4px 16px; }
             QHeaderView::section {
                 background: #E8F0FF;
                 color: #16294B;

@@ -119,6 +119,32 @@ def oturum_hatasi_mi(hata_veya_yanit):
     )
 
 
+def hata_detayi_metni(yanit, varsayilan="Bilinmeyen bir hata oluştu."):
+    """Sunucunun 'detail' alanını her durumda düz metne çevirir.
+
+    FastAPI doğrulama (422) hatalarında 'detail' bir liste döner; bu liste Qt mesaj kutusuna
+    verilirse hata verir ya da ham Python listesi gösterilir. Metin aynen, liste okunur
+    cümlelere, sözlük ise 'mesaj' alanına çevrilir.
+    """
+    try:
+        detay = yanit.json().get("detail", varsayilan)
+    except Exception:
+        return varsayilan
+    if isinstance(detay, str):
+        return detay or varsayilan
+    if isinstance(detay, dict):
+        return str(detay.get("mesaj") or varsayilan)
+    if isinstance(detay, list):
+        parcalar = []
+        for oge in detay:
+            mesaj = str(oge.get("msg", "")) if isinstance(oge, dict) else str(oge)
+            mesaj = mesaj.removeprefix("Value error, ").strip()
+            if mesaj:
+                parcalar.append(mesaj)
+        return "\n".join(parcalar) or "Girilen bilgiler geçersiz. Lütfen kontrol edin."
+    return varsayilan
+
+
 def api_hata_mesaji(yanit=None, hata=None):
     """API ve bağlantı hatalarını kullanıcı dostu metne dönüştürür.
 

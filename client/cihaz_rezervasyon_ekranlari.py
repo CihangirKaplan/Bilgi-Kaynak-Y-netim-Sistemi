@@ -2,6 +2,7 @@
 
 Görünüm diğer cihaz sayfalarıyla (Arıza, Bakım, Kalibrasyon) aynı ortak bileşenleri kullanır (client/tablo_tasarimi.py).
 """
+from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
     QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit, QFrame
@@ -121,6 +122,7 @@ class YeniRezervasyonFormu(QDialog):
         self.btn_yeni_proje_turu = self._kisayol_dugmesi("＋ Yeni tür", "Listede olmayan bir proje türünü ekleyin", self.yeni_proje_turu_ekle)
 
         self.txt_proje_aciklama = QTextEdit()
+        self.txt_proje_aciklama.textChanged.connect(self._aciklamayi_sinirla)
         self.txt_proje_aciklama.setMaximumHeight(90)
         self.txt_proje_aciklama.setPlaceholderText("Rezervasyon amacını kısaca belirtin...")
 
@@ -223,6 +225,17 @@ class YeniRezervasyonFormu(QDialog):
 
         except Exception as e:
             QMessageBox.warning(self, "Bağlantı Hatası", "Sunucuya bağlanırken bir sorun oluştu.")
+
+    ACIKLAMA_EN_FAZLA = 255                 # veritabanı: cihaz_rezervasyonlari.proje_adi_aciklamasi VARCHAR(255)
+
+    def _aciklamayi_sinirla(self):
+        """QTextEdit'te uzunluk sınırı yoktur; yapıştırılan fazla metin sınırda kesilir."""
+        metin = self.txt_proje_aciklama.toPlainText()
+        if len(metin) > self.ACIKLAMA_EN_FAZLA:
+            self.txt_proje_aciklama.blockSignals(True)
+            self.txt_proje_aciklama.setPlainText(metin[:self.ACIKLAMA_EN_FAZLA])
+            self.txt_proje_aciklama.moveCursor(self.txt_proje_aciklama.textCursor().MoveOperation.End)
+            self.txt_proje_aciklama.blockSignals(False)
 
     def _liste_uyarisi(self, ad, metin):
         """Formun üstündeki uyarıyı günceller: metin verilirse "<ad> alınamadı: ..." satırı eklenir, None ise o satır kalkar."""
@@ -384,7 +397,7 @@ class YeniRezervasyonFormu(QDialog):
                 basari.exec()
                 self.accept()
             else:
-                hata_detay = res.json().get("detail", "Bilinmeyen bir hata oluştu.")
+                hata_detay = hata_detayi_metni(res, "Bilinmeyen bir hata oluştu.")
                 QMessageBox.warning(self, "İşlem Başarısız", hata_detay)
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
@@ -650,7 +663,7 @@ class RezervasyonYonetimEkrani(QWidget):
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
             [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal]))
 
-        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"])
+        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)

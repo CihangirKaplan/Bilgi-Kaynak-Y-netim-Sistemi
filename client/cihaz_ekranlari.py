@@ -213,7 +213,7 @@ class CihazYonetimEkrani(QWidget):
         self.filtre_seridi.hide()
         layout.addWidget(self.filtre_seridi)
 
-        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"])
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -346,7 +346,7 @@ class CihazDuzenlemeListesi(QDialog):
         lbl.setWordWrap(True)
         layout.addWidget(lbl)
 
-        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "DURUM", "İŞLEM"])
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "DURUM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)

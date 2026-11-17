@@ -378,7 +378,7 @@ class BakimPlanlariEkrani(QWidget):
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
-        self.tablo = tablo_olustur(["CİHAZ", "PLAN", "TEKRAR", "UYARI", "SONRAKİ TARİH", "DURUM", "İŞLEM"])
+        self.tablo = tablo_olustur(["CİHAZ", "PLAN", "TEKRAR", "UYARI", "SONRAKİ TARİH", "DURUM", "İŞLEM"], ortali=True)
         baslik = self.tablo.horizontalHeader()
         baslik.setSectionResizeMode(0, QHeaderView.Stretch)
         baslik.setSectionResizeMode(1, QHeaderView.ResizeToContents)

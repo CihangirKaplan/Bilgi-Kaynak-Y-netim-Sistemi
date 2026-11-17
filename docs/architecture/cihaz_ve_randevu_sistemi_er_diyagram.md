@@ -81,15 +81,6 @@ erDiagram
         boolean aktif_mi
     }
 
-    cihaz_takip_parametreleri {
-        int parametre_id PK
-        int cihaz_id FK
-        string parametre_adi
-        string parametre_degeri
-        string birim
-        timestamp son_guncelleme
-    }
-
     danisan_kodlari {
         string danisan_kod_id PK
         boolean ucretli_mi
@@ -280,7 +271,6 @@ erDiagram
     cihazlar o|--o{ cihaz_bakimlari : "cihaz_id"
     cihazlar o|--o{ cihaz_kalibrasyonlari : "cihaz_id"
     cihazlar o|--o{ cihaz_bakim_planlari : "cihaz_id"
-    cihazlar o|--o{ cihaz_takip_parametreleri : "cihaz_id"
     personel o|--o{ danisan_kodlari : "olusturan_psikolog_id"
     danisan_kodlari ||--o{ randevular : "danisan_kod_id"
     personel ||--o{ randevular : "psikolog_id"

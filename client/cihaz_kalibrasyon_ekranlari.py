@@ -1,3 +1,4 @@
+from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
@@ -42,8 +43,10 @@ class YeniKalibrasyonFormu(QDialog):
 
         self.cmb_cihaz = QComboBox()
         self.txt_kurum = QLineEdit()
+        self.txt_kurum.setMaxLength(100)
         self.txt_kurum.setPlaceholderText("Örn: TSE, Kalibro A.Ş...")
         self.txt_sertifika = QLineEdit()
+        self.txt_sertifika.setMaxLength(100)
         self.txt_sertifika.setPlaceholderText("Sertifika veya Belge No...")
         self.dt_gecerlilik = QDateEdit(QDate.currentDate().addYears(1))
         self.dt_gecerlilik.setCalendarPopup(True)
@@ -160,7 +163,7 @@ class YeniKalibrasyonFormu(QDialog):
                 self.accept()
             else:
                 # Hatayı gizlemiyoruz, ekrana basıyoruz!
-                hata_mesaji = res.json().get("detail", "Kayıt yapılamadı.")
+                hata_mesaji = hata_detayi_metni(res, "Kayıt yapılamadı.")
                 QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
@@ -185,7 +188,9 @@ class KalibrasyonDuzenleFormu(QDialog):
         self.txt_cihaz = QLineEdit(veri.get("cihaz_adi", ""))
         self.txt_cihaz.setReadOnly(True)
         self.txt_kurum = QLineEdit(veri.get("kalibrasyon_yapan_kurum", ""))
+        self.txt_kurum.setMaxLength(100)
         self.txt_sertifika = QLineEdit(veri.get("sertifika_no", ""))
+        self.txt_sertifika.setMaxLength(100)
         self.dt_gecerlilik = QDateEdit(QDate.fromString(str(veri.get("gecerlilik_tarihi", QDate.currentDate().toString("yyyy-MM-dd")))[:10], "yyyy-MM-dd"))
         self.dt_gecerlilik.setCalendarPopup(True)
 
@@ -246,7 +251,7 @@ class KalibrasyonDuzenleFormu(QDialog):
                 QMessageBox.information(self, "Başarılı", "Kalibrasyon kaydı başarıyla güncellendi.")
                 self.accept()
             else:
-                hata_mesaji = res.json().get("detail", "Güncelleme yapılamadı.")
+                hata_mesaji = hata_detayi_metni(res, "Güncelleme yapılamadı.")
                 QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
@@ -278,7 +283,7 @@ class KalibrasyonYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
 
         self.tablo = tablo_olustur(["CİHAZ", "KURUM", "SERTİFİKA NO", "KALİBRASYON TARİHİ",
-                                    "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"])
+                                    "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -384,7 +389,7 @@ class KalibrasyonYonetimEkrani(QWidget):
             if res.status_code == 200:
                 self.yukle()
                 return True
-            hata = res.json().get("detail", "Bilinmeyen hata")
+            hata = hata_detayi_metni(res, "Bilinmeyen hata")
             QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")

@@ -40,7 +40,9 @@ CREATE TABLE cihaz_arizalari (
     ariza_id SERIAL PRIMARY KEY,
     cihaz_id INT REFERENCES cihazlar(cihaz_id),
     bildiren_personel VARCHAR(100),
+    ariza_baslik VARCHAR(150) NOT NULL,
     ariza_aciklamasi TEXT NOT NULL,
+    aciliyet VARCHAR(20) NOT NULL DEFAULT 'Orta' CHECK (aciliyet IN ('Düşük', 'Orta', 'Yüksek', 'Kritik')),
     bildirim_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     cozum_tarihi TIMESTAMP,
     cozuldu_mu BOOLEAN DEFAULT FALSE
@@ -75,14 +77,4 @@ CREATE TABLE cihaz_bakim_planlari (
     uyari_suresi_gun INT DEFAULT 1, -- Kaç gün önceden memura bildirim düşsün?
     sonraki_gorev_tarihi DATE NOT NULL, -- Sistemin alarm vereceği o kritik tarih
     aktif_mi BOOLEAN DEFAULT TRUE
-);
-
--- 9. Cihaz Dinamik Takip Parametreleri (Her cihaza özel değişen özellikler)
-CREATE TABLE cihaz_takip_parametreleri (
-    parametre_id SERIAL PRIMARY KEY,
-    cihaz_id INT REFERENCES cihazlar(cihaz_id),
-    parametre_adi VARCHAR(100) NOT NULL, -- Örn: 'Jel Miktarı', 'Lamba Kullanımı'
-    parametre_degeri VARCHAR(100) NOT NULL, -- Örn: '450', '1200'
-    birim VARCHAR(50), -- Örn: 'ml', 'Saat' (İsteğe bağlı)
-    son_guncelleme TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
