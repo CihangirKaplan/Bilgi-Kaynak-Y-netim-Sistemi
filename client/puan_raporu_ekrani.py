@@ -36,7 +36,8 @@ from PySide6.QtWidgets import (
 )
 
 DONEMLER = ["Bu Yıl", "Geçen Yıl", "Son 6 Ay", "Bu Ay", "Tümü", "Tarih Aralığı"]
-TURLER = [("Tümü", None), ("Gönüllü Öğrenci", "GONULLU"), ("Danışma Masası Öğrencisi", "DANISMA_MASASI")]
+TURLER = [("Tümü", None), ("Gönüllü Öğrenci", "GONULLU"), ("Danışma Masası Öğrencisi", "DANISMA_MASASI"),
+          ("Asistan Öğrenci", "ASISTAN")]
 DURUMLAR = [("Tümü", None), ("Aktif", "aktif"), ("Pasif", "pasif")]
 
 MADALYALAR = {1: "🥇", 2: "🥈", 3: "🥉"}

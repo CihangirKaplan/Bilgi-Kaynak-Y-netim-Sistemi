@@ -1,15 +1,24 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox, QPushButton, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox, QPushButton, QMessageBox,
+                               QFrame, QLabel)
 import requests
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
 
+DANISMA_OGRENCISI_BILGISI = (
+    "ℹ  Danışma Masası öğrencileri bu pencereden eklenemez. Danışma Masası görevleri için öğrencinin giriş hesabı "
+    "gerekir; öğrenciyi “Kullanıcı & Personel” sayfasından “Danışma Öğrencisi” rolüyle oluşturun."
+)
+
+
 class OgrenciEkleDialog(QDialog):
-    def __init__(self, api_url, token, parent=None):
+    def __init__(self, api_url, token, parent=None, kullanici_sayfasi_acilabilir=False):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
+        self.sayfa_istendi = False      # "Kullanıcı & Personel sayfasına git" düğmesine basıldı mı (pencereyi açan ekran bakar)
         self.setWindowTitle("Yeni Öğrenci Ekle")
         self.setMinimumWidth(400)
 
@@ -43,15 +52,16 @@ class OgrenciEkleDialog(QDialog):
 
         self.cb_tur = QComboBox()
         self.cb_tur.addItem("Gönüllü Öğrenci", "GONULLU")
-        self.cb_tur.addItem("Danışma Masası Öğrencisi", "DANISMA_MASASI")
-        self.cb_tur.addItem("Asistan Öğrenci", "ASISTAN") # Asistan seçeneği eklendi
+        self.cb_tur.addItem("Asistan Öğrenci", "ASISTAN")
 
         self.le_telefon = QLineEdit()
         self.le_telefon.setMaxLength(11)
         self.le_telefon.setPlaceholderText("Örn: 05551234567")
 
         self.le_bolum = QLineEdit()
+        self.le_bolum.setMaxLength(100)          # veritabanı: ogrenciler.bolum VARCHAR(100)
         self.le_sinif = QLineEdit()
+        self.le_sinif.setMaxLength(20)           # veritabanı: ogrenciler.sinif VARCHAR(20)
 
         # Elemanları Forma Ekle
         form_layout.addRow("Ad Soyad (*):", self.le_ad_soyad)
@@ -63,9 +73,33 @@ class OgrenciEkleDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        # Danışma Masası öğrencisi giriş hesabı gerektirdiği için buradan eklenmez; kullanıcıyı doğru sayfaya yönlendiririz.
+        self.bilgi_kutusu = QFrame()
+        self.bilgi_kutusu.setStyleSheet(
+            "QFrame { background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 8px; }"
+            "QLabel { background: transparent; color: #854D0E; font-size: 12px; font-weight: 600; border: none; }")
+        bilgi_duzeni = QVBoxLayout(self.bilgi_kutusu)
+        self.lbl_bilgi = QLabel(DANISMA_OGRENCISI_BILGISI)
+        self.lbl_bilgi.setWordWrap(True)
+        bilgi_duzeni.addWidget(self.lbl_bilgi)
+        self.btn_kullanici_sayfasi = QPushButton("👥  Kullanıcı && Personel sayfasına git")   # düğmede tek & kısayol işaretidir, && yazılır
+        self.btn_kullanici_sayfasi.setCursor(Qt.PointingHandCursor)
+        self.btn_kullanici_sayfasi.setStyleSheet(
+            "QPushButton { background-color: #F59E0B; color: white; font-weight: bold; padding: 8px; border-radius: 6px; }"
+            "QPushButton:hover { background-color: #D97706; }")
+        self.btn_kullanici_sayfasi.clicked.connect(self._kullanici_sayfasina_git)
+        self.btn_kullanici_sayfasi.setVisible(bool(kullanici_sayfasi_acilabilir))    # sayfaya yetkisi yoksa düğme gösterilmez
+        bilgi_duzeni.addWidget(self.btn_kullanici_sayfasi)
+        layout.addWidget(self.bilgi_kutusu)
+
         self.btn_kaydet = QPushButton("Öğrenciyi Kaydet")
         self.btn_kaydet.clicked.connect(self.kaydet_tiklandi)
         layout.addWidget(self.btn_kaydet)
+
+    def _kullanici_sayfasina_git(self):
+        """Pencereyi kapatır; sayfayı pencereyi açan ekran açar (sayfa_istendi işaretine bakarak)."""
+        self.sayfa_istendi = True
+        self.reject()
 
     def kaydet_tiklandi(self):
         ad_soyad = self.le_ad_soyad.text().strip()

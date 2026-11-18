@@ -97,6 +97,7 @@ bearer_scheme = HTTPBearer()
 OGRENCI_TUR_ETIKETLERI = {
     "GONULLU": "Gönüllü Öğrenci",
     "DANISMA_MASASI": "Danışma Masası Öğrencisi",
+    "ASISTAN": "Asistan Öğrenci",
 }
 
 VT_AYARLARI = {
@@ -6121,9 +6122,9 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
 
         cursor.execute("""
             INSERT INTO ogrenciler
-            (ad_soyad, ogrenci_numarasi, telefon, tur)
-            VALUES (%s, %s, %s, %s) RETURNING ogrenci_id;
-        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur))
+            (ad_soyad, ogrenci_numarasi, telefon, tur, bolum, sinif)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING ogrenci_id;
+        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur, ogr.bolum, ogr.sinif))
 
         yeni_id = cursor.fetchone()[0]
 
