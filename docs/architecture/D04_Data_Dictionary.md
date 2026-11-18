@@ -419,6 +419,7 @@ Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
 | `hedef_tablo` | VARCHAR(100) | NULL | Veri değişikliğinden etkilenen tablo. |
 | `hedef_kayit_id` | INTEGER | NULL | Değiştirilen/Silinen kaydın PK değeri. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Olayın gerçekleştiği tam zaman. |
+| `ayrinti` | JSONB | NULL | Kalıcı silmelerde silinen satırın içeriği (`silinen`); oda atamalarında önceki/yeni oda kimlikleri. Kişisel veri içeren `ogrenciler` silmesinde ad, telefon vb. yazılmaz (yalnızca kimliksiz alanlar ve `maskelenen_alanlar` listesi). Tablo değiştirilemez olduğundan kayıt sonradan düzenlenemez. |
 
 ## Teknik tablo: `alembic_version`
 

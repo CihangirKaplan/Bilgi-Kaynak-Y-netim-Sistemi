@@ -104,7 +104,7 @@ def test_psikolog_pasife_alinirken_ve_aktiflesirken_odalar_gercek_veritabaninda(
     c.execute("SELECT randevu_id, oda_id, psikolog_id FROM randevular WHERE danisan_kod_id = %s ORDER BY randevu_id", (kod,))
     assert c.fetchall() == [(gelecek_randevu, oda_a, personel), (eski_planli, oda_b, personel)]      # geçmiş kayıtlar ve oda bilgileri aynen
     c.execute("SELECT count(*) FROM denetim_kayitlari WHERE kullanici_id = %s AND hedef_tablo = 'psikolog_odalar' AND hedef_kayit_id = %s", (admin, psikolog))
-    assert c.fetchone()[0] == 1
+    assert c.fetchone()[0] == 2      # UPDATE (önceki/yeni odalar) + DELETE (kaldırılan odalar)
 
     # 3) aktifleştirirken oda seçilmeli
     assert degistir().status_code == 422 and _durum(c, psikolog) == (False, False)

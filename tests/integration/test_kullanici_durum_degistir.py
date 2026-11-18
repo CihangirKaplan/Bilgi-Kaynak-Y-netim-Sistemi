@@ -21,7 +21,8 @@ def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, akt
     if hedef_rol == "PSIKOLOG" and aktif:
         fetchone.append((planli,))
     cursor.fetchone.side_effect = fetchone
-    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu)]
+    # son iki liste: denetim kaydı için önceki ve yeni oda atamaları
+    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), [], []]
     return conn, cursor
 
 
@@ -188,8 +189,9 @@ def test_durum_degistirme_audit_parametreleri_dogru():
     ]
 
     # Psikolog pasife alınınca oda atamalarının kaldırılması da denetim kaydına yazılır.
-    assert [c.args[1] for c in audit_cagrilari] == [
+    assert [c.args[1][:4] for c in audit_cagrilari] == [
         (10, "UPDATE", "psikolog_odalar", 5),
+        (10, "DELETE", "psikolog_odalar", 5),   # kaldırılan odalar silme olarak da kaydedilir
         (10, "UPDATE", "kullanicilar", 5),
     ]
 
@@ -303,7 +305,7 @@ def test_psikolog_aktiflestirilirken_secilen_odalar_yazilir_eski_artik_kayitlar_
     silme = next(i for i, m in enumerate(metinler) if m.startswith("DELETE FROM PSIKOLOG_ODALAR"))
     eklemeler = [(i, a[1]) for i, (a, m) in enumerate(zip(sorgular(cursor), metinler)) if m.startswith("INSERT INTO PSIKOLOG_ODALAR")]
     assert [e[1] for e in eklemeler] == [(5, 2), (5, 3)] and all(e[0] > silme for e in eklemeler)      # tekrarsız, sıralı; önce eskiler silinir
-    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    audit = [a[1][:4] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
     assert audit == [(10, "UPDATE", "psikolog_odalar", 5), (10, "UPDATE", "kullanicilar", 5)]
     conn.commit.assert_called_once()
 
