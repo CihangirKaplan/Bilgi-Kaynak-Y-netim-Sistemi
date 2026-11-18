@@ -57,7 +57,12 @@ from server.guvenlik import (
     GECICI_PAROLA_BITIS_SQL,
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
-from server.denetim import denetim_kaydi_olustur
+from server.denetim import (
+    denetim_kaydi_olustur,
+    psikolog_oda_degisikligini_yaz,
+    psikolog_odalarini_oku,
+    satiri_sil_ve_ayrintisini_al,
+)
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -1042,16 +1047,14 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         # Oda yetkileri yalnızca psikologlar içindir: psikolog olurken verilen odalar yazılır,
         # psikologluktan çıkarken silinir (yeniden psikolog olursa odalar yeniden seçilir).
         if psikolog_olacak or psikolog_idi:
+            onceki_odalar = psikolog_odalarini_oku(cursor, kullanici_id)
             cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
             for oda_id in istenen_odalar:
                 cursor.execute(
                     "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
                     (kullanici_id, oda_id),
                 )
-            cursor.execute(
-                "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
-                (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id),
-            )
+            psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
         cursor.execute(
@@ -1226,7 +1229,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
             )
  
         cursor.execute("DELETE FROM rol_izinleri WHERE rol_id = %s;", (rol_id,))
-        cursor.execute("DELETE FROM roller WHERE rol_id = %s;", (rol_id,))
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "roller", rol_id)
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="DELETE",
@@ -1234,6 +1237,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
             hedef_tablo="roller",
             hedef_kayit_id=rol_id,
             mevcut_cursor=cursor,
+            ayrinti=silinen,
         )
         conn.commit()
         return {"durum": "basarili", "mesaj": f"'{rol[0]}' rolü silindi."}
@@ -1849,10 +1853,11 @@ def kullanici_durum_degistir(
                 cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (islem_yapan_id, "UPDATE", "danisan_kodlari"))
 
             # Pasifte oda ataması kalkar; aktifleşirken seçilen odalar yazılır (eski artık kayıtlar varsa değiştirilir).
+            onceki_odalar = psikolog_odalarini_oku(cursor, kullanici_id)
             cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
             for oda_id in istenen_odalar:
                 cursor.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);", (kullanici_id, oda_id))
-            cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id))
+            psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
         conn.commit()
@@ -2750,6 +2755,7 @@ def psikolog_oda_yetkilerini_guncelle(
         psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
+        onceki_odalar = psikolog_odalarini_oku(cursor, hedef_kullanici_id)
         cursor.execute(
             """
             DELETE FROM psikolog_odalar po USING odalar o
@@ -2763,10 +2769,7 @@ def psikolog_oda_yetkilerini_guncelle(
                 "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s) ON CONFLICT DO NOTHING;",
                 (hedef_kullanici_id, oda_id),
             )
-        cursor.execute(
-            "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
-            (kullanici_id, "UPDATE", "psikolog_odalar", hedef_kullanici_id),
-        )
+        psikolog_oda_degisikligini_yaz(cursor, kullanici_id, hedef_kullanici_id, onceki_odalar)
         conn.commit()
         return {"durum": "basarili", "kullanici_id": hedef_kullanici_id, "oda_idleri": oda_idleri}
     except HTTPException:
@@ -4209,12 +4212,13 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM cihaz_bakimlari WHERE bakim_id = %s RETURNING bakim_id;", (bakim_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_bakimlari", bakim_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Bakım kaydı bulunamadı.")
 
-        # Silme ile denetim kaydı aynı işlemde (transaction) yazılır.
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
+        # Silme ile denetim kaydı (silinen içerikle birlikte) aynı işlemde (transaction) yazılır.
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_bakimlari", bakim_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Bakım kaydı silindi."}
@@ -4388,11 +4392,12 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s RETURNING kalibrasyon_id;", (kalibrasyon_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_kalibrasyonlari", kalibrasyon_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Kalibrasyon kaydı bulunamadı.")
 
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_kalibrasyonlari", kalibrasyon_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_kalibrasyonlari", kalibrasyon_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon kaydı silindi."}
@@ -4687,11 +4692,12 @@ def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(mevcut_kullanici_i
             )
         izinler = _plan_yetkileri(cursor, kullanici_id)
         _plan_turu_yetkisini_dogrula(izinler, mevcut[0])
-        cursor.execute("DELETE FROM cihaz_bakim_planlari WHERE plan_id = %s RETURNING plan_id;", (plan_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_bakim_planlari", plan_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Plan bulunamadı.")
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="DELETE", kullanici_id=kullanici_id,
-                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor,
+                              ayrinti=silinen)
         conn.commit()
         return {"durum": "basarili", "mesaj": "Plan silindi."}
     except HTTPException:
@@ -5835,6 +5841,13 @@ def ogrenci_on_yil_sil(
                 """,
                 (ogrenci_id,)
             )
+            silinen_faaliyet_sayisi = cursor.rowcount
+
+            # 10 yıllık saklama süresi sonunda yapılan imha: denetim kaydına kişisel veri (ad, telefon...) YAZILMAZ;
+            # yalnızca kimliksiz alanlar ve silinen faaliyet sayısı tutulur.
+            silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenciler", ogrenci_id)
+            if silinen is not None:
+                silinen["silinen_faaliyet_kaydi_sayisi"] = silinen_faaliyet_sayisi
 
             denetim_kaydi_olustur(
                 VT_AYARLARI,
@@ -5842,12 +5855,8 @@ def ogrenci_on_yil_sil(
                 yetkili_id,
                 "ogrenciler",
                 ogrenci_id,
-                mevcut_cursor=cursor
-            )
-
-            cursor.execute(
-                "DELETE FROM ogrenciler WHERE ogrenci_id=%s",
-                (ogrenci_id,)
+                mevcut_cursor=cursor,
+                ayrinti=silinen,
             )
 
         conn.commit()
@@ -6294,12 +6303,11 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Silinecek kayıt zaten yok veya bulunamadı.")
 
-        # Kaydı acımadan veritabanından siliyoruz
-        cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
-
-        # Audit log (Denetim kaydı) - Kim sildi bilelim
+        # Kaydı veritabanından siliyoruz; silinen içerik denetim kaydına yazılır (kim, neyi sildi).
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenci_faaliyet_takip", takip_id)
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
@@ -7582,10 +7590,10 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="DİKKAT: Bu birim geçmiş faaliyet kayıtlarında kullanıldığı için SİLİNEMEZ! İsterseniz adını güncelleyebilirsiniz.")
 
-        cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
-
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "faaliyet_birimleri", birim_id)
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
@@ -7742,7 +7750,7 @@ def audit_kayitlarini_getir(
     if olay_turu:
         gecerli_olaylar = {
             "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
-            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE"
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE"
         }
         if (
             len(olay_turu) > len(gecerli_olaylar)
@@ -7801,7 +7809,7 @@ def audit_kayitlarini_getir(
                 ),
                 COUNT(*) FILTER (
                     WHERE d.olay_turu::text IN (
-                        'CREATE', 'UPDATE', 'ROLE_CHANGE'
+                        'CREATE', 'UPDATE', 'ROLE_CHANGE', 'DELETE'
                     )
                 ),
                 COUNT(*) FILTER (
@@ -7832,7 +7840,8 @@ def audit_kayitlarini_getir(
                     FROM kullanicilar hedef
                     WHERE d.hedef_tablo = 'kullanicilar'
                       AND hedef.kullanici_id = d.hedef_kayit_id
-                ) AS hedef_kullanici_adi
+                ) AS hedef_kullanici_adi,
+                d.ayrinti
             {from_sql}
             {where_sql}
             ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
@@ -7852,6 +7861,7 @@ def audit_kayitlarini_getir(
                 "hedef_tablo": satir[4],
                 "hedef_kayit_id": satir[5],
                 "hedef_kullanici_adi": satir[7] if len(satir) > 7 else None,
+                "ayrinti": satir[8] if len(satir) > 8 else None,
                 "olusturulma_tarihi": (
                     satir[6].isoformat() if satir[6] else None
                 )
