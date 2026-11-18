@@ -45,6 +45,7 @@ class OgrenciEkleDialog(QDialog):
 
         # Form Elemanları ve Kısıtlamalar
         self.le_ad_soyad = QLineEdit()
+        self.le_ad_soyad.setMaxLength(100)       # veritabanı: ogrenciler.ad_soyad VARCHAR(100)
 
         self.le_ogrenci_no = QLineEdit()
         self.le_ogrenci_no.setMaxLength(15)
