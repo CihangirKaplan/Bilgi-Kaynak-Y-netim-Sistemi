@@ -1,7 +1,7 @@
 """Bakım ve kalibrasyon kayıtlarına plan bağlantısı (plan_id)
 
 Revision ID: b3e8f1a5d472
-Revises: e0f32bef6d16
+Revises: e7c1a9d4b362
 Create Date: 2026-11-17 18:00:00.000000
 
 Bakım/kalibrasyon formları kaydın hangi plana ait olduğunu (plan_id) gönderiyor, ancak yalnızca planın "sonraki tarihi"
@@ -14,7 +14,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "b3e8f1a5d472"
-down_revision: Union[str, Sequence[str], None] = "e0f32bef6d16"
+down_revision: Union[str, Sequence[str], None] = "e7c1a9d4b362"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
