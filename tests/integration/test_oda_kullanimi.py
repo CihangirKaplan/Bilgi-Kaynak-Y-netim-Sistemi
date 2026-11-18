@@ -133,17 +133,19 @@ def istemci():
     app.dependency_overrides.pop(mevcut_kullanici_id, None)
 
 
-def _cagir(istemci, sorgu, rol="ADMIN", cihaz_izni=None):
+def _cagir(istemci, sorgu, rol="ADMIN", cihaz_izni=None, etkinlik_izni=True, etkinlik_satirlari=None):
     """cihaz_izni verilmezse yalnızca psikolog rolünde izin yok sayılır (gerçek rol_izinleri düzeni)."""
     izin = (0 if "PSIKOLOG" in rol else 1) if cihaz_izni is None else int(cihaz_izni)
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), (rol, izin)]
+    c.fetchone.side_effect = [(1,), (rol, izin, int(etkinlik_izni))]
     c.fetchall.side_effect = [
         [(1, "Oda-1", 1, True)],
         [(10, 1, datetime(2026, 11, 16, 9), datetime(2026, 11, 16, 10), "PLANLANDI", "Ayşe", "DAN-2026-0001", "ONLINE", True),
          (11, 1, datetime(2026, 11, 16, 10), datetime(2026, 11, 16, 11), "TAMAMLANDI", "Fatma", "DAN-2026-0002", "YUZ_YUZE", False)],
         [(20, 1, datetime(2026, 11, 16, 16), datetime(2026, 11, 16, 18), "EEG Seti", "Psikoloji")],
+        etkinlik_satirlari if etkinlik_satirlari is not None else [],
+        # Oda etkinlikleri
     ]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.get("/api/oda-kullanimi" + sorgu)
@@ -406,3 +408,82 @@ def test_menu_oda_kullanimi_normal_sayfa_olarak_baglidir():
     assert "Oda Kullanımı" in tkys_sidebar_refined.PAGE_ICONS
     kaynak = open(main_window.__file__, encoding="utf-8").read()
     assert "master_stack.setCurrentIndex(1)" not in kaynak and "HaftalikTakvimEkrani" not in kaynak      # tam ekran takvim yolu kalktı
+
+
+
+def test_oda_kullanimi_etkinlik_detaylari_izne_bagli(istemci):
+    kayit = (
+        77, 1, "Gizli Test Etkinliği", 8,
+        datetime(2026, 11, 16, 12),
+        datetime(2026, 11, 16, 13),
+        55,
+        False,  # iptal_edildi_mi
+    )
+    sorgu = "?baslangic=2026-11-16&bitis=2026-11-22"
+
+    izinli = _cagir(
+        istemci, sorgu,
+        etkinlik_izni=True,
+        etkinlik_satirlari=[kayit],
+    )[0]
+    assert izinli.status_code == 200
+    etkinlik = izinli.json()["etkinlikler"][0]
+    assert etkinlik["etkinlik_adi"] == "Gizli Test Etkinliği"
+    assert etkinlik["katilimci_sayisi"] == 8
+    assert etkinlik["organize_eden_personel_id"] == 55
+    assert etkinlik["iptal_edildi_mi"] is False
+
+    izinsiz = _cagir(
+        istemci, sorgu,
+        etkinlik_izni=False,
+        etkinlik_satirlari=[kayit],
+    )[0]
+    assert izinsiz.status_code == 200
+    etkinlik = izinsiz.json()["etkinlikler"][0]
+
+    # Doluluk için gereken veriler korunur.
+    assert etkinlik["oda_id"] == 1
+    assert etkinlik["baslangic_zamani"]
+    assert etkinlik["bitis_zamani"]
+
+    # Ayrıntılar sunucudan gönderilmez.
+    assert etkinlik["etkinlik_adi"] is None
+    assert etkinlik["katilimci_sayisi"] is None
+    assert etkinlik["organize_eden_personel_id"] is None
+    assert "Gizli Test Etkinliği" not in izinsiz.text
+
+
+def test_oda_kullanimi_iptal_edilen_etkinlik_gorunur_ve_detay_gizlenir(istemci):
+    kayit = (
+        88, 1, "İptal Edilmiş Test Etkinliği", 12,
+        datetime(2026, 11, 16, 14),
+        datetime(2026, 11, 16, 15),
+        55,
+        True,
+    )
+    sorgu = "?baslangic=2026-11-16&bitis=2026-11-22"
+
+    izinli = _cagir(
+        istemci, sorgu,
+        etkinlik_izni=True,
+        etkinlik_satirlari=[kayit],
+    )[0]
+
+    assert izinli.status_code == 200
+    etkinlik = izinli.json()["etkinlikler"][0]
+    assert etkinlik["iptal_edildi_mi"] is True
+    assert etkinlik["etkinlik_adi"] == "İptal Edilmiş Test Etkinliği"
+
+    izinsiz = _cagir(
+        istemci, sorgu,
+        etkinlik_izni=False,
+        etkinlik_satirlari=[kayit],
+    )[0]
+
+    assert izinsiz.status_code == 200
+    etkinlik = izinsiz.json()["etkinlikler"][0]
+    assert etkinlik["iptal_edildi_mi"] is True
+    assert etkinlik["oda_id"] == 1
+    assert etkinlik["etkinlik_adi"] is None
+    assert etkinlik["katilimci_sayisi"] is None
+    assert "İptal Edilmiş Test Etkinliği" not in izinsiz.text

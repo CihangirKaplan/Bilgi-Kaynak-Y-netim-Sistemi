@@ -35,7 +35,8 @@ def rol_degistir(hedef_rol, yeni_rol, oda_idleri=None, aktif_odalar=(), personel
         fetchall.append(list(planli))                   # planlı randevu sorgusu: [(oda_adi, randevu_sayisi)]
     if yeni_rol == "PSIKOLOG":
         fetchall.append([(o,) for o in aktif_odalar])   # oda doğrulama sorgusu
-        fetchall.append(list(rezervasyonlu))            # cihaz rezervasyonlu oda sorgusu: [(oda_adi, rezervasyon_sayisi)]
+        fetchall.append(list(rezervasyonlu))
+        fetchall.append([])  # Oda etkinliği yok
     fetchall.append(list(personel_kodlari))             # personel kodu sorgusu
     cursor.fetchall.side_effect = fetchall
 

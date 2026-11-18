@@ -21,7 +21,7 @@ def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, akt
     if hedef_rol == "PSIKOLOG" and aktif:
         fetchone.append((planli,))
     cursor.fetchone.side_effect = fetchone
-    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu)]
+    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), []]
     return conn, cursor
 
 

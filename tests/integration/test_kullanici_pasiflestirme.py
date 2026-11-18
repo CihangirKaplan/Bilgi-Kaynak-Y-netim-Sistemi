@@ -109,6 +109,7 @@ def test_pasif_kullanici_yeniden_aktiflestirilebilir():
     mock_cursor.fetchall.side_effect = [
         [(3,)],  # seçilen oda aktif
         [],      # cihaz rezervasyonu için kullanılan oda yok
+        [],      # oda etkinliği yok
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):

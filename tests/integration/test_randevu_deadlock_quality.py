@@ -82,7 +82,10 @@ def test_quality_randevu_deadlock_sonrasi_basarili_yeniden_deneme():
         (1,),        # Aktif psikolog
         (1,),        # Aktif oda
         (1,),        # Oda psikoloğa atanmış
-        None,        # Randevu cakismasi yok
+        None,        # Ortak kontrol: randevu yok
+        None,        # Ortak kontrol: cihaz yok
+        None,        # Ortak kontrol: etkinlik yok
+        None,        # Mevcut randevu çakışması yok
         (123,),      # Olusturulan randevu ID
     ]
 

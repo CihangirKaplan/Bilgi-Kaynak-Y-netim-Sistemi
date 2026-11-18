@@ -13,6 +13,7 @@ from server.sunucu import app
             "/api/randevular/5",
             {"oda_id": 1},
             [
+                (1,),  # Randevu güncelleme: ilk oda ID
                 (
                     "TEST-D-001",
                     2,

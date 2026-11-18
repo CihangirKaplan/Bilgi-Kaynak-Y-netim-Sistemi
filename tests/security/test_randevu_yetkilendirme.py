@@ -22,6 +22,7 @@ def test_psikolog_baskasinin_randevusunu_guncelleyemez():
     # 2. Giriş yapan kullanıcının rolü
     # 3. Giriş yapan psikoloğun personel_id değeri
     mock_cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         (
             "TEST-D-001",
             2,
@@ -141,6 +142,7 @@ def test_psikolog_kendi_randevusunu_guncelleyebilir():
 
     # SQL sorgularının sırasına göre sahte cevaplar
     mock_cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         (
             "TEST-D-001",
             1,
@@ -151,7 +153,10 @@ def test_psikolog_kendi_randevusunu_guncelleyebilir():
         ),
         ("PSIKOLOG",),
         (1,),  # Psikoloğun personel kaydı
-        None,  # Randevu çakışması yok
+        None,  # Ortak kontrol: randevu yok
+        None,  # Ortak kontrol: cihaz yok
+        None,  # Ortak kontrol: etkinlik yok
+        None,  # Mevcut randevu çakışması yok
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):

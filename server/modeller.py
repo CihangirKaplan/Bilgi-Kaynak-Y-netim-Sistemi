@@ -249,6 +249,43 @@ class RandevuModeli(BaseModel):
     olusturulma_tarihi: Optional[datetime.datetime] = None
 
 # APT-API-001 / SEC-APT-002: Randevu Oluşturma Modeli
+
+# TKYS_RANDEVU_MESAI_0800_1800
+def randevu_mesai_dogrula(baslangic, bitis):
+    """Randevular aynı gün 08:00-18:00 arasında olmalıdır."""
+    if baslangic.date() != bitis.date():
+        raise ValueError(
+            "Randevu aynı gün başlayıp bitmelidir."
+        )
+
+    if baslangic >= bitis:
+        raise ValueError(
+            "Bitiş zamanı başlangıçtan sonra olmalıdır."
+        )
+
+    bas_dakika = baslangic.hour * 60 + baslangic.minute
+    bit_dakika = bitis.hour * 60 + bitis.minute
+
+    bas_gecerli = (
+        480 <= bas_dakika < 1080
+    )
+    bit_gecerli = (
+        480 < bit_dakika <= 1080
+        and not (
+            bit_dakika == 1080
+            and (bitis.second or bitis.microsecond)
+        )
+    )
+
+    if not bas_gecerli or not bit_gecerli:
+        raise ValueError(
+            "Randevular yalnızca 08:00-18:00 "
+            "saatleri arasında oluşturulabilir."
+        )
+
+    return True
+
+
 class RandevuOlusturModeli(BaseModel):
     danisan_kod_id: str
     psikolog_id: int = Field(gt=0)
@@ -257,6 +294,15 @@ class RandevuOlusturModeli(BaseModel):
     bitis_zamani: NaifZaman
     gorusme_tipi: Literal["YUZ_YUZE", "ONLINE"] = "YUZ_YUZE"
     terapi_turu: Optional[Literal["OYUN_TERAPISI", "BIREYSEL_TERAPI"]] = None
+
+    @model_validator(mode="after")
+    def _randevu_mesai_kontrolu(self):
+        randevu_mesai_dogrula(
+            self.baslangic_zamani,
+            self.bitis_zamani,
+        )
+        return self
+
 
 # APT-API-001 / SEC-APT-002: Randevu Güncelleme Modeli
 class RandevuGuncelleModeli(BaseModel):
