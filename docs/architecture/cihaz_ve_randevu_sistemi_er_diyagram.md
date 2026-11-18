@@ -178,13 +178,6 @@ erDiagram
         int varsayilan_oda_id FK
     }
 
-    giris_captcha_kodlari {
-        string captcha_id PK
-        string kod_ozeti
-        timestamp gecerlilik_sonu
-        timestamp olusturulma_tarihi
-    }
-
     giris_istek_limitleri {
         string anahtar PK
         timestamp pencere_baslangici

@@ -22,6 +22,7 @@ IZINLI_HOSTLAR = {
 POSTGRESQL_TEST_DOSYALARI = {
     "test_veri_butunlugu_pg_quality.py",
     "test_denetim_silinen_veri_pg_quality.py",
+    "test_giris_siniri_pg_quality.py",
     "test_ogrenci_yonetimi_postgresql_quality.py",
     "test_psikolog_planli_randevu_pg_quality.py",
     "test_faaliyet_turleri_postgresql_quality.py",
@@ -184,3 +185,19 @@ def randevu_formu_tarih_alt_sinirini_sabitle(monkeypatch):
     from PySide6.QtCore import QDate
 
     monkeypatch.setattr(modul, "bugunun_tarihi", lambda: QDate(2000, 1, 1))
+
+
+# Giriş sınırı testlerinin bulunduğu modüller: bunlarda sınırlayıcı gerçek çalışır.
+GIRIS_SINIRI_TEST_MODULLERI = {"test_giris_siniri", "test_giris_siniri_pg_quality"}
+
+
+@pytest.fixture(autouse=True)
+def giris_siniri_diger_testlerde_kapali(request, monkeypatch):
+    """IP bazlı giriş sınırı, kendi testleri dışında devre dışıdır.
+
+    Diğer testler psycopg2.connect'i sahte bağlantıyla değiştirir; sınırlayıcı o sahte bağlantıyı gerçek sanıp girişi
+    engellemesin. Üretimde sınırlayıcı her zaman açıktır.
+    """
+    if request.module.__name__.split(".")[-1] in GIRIS_SINIRI_TEST_MODULLERI:
+        return
+    monkeypatch.setattr("server.giris_siniri.istemci_anahtari", lambda istek: None)

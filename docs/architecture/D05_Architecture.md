@@ -325,7 +325,6 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `kullanicilar`
 - `personel`
 - `denetim_kayitlari`
-- `giris_captcha_kodlari`
 - `giris_istek_limitleri`
 - `parola_sifirlama_talepleri`
 
