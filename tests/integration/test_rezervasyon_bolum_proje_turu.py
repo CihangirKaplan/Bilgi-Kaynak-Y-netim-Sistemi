@@ -186,6 +186,7 @@ def test_rezervasyon_odalari_aktif_psikologa_atanmamis_aktif_odalari_listeler():
     assert "o.aktif_mi = TRUE" in sorgu
     assert "FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id" in sorgu
     assert "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE" in sorgu                              # aktif psikologa atanan oda gelmez; pasif psikolog odayı tutmaz
+    assert "JOIN roller r ON r.rol_id = k.rol_id" in sorgu and "UPPER(r.rol_adi) = 'PSIKOLOG'" in sorgu          # odayı yalnızca şu an psikolog rolündeki kullanıcı tutar
     assert "zimmetli" not in sorgu and "cihazlar" not in sorgu                                      # cihaz tablosuna bağlı değil
 
 

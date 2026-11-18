@@ -88,18 +88,18 @@ def test_cihaz_rezervasyonlu_odayla_psikolog_olunamaz_ve_uyari_doner():
 def test_planli_randevusu_olan_psikolog_baska_role_gecemez_ve_uyari_doner():
     conn, cursor, _, hata = rol_degistir("PSIKOLOG", "MEMUR", planli=[("EEG Odası", 1), ("Oda-2", 2)])
     assert hata.status_code == 409
-    assert "3 planlı randevusu var" in hata.detail and "iptal edin" in hata.detail
+    assert "bugün ve sonrası için 3 planlı randevusu var" in hata.detail and "iptal edin ya da durumlarını güncelleyin" in hata.detail
     assert not rol_guncellendi_mi(cursor)                                   # rol değişmez
     assert not any(s.strip().upper().startswith("DELETE FROM PSIKOLOG_ODALAR") for s in sorgular(cursor))   # odalar da kalkmaz
     conn.commit.assert_not_called()
     conn.rollback.assert_called_once()
 
 
-def test_planli_randevu_sorgusu_bugunden_sonrasini_sayar_ve_psikolog_olmayanda_sorulmaz():
+def test_planli_randevu_sorgusu_bugun_ve_sonrasini_sayar_ve_psikolog_olmayanda_sorulmaz():
     _, cursor, _, hata = rol_degistir("PSIKOLOG", "MEMUR")
     assert hata is None
     sql = next(c.args[0] for c in cursor.execute.call_args_list if "FROM randevular r" in c.args[0])
-    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani >= CURRENT_DATE" in sql
     _, cursor, _, hata = rol_degistir("MEMUR", "MUDUR")
     assert hata is None and not any("FROM randevular" in s for s in sorgular(cursor))
 

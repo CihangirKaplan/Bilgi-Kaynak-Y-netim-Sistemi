@@ -237,18 +237,18 @@ def test_planli_randevusu_olan_psikolog_pasife_alinamaz():
     with pytest.raises(HTTPException) as hata:
         calistir(conn)
     assert hata.value.status_code == 409
-    assert "2 planlı randevusu var" in hata.value.detail and "iptal edin" in hata.value.detail
+    assert "bugün ve sonrası için 2 planlı randevusu var" in hata.value.detail and "iptal edin ya da durumlarını güncelleyin" in hata.value.detail
     assert not yazan_sorgu_var_mi(cursor, "UPDATE")                       # durum değişmez
     assert not yazan_sorgu_var_mi(cursor, "DELETE")                       # oda atamaları da kalkmaz
     conn.commit.assert_not_called()
     conn.rollback.assert_called_once()
 
 
-def test_planli_randevu_denetimi_yalnizca_bugunden_sonrasini_ve_planlilari_sayar():
+def test_planli_randevu_denetimi_bugun_ve_sonrasini_ve_yalnizca_planlilari_sayar():
     conn, cursor = sahte_db()
     calistir(conn)
     sql, parametreler = next(a for a in sorgular(cursor) if "FROM randevular r" in a[0])
-    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql      # geçmişte kalan "Planlandı" kayıtlar engellemez
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani >= CURRENT_DATE" in sql      # bugünkü randevu da engeller; dünden öncesi engellemez
     assert "p.personel_id = r.psikolog_id" in sql and parametreler == (5,)
 
 
