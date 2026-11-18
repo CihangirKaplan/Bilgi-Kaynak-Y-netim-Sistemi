@@ -19,40 +19,78 @@ def test_randevu_ve_cihaz_varken_etkinlik_reddedilir():
     conn = psycopg2.connect(**VT_AYARLARI)
     randevu_id = None
     rezervasyon_id = None
+    test_kullanici_id = None
+    test_personel_id = None
+    test_oda_id = None
+    test_danisan_id = None
+    test_cihaz_id = None
 
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT current_database()")
             assert cur.fetchone()[0] == "crkys_alembic_test"
 
-            cur.execute("""
-                SELECT oda_id FROM odalar
-                WHERE aktif_mi = TRUE AND kapasite >= 1
-                ORDER BY oda_id LIMIT 1
-            """)
-            oda = cur.fetchone()
+            etiket = uuid4().hex[:10]
 
-            cur.execute("""
-                SELECT personel_id, kullanici_id FROM personel
-                WHERE aktif_mi = TRUE AND kullanici_id IS NOT NULL
-                ORDER BY personel_id LIMIT 1
-            """)
-            personel = cur.fetchone()
+            cur.execute(
+                """
+                INSERT INTO kullanicilar
+                    (kullanici_adi, parola_hash, rol_id)
+                VALUES (
+                    %s, 'x',
+                    (SELECT rol_id FROM roller WHERE rol_adi = 'PSIKOLOG')
+                )
+                RETURNING kullanici_id
+                """,
+                (f"oe_{etiket}",),
+            )
+            test_kullanici_id = cur.fetchone()[0]
 
-            cur.execute("""
-                SELECT danisan_kod_id FROM danisan_kodlari
-                ORDER BY danisan_kod_id LIMIT 1
-            """)
-            danisan = cur.fetchone()
+            cur.execute(
+                """
+                INSERT INTO personel (kullanici_id, personel_kodu)
+                VALUES (%s, %s)
+                RETURNING personel_id
+                """,
+                (test_kullanici_id, f"OE-{etiket}"),
+            )
+            test_personel_id = cur.fetchone()[0]
 
-            cur.execute("""
-                SELECT cihaz_id FROM cihazlar
-                WHERE durum IN ('Kullanima_Hazir', 'Rezerve')
-                ORDER BY cihaz_id LIMIT 1
-            """)
-            cihaz = cur.fetchone()
+            cur.execute(
+                """
+                INSERT INTO odalar (oda_adi, kapasite)
+                VALUES (%s, 10)
+                RETURNING oda_id
+                """,
+                (f"oe_oda_{etiket}",),
+            )
+            test_oda_id = cur.fetchone()[0]
 
-            assert all((oda, personel, danisan, cihaz))
+            test_danisan_id = f"OE-{etiket}"
+            cur.execute(
+                """
+                INSERT INTO danisan_kodlari
+                    (danisan_kod_id, olusturan_psikolog_id)
+                VALUES (%s, %s)
+                """,
+                (test_danisan_id, test_personel_id),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO cihazlar
+                    (envanter_kodu, cihaz_adi, durum)
+                VALUES (%s, %s, 'Kullanima_Hazir')
+                RETURNING cihaz_id
+                """,
+                (f"OE-{etiket}", f"oe_cihaz_{etiket}"),
+            )
+            test_cihaz_id = cur.fetchone()[0]
+
+            oda = (test_oda_id,)
+            personel = (test_personel_id, test_kullanici_id)
+            danisan = (test_danisan_id,)
+            cihaz = (test_cihaz_id,)
 
             oda_id = oda[0]
             personel_id, kullanici_id = personel
@@ -149,6 +187,31 @@ def test_randevu_ve_cihaz_varken_etkinlik_reddedilir():
                         DELETE FROM randevular
                         WHERE randevu_id = %s
                     """, (randevu_id,))
+                if test_danisan_id is not None:
+                    cur.execute(
+                        "DELETE FROM danisan_kodlari WHERE danisan_kod_id = %s",
+                        (test_danisan_id,),
+                    )
+                if test_cihaz_id is not None:
+                    cur.execute(
+                        "DELETE FROM cihazlar WHERE cihaz_id = %s",
+                        (test_cihaz_id,),
+                    )
+                if test_oda_id is not None:
+                    cur.execute(
+                        "DELETE FROM odalar WHERE oda_id = %s",
+                        (test_oda_id,),
+                    )
+                if test_personel_id is not None:
+                    cur.execute(
+                        "DELETE FROM personel WHERE personel_id = %s",
+                        (test_personel_id,),
+                    )
+                if test_kullanici_id is not None:
+                    cur.execute(
+                        "DELETE FROM kullanicilar WHERE kullanici_id = %s",
+                        (test_kullanici_id,),
+                    )
             conn.commit()
             print("PASS | Geçici test kayıtları temizlendi.")
         except Exception:
