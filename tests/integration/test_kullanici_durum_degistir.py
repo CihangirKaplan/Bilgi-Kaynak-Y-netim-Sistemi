@@ -12,11 +12,13 @@ from server.sunucu import (
 )
 
 
-def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, aktif_odalar=(3,), rezervasyonlu=()):
-    """planli: bugünden sonraki planlı randevu sayısı (psikolog pasife alınırken sorulur).
-    aktif_odalar / rezervasyonlu: psikolog aktifleştirilirken oda doğrulama ve cihaz rezervasyonlu oda sorguları."""
+def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, aktif_odalar=(3,), rezervasyonlu=(), danisan=0):
+    """planli: bugün ve sonrası için planlı randevu sayısı (psikolog pasife alınırken sorulur).
+    aktif_odalar / rezervasyonlu: psikolog aktifleştirilirken oda doğrulama ve cihaz rezervasyonlu oda sorguları.
+    danisan: psikolog pasife alınırken/aktifleşirken etkilenen danışan sayısı (UPDATE danisan_kodlari rowcount)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
+    cursor.rowcount = danisan
     fetchone = [(islem_rolu,), (hedef_rol, aktif)]
     if hedef_rol == "PSIKOLOG" and aktif:
         fetchone.append((planli,))
@@ -346,3 +348,59 @@ def test_http_psikolog_aktiflestirme_govdesi(govde, beklenen):
         assert (conn.commit.call_count == 1) is (beklenen == 200)
     finally:
         app.dependency_overrides.pop(yetki, None)
+
+
+# ------------------------------------------------------------------ psikologun danışanları
+def danisan_sorgusu(cursor):
+    return next((a for a in sorgular(cursor) if a[0].startswith("UPDATE danisan_kodlari")), None)
+
+
+def test_psikolog_pasife_alininca_danisanlari_da_pasife_alinir_ve_isaretlenir():
+    conn, cursor = sahte_db(danisan=3)
+    sonuc = calistir(conn)
+    assert sonuc["yeni_durum"] is False and sonuc["pasife_alinan_danisan"] == 3 and "aktif_edilen_danisan" not in sonuc
+    sql, parametreler = danisan_sorgusu(cursor)
+    assert "SET aktif_mi = FALSE, psikolog_pasifligi_nedeniyle_pasif = TRUE" in sql
+    assert "WHERE aktif_mi = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s)" in sql   # yalnızca zaten aktif olanlar
+    assert parametreler == (5,)
+    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    assert (10, "UPDATE", "danisan_kodlari") in audit
+    assert not yazan_sorgu_var_mi(cursor, "DELETE FROM RANDEVULAR") and not yazan_sorgu_var_mi(cursor, "UPDATE RANDEVULAR")   # randevu geçmişi korunur
+    conn.commit.assert_called_once()
+
+
+def test_psikolog_aktiflesince_yalnizca_bu_yuzden_pasifleyen_danisanlar_geri_acilir():
+    conn, cursor = sahte_db(aktif=False, aktif_odalar=(3,), danisan=2)
+    sonuc = calistir(conn, DurumDegistirModeli(oda_idleri=[3]))
+    assert sonuc["yeni_durum"] is True and sonuc["aktif_edilen_danisan"] == 2 and "pasife_alinan_danisan" not in sonuc
+    sql, parametreler = danisan_sorgusu(cursor)
+    assert "SET aktif_mi = TRUE, psikolog_pasifligi_nedeniyle_pasif = FALSE" in sql
+    assert "WHERE psikolog_pasifligi_nedeniyle_pasif = TRUE AND olusturan_psikolog_id IN" in sql     # elle pasife alınmış danışanlara dokunmaz
+    assert parametreler == (5,)
+
+
+def test_etkilenen_danisan_yoksa_denetim_kaydi_yazilmaz():
+    conn, cursor = sahte_db(danisan=0)
+    sonuc = calistir(conn)
+    assert sonuc["pasife_alinan_danisan"] == 0
+    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    assert (10, "UPDATE", "danisan_kodlari") not in audit
+
+
+def test_planli_randevu_nedeniyle_pasife_alma_reddedilirse_danisanlara_dokunulmaz():
+    conn, cursor = sahte_db(planli=1, danisan=3)
+    with pytest.raises(HTTPException) as hata:
+        calistir(conn)
+    assert hata.value.status_code == 409
+    assert danisan_sorgusu(cursor) is None
+    conn.commit.assert_not_called()
+
+
+def test_psikolog_olmayan_icin_danisan_islemi_ve_yanit_anahtarlari_yok():
+    for aktif in (True, False):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value
+        cursor.fetchone.side_effect = [("MUDUR",), ("MEMUR", aktif)]
+        sonuc = calistir(conn)
+        assert danisan_sorgusu(cursor) is None
+        assert "pasife_alinan_danisan" not in sonuc and "aktif_edilen_danisan" not in sonuc

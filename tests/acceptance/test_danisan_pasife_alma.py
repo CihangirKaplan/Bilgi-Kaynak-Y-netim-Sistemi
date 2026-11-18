@@ -65,6 +65,13 @@ def test_pasif_danisan_yeniden_aktif_edilir_planli_randevu_kontrolu_gerekmez(ist
     assert not any("FROM randevular" in s for s, _ in sorgular)
 
 
+def test_elle_durum_degisikligi_psikolog_pasifligi_isaretini_temizler(istemci):
+    for aktif, danisan in (("false", (True, 3)), ("true", (False, 3))):
+        _, sorgular, _ = _degistir(istemci, f"?aktif_mi={aktif}", danisan=danisan)
+        sql = next(s for s, _ in sorgular if s.startswith("UPDATE danisan_kodlari"))
+        assert "psikolog_pasifligi_nedeniyle_pasif = FALSE" in sql                # elle değişiklik otomatik geri açma/kapama işaretini bırakmaz
+
+
 def test_ayni_durum_istenirse_islem_yapilmaz_basarili_doner(istemci):
     yanit, sorgular, conn = _degistir(istemci, "?aktif_mi=true", danisan=(True, 3))
     assert yanit.status_code == 200 and guncelleme_var(sorgular) == []

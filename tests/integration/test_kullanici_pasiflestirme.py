@@ -185,6 +185,7 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
+    mock_cursor.rowcount = 0  # pasife alınan danışan yok: yalnızca oda ve kullanıcı denetim kayıtları
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),
         ("PSIKOLOG", True),

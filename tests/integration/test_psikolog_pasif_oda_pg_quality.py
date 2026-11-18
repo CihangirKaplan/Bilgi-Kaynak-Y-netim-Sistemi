@@ -153,3 +153,34 @@ def test_psikolog_adlari_pasifler_dahil_gercek_veritabaninda(ortam):
         c.execute("DELETE FROM randevular WHERE psikolog_id = %s", (kayitlar["eski"],))
         c.execute("DELETE FROM personel WHERE personel_id = ANY(%s)", (list(kayitlar.values()),))
         c.execute("DELETE FROM kullanicilar WHERE kullanici_id = ANY(%s)", ([eski, sade],))
+
+
+def test_psikolog_pasife_alininca_danisanlari_pasife_alinir_aktiflesince_geri_acilir_gercek_veritabaninda(ortam):
+    """Danışanlar psikologla birlikte pasife alınır; geri açılırken yalnızca BU YÜZDEN pasifleşenler açılır (elle pasif olanlar pasif kalır)."""
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    etiket = uuid4().hex[:8]
+    kod_elle, kod_elle_acilan = f"PD-{etiket}-E", f"PD-{etiket}-A"
+    c.execute("INSERT INTO danisan_kodlari (danisan_kod_id, olusturan_psikolog_id, aktif_mi) VALUES (%s, %s, FALSE)", (kod_elle, personel))      # elle pasife alınmış
+    c.execute("INSERT INTO danisan_kodlari (danisan_kod_id, olusturan_psikolog_id) VALUES (%s, %s)", (kod_elle_acilan, personel))                # aktif
+    durum = lambda k: (c.execute("SELECT aktif_mi, psikolog_pasifligi_nedeniyle_pasif FROM danisan_kodlari WHERE danisan_kod_id = %s", (k,)), c.fetchone())[1]
+    try:
+        istemci = TestClient(app)
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        degistir = lambda **govde: istemci.patch(f"/api/kullanicilar/{psikolog}/durum-degistir", **({"json": govde} if govde else {}))
+
+        yanit = degistir()                                                                       # psikolog pasife alınır
+        assert yanit.status_code == 200 and yanit.json()["pasife_alinan_danisan"] == 2           # kod ve kod_elle_acilan (kod_elle zaten pasifti)
+        assert durum(kod) == (False, True) and durum(kod_elle_acilan) == (False, True)           # psikolog yüzünden pasif, işaretli
+        assert durum(kod_elle) == (False, False)                                                 # elle pasif olan işaretlenmez
+        c.execute("SELECT count(*) FROM denetim_kayitlari WHERE kullanici_id = %s AND hedef_tablo = 'danisan_kodlari'", (admin,))
+        assert c.fetchone()[0] == 1
+
+        assert istemci.patch(f"/api/danisan-kodlari/{kod_elle_acilan}/durum", params={"aktif_mi": "true"}).status_code == 200      # biri elle yeniden açılır
+        assert durum(kod_elle_acilan) == (True, False)                                           # işaret temizlenir
+
+        yanit = degistir(oda_idleri=[oda_a])                                                     # psikolog yeniden aktif
+        assert yanit.status_code == 200 and yanit.json()["aktif_edilen_danisan"] == 1            # yalnızca kod geri açıldı
+        assert durum(kod) == (True, False) and durum(kod_elle_acilan) == (True, False)
+        assert durum(kod_elle) == (False, False)                                                 # elle pasif olan pasif kaldı
+    finally:
+        c.execute("DELETE FROM danisan_kodlari WHERE danisan_kod_id = ANY(%s)", ([kod_elle, kod_elle_acilan],))

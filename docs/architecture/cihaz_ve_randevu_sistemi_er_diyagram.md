@@ -89,6 +89,7 @@ erDiagram
         timestamp olusturulma_tarihi
         int olusturan_psikolog_id FK
         string yas_grubu
+        boolean psikolog_pasifligi_nedeniyle_pasif
     }
 
     proje_turleri {
