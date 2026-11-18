@@ -871,7 +871,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
         istenen_odalar = sorted(set(veri.oda_idleri or []))
         if psikolog_idi and not psikolog_olacak:
-            # Psikologluktan çıkarken odaları kalkar: bugünden sonra planlı randevusu varsa önce iptal edilmeli.
+            # Psikologluktan çıkarken odaları kalkar: bugün ve sonrası için planlı randevusu varsa önce iptal edilmeli.
             psikolog_planli_randevulari_denetle(cursor, kullanici_id)
         if psikolog_olacak:
             if not istenen_odalar:
@@ -1762,7 +1762,7 @@ def kullanici_durum_degistir(
 ):
     """Kullanıcıyı aktif/pasif yapar (geçiş).
 
-    Psikolog pasife alınırken: bugünden sonra planlı randevusu varsa işlem 409 ile reddedilir; yoksa oda atamaları kaldırılır
+    Psikolog pasife alınırken: bugün ve sonrası için planlı randevusu varsa işlem 409 ile reddedilir; yoksa oda atamaları kaldırılır
     (geçmiş randevular ve raporlar etkilenmez, çünkü oda bilgisi randevunun kendisinde durur). Psikolog aktife alınırken en az
     bir görüşme odası seçilmelidir (oda_idleri); seçilen odalar cihaz rezervasyonu için kullanılıyorsa 409 döner."""
     conn = None
@@ -1810,17 +1810,17 @@ def kullanici_durum_degistir(
                 raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
         elif psikolog_pasiflesiyor:
-            # Oda boşa düşeceği için bugünden sonraki planlı randevular önce iptal edilmeli. Geçmişte kalmış kayıtlar engellemez.
+            # Oda boşa düşeceği için bugün ve sonrasındaki planlı randevular önce iptal edilmeli (ya da durumu güncellenmeli). Dünden önceki kayıtlar engellemez.
             cursor.execute(
                 "SELECT COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
-                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW();",
+                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE;",
                 (kullanici_id,),
             )
             planli = cursor.fetchone()[0]
             if planli:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Bu psikologun bugünden sonra {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin.",
+                    detail=f"Bu psikologun bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin ya da durumlarını güncelleyin.",
                 )
 
         # Her iki tabloyu da eşzamanlı güncelle
@@ -2594,7 +2594,7 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
 
 
 def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri=None):
-    """Psikologun bugünden sonra planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
+    """Psikologun bugün ve sonrası için planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
 
     kalacak_oda_idleri verilmezse (rol değiştirme: tüm odalar kalkar) tüm planlı randevular sayılır. Verilirse (oda yetkisi
     güncelleme) yalnızca psikologa şu an atanmış, yeni kümede olmayan ve aktif odalardaki planlı randevular sayılır.
@@ -2606,7 +2606,7 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
             FROM randevular r
             JOIN personel p ON p.personel_id = r.psikolog_id
             JOIN odalar o ON o.oda_id = r.oda_id
-            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE
             GROUP BY o.oda_id, o.oda_adi
             ORDER BY o.oda_adi;
             """,
@@ -2619,7 +2619,7 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
             FROM randevular r
             JOIN personel p ON p.personel_id = r.psikolog_id
             JOIN odalar o ON o.oda_id = r.oda_id
-            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE
               AND o.aktif_mi = TRUE AND r.oda_id <> ALL(%s)
               AND EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)
             GROUP BY o.oda_id, o.oda_adi
@@ -2632,10 +2632,10 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
         return
     if kalacak_oda_idleri is None:
         toplam = sum(sayi for _, sayi in planlilar)
-        detay = f"Bu psikologun bugünden sonra {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin."
+        detay = f"Bu psikologun bugün ve sonrası için {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin ya da durumlarını güncelleyin."
     else:
         ayrinti = ", ".join(f"{ad} ({sayi} randevu)" for ad, sayi in planlilar)
-        detay = f"Kaldırılmak istenen odalarda bugünden sonra planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin."
+        detay = f"Kaldırılmak istenen odalarda bugün ve sonrası için planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin ya da durumlarını güncelleyin."
     raise HTTPException(status_code=409, detail=detay)
 
 
@@ -2765,7 +2765,8 @@ def oda_psikolog_atamalari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EK
             SELECT po.oda_id, k.kullanici_adi
             FROM psikolog_odalar po
             JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
-            WHERE k.aktif_mi = TRUE
+            JOIN roller r ON r.rol_id = k.rol_id
+            WHERE k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'
             ORDER BY po.oda_id, k.kullanici_adi;
             """
         )
@@ -2847,7 +2848,8 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
 CIHAZ_ODALARI_SORGUSU = (
     "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
     "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id "
-    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE) ORDER BY o.oda_adi"
+    "JOIN roller r ON r.rol_id = k.rol_id "
+    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') ORDER BY o.oda_adi"
 )
 
 
