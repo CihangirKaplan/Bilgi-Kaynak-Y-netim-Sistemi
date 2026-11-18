@@ -14,6 +14,8 @@ def ogrenci_modeli():
         ogrenci_numarasi="QA001",
         telefon="05000000000",
         tur="Gönüllü",
+        bolum=None,
+        sinif=None,
     )
 
 

@@ -654,9 +654,17 @@ class OgrenciEkleModeli(BaseModel):
     ad_soyad: str
     ogrenci_numarasi: str
     telefon: Optional[str] = None
-    tur: Literal["GONULLU"]
-    bolum: Optional[str] = None
-    sinif: Optional[str] = None
+    # Danışma Masası öğrencisi giriş hesabı gerektirir; "Kullanıcı & Personel" ekranından kullanıcıyla birlikte oluşturulur.
+    tur: Literal["GONULLU", "ASISTAN"]
+    bolum: Optional[str] = Field(default=None, max_length=100)     # veritabanı: ogrenciler.bolum VARCHAR(100)
+    sinif: Optional[str] = Field(default=None, max_length=20)      # veritabanı: ogrenciler.sinif VARCHAR(20)
+
+    @field_validator("bolum", "sinif", mode="before")
+    @classmethod
+    def bos_metni_yok_say(cls, deger):
+        if isinstance(deger, str):
+            return deger.strip() or None
+        return deger
 
 # ==========================================
 # DANIŞMA MASASI YÖNETİMİ MODELLERİ

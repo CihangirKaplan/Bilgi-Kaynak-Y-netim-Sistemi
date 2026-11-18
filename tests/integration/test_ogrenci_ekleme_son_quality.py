@@ -72,6 +72,8 @@ def test_ogrenci_audit_hatasinda_rollback():
             "ogrenci_numarasi",
             "telefon",
             "tur",
+            "bolum",
+            "sinif",
         )
     })
 

@@ -2311,7 +2311,9 @@ QLabel {
             self.ogrenciler_ekrani = OgrenciYonetimEkrani(
                 api_url=self.api_url,
                 token=self.token,
-                parent=self
+                parent=self,
+                sayfaya_git=self._bildirimden_sayfaya_git,
+                kullanici_sayfasi_izinli=self._sayfa_izinli_mi("Kullanıcı & Personel"),
             )
             lay.addWidget(self.ogrenciler_ekrani, 1)
 
