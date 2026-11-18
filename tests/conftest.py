@@ -20,6 +20,7 @@ IZINLI_HOSTLAR = {
 }
 
 POSTGRESQL_TEST_DOSYALARI = {
+    "test_veri_butunlugu_pg_quality.py",
     "test_ogrenci_yonetimi_postgresql_quality.py",
     "test_psikolog_planli_randevu_pg_quality.py",
     "test_faaliyet_turleri_postgresql_quality.py",
