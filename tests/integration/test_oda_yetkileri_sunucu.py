@@ -127,18 +127,18 @@ def test_planli_randevusu_olan_odayi_kaldirmak_409_verir_ve_uyari_doner():
     yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2]})
     assert yanit.status_code == 409
     detay = yanit.json()["detail"]
-    assert "Görüşme Odası-1 (2 randevu)" in detay and "planlı randevu var" in detay and "iptal edin" in detay
+    assert "Görüşme Odası-1 (2 randevu)" in detay and "bugün ve sonrası için planlı randevu var" in detay and "iptal edin ya da durumlarını güncelleyin" in detay
     assert not yazma_sorgusu_var_mi(cursor)                                                 # atama değişmez
     conn.commit.assert_not_called()
     conn.rollback.assert_called()
 
 
-def test_planli_randevu_denetimi_yalnizca_kaldirilan_aktif_odalarin_bugunden_sonrasini_sayar():
+def test_planli_randevu_denetimi_yalnizca_kaldirilan_aktif_odalarin_bugun_ve_sonrasini_sayar():
     conn, cursor = baglanti(fetchone=[(1,), ("PSIKOLOG",)], fetchall=[[(2,), (3,)], [], []])
     istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2, 3]})
     sql, parametreler = next(c.args for c in cursor.execute.call_args_list if "FROM randevular r" in c.args[0])
     assert parametreler == (11, [2, 3])                                                      # psikolog ve yeni oda kümesi
-    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql          # geçmiş "Planlandı" ve iptaller engellemez
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani >= CURRENT_DATE" in sql  # bugünkü randevu da engeller; dünden öncesi ve iptaller engellemez
     assert "r.oda_id <> ALL(%s)" in sql and "o.aktif_mi = TRUE" in sql                        # yalnızca kaldırılan aktif odalar
     assert "EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)" in sql   # şu an atanmış odalar
 
@@ -204,6 +204,14 @@ def test_atamalar_ucu_yalnizca_aktif_kullanicilari_listeler_psikologsuz_oda_yok_
     yanit = istek("get", "/api/oda-psikolog-atamalari", conn)
     assert yanit.json() == []  # cihaz odaları listede olmayabilir; bu bir hata değildir
     assert "k.aktif_mi = TRUE" in sorgular(cursor)[-1]
+
+
+def test_atamalar_ucu_yalnizca_su_an_psikolog_rolundeki_kullanicilari_listeler():
+    """Psikolog olup sonradan başka role geçen kişinin (eski kayıt kalmış olsa bile) adı Oda Yönetimi'nde görünmez."""
+    conn, cursor = baglanti(fetchone=[(2,)], fetchall=[[(2, "psikolog1")]])
+    istek("get", "/api/oda-psikolog-atamalari", conn)
+    sql = " ".join(sorgular(cursor)[-1].split())
+    assert "JOIN roller r ON r.rol_id = k.rol_id" in sql and "UPPER(r.rol_adi) = 'PSIKOLOG'" in sql
 
 
 # ------------------------------------------------------------------ Psikolog oluşturma kuralı
