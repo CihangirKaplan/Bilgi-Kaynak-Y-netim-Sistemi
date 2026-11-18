@@ -230,7 +230,7 @@ class CihazRaporlariEkrani(QWidget):
             "Cihaz", "Bakım Tarihi", "Yapan Kişi", "Yapılan İşlem", "Maliyet", "Sonraki Bakım"
         ])
         self.kalibrasyon_tablo = self._sekme_ekle("Kalibrasyon", [
-            "Cihaz", "İşlem Tarihi", "Kurum", "Sertifika No", "Geçerlilik Tarihi"
+            "Cihaz", "Kalibrasyon Tarihi", "Kurum", "Sertifika No", "Geçerlilik Tarihi"
         ])
         self.ariza_tablo = self._sekme_ekle("Arızalar", [
             "Cihaz", "Bildirim Tarihi", "Bildiren", "Açıklama", "Durum", "Çözüm Tarihi"
@@ -421,7 +421,7 @@ class CihazRaporlariEkrani(QWidget):
         self._tabloyu_doldur(self.kalibrasyon_tablo, [
             [
                 k["cihaz"],
-                self._tarih(k["islem_tarihi"]),
+                self._tarih(k.get("kalibrasyon_baslangic_tarihi") or k["islem_tarihi"]),
                 k.get("kalibrasyon_yapan_kurum") or "—",
                 k.get("sertifika_no") or "—",
                 self._tarih(k["gecerlilik_tarihi"]),

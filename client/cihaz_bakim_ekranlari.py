@@ -385,6 +385,8 @@ class BakimYonetimEkrani(QWidget):
             tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
             cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
+            if b.get("plan_adi"):
+                cihaz_item.setToolTip(f"Yerine getirilen plan: {b['plan_adi']}")
             cihaz_item.setData(Qt.UserRole, b["bakim_id"])
             self.tablo.setItem(i, 0, cihaz_item)
             self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
