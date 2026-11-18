@@ -87,6 +87,10 @@ def test_migrasyon_zincire_baglanir():
     spec = importlib.util.spec_from_file_location("ogrenci_turu_migrasyonu", dosya)
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
-    assert modul.revision == "d6c3a9e1f407" and modul.down_revision == "c5a2e8f1d739"
+    # Zincirdeki yeri sabit bir revizyona bağlanmaz (başka PR'lar araya yeni migrasyon ekleyebilir); var olan bir revizyona
+    # bağlı olduğu ve tek head bıraktığı ayrı testlerde (test_audit_degistirilemez) denetlenir.
+    assert modul.revision == "d6c3a9e1f407"
+    mevcutlar = {d.name.split("_")[0] for d in dosya.parent.glob("*.py")}
+    assert modul.down_revision in mevcutlar
     metin = dosya.read_text(encoding="utf-8")
     assert "ADD VALUE IF NOT EXISTS 'ASISTAN'" in metin and "ADD COLUMN IF NOT EXISTS bolum" in metin

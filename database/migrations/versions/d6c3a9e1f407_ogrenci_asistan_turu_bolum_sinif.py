@@ -1,7 +1,7 @@
 """ogrenci_turu enum'una ASISTAN eklenir; ogrenciler tablosuna bolum ve sinif sütunları eklenir
 
 Revision ID: d6c3a9e1f407
-Revises: c5a2e8f1d739
+Revises: a9d3c7e1f452
 Create Date: 2026-11-18 13:00:00.000000
 
 Sistemde üç öğrenci türü vardır: Gönüllü, Danışma Masası ve Asistan. "Yeni Öğrenci" penceresi bu üç türü sunuyor ve
@@ -14,7 +14,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "d6c3a9e1f407"
-down_revision: Union[str, Sequence[str], None] = "c5a2e8f1d739"
+down_revision: Union[str, Sequence[str], None] = "a9d3c7e1f452"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
