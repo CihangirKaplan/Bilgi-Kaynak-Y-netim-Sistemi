@@ -2078,6 +2078,8 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
     if hafta_sonuna_denk_mi(randevu.baslangic_zamani, randevu.bitis_zamani):
         raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
+    if gecmis_tarihe_mi(randevu.baslangic_zamani):
+        raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
 
     conn = None
     cursor = None
@@ -2236,6 +2238,14 @@ def hafta_sonuna_denk_mi(*zamanlar) -> bool:
     return any(z.weekday() >= 5 for z in zamanlar)
 
 
+GECMIS_TARIH_MESAJI = "Geçmiş bir tarihe randevu verilemez."
+
+
+def gecmis_tarihe_mi(zaman) -> bool:
+    """Başlangıç günü bugünden önceyse True. Bugünün geçmiş saatleri serbesttir (görüşme yapılıp sonradan girilebilir)."""
+    return zaman.date() < datetime.now(zaman.tzinfo).date()
+
+
 @app.get("/api/randevular/doluluk")
 def randevu_doluluk(
     tarih: date,
@@ -2335,6 +2345,9 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         # Zaman değişiyorsa hafta sonuna alınamaz (eskiden kalan hafta sonu randevusunun yalnızca oda/danışanı değişebilir)
         if ("baslangic_zamani" in degisiklikler or "bitis_zamani" in degisiklikler) and hafta_sonuna_denk_mi(baslangic, bitis):
             raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
+        # Başlangıç değişiyorsa geçmiş bir tarihe alınamaz (geçmiş randevunun terapi türü vb. yine düzeltilebilir).
+        if "baslangic_zamani" in degisiklikler and baslangic != mevcut[3] and gecmis_tarihe_mi(baslangic):
+            raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
         if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 
@@ -3107,12 +3120,27 @@ def danisan_bilgilerini_guncelle(
         if conn is not None: conn.close()
 
 @app.get("/api/psikologlar")
-def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
+def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")), pasifler_dahil: bool = False):
+    """Aktif psikologlar (randevu formundaki psikolog seçimi bunu kullanır).
+
+    pasifler_dahil=true: ad gösterimi içindir; randevusu ya da danışan kodu olan pasif ya da sonradan başka role geçmiş eski
+    psikologlar da gelir ve her kayıtta aktif_mi bilgisi bulunur. Böylece eski randevularda "Psikolog #19" yerine gerçek ad görünür."""
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        if pasifler_dahil:
+            cursor.execute("""
+                SELECT p.personel_id, k.kullanici_adi, k.kullanici_id,
+                       (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') AS aktif_mi
+                FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id
+                WHERE (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG')
+                   OR EXISTS (SELECT 1 FROM randevular x WHERE x.psikolog_id = p.personel_id)
+                   OR EXISTS (SELECT 1 FROM danisan_kodlari d WHERE d.olusturan_psikolog_id = p.personel_id)
+                ORDER BY k.kullanici_adi;
+            """)
+            return [{"personel_id": k[0], "ad_soyad": k[1], "kullanici_id": k[2], "aktif_mi": bool(k[3])} for k in cursor.fetchall()]
         cursor.execute("""
             SELECT p.personel_id, k.kullanici_adi, k.kullanici_id
             FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id

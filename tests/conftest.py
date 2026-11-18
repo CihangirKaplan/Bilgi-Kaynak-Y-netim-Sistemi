@@ -166,3 +166,19 @@ def tkys_qapplication():
         uygulama = QApplication([])
 
     yield uygulama
+
+
+@pytest.fixture(autouse=True)
+def randevu_formu_tarih_alt_sinirini_sabitle(monkeypatch):
+    """Randevu formunun tarih alt sınırını (geçmiş tarihe randevu verilemez) testlerde çok eski bir tarihe sabitler.
+
+    Sabit tarihli arayüz testleri (ör. Aralık 2026) zamanla geçmişte kalıp tarih seçicide reddedilmesin diye. Alt sınırı sınayan
+    testler kendi değerini monkeypatch eder. Yalnızca testin zaten içe aktardığı durumda uygulanır."""
+    import sys
+
+    modul = sys.modules.get("client.randevu_ekranlari")
+    if modul is None:
+        return
+    from PySide6.QtCore import QDate
+
+    monkeypatch.setattr(modul, "bugunun_tarihi", lambda: QDate(2000, 1, 1))

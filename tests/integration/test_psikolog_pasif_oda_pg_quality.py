@@ -121,3 +121,35 @@ def test_psikolog_pasife_alinirken_ve_aktiflesirken_odalar_gercek_veritabaninda(
     yanit = degistir(oda_idleri=[oda_b])
     assert yanit.status_code == 200 and yanit.json()["yeni_durum"] is True
     assert _durum(c, psikolog) == (True, True) and _atanmis(c, psikolog) == [oda_b]
+
+
+def test_psikolog_adlari_pasifler_dahil_gercek_veritabaninda(ortam):
+    """GET /api/psikologlar?pasifler_dahil=true: randevusu olan eski (başka role geçmiş) psikolog adıyla gelir, aktif_mi = false."""
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    etiket = uuid4().hex[:8]
+    eski = _kullanici(c, f"eski_{etiket}", "MEMUR")
+    sade = _kullanici(c, f"sade_{etiket}", "MEMUR")
+    kayitlar = {}
+    for ad, kullanici in (("eski", eski), ("sade", sade)):
+        c.execute("INSERT INTO personel (kullanici_id, personel_kodu) VALUES (%s, %s) RETURNING personel_id", (kullanici, f"PA-{ad}-{etiket}"))
+        kayitlar[ad] = c.fetchone()[0]
+    try:
+        _randevu(c, kod, kayitlar["eski"], oda_a, datetime.now() - timedelta(days=30), durum="TAMAMLANDI")     # geçmişte randevusu var
+        istemci = TestClient(app)
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+
+        varsayilan = {p["personel_id"] for p in istemci.get("/api/psikologlar").json()}
+        assert personel in varsayilan and kayitlar["eski"] not in varsayilan                            # randevu formu: yalnızca aktif psikologlar
+
+        liste = {p["personel_id"]: p for p in istemci.get("/api/psikologlar", params={"pasifler_dahil": "true"}).json()}
+        assert liste[personel]["aktif_mi"] is True and liste[personel]["ad_soyad"].startswith("pp_")
+        assert liste[kayitlar["eski"]] == {"personel_id": kayitlar["eski"], "ad_soyad": f"eski_{etiket}", "kullanici_id": eski, "aktif_mi": False}
+        assert kayitlar["sade"] not in liste                                                            # geçmişi olmayan, psikolog olmayan gelmez
+
+        c.execute("UPDATE kullanicilar SET aktif_mi = FALSE WHERE kullanici_id = %s", (psikolog,))     # pasif psikolog de adıyla gelir
+        liste = {p["personel_id"]: p for p in istemci.get("/api/psikologlar", params={"pasifler_dahil": "true"}).json()}
+        assert liste[personel]["aktif_mi"] is False and liste[personel]["ad_soyad"].startswith("pp_")
+    finally:
+        c.execute("DELETE FROM randevular WHERE psikolog_id = %s", (kayitlar["eski"],))
+        c.execute("DELETE FROM personel WHERE personel_id = ANY(%s)", (list(kayitlar.values()),))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = ANY(%s)", ([eski, sade],))

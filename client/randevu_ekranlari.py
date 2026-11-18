@@ -53,6 +53,11 @@ def hafta_sonu_mu(tarih):
     return tarih.dayOfWeek() >= 6
 
 
+def bugunun_tarihi():
+    """Tarih seçicilerin alt sınırı: geçmiş tarihe randevu verilemez. Testlerde sabitlenebilsin diye ayrı işlev."""
+    return QDate.currentDate()
+
+
 def siradaki_is_gunu(tarih):
     """Hafta sonuna denk gelen tarih için sonraki pazartesiyi, değilse aynı tarihi döndürür."""
     while hafta_sonu_mu(tarih):
@@ -367,6 +372,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
         self.cmb_danisan_kodu.currentIndexChanged.connect(self._terapiyi_danisana_gore_ayarla)
 
         self.dt_tarih = QDateEdit(siradaki_is_gunu(QDate.currentDate()))
+        self.dt_tarih.setMinimumDate(bugunun_tarihi())                 # geçmiş bir tarihe randevu verilemez
         self.dt_tarih.setDisplayFormat("dd.MM.yyyy")
         self.dt_tarih.setCalendarPopup(True)
         form_layout.addRow("Randevu Tarihi:", self.dt_tarih)
@@ -754,7 +760,10 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
         baslangic = self.eski_veriler["baslangic_zamani"].split('.')[0]
         tarih_kismi, saat_kismi = baslangic.split("T")
 
-        self.dt_tarih.setDate(QDate.fromString(tarih_kismi, "yyyy-MM-dd"))
+        mevcut_tarih = QDate.fromString(tarih_kismi, "yyyy-MM-dd")
+        # Geçmiş bir tarihe taşınamaz; ama geçmişte kalmış randevunun kendi tarihi görünür kalır (diğer alanları düzeltilebilsin).
+        self.dt_tarih.setMinimumDate(min(bugunun_tarihi(), mevcut_tarih))
+        self.dt_tarih.setDate(mevcut_tarih)
 
         saat_kisa = saat_kismi[:5]
         index = self.cmb_saat.findData(saat_kisa)
@@ -1188,10 +1197,11 @@ class RandevuAnaEkrani(QWidget):
         return donem_araligi(anahtar, datetime.now().date())
 
     # ------------------------------------------------------------------ veri
-    def _sozluk_cek(self, yol, anahtar, deger, onceki):
+    def _sozluk_cek(self, yol, anahtar, deger, onceki, params=None):
         headers = {"Authorization": f"Bearer {self.token}"}
+        ek = {"params": params} if params else {}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers=headers, timeout=5)
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers=headers, timeout=5, **ek)
             if oturum_hatasi_mi(cevap):
                 return onceki
             if cevap.status_code == 200:
@@ -1206,9 +1216,10 @@ class RandevuAnaEkrani(QWidget):
         self.oda_adlari = self._sozluk_cek(
             "/api/odalar", "oda_id", "oda_adi", self.oda_adlari
         )
+        # Pasif ya da başka role geçmiş eski psikologların adı da gelsin ("Psikolog #19" yerine gerçek ad).
         self.psikolog_adlari = self._sozluk_cek(
             "/api/psikologlar", "personel_id", "ad_soyad",
-            self.psikolog_adlari
+            self.psikolog_adlari, params={"pasifler_dahil": "true"}
         )
 
         headers = {"Authorization": f"Bearer {self.token}"}
