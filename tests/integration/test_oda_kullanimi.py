@@ -51,12 +51,11 @@ def test_hafta_basi_ve_basligi():
     assert hafta_basligi(date(2026, 12, 28)) == "28 Ara 2026 – 3 Oca 2027"                  # yıl değişir
 
 
-def test_saat_dilimleri_mesai_saatleri_mesai_disi_kayit_araligi_genisletir():
-    assert saat_dilimleri([]) == list(range(8, 18))                                          # 08:00-18:00 mesai
+def test_saat_dilimleri_her_zaman_sabit_08_18_mesai_disi_kayit_genisletmez():
+    assert saat_dilimleri([]) == saat_dilimleri() == list(range(8, 18))                      # 08:00-18:00 mesai
     assert saat_dilimleri([randevu(1, 0, 9)]) == list(range(8, 18))
-    assert saat_dilimleri([randevu(1, 0, 7)]) == list(range(7, 18))                          # mesai öncesi eski kayıt
-    assert saat_dilimleri([randevu(1, 0, 17, sure=2)]) == list(range(8, 19))                 # 17:00-19:00 → 17 ve 18 dilimleri
-    assert saat_dilimleri([rezervasyon_kayitlari([rezervasyon(1, 0, 18)])[0]]) == list(range(8, 19))
+    assert saat_dilimleri([randevu(1, 0, 7)]) == list(range(8, 18))                          # mesai öncesi kayıt ızgarayı genişletmez
+    assert saat_dilimleri([randevu(1, 0, 17, sure=2)]) == list(range(8, 18))                 # 17:00-19:00 kaydı da genişletmez
 
 
 def test_doluluk_aktif_odalar_calisma_gunleri_ve_sure_uzerinden():
@@ -97,14 +96,26 @@ def test_rezervasyon_kayitlari_randevu_bicimine_cevrilir():
     assert blok_haritasi([k])[(2, PZT, 16)] == [k]
 
 
-def test_gun_siniri_asan_rezervasyon_gunluk_parcalara_bolunur():
-    bas, bit = datetime(2026, 11, 16, 17), datetime(2026, 11, 18, 9)
-    r = {"rezervasyon_id": 1, "oda_id": 1, "baslangic_zamani": bas.isoformat(), "bitis_zamani": bit.isoformat(), "cihaz_adi": "EEG", "bolum_adi": None}
-    parcalar = rezervasyon_kayitlari([r])
+def _kayit(bas, bit):
+    return {"rezervasyon_id": 1, "oda_id": 1, "baslangic_zamani": bas.isoformat(), "bitis_zamani": bit.isoformat(), "cihaz_adi": "EEG", "bolum_adi": None}
+
+
+def test_cok_gunlu_rezervasyon_tek_kayit_her_gun_yalnizca_mesai_kismi_cizilir():
+    bas, bit = datetime(2026, 11, 18, 9), datetime(2026, 11, 20, 9)                           # 18.11 09:00 → 20.11 09:00
+    parcalar = rezervasyon_kayitlari([_kayit(bas, bit)])
     assert [(p["baslangic_zamani"], p["bitis_zamani"]) for p in parcalar] == [
-        ("2026-11-16T17:00:00", "2026-11-17T00:00:00"), ("2026-11-17T00:00:00", "2026-11-18T00:00:00"), ("2026-11-18T00:00:00", "2026-11-18T09:00:00")]
-    bitis_gece_yarisi = dict(r, bitis_zamani=datetime(2026, 11, 17).isoformat())
-    assert len(rezervasyon_kayitlari([bitis_gece_yarisi])) == 1                              # gece yarısında biten fazladan gün oluşturmaz
+        ("2026-11-18T09:00:00", "2026-11-18T18:00:00"), ("2026-11-19T08:00:00", "2026-11-19T18:00:00"), ("2026-11-20T08:00:00", "2026-11-20T09:00:00")]
+    assert {(p["gercek_baslangic"], p["gercek_bitis"]) for p in parcalar} == {(bas.isoformat(), bit.isoformat())}      # gerçek aralık korunur
+    assert len(rezervasyon_kayitlari([_kayit(datetime(2026, 11, 16, 17), datetime(2026, 11, 17))])) == 1              # gece yarısında biten fazladan gün açmaz
+
+
+def test_mesai_disina_dusen_rezervasyon_kismi_gosterilmez():
+    assert rezervasyon_kayitlari([_kayit(datetime(2026, 11, 16, 19), datetime(2026, 11, 16, 22))]) == []             # tamamen mesai dışı
+    assert rezervasyon_kayitlari([_kayit(datetime(2026, 11, 16, 18), datetime(2026, 11, 17, 8))]) == []              # gece boyunca: çizilecek mesai kısmı yok
+    (k,) = rezervasyon_kayitlari([_kayit(datetime(2026, 11, 16, 6), datetime(2026, 11, 16, 9))])
+    assert (k["baslangic_zamani"], k["bitis_zamani"]) == ("2026-11-16T08:00:00", "2026-11-16T09:00:00")              # sabah kısmı kırpılır
+    (k,) = rezervasyon_kayitlari([_kayit(datetime(2026, 11, 16, 17), datetime(2026, 11, 16, 20))])
+    assert (k["baslangic_zamani"], k["bitis_zamani"]) == ("2026-11-16T17:00:00", "2026-11-16T18:00:00")              # akşam kısmı kırpılır
 
 
 def test_gecersiz_rezervasyon_kayitlari_atlanir():
@@ -330,6 +341,24 @@ def test_16_18_arasi_cihaz_rezervasyonu_gorunur_ve_iki_satiri_kaplar(ekran_ac):
     assert ekran.tablo.rowCount() == 10 and ekran.tablo.verticalHeaderItem(8).text() == "16:00"      # 16:00 ve 17:00 satırları mesaide
     assert ekran.tablo.rowSpan(8, 0) == 2
     assert blok_metinleri(ekran, 8, 0) == ["EEG Seti", "Psikoloji", "16:00 – 18:00"]
+
+
+def test_mesai_disi_kayitlar_cizilmez_ve_izgara_genislemez(ekran_ac):
+    ekran, _ = ekran_ac(Sunucu([randevu(1, 0, 19), randevu(2, 0, 6)], rezervasyonlar=[rezervasyon(3, 0, 19, sure=3)]))
+    assert ekran.tablo.rowCount() == 10 and [ekran.tablo.verticalHeaderItem(i).text() for i in range(10)] == [f"{h:02d}:00" for h in range(8, 18)]
+    assert all(ekran.tablo.cellWidget(satir, sutun) is None for satir in range(10) for sutun in range(2))             # hiçbiri çizilmez
+
+
+def test_cok_gunlu_rezervasyon_her_gun_mesai_kismiyla_ve_gercek_aralikla_gorunur(ekran_ac):
+    r = rezervasyon(1, 2, 9)                                                                  # Çar 18.11 09:00
+    r["bitis_zamani"] = datetime(2026, 11, 20, 9).isoformat()                                # → Cum 20.11 09:00
+    ekran, _ = ekran_ac(Sunucu([], rezervasyonlar=[r]))
+    ekran.btn_hafta.click()
+    assert blok_metinleri(ekran, 1, 2) == ["EEG Seti", "Psikoloji", "18.11 09:00 – 20.11 09:00"]     # Çar: 09:00'dan, yazıda gerçek aralık
+    assert ekran.tablo.rowSpan(1, 2) == 9                                                            # 09:00-18:00 (9 satır)
+    assert ekran.tablo.rowSpan(0, 3) == 10 and blok_metinleri(ekran, 0, 3)[2] == "18.11 09:00 – 20.11 09:00"          # Per: 08:00-18:00 tam gün
+    assert ekran.tablo.rowSpan(0, 4) == 1 and blok_metinleri(ekran, 0, 4)[0] == "EEG Seti"            # Cum: yalnızca 08:00-09:00
+    assert ekran.tablo.rowCount() == 10
 
 
 def test_yetkili_cihaz_adi_ve_bolumu_gorur(ekran_ac):
