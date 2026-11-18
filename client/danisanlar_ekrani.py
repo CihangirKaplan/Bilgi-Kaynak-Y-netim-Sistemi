@@ -149,6 +149,7 @@ class DanisanlarEkrani(QWidget):
         self._son_danisan_filtre_id = None
         self.randevular = []
         self.psikolog_adlari = {}
+        self.pasif_psikologlar = set()          # adı gösterilen ama artık aktif olmayan (pasif / başka role geçmiş) psikologlar
         self.oda_adlari = {}
         self.randevu_gruplari = {}
 
@@ -444,13 +445,20 @@ class DanisanlarEkrani(QWidget):
 
     def _psikologlari_yukle(self):
         """Psikolog kutusunu doldurur; giriş yapan kişi psikologsa kendi adına kilitlenir."""
-        self.psikolog_adlari = self._sozluk_cek("/api/psikologlar", "personel_id", "ad_soyad", self.psikolog_adlari)
+        # Pasif ya da başka role geçmiş eski psikologlar da gelir ("Psikolog #19" yerine gerçek ad); filtrede "(pasif)" yazar.
+        liste = self._api_liste_getir("/api/psikologlar", params={"pasifler_dahil": "true"})
+        if liste is not None:
+            try:
+                self.psikolog_adlari = {k["personel_id"]: k["ad_soyad"] for k in liste}
+                self.pasif_psikologlar = {k["personel_id"] for k in liste if k.get("aktif_mi") is False}
+            except (KeyError, TypeError):
+                self._yukleme_durumu("/api/psikologlar", "/api/psikologlar: Sunucudan beklenmeyen veri alındı.")
         secili = self.cmb_psikolog.currentData()
         self.cmb_psikolog.blockSignals(True)
         self.cmb_psikolog.clear()
         self.cmb_psikolog.addItem("Tüm psikologlar", None)
         for personel_id, ad in self.psikolog_adlari.items():
-            self.cmb_psikolog.addItem(ad, personel_id)
+            self.cmb_psikolog.addItem(f"{ad} (pasif)" if personel_id in self.pasif_psikologlar else ad, personel_id)
         kendisi = self.cmb_psikolog.findData(self.mevcut_psikolog_id)
         if self.mevcut_psikolog_id is not None and kendisi >= 0:
             self.cmb_psikolog.setCurrentIndex(kendisi)
