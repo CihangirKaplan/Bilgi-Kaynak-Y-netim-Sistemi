@@ -3993,9 +3993,11 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
                    b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet,
                    b.bakim_tarihi, b.sonraki_bakim_tarihi,
-                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi, b.uyari_suresi_gun
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi, b.uyari_suresi_gun,
+                   b.plan_id, p.gorev_turu
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
+            LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = b.plan_id
             ORDER BY b.bakim_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
@@ -4013,7 +4015,9 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_
                 # EKSİK OLAN KISIM: JSON sözlüğüne başlangıç ve bitiş eklendi (eski kayıtlarda null gelirse bakim_tarihi kurtarır)
                 "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
                 "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
-                "uyari_suresi_gun": k[10]
+                "uyari_suresi_gun": k[10],
+                "plan_id": k[11],          # kaydın yerine getirdiği plan (yoksa None)
+                "plan_adi": k[12]
             }
             for k in kayitlar
         ]
@@ -4050,9 +4054,10 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         cursor.execute("""
             INSERT INTO cihaz_bakimlari (
                 cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
-                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi, uyari_suresi_gun
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi, uyari_suresi_gun,
+                plan_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
         """, (
             bakim.cihaz_id,
             bakim.bakim_yapan_kisi,
@@ -4062,7 +4067,8 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             bakim.bakim_baslangic_tarihi,
             bakim.bakim_bitis_tarihi,
             sonraki_bakim,
-            bakim.uyari_suresi_gun
+            bakim.uyari_suresi_gun,
+            bakim.plan_id
         ))
         bakim_id = cursor.fetchone()[0]
 
@@ -4182,9 +4188,11 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYO
         cursor.execute("""
             SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu,
                    k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi,
-                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi, k.uyari_suresi_gun
+                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi, k.uyari_suresi_gun,
+                   k.plan_id, p.gorev_turu
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
+            LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = k.plan_id
             ORDER BY k.islem_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
@@ -4200,7 +4208,9 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYO
                 # Yeni alanlar ve Fallback mantığı (Eski kayıtlarda null gelirse işlem tarihi baz alınır)
                 "kalibrasyon_baslangic_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
                 "kalibrasyon_bitis_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
-                "uyari_suresi_gun": k[9]
+                "uyari_suresi_gun": k[9],
+                "plan_id": k[10],          # kaydın yerine getirdiği plan (yoksa None)
+                "plan_adi": k[11]
             }
             for k in kayitlar
         ]
@@ -4230,9 +4240,9 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         cursor.execute("""
             INSERT INTO cihaz_kalibrasyonlari (
                 cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi,
-                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi, uyari_suresi_gun
+                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi, uyari_suresi_gun, plan_id
             )
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s) RETURNING kalibrasyon_id;
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s) RETURNING kalibrasyon_id;
         """, (
             kalib.cihaz_id, 
             kalib.kalibrasyon_yapan_kurum, 
@@ -4240,7 +4250,8 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
             kalib.sertifika_no,
             kalib.kalibrasyon_baslangic_tarihi, # EKLENDİ
             kalib.kalibrasyon_bitis_tarihi,     # EKLENDİ
-            kalib.uyari_suresi_gun
+            kalib.uyari_suresi_gun,
+            kalib.plan_id
         ))
         kalibrasyon_id = cursor.fetchone()[0]
 
@@ -7902,14 +7913,18 @@ def cihaz_raporlari(
             for k in cursor.fetchall()
         ]
 
-        where, parametreler = kosul_olustur("t.islem_tarihi")
+        # Filtre ve sıralama, kaydın girildiği zamana (islem_tarihi) değil kalibrasyonun gerçek başlangıç tarihine
+        # göre yapılır (Kalibrasyon ekranı da bunu gösterir); eski kayıtlarda tarih boşsa islem_tarihi kullanılır.
+        kalibrasyon_gunu = "COALESCE(t.kalibrasyon_baslangic_tarihi, t.islem_tarihi::date)"
+        where, parametreler = kosul_olustur(kalibrasyon_gunu)
         cursor.execute(f"""
             SELECT t.kalibrasyon_id, c.envanter_kodu, c.cihaz_adi, t.kalibrasyon_yapan_kurum,
-                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi, t.cihaz_id
+                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi, t.cihaz_id,
+                   t.kalibrasyon_baslangic_tarihi, t.kalibrasyon_bitis_tarihi
             FROM cihaz_kalibrasyonlari t
             JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
             {where}
-            ORDER BY t.islem_tarihi DESC;
+            ORDER BY {kalibrasyon_gunu} DESC, t.kalibrasyon_id DESC;
         """, parametreler)
         kalibrasyonlar = [
             {
@@ -7920,6 +7935,9 @@ def cihaz_raporlari(
                 "sertifika_no": k[4],
                 "islem_tarihi": _tarih_metni(k[5]),
                 "gecerlilik_tarihi": _tarih_metni(k[6]),
+                # Eski kayıtlarda başlangıç/bitiş boşsa işlem tarihinin günü kullanılır.
+                "kalibrasyon_baslangic_tarihi": _tarih_metni(k[8] or (k[5].date() if k[5] else None)),
+                "kalibrasyon_bitis_tarihi": _tarih_metni(k[9] or (k[5].date() if k[5] else None)),
             }
             for k in cursor.fetchall()
         ]

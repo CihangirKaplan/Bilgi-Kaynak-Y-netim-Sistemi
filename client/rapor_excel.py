@@ -634,12 +634,12 @@ def excel_dosyasi_olustur(veri, filtre_ozeti, dosya_yolu, bugun=None):
     _sayfa_olustur(
         kitap,
         "Kalibrasyon",
-        [("Cihaz", None), ("İşlem Tarihi", TARIH_SAAT_BICIMI), ("Kurum", None),
+        [("Cihaz", None), ("Kalibrasyon Tarihi", TARIH_BICIMI), ("Kurum", None),
          ("Sertifika No", None), ("Geçerlilik Tarihi", TARIH_BICIMI), ("Geçerlilik Durumu", None)],
         [
             [
                 k["cihaz"],
-                _tarih_degeri(k["islem_tarihi"]),
+                _tarih_degeri(k.get("kalibrasyon_baslangic_tarihi") or k["islem_tarihi"]),
                 k.get("kalibrasyon_yapan_kurum"),
                 k.get("sertifika_no"),
                 _tarih_degeri(k["gecerlilik_tarihi"]),

@@ -73,33 +73,35 @@ def kayit_et(fonk, model):
 def test_bakim_kaydi_uyari_suresini_veritabanina_yazar():
     insert = kayit_et(bakim_kaydi_ekle, bakim(uyari_suresi_gun=21))
     assert "uyari_suresi_gun" in insert.args[0]
-    assert insert.args[1][-1] == 21 and len(insert.args[1]) == 9
+    assert insert.args[1][-2] == 21 and insert.args[1][-1] is None and len(insert.args[1]) == 10   # son parametre: plan_id
 
 
 def test_kalibrasyon_kaydi_uyari_suresini_veritabanina_yazar():
     insert = kayit_et(kalibrasyon_kaydi_ekle, kalibrasyon(uyari_suresi_gun=45))
     assert "uyari_suresi_gun" in insert.args[0]
-    assert insert.args[1][-1] == 45 and len(insert.args[1]) == 7
+    assert insert.args[1][-2] == 45 and insert.args[1][-1] is None and len(insert.args[1]) == 8    # son parametre: plan_id
 
 
 # --------------------------------------------------------------------- listeleme
 def test_bakim_listesi_uyari_suresini_dondurur():
-    satir = (4, "Cihaz", "E1", "kişi", "işlem", 10.0, D(2026, 11, 1), D(2027, 5, 1), D(2026, 11, 1), D(2026, 11, 2), 21)
+    satir = (4, "Cihaz", "E1", "kişi", "işlem", 10.0, D(2026, 11, 1), D(2027, 5, 1), D(2026, 11, 1), D(2026, 11, 2), 21, None, None)
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = [satir]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         sonuc = bakimlari_listele(kullanici_id=1)
     assert sonuc[0]["uyari_suresi_gun"] == 21 and sonuc[0]["bakim_id"] == 4
+    assert sonuc[0]["plan_id"] is None and sonuc[0]["plan_adi"] is None                  # plansız kayıt
 
 
 def test_kalibrasyon_listesi_uyari_suresini_dondurur():
     satir = (7, "Cihaz", "E1", "kurum", D(2027, 11, 2), "no", datetime.datetime(2026, 11, 2, 9, 0),
-             D(2026, 11, 1), D(2026, 11, 2), 45)
+             D(2026, 11, 1), D(2026, 11, 2), 45, 3, "Yıllık kalibrasyon")
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = [satir]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         sonuc = kalibrasyonlari_listele(kullanici_id=1)
     assert sonuc[0]["uyari_suresi_gun"] == 45 and sonuc[0]["kalibrasyon_id"] == 7
+    assert sonuc[0]["plan_id"] == 3 and sonuc[0]["plan_adi"] == "Yıllık kalibrasyon"      # plan bağlantısı listede görünür
 
 
 # ------------------------------------------------- dashboard / bildirim: yaklaşan işlemler

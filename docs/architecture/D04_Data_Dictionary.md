@@ -108,6 +108,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `bakim_baslangic_tarihi` | DATE | NULL | Bakım sürecinin başlangıç tarihi. |
 | `bakim_bitis_tarihi` | DATE | NULL | Bakım sürecinin bitiş tarihi. |
 | `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Bakım tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
+| `plan_id` | INTEGER | FK → `cihaz_bakim_planlari(plan_id)` ON DELETE SET NULL; NULL | Kaydın yerine getirdiği bakım planı (plansız kayıtta boş). |
 
 **CHECK kısıtları:**
 
@@ -126,6 +127,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `kalibrasyon_baslangic_tarihi` | DATE | NULL | Kalibrasyon sürecinin başlangıç tarihi. |
 | `kalibrasyon_bitis_tarihi` | DATE | NULL | Kalibrasyon sürecinin bitiş tarihi. |
 | `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Kalibrasyon tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
+| `plan_id` | INTEGER | FK → `cihaz_bakim_planlari(plan_id)` ON DELETE SET NULL; NULL | Kaydın yerine getirdiği kalibrasyon planı (plansız kayıtta boş). |
 
 **CHECK kısıtları:**
 
