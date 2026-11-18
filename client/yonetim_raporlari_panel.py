@@ -26,6 +26,43 @@ RAPOR_TURLERI = (
 )
 
 
+def oda_kullanim_tablosu(kullanim, en_cok=8):
+    """Randevular görünümü: odaların planlanan kullanım saatleri (randevu + cihaz rezervasyonu + etkinlik)."""
+    baslik = "Oda Kullanımı (planlanan saat)"
+    sutunlar = ["Oda", "Randevu", "Rez./Etkinlik", "Toplam Saat"]
+    if kullanim is None:
+        return (baslik, ["Bilgi"], [("Kullanım verisi alınamadı.",)])
+    satirlar = [
+        (
+            o["oda_adi"],
+            f"{o['randevu_sayisi']} ({o['randevu_saati']:g} sa)",
+            f"{o['cihaz_rezervasyon_sayisi'] + o['etkinlik_sayisi']} "
+            f"({o['cihaz_rezervasyon_saati'] + o['etkinlik_saati']:g} sa)",
+            f"{o['toplam_saat']:g}",
+        )
+        for o in kullanim["odalar"][:en_cok]
+    ]
+    return (baslik, sutunlar, satirlar or [("Dönemde oda kullanımı yok.", "", "", "")])
+
+
+def cihaz_kullanim_tablosu(kullanim, en_cok=8):
+    """Cihazlar görünümü: cihazların rezervasyon sayısı ve planlanan kullanım saati (hiç kullanılmayanlar sonda)."""
+    baslik = "Cihaz Kullanımı (planlanan saat)"
+    sutunlar = ["Cihaz", "Rezervasyon", "Saat", "İptal"]
+    if kullanim is None:
+        return (baslik, ["Bilgi"], [("Kullanım verisi alınamadı.",)])
+    satirlar = [
+        (
+            f"{c['envanter_kodu']} - {c['cihaz_adi']}",
+            c["rezervasyon_sayisi"],
+            f"{c['rezervasyon_saati']:g}",
+            c["iptal_edilen_rezervasyon"],
+        )
+        for c in kullanim["cihazlar"][:en_cok]
+    ]
+    return (baslik, sutunlar, satirlar or [("Kayıtlı cihaz yok.", "", "", "")])
+
+
 def metin(deger):
     return "—" if deger is None else str(deger)
 
@@ -467,6 +504,23 @@ class YonetimRaporlariEkrani(QWidget):
 
             sonuc[ad] = yanit.json()
 
+        # Oda/cihaz kullanım raporu ek bilgidir: alınamazsa diğer raporlar yine gösterilir.
+        try:
+            yanit = oturum_kontrollu_istek(
+                "GET",
+                f"{self.api_url}/api/yonetim-raporlari/kullanim-ozet",
+                headers={
+                    "Authorization": f"Bearer {self.token}"
+                },
+                params=params,
+                timeout=15,
+            )
+            sonuc["kullanim"] = (
+                yanit.json() if yanit.status_code == 200 else None
+            )
+        except (requests.RequestException, ValueError):
+            sonuc["kullanim"] = None
+
         return sonuc
 
     def raporu_yukle(self):
@@ -531,6 +585,12 @@ class YonetimRaporlariEkrani(QWidget):
         widget.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
+        if "Kullanımı" in baslik and len(sutunlar) > 1:
+            # Ad sütunu esnek kalır (oda/cihaz adı kırpılmasın); sayı sütunları içeriğe göre daralır.
+            for sutun in range(1, len(sutunlar)):
+                widget.horizontalHeader().setSectionResizeMode(
+                    sutun, QHeaderView.ResizeToContents
+                )
 
     def verileri_goster(self, veriler):
         self.veriler = veriler
@@ -755,11 +815,7 @@ class YonetimRaporlariEkrani(QWidget):
                     ("Gelmedi", ro["gelmedi"]),
                     ("İptal", ro["iptal_edildi"]),
                 ]),
-                ("Kapsam", ["Bilgi", "Değer"], [
-                    ("Başlangıç", r["donem"]["baslangic"]),
-                    ("Bitiş", r["donem"]["bitis"]),
-                    ("Önceki toplam", rr["toplam"]),
-                ]),
+                oda_kullanim_tablosu(self.veriler.get("kullanim")),
             ]
 
         elif tur == "Cihazlar":
@@ -793,9 +849,7 @@ class YonetimRaporlariEkrani(QWidget):
                  ["İşlem", "Seçilen Dönem", "Önceki Dönem"], [
                      (ad, co[kod], cr[kod]) for ad, kod in kodlar
                  ]),
-                ("Sayısal Değişim", ["İşlem", "Fark"], [
-                    (ad, co[kod] - cr[kod]) for ad, kod in kodlar
-                ]),
+                cihaz_kullanim_tablosu(self.veriler.get("kullanim")),
                 ("Bu Dönem", ["İşlem", "Kayıt"], [
                     (ad, co[kod]) for ad, kod in kodlar
                 ]),
@@ -805,7 +859,7 @@ class YonetimRaporlariEkrani(QWidget):
                 ("Veri Açıklaması", ["Bilgi"], [
                     ("Bunlar işlem kayıtlarının sayılarıdır.",),
                     ("Anlık cihaz durumu değildir.",),
-                    ("Gerçek kullanım süresi değildir.",),
+                    ("Kullanım saatleri planlanan süredir.",),
                 ]),
             ]
 
