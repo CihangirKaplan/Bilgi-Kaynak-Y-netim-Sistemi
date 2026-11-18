@@ -160,6 +160,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kodun sisteme eklendiği tarih. |
 | `olusturan_psikolog_id` | INTEGER | FK → `personel(personel_id)`; NULL | Danışan kodunu oluşturan psikoloğun personel kimliği. |
 | `yas_grubu` | VARCHAR(20) | NULL | Danışanın yaş grubu; COCUK veya YETISKIN olabilir. |
+| `psikolog_pasifligi_nedeniyle_pasif` | BOOLEAN | NOT NULL; DEFAULT `false` | Kod, oluşturan psikolog pasife alındığı için pasife alındıysa `true`; psikolog yeniden aktif edilince yalnızca bu kodlar geri açılır. Elle yapılan durum değişikliği işareti temizler. |
 
 **CHECK kısıtları:**
 
