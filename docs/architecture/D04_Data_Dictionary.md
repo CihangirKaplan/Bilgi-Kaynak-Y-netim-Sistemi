@@ -286,22 +286,13 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
 | `varsayilan_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Personelle ilişkilendirilmiş varsayılan oda. |
 
-### Tablo: `giris_captcha_kodlari`
-
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `captcha_id` | VARCHAR(32) | PK; NOT NULL | CAPTCHA kaydının benzersiz kimliği. |
-| `kod_ozeti` | VARCHAR(64) | NOT NULL | CAPTCHA doğrulama kodunun özeti. |
-| `gecerlilik_sonu` | TIMESTAMP | NOT NULL | CAPTCHA kodunun geçerliliğinin sona ereceği zaman. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | CAPTCHA kaydının oluşturulma zamanı. |
-
 ### Tablo: `giris_istek_limitleri`
 
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `anahtar` | VARCHAR(64) | PK; NOT NULL | Giriş isteği sınırlandırması için kullanılan kayıt anahtarı. |
-| `pencere_baslangici` | TIMESTAMP | NOT NULL | İstek sayım penceresinin başlangıcı. |
-| `istek_sayisi` | INTEGER | NOT NULL | İlgili pencerede kaydedilen istek sayısı. |
+| `anahtar` | VARCHAR(64) | PK; NOT NULL | İstemci (IP) adresinin SHA-256 özeti; ham adres saklanmaz. |
+| `pencere_baslangici` | TIMESTAMP | NOT NULL | Sayım penceresinin başlangıcı (pencere 5 dakikadır). |
+| `istek_sayisi` | INTEGER | NOT NULL | Pencerede o istemciden gelen BAŞARISIZ giriş denemesi sayısı; 20'ye ulaşınca pencere bitene kadar giriş 429 ile reddedilir. |
 
 **CHECK kısıtları:**
 

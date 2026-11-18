@@ -1,5 +1,5 @@
 from server.modeller import DanismaGorevOlusturModeli
-from fastapi import FastAPI, HTTPException, Depends, Query, Response
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
@@ -63,6 +63,7 @@ from server.denetim import (
     psikolog_odalarini_oku,
     satiri_sil_ve_ayrintisini_al,
 )
+from server import giris_siniri
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -281,7 +282,16 @@ def yetkilerim(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if conn is not None: conn.close()
 
 @app.post("/api/login")
-def giris_yap(giris: GirisModeli):
+def giris_yap(giris: GirisModeli, request: Request = None):
+    # İstemci (IP) bazlı başarısız deneme sınırı: var olmayan kullanıcı adlarıyla yapılan denemeleri de durdurur.
+    istemci = giris_siniri.istemci_anahtari(request)
+    bekleme = giris_siniri.engel_suresi(VT_AYARLARI, istemci)
+    if bekleme:
+        raise HTTPException(
+            status_code=429,
+            detail="Bu bilgisayardan çok fazla hatalı giriş denemesi yapıldı. Lütfen biraz bekleyip tekrar deneyin.",
+            headers={"Retry-After": str(bekleme)},
+        )
     conn = None
     cursor = None
     try:
@@ -300,6 +310,7 @@ def giris_yap(giris: GirisModeli):
 
         if kullanici is None:
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", hedef_tablo="kullanicilar")
+            giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
         if not kullanici[4]:
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
@@ -329,6 +340,7 @@ def giris_yap(giris: GirisModeli):
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kullanici[0]))
             conn.commit()
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
+            giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             if yeni_basarisiz_giris_sayisi >= 5:
                 raise HTTPException(
                     status_code=429,
