@@ -12,6 +12,32 @@ permissions:
   contents: read
 
 jobs:
+  # Hizli (saniyeler suren) kontrol: migration zincirinde tek head var mi? Veritabani gerektirmez.
+  # Diger islerden bagimsizdir (needs yok): bu is kirmizi olursa digerleri de zaten kirmizi/atlanmis kalmaz,
+  # zorunlu kontrol olarak tanimlanmis islerin "atlandi" sayilip merge'e izin vermesi engellenir.
+  alembic-tek-head:
+    name: Alembic Tek Head Kontrolu
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python 3.13 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Python bagimliliklarini kur
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Migration zincirinde tek head oldugunu dogrula
+        run: python scripts/alembic_tek_head_kontrol.py
+
   qa-tests:
     name: Python 3.13 - QA Tests
     runs-on: ubuntu-latest

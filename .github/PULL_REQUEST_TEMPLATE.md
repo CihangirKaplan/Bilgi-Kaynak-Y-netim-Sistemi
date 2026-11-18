@@ -8,6 +8,7 @@ Bu PR kapsamında yapılan değişiklikleri kısaca açıklayın.
 - [ ] Veritabanı değişikliği yok.
 - [ ] Veritabanı değişikliği var ve Alembic migration dosyası eklendi.
 - [ ] Migration `python -m alembic upgrade head` ile test edildi.
+- [ ] Push etmeden önce `git fetch origin`, `git merge origin/develop` yapıldı ve `python scripts/alembic_tek_head_kontrol.py` tek head gösteriyor.
 
 ## Genel Kontroller
 - [ ] Kod değişiklikleri test edildi.
