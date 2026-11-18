@@ -27,7 +27,7 @@ Merkeze ait cihazların envanter, rezervasyon, bakım, arıza, kalibrasyon ve ta
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `bolum_id` | SERIAL (INTEGER) | PK; NOT NULL | Bölümün benzersiz kimliği. |
-| `bolum_adi` | VARCHAR(150) | UNIQUE; NOT NULL | Bölümün adı (Örn: Nöroloji Lab). |
+| `bolum_adi` | VARCHAR(150) | UNIQUE (büyük/küçük harf duyarsız: `ux_bolumler_bolum_adi_ci`); NOT NULL | Bölümün adı (Örn: Nöroloji Lab). |
 | `sorumlu_ad_soyad` | VARCHAR(100) | NOT NULL | Cihazı teslim alan yetkilinin adı soyadı. |
 | `iletisim_bilgisi` | VARCHAR(100) | NULL | Telefon veya dahili numara. |
 | `aktif_mi` | BOOLEAN | NULL; DEFAULT `true` | Bölümün aktiflik durumu. |
@@ -85,7 +85,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `ariza_id` | SERIAL (INTEGER) | PK; NOT NULL | Arıza kaydının kimliği. |
-| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Arızalanan cihaz. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Arızalanan cihaz. |
 | `bildiren_personel` | VARCHAR(100) | NULL | Arızayı tespit/ihbar eden kişi. |
 | `ariza_baslik` | VARCHAR(150) | NOT NULL | Arızanın kısa başlığı. |
 | `ariza_aciklamasi` | TEXT | NOT NULL | Arızanın detayı. |
@@ -99,7 +99,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `bakim_id` | SERIAL (INTEGER) | PK; NOT NULL | Bakım işleminin kimliği. |
-| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Bakım yapılan cihaz. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Bakım yapılan cihaz. |
 | `bakim_yapan_kisi` | VARCHAR(100) | NULL | İşlemi gerçekleştiren kişi/firma. |
 | `yapilan_islem` | TEXT | NULL | Uygulanan bakımın detayı. |
 | `maliyet` | NUMERIC(10, 2) | NULL | Bakım maliyeti. |
@@ -108,6 +108,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `bakim_baslangic_tarihi` | DATE | NULL | Bakım sürecinin başlangıç tarihi. |
 | `bakim_bitis_tarihi` | DATE | NULL | Bakım sürecinin bitiş tarihi. |
 | `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Bakım tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
+| `plan_id` | INTEGER | FK → `cihaz_bakim_planlari(plan_id)` ON DELETE SET NULL; NULL | Kaydın yerine getirdiği bakım planı (plansız kayıtta boş). |
 
 **CHECK kısıtları:**
 
@@ -118,7 +119,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `kalibrasyon_id` | SERIAL (INTEGER) | PK; NOT NULL | Kalibrasyon kaydının kimliği. |
-| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Kalibre edilen cihaz. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Kalibre edilen cihaz. |
 | `kalibrasyon_yapan_kurum` | VARCHAR(100) | NULL | Kalibrasyonu sağlayan akredite kurum. |
 | `gecerlilik_tarihi` | DATE | NULL | Sertifikanın son geçerlilik tarihi. |
 | `sertifika_no` | VARCHAR(100) | NULL | Belge numarası. |
@@ -126,6 +127,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `kalibrasyon_baslangic_tarihi` | DATE | NULL | Kalibrasyon sürecinin başlangıç tarihi. |
 | `kalibrasyon_bitis_tarihi` | DATE | NULL | Kalibrasyon sürecinin bitiş tarihi. |
 | `uyari_suresi_gun` | INTEGER | NOT NULL; DEFAULT `30` | Kalibrasyon tarihi yaklaşırken kullanılacak gün cinsinden uyarı süresi. |
+| `plan_id` | INTEGER | FK → `cihaz_bakim_planlari(plan_id)` ON DELETE SET NULL; NULL | Kaydın yerine getirdiği kalibrasyon planı (plansız kayıtta boş). |
 
 **CHECK kısıtları:**
 
@@ -136,7 +138,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `plan_id` | SERIAL (INTEGER) | PK; NOT NULL | Bakım veya takip planının benzersiz kimliği. |
-| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NULL | Planın ilişkili olduğu cihaz. |
+| `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Planın ilişkili olduğu cihaz. |
 | `gorev_turu` | VARCHAR(100) | NOT NULL | Planlanan görev veya işlem türü. |
 | `periyot_gun` | INTEGER | NOT NULL | Görevin tekrar aralığı (gün). |
 | `uyari_suresi_gun` | INTEGER | NULL; DEFAULT `1` | Planlanan görev öncesindeki uyarı süresi (gün). |
@@ -158,6 +160,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kodun sisteme eklendiği tarih. |
 | `olusturan_psikolog_id` | INTEGER | FK → `personel(personel_id)`; NULL | Danışan kodunu oluşturan psikoloğun personel kimliği. |
 | `yas_grubu` | VARCHAR(20) | NULL | Danışanın yaş grubu; COCUK veya YETISKIN olabilir. |
+| `psikolog_pasifligi_nedeniyle_pasif` | BOOLEAN | NOT NULL; DEFAULT `false` | Kod, oluşturan psikolog pasife alındığı için pasife alındıysa `true`; psikolog yeniden aktif edilince yalnızca bu kodlar geri açılır. Elle yapılan durum değişikliği işareti temizler. |
 
 **CHECK kısıtları:**
 
@@ -168,7 +171,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `oda_id` | SERIAL (INTEGER) | PK; NOT NULL | Odanın benzersiz kimliği. |
-| `oda_adi` | VARCHAR(50) | UNIQUE; NOT NULL | Odanın tabeladaki adı/numarası. |
+| `oda_adi` | VARCHAR(50) | UNIQUE (büyük/küçük harf duyarsız: `ux_odalar_oda_adi_ci`); NOT NULL | Odanın tabeladaki adı/numarası. |
 | `kapasite` | INTEGER | NULL; DEFAULT `1` | Maksimum kişi kapasitesi. |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Odanın kullanıma açıklık durumu. |
 
@@ -182,7 +185,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Görüşmenin yapılacağı oda. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Randevu başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Randevu bitişi. |
-| `durum` | VARCHAR(30) | NULL; DEFAULT `'PLANLANDI'::character varying` | Randevunun anlık durumu. |
+| `durum` | VARCHAR(30) | NOT NULL; DEFAULT `'PLANLANDI'`; CHECK (`PLANLANDI`, `TAMAMLANDI`, `GELMEDI`, `IPTAL_EDILDI`) | Randevunun anlık durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
 | `iptal_nedeni` | VARCHAR(30) | NULL | Randevunun iptal edilme nedeni. |
 | `iptal_notu` | VARCHAR(100) | NULL | İptale ilişkin açıklama; DIGER nedeni seçilirse zorunludur. |
@@ -262,7 +265,7 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `kullanici_id` | SERIAL (INTEGER) | PK; NOT NULL | Hesabın benzersiz kimliği. |
-| `kullanici_adi` | VARCHAR(100) | UNIQUE; NOT NULL | Sisteme giriş (login) adı. |
+| `kullanici_adi` | VARCHAR(100) | UNIQUE (büyük/küçük harf duyarsız: `ux_kullanicilar_kullanici_adi_ci`); NOT NULL | Sisteme giriş (login) adı. |
 | `parola_hash` | VARCHAR(255) | NOT NULL | Şifrelenmiş parola verisi. |
 | `rol_id` | INTEGER | FK → `roller(rol_id)`; NOT NULL | Kullanıcının sistemdeki rolü. |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Hesabın erişime açıklık durumu. |
@@ -283,22 +286,13 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
 | `varsayilan_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Personelle ilişkilendirilmiş varsayılan oda. |
 
-### Tablo: `giris_captcha_kodlari`
-
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `captcha_id` | VARCHAR(32) | PK; NOT NULL | CAPTCHA kaydının benzersiz kimliği. |
-| `kod_ozeti` | VARCHAR(64) | NOT NULL | CAPTCHA doğrulama kodunun özeti. |
-| `gecerlilik_sonu` | TIMESTAMP | NOT NULL | CAPTCHA kodunun geçerliliğinin sona ereceği zaman. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | CAPTCHA kaydının oluşturulma zamanı. |
-
 ### Tablo: `giris_istek_limitleri`
 
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `anahtar` | VARCHAR(64) | PK; NOT NULL | Giriş isteği sınırlandırması için kullanılan kayıt anahtarı. |
-| `pencere_baslangici` | TIMESTAMP | NOT NULL | İstek sayım penceresinin başlangıcı. |
-| `istek_sayisi` | INTEGER | NOT NULL | İlgili pencerede kaydedilen istek sayısı. |
+| `anahtar` | VARCHAR(64) | PK; NOT NULL | İstemci (IP) adresinin SHA-256 özeti; ham adres saklanmaz. |
+| `pencere_baslangici` | TIMESTAMP | NOT NULL | Sayım penceresinin başlangıcı (pencere 5 dakikadır). |
+| `istek_sayisi` | INTEGER | NOT NULL | Pencerede o istemciden gelen BAŞARISIZ giriş denemesi sayısı; 20'ye ulaşınca pencere bitene kadar giriş 429 ile reddedilir. |
 
 **CHECK kısıtları:**
 
@@ -417,6 +411,7 @@ Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
 | `hedef_tablo` | VARCHAR(100) | NULL | Veri değişikliğinden etkilenen tablo. |
 | `hedef_kayit_id` | INTEGER | NULL | Değiştirilen/Silinen kaydın PK değeri. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Olayın gerçekleştiği tam zaman. |
+| `ayrinti` | JSONB | NULL | Kalıcı silmelerde silinen satırın içeriği (`silinen`); oda atamalarında önceki/yeni oda kimlikleri. Kişisel veri içeren `ogrenciler` silmesinde ad, telefon vb. yazılmaz (yalnızca kimliksiz alanlar ve `maskelenen_alanlar` listesi). Tablo değiştirilemez olduğundan kayıt sonradan düzenlenemez. |
 
 ## Teknik tablo: `alembic_version`
 

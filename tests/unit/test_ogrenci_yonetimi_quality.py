@@ -131,10 +131,10 @@ def test_ogrenci_ekleme_yalnizca_gonullu_kabul_eder():
 
     assert gonullu.tur == "GONULLU"
 
-    for tur in (
-        "DANISMA_MASASI",
-        "ASISTAN",
-        "GECERSIZ",
-    ):
+    # Gönüllü ve Asistan bu uçtan eklenir. Danışma Masası öğrencisi giriş hesabı gerektirdiği için
+    # "Kullanıcı & Personel" ekranından oluşturulur; tanımsız türler de reddedilir.
+    assert OgrenciEkleModeli(**veri, tur="ASISTAN").tur == "ASISTAN"
+
+    for tur in ("DANISMA_MASASI", "GECERSIZ", "", "gonullu", None):
         with pytest.raises(ValidationError):
             OgrenciEkleModeli(**veri, tur=tur)

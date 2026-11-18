@@ -212,8 +212,14 @@ class KullaniciPersonelEkrani(QWidget):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    yeni_durum_bilgisi = "Aktif" if res.json().get("yeni_durum") else "Pasif"
-                    QMessageBox.information(self, "Başarılı", f"Kullanıcı başarıyla {yeni_durum_bilgisi} duruma getirildi.")
+                    sonuc = res.json()
+                    yeni_durum_bilgisi = "Aktif" if sonuc.get("yeni_durum") else "Pasif"
+                    mesaj = f"Kullanıcı başarıyla {yeni_durum_bilgisi} duruma getirildi."
+                    if sonuc.get("pasife_alinan_danisan"):
+                        mesaj += f"\n{sonuc['pasife_alinan_danisan']} danışan da pasife alındı."
+                    elif sonuc.get("aktif_edilen_danisan"):
+                        mesaj += f"\n{sonuc['aktif_edilen_danisan']} danışan yeniden aktif edildi."
+                    QMessageBox.information(self, "Başarılı", mesaj)
                     self.verileri_cek() 
                 elif res.status_code == 403:
                     QMessageBox.warning(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))

@@ -151,9 +151,17 @@ class PersonelOlusturModeli(BaseModel):
 
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
-    eski_parola: str
+    eski_parola: str = Field(max_length=256)
     yeni_parola: str = Field(min_length=8, max_length=72)
-    yeni_parola_tekrar: str
+    yeni_parola_tekrar: str = Field(max_length=256)
+
+    @field_validator("yeni_parola")
+    @classmethod
+    def parola_72_bayti_gecmesin(cls, deger):
+        """bcrypt en fazla 72 BAYT işler; 72 karakterlik bir parola Türkçe harflerle bu sınırı aşıp sunucu hatasına yol açardı."""
+        if len(deger.encode("utf-8")) > 72:
+            raise ValueError("Parola en fazla 72 bayt olabilir (Türkçe karakterler 2 bayt sayılır); daha kısa bir parola seçin.")
+        return deger
 
 # AUTH-002: Role Modeli
 class RolModeli(BaseModel):
@@ -199,8 +207,8 @@ class RolDegistirModeli(BaseModel):
 
 # AUTH-004: Login İstek Modeli
 class GirisModeli(BaseModel):
-    kullanici_adi: str
-    parola: str
+    kullanici_adi: str = Field(max_length=100)          # veritabanı: kullanicilar.kullanici_adi VARCHAR(100)
+    parola: str = Field(max_length=256)                 # makul üst sınır; 72 bayttan uzun parola zaten "yanlış parola" sayılır
 
 
 class ParolaSifirlamaTalebiModeli(BaseModel):
@@ -287,7 +295,7 @@ def randevu_mesai_dogrula(baslangic, bitis):
 
 
 class RandevuOlusturModeli(BaseModel):
-    danisan_kod_id: str
+    danisan_kod_id: str = Field(min_length=1, max_length=50)       # veritabanı: VARCHAR(50)
     psikolog_id: int = Field(gt=0)
     oda_id: int = Field(gt=0)
     baslangic_zamani: NaifZaman
@@ -309,6 +317,7 @@ class RandevuGuncelleModeli(BaseModel):
     danisan_kod_id: Optional[str] = Field(
     default=None,
     min_length=1,
+    max_length=50,                   # veritabanı: VARCHAR(50)
     pattern=r".*\S.*"
 )
     psikolog_id: Optional[int] = Field(default=None, gt=0)
@@ -697,12 +706,26 @@ class FaaliyetKayitModeli(BaseModel):
     miktar: int = Field(ge=1, le=10000)             # arayüzdeki giriş kutusuyla aynı sınır
 
 class OgrenciEkleModeli(BaseModel):
-    ad_soyad: str
-    ogrenci_numarasi: str
-    telefon: Optional[str] = None
-    tur: Literal["GONULLU"]
-    bolum: Optional[str] = None
-    sinif: Optional[str] = None
+    ad_soyad: str = Field(min_length=1, max_length=100)            # veritabanı: ogrenciler.ad_soyad VARCHAR(100)
+    ogrenci_numarasi: str = Field(min_length=1, max_length=15)     # kullanıcı oluşturmadaki sınırla aynı (DB: VARCHAR(50), geçmiş tablosu 15)
+    telefon: Optional[str] = Field(default=None, max_length=20)    # veritabanı: ogrenciler.telefon VARCHAR(20)
+    # Danışma Masası öğrencisi giriş hesabı gerektirir; "Kullanıcı & Personel" ekranından kullanıcıyla birlikte oluşturulur.
+    tur: Literal["GONULLU", "ASISTAN"]
+    bolum: Optional[str] = Field(default=None, max_length=100)     # veritabanı: ogrenciler.bolum VARCHAR(100)
+    sinif: Optional[str] = Field(default=None, max_length=20)      # veritabanı: ogrenciler.sinif VARCHAR(20)
+
+    @field_validator("ad_soyad", "ogrenci_numarasi", mode="before")
+    @classmethod
+    def bosluklari_kirp(cls, deger):
+        """Baş/son boşluklar atılır; yalnızca boşluktan oluşan değer 'zorunlu alan' hatası verir."""
+        return deger.strip() if isinstance(deger, str) else deger
+
+    @field_validator("bolum", "sinif", "telefon", mode="before")
+    @classmethod
+    def bos_metni_yok_say(cls, deger):
+        if isinstance(deger, str):
+            return deger.strip() or None
+        return deger
 
 # ==========================================
 # DANIŞMA MASASI YÖNETİMİ MODELLERİ

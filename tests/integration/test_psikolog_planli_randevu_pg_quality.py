@@ -382,3 +382,46 @@ def test_es_zamanli_etkinlik_ve_psikolog_oda_atamasi(ortam):
                 "WHERE etkinlik_id = %s",
                 (eid,),
             )
+
+
+def test_bugunku_planli_randevu_pasife_almayi_engeller_gercek_veritabaninda(ortam):
+    """Bugün (saati geçmiş olsa bile) planlı randevusu olan psikolog pasife alınamaz; durumu güncellenince ya da iptalde alınır."""
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, etiket = ortam
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    pasife_al = lambda: istemci.patch(f"/api/kullanicilar/{psikolog}/durum-degistir")
+    aktif = lambda: c.execute("SELECT aktif_mi FROM kullanicilar WHERE kullanici_id = %s", (psikolog,)) or c.fetchone()[0]
+
+    dun = _randevu(c, kod, personel, oda_a, (datetime.now() - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0))   # dünkü "Planlandı" engel olmaz
+    bugun = _randevu(c, kod, personel, oda_a, datetime.now().replace(hour=0, minute=30, second=0, microsecond=0))                    # bugün, saati geçmiş
+    yanit = pasife_al()
+    assert yanit.status_code == 409 and "bugün ve sonrası için 1 planlı randevusu var" in yanit.json()["detail"]
+    assert aktif() is True and _atanmis(c, psikolog) == [oda_a, oda_b]                          # hiçbir şey değişmedi
+
+    c.execute("UPDATE randevular SET durum = 'TAMAMLANDI' WHERE randevu_id = %s", (bugun,))      # durumu güncellenince engel kalkar
+    yanit = pasife_al()
+    assert yanit.status_code == 200 and yanit.json()["yeni_durum"] is False
+    assert aktif() is False and _atanmis(c, psikolog) == []                                     # oda atamaları kalktı
+    c.execute("SELECT randevu_id, oda_id FROM randevular WHERE danisan_kod_id = %s ORDER BY randevu_id", (kod,))
+    assert c.fetchall() == [(dun, oda_a), (bugun, oda_a)]                                       # randevular ve oda bilgileri aynen
+
+
+def test_oda_yonetimi_sutunu_ve_cihaz_odasi_yalnizca_psikolog_rolune_bakar_gercek_veritabaninda(ortam):
+    """Psikolog olup sonradan başka role geçen kullanıcının (eski atama kaydı kalmış olsa bile) adı Oda Yönetimi'nde görünmez, odayı tutmaz."""
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, etiket = ortam
+    eski = _kullanici(c, f"eskipsi_{etiket}", "MEMUR")                                          # artık psikolog değil, ama oda_c kaydı kalmış
+    c.execute("INSERT INTO odalar (oda_adi, kapasite) VALUES (%s, 1) RETURNING oda_id", (f"pl_oda_c_{etiket}",))
+    oda_c = c.fetchone()[0]                                                                     # yalnızca eski kayıt bu odayı tutuyor
+    c.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s)", (eski, oda_c))
+    try:
+        istemci = TestClient(app)
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        atamalar = {a["oda_id"]: a["psikologlar"] for a in istemci.get("/api/oda-psikolog-atamalari").json()}
+        assert atamalar[oda_a] == [f"pp_{etiket}"]                                              # gerçek psikolog görünür
+        assert oda_c not in atamalar                                                            # eski psikologun adı görünmez
+        cihaz_odalari = {o["oda_id"] for o in istemci.get("/api/cihaz-odalari").json()}
+        assert oda_a not in cihaz_odalari and oda_c in cihaz_odalari                           # eski kayıt odayı tutmaz: cihaz rezervasyonuna açık
+    finally:
+        c.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s", (eski,))
+        c.execute("DELETE FROM odalar WHERE oda_id = %s", (oda_c,))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (eski,))

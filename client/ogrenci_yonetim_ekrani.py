@@ -346,11 +346,13 @@ class EtiketDelegate(QStyledItemDelegate):
 
 class OgrenciYonetimEkrani(QWidget):
 
-    def __init__(self, api_url, token, parent=None):
+    def __init__(self, api_url, token, parent=None, sayfaya_git=None, kullanici_sayfasi_izinli=False):
         super().__init__(parent)
 
         self.api_url = api_url.rstrip("/")
         self.token = token
+        self._sayfaya_git = sayfaya_git                              # ana pencerenin sayfa açma işlevi
+        self._kullanici_sayfasi_izinli = kullanici_sayfasi_izinli    # "Kullanıcı & Personel" sayfasına yetkisi var mı
         self.kayitlar = []
         self._on_yil_uyarisi_gosterildi = False
 
@@ -383,6 +385,9 @@ class OgrenciYonetimEkrani(QWidget):
         self.grup.addItem(
             "Danışma Masası Öğrencisi",
             "DANISMA_MASASI"
+        )
+        self.grup.addItem(
+            "Asistan Öğrenci", "ASISTAN"
         )
 
         self.grup.setCursor(Qt.PointingHandCursor)
@@ -831,18 +836,11 @@ class OgrenciYonetimEkrani(QWidget):
         dialog = OgrenciEkleDialog(
             self.api_url,
             self.token,
-            self
+            self,
+            kullanici_sayfasi_acilabilir=bool(self._sayfaya_git and self._kullanici_sayfasi_izinli),
         )
 
-        # Danışma Öğrencisi burada oluşturulmayacak.
-        dialog.cb_tur.clear()
-
-        dialog.cb_tur.addItem(
-            "Gönüllü Öğrenci",
-            "GONULLU"
-        )
-
-
+        # Gönüllü ve Asistan buradan eklenir; Danışma Masası öğrencisi "Kullanıcı & Personel" sayfasından oluşturulur.
         dialog.cb_tur.setCurrentIndex(0)
         dialog.cb_tur.setCursor(
             Qt.PointingHandCursor
@@ -854,6 +852,8 @@ class OgrenciYonetimEkrani(QWidget):
 
         if dialog.exec():
             self.yenile()
+        elif dialog.sayfa_istendi and self._sayfaya_git:
+            self._sayfaya_git("Kullanıcı & Personel")
 
     def aktiflik_duzenle(self):
         ogrenci = self.secili_ogrenci()

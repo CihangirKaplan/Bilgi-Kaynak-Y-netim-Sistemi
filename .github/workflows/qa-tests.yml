@@ -12,6 +12,32 @@ permissions:
   contents: read
 
 jobs:
+  # Hizli (saniyeler suren) kontrol: migration zincirinde tek head var mi? Veritabani gerektirmez.
+  # Diger islerden bagimsizdir (needs yok): bu is kirmizi olursa digerleri de zaten kirmizi/atlanmis kalmaz,
+  # zorunlu kontrol olarak tanimlanmis islerin "atlandi" sayilip merge'e izin vermesi engellenir.
+  alembic-tek-head:
+    name: Alembic Tek Head Kontrolu
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python 3.13 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Python bagimliliklarini kur
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Migration zincirinde tek head oldugunu dogrula
+        run: python scripts/alembic_tek_head_kontrol.py
+
   qa-tests:
     name: Python 3.13 - QA Tests
     runs-on: ubuntu-latest
@@ -87,7 +113,7 @@ jobs:
           echo "=== DIGER GUVENLI TESTLER (DOSYA BAZINDA) ==="
           for dosya in tests/integration/test_*.py tests/security/test_*.py; do
             case "$(basename "$dosya")" in
-              test_transaction_quality.py|test_randevu_transaction_quality.py|test_randevu_eszamanlilik_quality.py|test_audit_postgresql_quality.py|test_api_audit_rollback_quality.py|test_kullanici_personel_postgresql_quality.py|test_parola_sifirlama_pg_quality.py|test_ogrenci_yonetimi_postgresql_quality.py|test_faaliyet_turleri_postgresql_quality.py|test_admin_tum_izinler_pg_quality.py|test_kisisel_veri_ayrimi_pg_quality.py|test_randevu_iptal_durum_pg_quality.py|test_yas_terapi_gorusme_pg_quality.py|test_randevu_raporu_pg_quality.py|test_oda_kullanimi_pg_quality.py|test_girdi_fuzz_pg_quality.py|test_sema_dogrulama_pg_quality.py|test_yabanci_anahtar_indeks_pg_quality.py|test_kisitli_kullanici_pg_quality.py|test_gecici_parola_suresi_pg_quality.py|test_cihaz_odasi_atama_pg_quality.py|test_cihaz_odalari_psikolog_haric_pg_quality.py|test_psikolog_pasif_oda_pg_quality.py|test_psikolog_planli_randevu_pg_quality.py)
+              test_veri_butunlugu_pg_quality.py|test_denetim_silinen_veri_pg_quality.py|test_giris_siniri_pg_quality.py|test_transaction_quality.py|test_randevu_transaction_quality.py|test_randevu_eszamanlilik_quality.py|test_audit_postgresql_quality.py|test_api_audit_rollback_quality.py|test_kullanici_personel_postgresql_quality.py|test_parola_sifirlama_pg_quality.py|test_ogrenci_yonetimi_postgresql_quality.py|test_faaliyet_turleri_postgresql_quality.py|test_admin_tum_izinler_pg_quality.py|test_kisisel_veri_ayrimi_pg_quality.py|test_randevu_iptal_durum_pg_quality.py|test_yas_terapi_gorusme_pg_quality.py|test_randevu_raporu_pg_quality.py|test_oda_kullanimi_pg_quality.py|test_girdi_fuzz_pg_quality.py|test_sema_dogrulama_pg_quality.py|test_yabanci_anahtar_indeks_pg_quality.py|test_kisitli_kullanici_pg_quality.py|test_gecici_parola_suresi_pg_quality.py|test_cihaz_odasi_atama_pg_quality.py|test_cihaz_odalari_psikolog_haric_pg_quality.py|test_psikolog_pasif_oda_pg_quality.py|test_psikolog_planli_randevu_pg_quality.py)
                 continue ;;
             esac
 
@@ -210,4 +236,7 @@ jobs:
             tests/integration/test_cihaz_odasi_atama_pg_quality.py \
             tests/integration/test_cihaz_odalari_psikolog_haric_pg_quality.py \
             tests/integration/test_psikolog_pasif_oda_pg_quality.py \
-            tests/integration/test_psikolog_planli_randevu_pg_quality.py
+            tests/integration/test_psikolog_planli_randevu_pg_quality.py \
+            tests/integration/test_veri_butunlugu_pg_quality.py \
+            tests/integration/test_denetim_silinen_veri_pg_quality.py \
+            tests/integration/test_giris_siniri_pg_quality.py

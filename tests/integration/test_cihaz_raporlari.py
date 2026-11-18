@@ -29,7 +29,7 @@ def test_rapor_ozeti_ve_listeleri_dogru_doner():
           datetime(2026, 10, 5, 9, 0), None, 2, None, None)],
         # kalibrasyonlar
         [(1, "CHZ-1", "EEG", "Kurum A", "SRT-1",
-          datetime(2026, 10, 2, 9, 0), date(2027, 10, 2), 1)],
+          datetime(2026, 10, 2, 9, 0), date(2027, 10, 2), 1, date(2026, 9, 28), date(2026, 9, 29))],
         # arızalar
         [(1, "CHZ-1", "EEG", "Ayşe", "Ekran gitti",
           datetime(2026, 10, 3, 9, 0), None, False, 1, "Ekran arızası", "Yüksek"),
@@ -68,6 +68,8 @@ def test_rapor_ozeti_ve_listeleri_dogru_doner():
     assert sonuc["bakimlar"][1]["sonraki_bakim_tarihi"] is None
     assert [a["durum"] for a in sonuc["arizalar"]] == ["Açık", "Çözüldü"]
     # başlık ve aciliyet kendi sütunlarından gelir; rapor metni "başlık: açıklama" olur
+    assert sonuc["kalibrasyonlar"][0]["kalibrasyon_baslangic_tarihi"] == "2026-09-28"
+    assert sonuc["kalibrasyonlar"][0]["kalibrasyon_bitis_tarihi"] == "2026-09-29"
     assert sonuc["arizalar"][1]["ariza_baslik"] == "Wi-Fi kopuyor"
     assert sonuc["arizalar"][1]["aciliyet"] == "Düşük"
     assert sonuc["arizalar"][1]["ariza_aciklamasi"] == "Wi-Fi kopuyor: Kablo kopuk"
@@ -93,6 +95,10 @@ def test_filtreler_sql_parametresi_olarak_gonderilir():
         sql, parametreler = cagri.args
         assert "%s" in sql
         assert parametreler == [date(2026, 10, 1), date(2026, 10, 31), 7]
+
+    # Kalibrasyon, kaydın girildiği zamana değil gerçek kalibrasyon tarihine göre süzülür.
+    assert "kalibrasyon_baslangic_tarihi" in kalibrasyon.args[0]
+    assert "FROM cihaz_kalibrasyonlari t" in kalibrasyon.args[0] and "COALESCE(t.kalibrasyon_baslangic_tarihi" in kalibrasyon.args[0]
 
     # Arızada bildirim VEYA çözüm tarihi aralıktaysa kayıt dahil edilir.
     ariza_sql, ariza_parametreleri = ariza.args

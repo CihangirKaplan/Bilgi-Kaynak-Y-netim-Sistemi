@@ -12,16 +12,19 @@ from server.sunucu import (
 )
 
 
-def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, aktif_odalar=(3,), rezervasyonlu=()):
-    """planli: bugünden sonraki planlı randevu sayısı (psikolog pasife alınırken sorulur).
-    aktif_odalar / rezervasyonlu: psikolog aktifleştirilirken oda doğrulama ve cihaz rezervasyonlu oda sorguları."""
+def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, aktif_odalar=(3,), rezervasyonlu=(), danisan=0):
+    """planli: bugün ve sonrası için planlı randevu sayısı (psikolog pasife alınırken sorulur).
+    aktif_odalar / rezervasyonlu: psikolog aktifleştirilirken oda doğrulama ve cihaz rezervasyonlu oda sorguları.
+    danisan: psikolog pasife alınırken/aktifleşirken etkilenen danışan sayısı (UPDATE danisan_kodlari rowcount)."""
     conn = MagicMock()
     cursor = conn.cursor.return_value
+    cursor.rowcount = danisan
     fetchone = [(islem_rolu,), (hedef_rol, aktif)]
     if hedef_rol == "PSIKOLOG" and aktif:
         fetchone.append((planli,))
     cursor.fetchone.side_effect = fetchone
-    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), []]
+    # son iki liste: denetim kaydı için önceki ve yeni oda atamaları
+    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), [], [], []]
     return conn, cursor
 
 
@@ -188,8 +191,9 @@ def test_durum_degistirme_audit_parametreleri_dogru():
     ]
 
     # Psikolog pasife alınınca oda atamalarının kaldırılması da denetim kaydına yazılır.
-    assert [c.args[1] for c in audit_cagrilari] == [
+    assert [c.args[1][:4] for c in audit_cagrilari] == [
         (10, "UPDATE", "psikolog_odalar", 5),
+        (10, "DELETE", "psikolog_odalar", 5),   # kaldırılan odalar silme olarak da kaydedilir
         (10, "UPDATE", "kullanicilar", 5),
     ]
 
@@ -237,18 +241,18 @@ def test_planli_randevusu_olan_psikolog_pasife_alinamaz():
     with pytest.raises(HTTPException) as hata:
         calistir(conn)
     assert hata.value.status_code == 409
-    assert "2 planlı randevusu var" in hata.value.detail and "iptal edin" in hata.value.detail
+    assert "bugün ve sonrası için 2 planlı randevusu var" in hata.value.detail and "iptal edin ya da durumlarını güncelleyin" in hata.value.detail
     assert not yazan_sorgu_var_mi(cursor, "UPDATE")                       # durum değişmez
     assert not yazan_sorgu_var_mi(cursor, "DELETE")                       # oda atamaları da kalkmaz
     conn.commit.assert_not_called()
     conn.rollback.assert_called_once()
 
 
-def test_planli_randevu_denetimi_yalnizca_bugunden_sonrasini_ve_planlilari_sayar():
+def test_planli_randevu_denetimi_bugun_ve_sonrasini_ve_yalnizca_planlilari_sayar():
     conn, cursor = sahte_db()
     calistir(conn)
     sql, parametreler = next(a for a in sorgular(cursor) if "FROM randevular r" in a[0])
-    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani > NOW()" in sql      # geçmişte kalan "Planlandı" kayıtlar engellemez
+    assert "r.durum = 'PLANLANDI'" in sql and "r.baslangic_zamani >= CURRENT_DATE" in sql      # bugünkü randevu da engeller; dünden öncesi engellemez
     assert "p.personel_id = r.psikolog_id" in sql and parametreler == (5,)
 
 
@@ -303,7 +307,7 @@ def test_psikolog_aktiflestirilirken_secilen_odalar_yazilir_eski_artik_kayitlar_
     silme = next(i for i, m in enumerate(metinler) if m.startswith("DELETE FROM PSIKOLOG_ODALAR"))
     eklemeler = [(i, a[1]) for i, (a, m) in enumerate(zip(sorgular(cursor), metinler)) if m.startswith("INSERT INTO PSIKOLOG_ODALAR")]
     assert [e[1] for e in eklemeler] == [(5, 2), (5, 3)] and all(e[0] > silme for e in eklemeler)      # tekrarsız, sıralı; önce eskiler silinir
-    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    audit = [a[1][:4] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
     assert audit == [(10, "UPDATE", "psikolog_odalar", 5), (10, "UPDATE", "kullanicilar", 5)]
     conn.commit.assert_called_once()
 
@@ -346,3 +350,59 @@ def test_http_psikolog_aktiflestirme_govdesi(govde, beklenen):
         assert (conn.commit.call_count == 1) is (beklenen == 200)
     finally:
         app.dependency_overrides.pop(yetki, None)
+
+
+# ------------------------------------------------------------------ psikologun danışanları
+def danisan_sorgusu(cursor):
+    return next((a for a in sorgular(cursor) if a[0].startswith("UPDATE danisan_kodlari")), None)
+
+
+def test_psikolog_pasife_alininca_danisanlari_da_pasife_alinir_ve_isaretlenir():
+    conn, cursor = sahte_db(danisan=3)
+    sonuc = calistir(conn)
+    assert sonuc["yeni_durum"] is False and sonuc["pasife_alinan_danisan"] == 3 and "aktif_edilen_danisan" not in sonuc
+    sql, parametreler = danisan_sorgusu(cursor)
+    assert "SET aktif_mi = FALSE, psikolog_pasifligi_nedeniyle_pasif = TRUE" in sql
+    assert "WHERE aktif_mi = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s)" in sql   # yalnızca zaten aktif olanlar
+    assert parametreler == (5,)
+    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    assert (10, "UPDATE", "danisan_kodlari") in audit
+    assert not yazan_sorgu_var_mi(cursor, "DELETE FROM RANDEVULAR") and not yazan_sorgu_var_mi(cursor, "UPDATE RANDEVULAR")   # randevu geçmişi korunur
+    conn.commit.assert_called_once()
+
+
+def test_psikolog_aktiflesince_yalnizca_bu_yuzden_pasifleyen_danisanlar_geri_acilir():
+    conn, cursor = sahte_db(aktif=False, aktif_odalar=(3,), danisan=2)
+    sonuc = calistir(conn, DurumDegistirModeli(oda_idleri=[3]))
+    assert sonuc["yeni_durum"] is True and sonuc["aktif_edilen_danisan"] == 2 and "pasife_alinan_danisan" not in sonuc
+    sql, parametreler = danisan_sorgusu(cursor)
+    assert "SET aktif_mi = TRUE, psikolog_pasifligi_nedeniyle_pasif = FALSE" in sql
+    assert "WHERE psikolog_pasifligi_nedeniyle_pasif = TRUE AND olusturan_psikolog_id IN" in sql     # elle pasife alınmış danışanlara dokunmaz
+    assert parametreler == (5,)
+
+
+def test_etkilenen_danisan_yoksa_denetim_kaydi_yazilmaz():
+    conn, cursor = sahte_db(danisan=0)
+    sonuc = calistir(conn)
+    assert sonuc["pasife_alinan_danisan"] == 0
+    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    assert (10, "UPDATE", "danisan_kodlari") not in audit
+
+
+def test_planli_randevu_nedeniyle_pasife_alma_reddedilirse_danisanlara_dokunulmaz():
+    conn, cursor = sahte_db(planli=1, danisan=3)
+    with pytest.raises(HTTPException) as hata:
+        calistir(conn)
+    assert hata.value.status_code == 409
+    assert danisan_sorgusu(cursor) is None
+    conn.commit.assert_not_called()
+
+
+def test_psikolog_olmayan_icin_danisan_islemi_ve_yanit_anahtarlari_yok():
+    for aktif in (True, False):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value
+        cursor.fetchone.side_effect = [("MUDUR",), ("MEMUR", aktif)]
+        sonuc = calistir(conn)
+        assert danisan_sorgusu(cursor) is None
+        assert "pasife_alinan_danisan" not in sonuc and "aktif_edilen_danisan" not in sonuc

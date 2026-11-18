@@ -110,6 +110,8 @@ def test_pasif_kullanici_yeniden_aktiflestirilebilir():
         [(3,)],  # seçilen oda aktif
         [],      # cihaz rezervasyonu için kullanılan oda yok
         [],      # oda etkinliği yok
+        [],      # denetim için önceki oda atamaları
+        [(3,)],  # denetim için yeni oda atamaları
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -186,6 +188,7 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
+    mock_cursor.rowcount = 0  # pasife alınan danışan yok: yalnızca oda ve kullanıcı denetim kayıtları
     mock_cursor.fetchone.side_effect = [
         ("MUDUR",),
         ("PSIKOLOG", True),
@@ -207,7 +210,7 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
     # Psikolog pasife alınınca oda atamalarının kaldırılması da denetim kaydına yazılır.
     assert len(audit_cagrilari) == 2
 
-    assert audit_cagrilari[0].args[1] == (10, "UPDATE", "psikolog_odalar", 5)
+    assert audit_cagrilari[0].args[1][:4] == (10, "UPDATE", "psikolog_odalar", 5)
     assert audit_cagrilari[1].args[1] == (
         10,             # İşlemi yapan kullanıcı
         "UPDATE",       # Audit olay türü

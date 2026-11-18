@@ -96,3 +96,26 @@ def test_cihaz_tablolari_ortali_ve_genis_bosluklu(monkeypatch):
     assert ortali.item(0, 0).textAlignment() & Qt.AlignHCenter
     assert not duz.item(0, 0).textAlignment() & Qt.AlignHCenter
     assert "padding: 6px 22px" in ORTALI_TABLO_STIL and "padding: 6px 10px" in TABLO_STIL
+
+
+def test_bakim_ve_kalibrasyon_kaydi_plan_id_yi_veritabanina_yazar():
+    """Plan bağlantısı yalnızca plan tarihini ilerletmekle kalmaz, kayda da yazılır."""
+    from unittest.mock import MagicMock, patch
+
+    from server import sunucu
+
+    for ekle, model, tablo in (
+        (sunucu.bakim_kaydi_ekle, BakimOlusturModeli(**BAKIM, plan_id=7), "cihaz_bakimlari"),
+        (sunucu.kalibrasyon_kaydi_ekle, KalibrasyonOlusturModeli(**KALIBRASYON, plan_id=7), "cihaz_kalibrasyonlari"),
+    ):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value
+        cursor.fetchone.return_value = (1,)
+        with patch("server.sunucu.psycopg2.connect", return_value=conn), \
+             patch("server.sunucu.cakisan_rezervasyonlari_denetle"), \
+             patch("server.sunucu.plani_ilerlet"), patch("server.sunucu.plan_periyodu", return_value=30), \
+             patch("server.denetim.denetim_kaydi_olustur"):
+            ekle(model, kullanici_id=3)
+        insert = next(c for c in cursor.execute.call_args_list if f"INSERT INTO {tablo}" in c.args[0])
+        assert "plan_id" in insert.args[0]
+        assert insert.args[1][-1] == 7                      # son parametre plan_id

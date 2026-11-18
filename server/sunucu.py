@@ -1,5 +1,5 @@
 from server.modeller import DanismaGorevOlusturModeli
-from fastapi import FastAPI, HTTPException, Depends, Query, Response
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
@@ -61,7 +61,13 @@ from server.guvenlik import (
     GECICI_PAROLA_BITIS_SQL,
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
-from server.denetim import denetim_kaydi_olustur
+from server.denetim import (
+    denetim_kaydi_olustur,
+    psikolog_oda_degisikligini_yaz,
+    psikolog_odalarini_oku,
+    satiri_sil_ve_ayrintisini_al,
+)
+from server import giris_siniri
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -101,6 +107,7 @@ bearer_scheme = HTTPBearer()
 OGRENCI_TUR_ETIKETLERI = {
     "GONULLU": "Gönüllü Öğrenci",
     "DANISMA_MASASI": "Danışma Masası Öğrencisi",
+    "ASISTAN": "Asistan Öğrenci",
 }
 
 VT_AYARLARI = {
@@ -279,7 +286,16 @@ def yetkilerim(kullanici_id: int = Depends(mevcut_kullanici_id)):
         if conn is not None: conn.close()
 
 @app.post("/api/login")
-def giris_yap(giris: GirisModeli):
+def giris_yap(giris: GirisModeli, request: Request = None):
+    # İstemci (IP) bazlı başarısız deneme sınırı: var olmayan kullanıcı adlarıyla yapılan denemeleri de durdurur.
+    istemci = giris_siniri.istemci_anahtari(request)
+    bekleme = giris_siniri.engel_suresi(VT_AYARLARI, istemci)
+    if bekleme:
+        raise HTTPException(
+            status_code=429,
+            detail="Bu bilgisayardan çok fazla hatalı giriş denemesi yapıldı. Lütfen biraz bekleyip tekrar deneyin.",
+            headers={"Retry-After": str(bekleme)},
+        )
     conn = None
     cursor = None
     try:
@@ -298,6 +314,7 @@ def giris_yap(giris: GirisModeli):
 
         if kullanici is None:
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", hedef_tablo="kullanicilar")
+            giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
         if not kullanici[4]:
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
@@ -327,6 +344,7 @@ def giris_yap(giris: GirisModeli):
                 cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kullanici[0]))
             conn.commit()
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
+            giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             if yeni_basarisiz_giris_sayisi >= 5:
                 raise HTTPException(
                     status_code=429,
@@ -878,7 +896,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
         istenen_odalar = sorted(set(veri.oda_idleri or []))
         if psikolog_idi and not psikolog_olacak:
-            # Psikologluktan çıkarken odaları kalkar: bugünden sonra planlı randevusu varsa önce iptal edilmeli.
+            # Psikologluktan çıkarken odaları kalkar: bugün ve sonrası için planlı randevusu varsa önce iptal edilmeli.
             psikolog_planli_randevulari_denetle(cursor, kullanici_id)
         if psikolog_olacak:
             if not istenen_odalar:
@@ -1053,16 +1071,14 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         # Oda yetkileri yalnızca psikologlar içindir: psikolog olurken verilen odalar yazılır,
         # psikologluktan çıkarken silinir (yeniden psikolog olursa odalar yeniden seçilir).
         if psikolog_olacak or psikolog_idi:
+            onceki_odalar = psikolog_odalarini_oku(cursor, kullanici_id)
             cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
             for oda_id in istenen_odalar:
                 cursor.execute(
                     "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);",
                     (kullanici_id, oda_id),
                 )
-            cursor.execute(
-                "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
-                (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id),
-            )
+            psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
         cursor.execute(
@@ -1237,7 +1253,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
             )
  
         cursor.execute("DELETE FROM rol_izinleri WHERE rol_id = %s;", (rol_id,))
-        cursor.execute("DELETE FROM roller WHERE rol_id = %s;", (rol_id,))
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "roller", rol_id)
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="DELETE",
@@ -1245,6 +1261,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
             hedef_tablo="roller",
             hedef_kayit_id=rol_id,
             mevcut_cursor=cursor,
+            ayrinti=silinen,
         )
         conn.commit()
         return {"durum": "basarili", "mesaj": f"'{rol[0]}' rolü silindi."}
@@ -1773,7 +1790,8 @@ def kullanici_durum_degistir(
 ):
     """Kullanıcıyı aktif/pasif yapar (geçiş).
 
-    Psikolog pasife alınırken: bugünden sonra planlı randevusu varsa işlem 409 ile reddedilir; yoksa oda atamaları kaldırılır
+    Psikolog pasife alınırken: bugün ve sonrası için planlı randevusu varsa işlem 409 ile reddedilir; yoksa kendi danışanları da pasife
+    alınır (yanıtta pasife_alinan_danisan; yeniden aktifleşince yalnızca bu yüzden pasifleşenler geri açılır, aktif_edilen_danisan) ve oda atamaları kaldırılır
     (geçmiş randevular ve raporlar etkilenmez, çünkü oda bilgisi randevunun kendisinde durur). Psikolog aktife alınırken en az
     bir görüşme odası seçilmelidir (oda_idleri); seçilen odalar cihaz rezervasyonu için kullanılıyorsa 409 döner."""
     conn = None
@@ -1825,34 +1843,59 @@ def kullanici_durum_degistir(
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
             oda_etkinlikli_odalari_denetle(cursor, istenen_odalar)
         elif psikolog_pasiflesiyor:
-            # Oda boşa düşeceği için bugünden sonraki planlı randevular önce iptal edilmeli. Geçmişte kalmış kayıtlar engellemez.
+            # Oda boşa düşeceği için bugün ve sonrasındaki planlı randevular önce iptal edilmeli (ya da durumu güncellenmeli). Dünden önceki kayıtlar engellemez.
             cursor.execute(
                 "SELECT COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
-                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW();",
+                "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE;",
                 (kullanici_id,),
             )
             planli = cursor.fetchone()[0]
             if planli:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Bu psikologun bugünden sonra {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin.",
+                    detail=f"Bu psikologun bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin ya da durumlarını güncelleyin.",
                 )
 
         # Her iki tabloyu da eşzamanlı güncelle
         cursor.execute("UPDATE kullanicilar SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
         cursor.execute("UPDATE personel SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
 
+        danisan_sayisi = 0
         if psikolog_mu:
+            # Bir danışanın tek psikoloğu vardır: psikolog pasife alınınca kendi danışanları da pasife alınır (randevu geçmişi korunur).
+            # Yeniden aktifleşince yalnızca BU YÜZDEN pasifleşenler geri açılır; daha önce elle pasife alınmış danışanlar pasif kalır.
+            if psikolog_pasiflesiyor:
+                cursor.execute(
+                    "UPDATE danisan_kodlari SET aktif_mi = FALSE, psikolog_pasifligi_nedeniyle_pasif = TRUE "
+                    "WHERE aktif_mi = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s);",
+                    (kullanici_id,),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE danisan_kodlari SET aktif_mi = TRUE, psikolog_pasifligi_nedeniyle_pasif = FALSE "
+                    "WHERE psikolog_pasifligi_nedeniyle_pasif = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s);",
+                    (kullanici_id,),
+                )
+            danisan_sayisi = cursor.rowcount
+            if danisan_sayisi:
+                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (islem_yapan_id, "UPDATE", "danisan_kodlari"))
+
             # Pasifte oda ataması kalkar; aktifleşirken seçilen odalar yazılır (eski artık kayıtlar varsa değiştirilir).
+            onceki_odalar = psikolog_odalarini_oku(cursor, kullanici_id)
             cursor.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = %s;", (kullanici_id,))
             for oda_id in istenen_odalar:
                 cursor.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);", (kullanici_id, oda_id))
-            cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "psikolog_odalar", kullanici_id))
+            psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
         conn.commit()
 
-        return {"mesaj": "Durum başarıyla güncellendi.", "kullanici_id": kullanici_id, "yeni_durum": yeni_durum}
+        yanit = {"mesaj": "Durum başarıyla güncellendi.", "kullanici_id": kullanici_id, "yeni_durum": yeni_durum}
+        if psikolog_pasiflesiyor:
+            yanit["pasife_alinan_danisan"] = danisan_sayisi
+        elif psikolog_aktiflesiyor:
+            yanit["aktif_edilen_danisan"] = danisan_sayisi
+        return yanit
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
@@ -2094,6 +2137,8 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
     if hafta_sonuna_denk_mi(randevu.baslangic_zamani, randevu.bitis_zamani):
         raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
+    if gecmis_tarihe_mi(randevu.baslangic_zamani):
+        raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
 
     conn = None
     cursor = None
@@ -2266,6 +2311,14 @@ def hafta_sonuna_denk_mi(*zamanlar) -> bool:
     return any(z.weekday() >= 5 for z in zamanlar)
 
 
+GECMIS_TARIH_MESAJI = "Geçmiş bir tarihe randevu verilemez."
+
+
+def gecmis_tarihe_mi(zaman) -> bool:
+    """Başlangıç günü bugünden önceyse True. Bugünün geçmiş saatleri serbesttir (görüşme yapılıp sonradan girilebilir)."""
+    return zaman.date() < datetime.now(zaman.tzinfo).date()
+
+
 @app.get("/api/randevular/doluluk")
 def randevu_doluluk(
     tarih: date,
@@ -2420,6 +2473,9 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         # Zaman değişiyorsa hafta sonuna alınamaz (eskiden kalan hafta sonu randevusunun yalnızca oda/danışanı değişebilir)
         if ("baslangic_zamani" in degisiklikler or "bitis_zamani" in degisiklikler) and hafta_sonuna_denk_mi(baslangic, bitis):
             raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
+        # Başlangıç değişiyorsa geçmiş bir tarihe alınamaz (geçmiş randevunun terapi türü vb. yine düzeltilebilir).
+        if "baslangic_zamani" in degisiklikler and baslangic != mevcut[3] and gecmis_tarihe_mi(baslangic):
+            raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
         if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 
@@ -2679,7 +2735,7 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
 
 
 def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri=None):
-    """Psikologun bugünden sonra planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
+    """Psikologun bugün ve sonrası için planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
 
     kalacak_oda_idleri verilmezse (rol değiştirme: tüm odalar kalkar) tüm planlı randevular sayılır. Verilirse (oda yetkisi
     güncelleme) yalnızca psikologa şu an atanmış, yeni kümede olmayan ve aktif odalardaki planlı randevular sayılır.
@@ -2691,7 +2747,7 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
             FROM randevular r
             JOIN personel p ON p.personel_id = r.psikolog_id
             JOIN odalar o ON o.oda_id = r.oda_id
-            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE
             GROUP BY o.oda_id, o.oda_adi
             ORDER BY o.oda_adi;
             """,
@@ -2704,7 +2760,7 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
             FROM randevular r
             JOIN personel p ON p.personel_id = r.psikolog_id
             JOIN odalar o ON o.oda_id = r.oda_id
-            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani > NOW()
+            WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE
               AND o.aktif_mi = TRUE AND r.oda_id <> ALL(%s)
               AND EXISTS (SELECT 1 FROM psikolog_odalar po WHERE po.kullanici_id = p.kullanici_id AND po.oda_id = r.oda_id)
             GROUP BY o.oda_id, o.oda_adi
@@ -2717,10 +2773,10 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
         return
     if kalacak_oda_idleri is None:
         toplam = sum(sayi for _, sayi in planlilar)
-        detay = f"Bu psikologun bugünden sonra {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin."
+        detay = f"Bu psikologun bugün ve sonrası için {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin ya da durumlarını güncelleyin."
     else:
         ayrinti = ", ".join(f"{ad} ({sayi} randevu)" for ad, sayi in planlilar)
-        detay = f"Kaldırılmak istenen odalarda bugünden sonra planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin."
+        detay = f"Kaldırılmak istenen odalarda bugün ve sonrası için planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin ya da durumlarını güncelleyin."
     raise HTTPException(status_code=409, detail=detay)
 
 
@@ -2871,6 +2927,7 @@ def psikolog_oda_yetkilerini_guncelle(
         psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
+        onceki_odalar = psikolog_odalarini_oku(cursor, hedef_kullanici_id)
         cursor.execute(
             """
             DELETE FROM psikolog_odalar po USING odalar o
@@ -2884,10 +2941,7 @@ def psikolog_oda_yetkilerini_guncelle(
                 "INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s) ON CONFLICT DO NOTHING;",
                 (hedef_kullanici_id, oda_id),
             )
-        cursor.execute(
-            "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);",
-            (kullanici_id, "UPDATE", "psikolog_odalar", hedef_kullanici_id),
-        )
+        psikolog_oda_degisikligini_yaz(cursor, kullanici_id, hedef_kullanici_id, onceki_odalar)
         conn.commit()
         return {"durum": "basarili", "kullanici_id": hedef_kullanici_id, "oda_idleri": oda_idleri}
     except HTTPException:
@@ -2911,7 +2965,8 @@ def oda_psikolog_atamalari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EK
             SELECT po.oda_id, k.kullanici_adi
             FROM psikolog_odalar po
             JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
-            WHERE k.aktif_mi = TRUE
+            JOIN roller r ON r.rol_id = k.rol_id
+            WHERE k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'
             ORDER BY po.oda_id, k.kullanici_adi;
             """
         )
@@ -2993,7 +3048,8 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
 CIHAZ_ODALARI_SORGUSU = (
     "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
     "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id "
-    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE) ORDER BY o.oda_adi"
+    "JOIN roller r ON r.rol_id = k.rol_id "
+    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') ORDER BY o.oda_adi"
 )
 
 
@@ -3204,7 +3260,8 @@ def danisan_durumunu_degistir(
                     detail=f"Bu danışanın {planli} planlanmış randevusu var. Pasife almadan önce randevuları iptal edin.",
                 )
 
-        cursor.execute("UPDATE danisan_kodlari SET aktif_mi = %s WHERE danisan_kod_id = %s;", (aktif_mi, danisan_kod_id))
+        # Elle yapılan durum değişikliği, "psikolog pasifliği nedeniyle pasif" işaretini temizler (psikolog dönünce otomatik geri açılmasın/kapanmasın).
+        cursor.execute("UPDATE danisan_kodlari SET aktif_mi = %s, psikolog_pasifligi_nedeniyle_pasif = FALSE WHERE danisan_kod_id = %s;", (aktif_mi, danisan_kod_id))
         cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
         conn.commit()
         return {"durum": "basarili", "aktif_mi": aktif_mi, "mesaj": "Danışan aktif edildi." if aktif_mi else "Danışan pasife alındı."}
@@ -3267,12 +3324,27 @@ def danisan_bilgilerini_guncelle(
         if conn is not None: conn.close()
 
 @app.get("/api/psikologlar")
-def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
+def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")), pasifler_dahil: bool = False):
+    """Aktif psikologlar (randevu formundaki psikolog seçimi bunu kullanır).
+
+    pasifler_dahil=true: ad gösterimi içindir; randevusu ya da danışan kodu olan pasif ya da sonradan başka role geçmiş eski
+    psikologlar da gelir ve her kayıtta aktif_mi bilgisi bulunur. Böylece eski randevularda "Psikolog #19" yerine gerçek ad görünür."""
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        if pasifler_dahil:
+            cursor.execute("""
+                SELECT p.personel_id, k.kullanici_adi, k.kullanici_id,
+                       (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') AS aktif_mi
+                FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id
+                WHERE (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG')
+                   OR EXISTS (SELECT 1 FROM randevular x WHERE x.psikolog_id = p.personel_id)
+                   OR EXISTS (SELECT 1 FROM danisan_kodlari d WHERE d.olusturan_psikolog_id = p.personel_id)
+                ORDER BY k.kullanici_adi;
+            """)
+            return [{"personel_id": k[0], "ad_soyad": k[1], "kullanici_id": k[2], "aktif_mi": bool(k[3])} for k in cursor.fetchall()]
         cursor.execute("""
             SELECT p.personel_id, k.kullanici_adi, k.kullanici_id
             FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id
@@ -4171,9 +4243,11 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_
             SELECT b.bakim_id, c.cihaz_adi, c.envanter_kodu,
                    b.bakim_yapan_kisi, b.yapilan_islem, b.maliyet,
                    b.bakim_tarihi, b.sonraki_bakim_tarihi,
-                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi, b.uyari_suresi_gun
+                   b.bakim_baslangic_tarihi, b.bakim_bitis_tarihi, b.uyari_suresi_gun,
+                   b.plan_id, p.gorev_turu
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
+            LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = b.plan_id
             ORDER BY b.bakim_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
@@ -4191,7 +4265,9 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_
                 # EKSİK OLAN KISIM: JSON sözlüğüne başlangıç ve bitiş eklendi (eski kayıtlarda null gelirse bakim_tarihi kurtarır)
                 "bakim_baslangic_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
                 "bakim_bitis_tarihi": k[9].isoformat() if k[9] and hasattr(k[9], 'isoformat') else (str(k[6]) if k[6] else "Belirtilmedi"),
-                "uyari_suresi_gun": k[10]
+                "uyari_suresi_gun": k[10],
+                "plan_id": k[11],          # kaydın yerine getirdiği plan (yoksa None)
+                "plan_adi": k[12]
             }
             for k in kayitlar
         ]
@@ -4228,9 +4304,10 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
         cursor.execute("""
             INSERT INTO cihaz_bakimlari (
                 cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet,
-                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi, uyari_suresi_gun
+                bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi, sonraki_bakim_tarihi, uyari_suresi_gun,
+                plan_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING bakim_id;
         """, (
             bakim.cihaz_id,
             bakim.bakim_yapan_kisi,
@@ -4240,7 +4317,8 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             bakim.bakim_baslangic_tarihi,
             bakim.bakim_bitis_tarihi,
             sonraki_bakim,
-            bakim.uyari_suresi_gun
+            bakim.uyari_suresi_gun,
+            bakim.plan_id
         ))
         bakim_id = cursor.fetchone()[0]
 
@@ -4324,12 +4402,13 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM cihaz_bakimlari WHERE bakim_id = %s RETURNING bakim_id;", (bakim_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_bakimlari", bakim_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Bakım kaydı bulunamadı.")
 
-        # Silme ile denetim kaydı aynı işlemde (transaction) yazılır.
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_bakimlari", bakim_id, mevcut_cursor=cursor)
+        # Silme ile denetim kaydı (silinen içerikle birlikte) aynı işlemde (transaction) yazılır.
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_bakimlari", bakim_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Bakım kaydı silindi."}
@@ -4360,9 +4439,11 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYO
         cursor.execute("""
             SELECT k.kalibrasyon_id, c.cihaz_adi, c.envanter_kodu,
                    k.kalibrasyon_yapan_kurum, k.gecerlilik_tarihi, k.sertifika_no, k.islem_tarihi,
-                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi, k.uyari_suresi_gun
+                   k.kalibrasyon_baslangic_tarihi, k.kalibrasyon_bitis_tarihi, k.uyari_suresi_gun,
+                   k.plan_id, p.gorev_turu
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
+            LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = k.plan_id
             ORDER BY k.islem_tarihi DESC;
         """)
         kayitlar = cursor.fetchall()
@@ -4378,7 +4459,9 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYO
                 # Yeni alanlar ve Fallback mantığı (Eski kayıtlarda null gelirse işlem tarihi baz alınır)
                 "kalibrasyon_baslangic_tarihi": k[7].isoformat() if k[7] and hasattr(k[7], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
                 "kalibrasyon_bitis_tarihi": k[8].isoformat() if k[8] and hasattr(k[8], 'isoformat') else (str(k[6])[:10] if k[6] else "Belirtilmedi"),
-                "uyari_suresi_gun": k[9]
+                "uyari_suresi_gun": k[9],
+                "plan_id": k[10],          # kaydın yerine getirdiği plan (yoksa None)
+                "plan_adi": k[11]
             }
             for k in kayitlar
         ]
@@ -4408,9 +4491,9 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
         cursor.execute("""
             INSERT INTO cihaz_kalibrasyonlari (
                 cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, islem_tarihi,
-                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi, uyari_suresi_gun
+                kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi, uyari_suresi_gun, plan_id
             )
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s) RETURNING kalibrasyon_id;
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s) RETURNING kalibrasyon_id;
         """, (
             kalib.cihaz_id, 
             kalib.kalibrasyon_yapan_kurum, 
@@ -4418,7 +4501,8 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
             kalib.sertifika_no,
             kalib.kalibrasyon_baslangic_tarihi, # EKLENDİ
             kalib.kalibrasyon_bitis_tarihi,     # EKLENDİ
-            kalib.uyari_suresi_gun
+            kalib.uyari_suresi_gun,
+            kalib.plan_id
         ))
         kalibrasyon_id = cursor.fetchone()[0]
 
@@ -4498,11 +4582,12 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s RETURNING kalibrasyon_id;", (kalibrasyon_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_kalibrasyonlari", kalibrasyon_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Kalibrasyon kaydı bulunamadı.")
 
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_kalibrasyonlari", kalibrasyon_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "cihaz_kalibrasyonlari", kalibrasyon_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kalibrasyon kaydı silindi."}
@@ -4797,11 +4882,12 @@ def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(mevcut_kullanici_i
             )
         izinler = _plan_yetkileri(cursor, kullanici_id)
         _plan_turu_yetkisini_dogrula(izinler, mevcut[0])
-        cursor.execute("DELETE FROM cihaz_bakim_planlari WHERE plan_id = %s RETURNING plan_id;", (plan_id,))
-        if cursor.fetchone() is None:
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_bakim_planlari", plan_id)
+        if silinen is None:
             raise HTTPException(status_code=404, detail="Plan bulunamadı.")
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="DELETE", kullanici_id=kullanici_id,
-                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor)
+                              hedef_tablo="cihaz_bakim_planlari", hedef_kayit_id=plan_id, mevcut_cursor=cursor,
+                              ayrinti=silinen)
         conn.commit()
         return {"durum": "basarili", "mesaj": "Plan silindi."}
     except HTTPException:
@@ -5993,6 +6079,13 @@ def ogrenci_on_yil_sil(
                 """,
                 (ogrenci_id,)
             )
+            silinen_faaliyet_sayisi = cursor.rowcount
+
+            # 10 yıllık saklama süresi sonunda yapılan imha: denetim kaydına kişisel veri (ad, telefon...) YAZILMAZ;
+            # yalnızca kimliksiz alanlar ve silinen faaliyet sayısı tutulur.
+            silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenciler", ogrenci_id)
+            if silinen is not None:
+                silinen["silinen_faaliyet_kaydi_sayisi"] = silinen_faaliyet_sayisi
 
             denetim_kaydi_olustur(
                 VT_AYARLARI,
@@ -6000,12 +6093,8 @@ def ogrenci_on_yil_sil(
                 yetkili_id,
                 "ogrenciler",
                 ogrenci_id,
-                mevcut_cursor=cursor
-            )
-
-            cursor.execute(
-                "DELETE FROM ogrenciler WHERE ogrenci_id=%s",
-                (ogrenci_id,)
+                mevcut_cursor=cursor,
+                ayrinti=silinen,
             )
 
         conn.commit()
@@ -6306,9 +6395,9 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
 
         cursor.execute("""
             INSERT INTO ogrenciler
-            (ad_soyad, ogrenci_numarasi, telefon, tur)
-            VALUES (%s, %s, %s, %s) RETURNING ogrenci_id;
-        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur))
+            (ad_soyad, ogrenci_numarasi, telefon, tur, bolum, sinif)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING ogrenci_id;
+        """, (ogr.ad_soyad, ogr.ogrenci_numarasi, ogr.telefon, ogr.tur, ogr.bolum, ogr.sinif))
 
         yeni_id = cursor.fetchone()[0]
 
@@ -6452,12 +6541,11 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Silinecek kayıt zaten yok veya bulunamadı.")
 
-        # Kaydı acımadan veritabanından siliyoruz
-        cursor.execute("DELETE FROM ogrenci_faaliyet_takip WHERE takip_id = %s;", (takip_id,))
-
-        # Audit log (Denetim kaydı) - Kim sildi bilelim
+        # Kaydı veritabanından siliyoruz; silinen içerik denetim kaydına yazılır (kim, neyi sildi).
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenci_faaliyet_takip", takip_id)
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
@@ -7740,10 +7828,10 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="DİKKAT: Bu birim geçmiş faaliyet kayıtlarında kullanıldığı için SİLİNEMEZ! İsterseniz adını güncelleyebilirsiniz.")
 
-        cursor.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s;", (birim_id,))
-
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "faaliyet_birimleri", birim_id)
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id,
+                              mevcut_cursor=cursor, ayrinti=silinen)
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
@@ -7900,7 +7988,7 @@ def audit_kayitlarini_getir(
     if olay_turu:
         gecerli_olaylar = {
             "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
-            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE"
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE"
         }
         if (
             len(olay_turu) > len(gecerli_olaylar)
@@ -7959,7 +8047,7 @@ def audit_kayitlarini_getir(
                 ),
                 COUNT(*) FILTER (
                     WHERE d.olay_turu::text IN (
-                        'CREATE', 'UPDATE', 'ROLE_CHANGE'
+                        'CREATE', 'UPDATE', 'ROLE_CHANGE', 'DELETE'
                     )
                 ),
                 COUNT(*) FILTER (
@@ -7990,7 +8078,8 @@ def audit_kayitlarini_getir(
                     FROM kullanicilar hedef
                     WHERE d.hedef_tablo = 'kullanicilar'
                       AND hedef.kullanici_id = d.hedef_kayit_id
-                ) AS hedef_kullanici_adi
+                ) AS hedef_kullanici_adi,
+                d.ayrinti
             {from_sql}
             {where_sql}
             ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
@@ -8010,6 +8099,7 @@ def audit_kayitlarini_getir(
                 "hedef_tablo": satir[4],
                 "hedef_kayit_id": satir[5],
                 "hedef_kullanici_adi": satir[7] if len(satir) > 7 else None,
+                "ayrinti": satir[8] if len(satir) > 8 else None,
                 "olusturulma_tarihi": (
                     satir[6].isoformat() if satir[6] else None
                 )
@@ -8128,14 +8218,18 @@ def cihaz_raporlari(
             for k in cursor.fetchall()
         ]
 
-        where, parametreler = kosul_olustur("t.islem_tarihi")
+        # Filtre ve sıralama, kaydın girildiği zamana (islem_tarihi) değil kalibrasyonun gerçek başlangıç tarihine
+        # göre yapılır (Kalibrasyon ekranı da bunu gösterir); eski kayıtlarda tarih boşsa islem_tarihi kullanılır.
+        kalibrasyon_gunu = "COALESCE(t.kalibrasyon_baslangic_tarihi, t.islem_tarihi::date)"
+        where, parametreler = kosul_olustur(kalibrasyon_gunu)
         cursor.execute(f"""
             SELECT t.kalibrasyon_id, c.envanter_kodu, c.cihaz_adi, t.kalibrasyon_yapan_kurum,
-                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi, t.cihaz_id
+                   t.sertifika_no, t.islem_tarihi, t.gecerlilik_tarihi, t.cihaz_id,
+                   t.kalibrasyon_baslangic_tarihi, t.kalibrasyon_bitis_tarihi
             FROM cihaz_kalibrasyonlari t
             JOIN cihazlar c ON t.cihaz_id = c.cihaz_id
             {where}
-            ORDER BY t.islem_tarihi DESC;
+            ORDER BY {kalibrasyon_gunu} DESC, t.kalibrasyon_id DESC;
         """, parametreler)
         kalibrasyonlar = [
             {
@@ -8146,6 +8240,9 @@ def cihaz_raporlari(
                 "sertifika_no": k[4],
                 "islem_tarihi": _tarih_metni(k[5]),
                 "gecerlilik_tarihi": _tarih_metni(k[6]),
+                # Eski kayıtlarda başlangıç/bitiş boşsa işlem tarihinin günü kullanılır.
+                "kalibrasyon_baslangic_tarihi": _tarih_metni(k[8] or (k[5].date() if k[5] else None)),
+                "kalibrasyon_bitis_tarihi": _tarih_metni(k[9] or (k[5].date() if k[5] else None)),
             }
             for k in cursor.fetchall()
         ]

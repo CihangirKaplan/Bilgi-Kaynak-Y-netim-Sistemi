@@ -10,8 +10,8 @@ def gecerli_randevu():
         "danisan_kod_id": "DAN-2026-0001",
         "psikolog_id": 1,
         "oda_id": 1,
-        "baslangic_zamani": "2026-10-15T10:00:00",
-        "bitis_zamani": "2026-10-15T11:00:00",
+        "baslangic_zamani": "2031-10-16T10:00:00",
+        "bitis_zamani": "2031-10-16T11:00:00",
     }
 
 
@@ -108,8 +108,8 @@ from server.sunucu import randevu_olustur
 # 8. Başlangıç zamanı bitişten önce olmalı
 def test_baslangic_bitisten_sonra_olamaz():
     veriler = gecerli_randevu()
-    veriler["baslangic_zamani"] = "2026-10-15T12:00:00"
-    veriler["bitis_zamani"] = "2026-10-15T11:00:00"
+    veriler["baslangic_zamani"] = "2031-10-16T12:00:00"
+    veriler["bitis_zamani"] = "2031-10-16T11:00:00"
 
     # Geçersiz tarih artık API'ye ulaşmadan Pydantic'te reddedilir.
     with patch("server.sunucu.psycopg2.connect") as mock_connect:
@@ -216,8 +216,8 @@ def test_bos_guncelleme_reddedilir():
                 "DAN-2026-0001",
                 1,
                 1,
-                datetime(2026, 10, 15, 10, 0),
-                datetime(2026, 10, 15, 11, 0),
+                datetime(2031, 10, 16, 10, 0),
+                datetime(2031, 10, 16, 11, 0),
                 "PLANLANDI",
             ),
             ("ADMIN",),
@@ -262,8 +262,8 @@ def test_null_guncelleme_reddedilir():
                 "DAN-2026-0001",
                 1,
                 1,
-                datetime(2026, 10, 15, 10, 0),
-                datetime(2026, 10, 15, 11, 0),
+                datetime(2031, 10, 16, 10, 0),
+                datetime(2031, 10, 16, 11, 0),
                 "PLANLANDI",
             ),
             ("ADMIN",),
@@ -297,7 +297,7 @@ def test_null_guncelleme_reddedilir():
 # 14. Güncellemede başlangıç zamanı bitişten sonra olamaz
 def test_guncellemede_gecersiz_tarih_reddedilir():
     guncelleme = RandevuGuncelleModeli(
-        baslangic_zamani=datetime(2026, 10, 15, 12, 0)
+        baslangic_zamani=datetime(2031, 10, 16, 12, 0)
     )
 
     with patch("server.sunucu.psycopg2.connect") as mock_connect:
@@ -311,8 +311,8 @@ def test_guncellemede_gecersiz_tarih_reddedilir():
                 "DAN-2026-0001",
                 1,
                 1,
-                datetime(2026, 10, 15, 10, 0),
-                datetime(2026, 10, 15, 11, 0),
+                datetime(2031, 10, 16, 10, 0),
+                datetime(2031, 10, 16, 11, 0),
                 "PLANLANDI",
             ),
             ("ADMIN",),
@@ -357,8 +357,8 @@ def test_gecerli_randevu_guncellenir():
                 "DAN-2026-0001",
                 1,
                 1,
-                datetime(2026, 10, 15, 10, 0),
-                datetime(2026, 10, 15, 11, 0),
+                datetime(2031, 10, 16, 10, 0),
+                datetime(2031, 10, 16, 11, 0),
                 "PLANLANDI",
             ),
             ("ADMIN",),  # Kullanıcı rolü

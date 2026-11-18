@@ -3,8 +3,9 @@
 İki görünüm vardır: Gün (seçili günde tüm odalar yan yana) ve Hafta (seçili odanın haftası). Randevular renkli bloklar olarak
 gösterilir (renkler Randevu Yönetimi'ndeki durum renkleriyle aynıdır); iptal edilenler gösterilmez. Psikolog, başkalarının
 randevularında yalnızca "Dolu" bilgisini görür (sunucu uygular). Cihaz rezervasyonu odayı o saatlerde tamamen doldurur: yetkili
-roller cihaz adını ve bölümü görür, yetkisi olmayanlar odanın cihaz kullanımı nedeniyle dolu olduğunu görür. Takvim 08:00-18:00
-mesai saatlerini gösterir. Sayfa yalnızca görüntülemedir.
+roller cihaz adını ve bölümü görür, yetkisi olmayanlar odanın cihaz kullanımı nedeniyle dolu olduğunu görür. Takvim her zaman
+08:00-18:00 mesai saatlerini gösterir; mesai dışı saatler gösterilmez ve ızgarayı genişletmez. Çok günlü cihaz rezervasyonu tek kayıttır,
+her gün yalnızca mesai kısmıyla çizilir. Sayfa yalnızca görüntülemedir.
 """
 
 import textwrap
@@ -58,16 +59,11 @@ def zaman(metin):
         return None
 
 
-def saat_dilimleri(kayitlar):
-    """Satır saatleri: 08:00-18:00 mesai saatleri; dışında kalan (eski) bir randevu ya da rezervasyon varsa aralık onu da kapsar."""
-    saatler = set(ODA_TAKVIMI_SAATLERI)
-    for r in kayitlar:
-        bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
-        if bas is not None:
-            saatler.add(bas.hour)
-            if bit is not None and bit > bas:
-                saatler.update(range(bas.hour, bas.hour + _kapsanan_saat(bas, bit)))
-    return list(range(min(saatler), max(saatler) + 1))
+def saat_dilimleri(kayitlar=None):
+    """Satır saatleri: her zaman 08:00-18:00 mesai saatleri. Mesai dışındaki kayıtlar ızgarayı genişletmez, gösterilmez.
+
+    (kayitlar parametresi eski çağrılarla uyum içindir; saat aralığı kayıtlara bağlı değildir.)"""
+    return list(ODA_TAKVIMI_SAATLERI)
 
 
 def _kapsanan_saat(bas, bit):
@@ -89,9 +85,12 @@ def _kapsanan_saat(bas, bit):
 def rezervasyon_kayitlari(rezervasyonlar):
     """Sunucudaki cihaz rezervasyonlarını randevu kayıtlarıyla aynı biçime çevirir (blok haritası ve doluluk aynı kodla çalışsın).
 
-    Gün sınırını aşan rezervasyon günlük parçalara bölünür (her parça kendi gününün başladığı saat diliminden çizilir).
-    cihaz_adi boşsa (yetkisi olmayan kullanıcı) blok yalnızca cihaz kullanımı nedeniyle dolu olarak görünür."""
+    Çok günlü rezervasyon (örn. 18.11 09:00 - 20.11 09:00) tek kayıttır; ekranda her gün için yalnızca mesai (08:00-18:00) kısmı
+    çizilir: ilk gün 09:00-18:00, aradaki gün 08:00-18:00, son gün 08:00-09:00. Mesai dışına düşen kısım hiç gösterilmez.
+    Gerçek aralık gercek_baslangic / gercek_bitis alanlarında kalır (blokta okunur). cihaz_adi boşsa (yetkisi olmayan kullanıcı)
+    blok yalnızca cihaz kullanımı nedeniyle dolu olarak görünür."""
     kayitlar = []
+    mesai_bas, mesai_bit = ODA_TAKVIMI_SAATLERI[0], ODA_TAKVIMI_SAATLERI[-1] + 1
     for r in rezervasyonlar:
         bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
         if bas is None or bit is None or bit <= bas:
@@ -99,12 +98,15 @@ def rezervasyon_kayitlari(rezervasyonlar):
         gun = bas.date()
         while gun <= (bit - timedelta(microseconds=1)).date():
             gun_bas = datetime.combine(gun, datetime.min.time())
-            parca_bas, parca_bit = max(bas, gun_bas), min(bit, gun_bas + timedelta(days=1))
-            kayitlar.append({
-                "rezervasyon_id": r.get("rezervasyon_id"), "oda_id": r.get("oda_id"), "cihaz": True, "durum": "CIHAZ",
-                "baslangic_zamani": parca_bas.isoformat(), "bitis_zamani": parca_bit.isoformat(),
-                "cihaz_adi": r.get("cihaz_adi"), "bolum_adi": r.get("bolum_adi"), "psikolog": None, "danisan_kod_id": None,
-            })
+            parca_bas = max(bas, gun_bas + timedelta(hours=mesai_bas))
+            parca_bit = min(bit, gun_bas + timedelta(hours=mesai_bit))
+            if parca_bas < parca_bit:
+                kayitlar.append({
+                    "rezervasyon_id": r.get("rezervasyon_id"), "oda_id": r.get("oda_id"), "cihaz": True, "durum": "CIHAZ",
+                    "baslangic_zamani": parca_bas.isoformat(), "bitis_zamani": parca_bit.isoformat(),
+                    "gercek_baslangic": bas.isoformat(), "gercek_bitis": bit.isoformat(),
+                    "cihaz_adi": r.get("cihaz_adi"), "bolum_adi": r.get("bolum_adi"), "psikolog": None, "danisan_kod_id": None,
+                })
             gun += timedelta(days=1)
     return kayitlar
 
@@ -618,6 +620,11 @@ class OdaKullanimiEkrani(QWidget):
         yerlesim.setSpacing(0)
         bas, bit = zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))
         saat = f"{bas:%H:%M} – {bit:%H:%M}" if bas and bit else ""
+        if cihaz:
+            # Blok yalnızca mesai kısmını çizer; yazıdaki aralık rezervasyonun gerçek aralığıdır (çok günlüyse tarihli).
+            gb, gt = zaman(r.get("gercek_baslangic")), zaman(r.get("gercek_bitis"))
+            if gb and gt:
+                saat = f"{gb:%H:%M} – {gt:%H:%M}" if gb.date() == gt.date() else f"{gb:%d.%m %H:%M} – {gt:%d.%m %H:%M}"
         if etkinlik:
             satirlar = [
                 (

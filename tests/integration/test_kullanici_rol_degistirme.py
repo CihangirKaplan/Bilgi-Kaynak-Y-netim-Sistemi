@@ -83,6 +83,8 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
     mock_cursor.fetchall.side_effect = [
         [],  # bugünden sonra planlı randevu yok
         [("PER-MEM-001",), ("PER-MEM-002",)],
+        [],  # denetim için önceki oda atamaları
+        [],  # denetim için yeni oda atamaları
     ]
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -125,7 +127,7 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
     # Psikologluktan çıkarken oda yetkileri silinir ve bunun için ayrıca denetim kaydı düşer.
     assert any(c.args[0].startswith('DELETE FROM psikolog_odalar') for c in mock_cursor.execute.call_args_list)
     assert len(audit_cagrilari) == 3
-    assert audit_cagrilari[0].args[1] == (10, "UPDATE", "psikolog_odalar", 5)
+    assert audit_cagrilari[0].args[1][:4] == (10, "UPDATE", "psikolog_odalar", 5)
     audit_cagrilari = audit_cagrilari[1:]
 
     assert audit_cagrilari[0].args[1] == (

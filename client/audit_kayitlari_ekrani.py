@@ -24,6 +24,7 @@ OLAY_ADLARI = {
     "CREATE": "Oluşturma",
     "UPDATE": "Güncelleme",
     "CANCEL": "İptal",
+    "DELETE": "Silme",
     "ROLE_CHANGE": "Rol Değişikliği",
     "DEVICE_STATUS_CHANGE": "Cihaz Durum Değişikliği",
 }
@@ -41,6 +42,12 @@ HEDEF_TABLO_ADLARI = {
     "cihaz_bakim": "Cihaz Bakımı",
     "cihaz_ariza": "Cihaz Arızası",
     "cihaz_kalibrasyon": "Cihaz Kalibrasyonu",
+    "cihaz_bakimlari": "Cihaz Bakımı",
+    "cihaz_arizalari": "Cihaz Arızası",
+    "cihaz_kalibrasyonlari": "Cihaz Kalibrasyonu",
+    "cihaz_bakim_planlari": "Cihaz Bakım Planı",
+    "faaliyet_birimleri": "Faaliyet Birimi",
+    "psikolog_odalar": "Psikolog Oda Yetkisi",
     "danisan_kodlari": "Danışan Kodu",
     "danisma_masasi_oturumlari": "Danışma Oturumu",
     "ogrenci_faaliyet_takip": "Öğrenci Faaliyeti",
@@ -56,9 +63,38 @@ OLAY_RENKLERI = {
     "CREATE": ("#2457A2", "#E9F1FF"),
     "UPDATE": ("#96601B", "#FFF2DF"),
     "CANCEL": ("#9B3048", "#FCEBF0"),
+    "DELETE": ("#8A1F2D", "#FBE3E6"),
     "ROLE_CHANGE": ("#62499E", "#F0EBFC"),
     "DEVICE_STATUS_CHANGE": ("#285F88", "#E8F2FB"),
 }
+
+
+def ayrinti_satirlari(ayrinti):
+    """Denetim kaydındaki ayrıntıyı (silinen veri, önceki/yeni değer) ekranda gösterilecek (başlık, değer) satırlarına çevirir."""
+    if not isinstance(ayrinti, dict):
+        return []
+
+    def biçimle(deger):
+        if deger is None:
+            return "—"
+        if isinstance(deger, bool):
+            return "Evet" if deger else "Hayır"
+        if isinstance(deger, (list, tuple)):
+            return ", ".join(biçimle(d) for d in deger) if deger else "—"
+        return str(deger)
+
+    def alan_adi(anahtar):
+        return str(anahtar).replace("_", " ").capitalize()
+
+    satirlar = []
+    for anahtar, deger in ayrinti.items():
+        if anahtar == "silinen" and isinstance(deger, dict):
+            satirlar.extend((alan_adi(a), biçimle(d)) for a, d in deger.items())
+        elif anahtar == "maskelenen_alanlar":
+            satirlar.append(("Kişisel veri olduğu için kaydedilmeyen alanlar", biçimle(deger)))
+        else:
+            satirlar.append((alan_adi(anahtar), biçimle(deger)))
+    return satirlar
 
 
 def kart_golgesi(widget):
@@ -692,6 +728,30 @@ class AuditKayitlariEkrani(QWidget):
 
         izgara.setColumnStretch(1, 1)
         duzen.addLayout(izgara)
+
+        ayrinti = ayrinti_satirlari(kayit.get("ayrinti"))
+        if ayrinti:
+            alt_baslik = QLabel(
+                "Silinen Veri" if kayit.get("olay_turu") == "DELETE" else "Değişiklik Ayrıntısı"
+            )
+            alt_baslik.setStyleSheet("font-size: 15px; font-weight: bold; color: #102D59;")
+            duzen.addWidget(alt_baslik)
+
+            ayrinti_izgara = QGridLayout()
+            ayrinti_izgara.setHorizontalSpacing(20)
+            ayrinti_izgara.setVerticalSpacing(8)
+            for sira, (alan, deger) in enumerate(ayrinti):
+                ad = QLabel(alan + ":")
+                ad.setStyleSheet("font-weight: bold; color: #31517D;")
+                ad.setWordWrap(True)
+                deger_yazisi = QLabel(deger)
+                deger_yazisi.setTextFormat(Qt.PlainText)
+                deger_yazisi.setWordWrap(True)
+                deger_yazisi.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                ayrinti_izgara.addWidget(ad, sira, 0)
+                ayrinti_izgara.addWidget(deger_yazisi, sira, 1)
+            ayrinti_izgara.setColumnStretch(1, 1)
+            duzen.addLayout(ayrinti_izgara)
 
         kapat = QPushButton("Kapat")
         kapat.setCursor(Qt.PointingHandCursor)

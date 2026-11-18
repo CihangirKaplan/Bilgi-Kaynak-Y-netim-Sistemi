@@ -45,8 +45,13 @@ def parola_hashle(parola: str) -> str:
     return hash_bytes.decode("utf-8")
 
 def parola_dogrula(parola: str, parola_hash: str) -> bool:
+    parola_bytes = parola.encode("utf-8")
+    if len(parola_bytes) > 72:
+        # bcrypt 72 bayttan uzun girdide ValueError fırlatır (sunucu hatasına yol açardı); parola bu uzunlukta
+        # belirlenemediği için hiçbir hesapla eşleşemez: sıradan "yanlış parola" sayılır.
+        return False
     return bcrypt.checkpw(
-        parola.encode("utf-8"),
+        parola_bytes,
         parola_hash.encode("utf-8")
     )
 

@@ -17,7 +17,8 @@ from server.sunucu import VT_AYARLARI
 # Danışan koduyla ilgili tabloların TÜM sütunları (başka sütun eklenirse test kırılır).
 IZINLI_SUTUNLAR = {
     "danisan_kodlari": {"danisan_kod_id", "ucretli_mi", "istisna_turu", "aktif_mi", "olusturulma_tarihi",
-                        "olusturan_psikolog_id", "yas_grubu"},
+                        "olusturan_psikolog_id", "yas_grubu",
+                        "psikolog_pasifligi_nedeniyle_pasif"},          # durum işareti (boolean): psikolog pasife alınınca kodu pasife alan sürece ait, kişisel veri değil
     "randevular": {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
                    "durum", "olusturulma_tarihi", "iptal_nedeni", "iptal_notu", "gorusme_tipi", "terapi_turu"},
 }

@@ -27,8 +27,8 @@ def test_psikolog_baskasinin_randevusunu_guncelleyemez():
             "TEST-D-001",
             2,
             1,
-            "2026-10-15T10:00:00",
-            "2026-10-15T11:00:00",
+            "2031-10-16T10:00:00",
+            "2031-10-16T11:00:00",
             "PLANLANDI",
         ),
         ("PSIKOLOG",),
@@ -109,8 +109,8 @@ def test_psikolog_baskasi_adina_randevu_olusturamaz():
         danisan_kod_id="TEST-D-001",
         psikolog_id=2,
         oda_id=1,
-        baslangic_zamani="2026-10-15T15:00:00",
-        bitis_zamani="2026-10-15T16:00:00",
+        baslangic_zamani="2031-10-16T15:00:00",
+        bitis_zamani="2031-10-16T16:00:00",
     )
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
@@ -147,8 +147,8 @@ def test_psikolog_kendi_randevusunu_guncelleyebilir():
             "TEST-D-001",
             1,
             1,
-            "2026-10-15T10:00:00",
-            "2026-10-15T11:00:00",
+            "2031-10-16T10:00:00",
+            "2031-10-16T11:00:00",
             "PLANLANDI",
         ),
         ("PSIKOLOG",),
@@ -195,14 +195,14 @@ def test_psikolog_tum_randevulari_goruntuleyebilir():
     mock_cursor.fetchall.return_value = [
         (
             2, "TEST-D-001", 1, 1,
-            "2026-10-15T10:00:00",
-            "2026-10-15T11:00:00",
+            "2031-10-16T10:00:00",
+            "2031-10-16T11:00:00",
             "PLANLANDI",
         ),
         (
             5, "TEST-D-002", 2, 1,
-            "2026-10-15T15:00:00",
-            "2026-10-15T16:00:00",
+            "2031-10-16T15:00:00",
+            "2031-10-16T16:00:00",
             "PLANLANDI",
         ),
     ]

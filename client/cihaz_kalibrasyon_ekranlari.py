@@ -333,7 +333,10 @@ class KalibrasyonYonetimEkrani(QWidget):
             bit = tarih_goster(k.get("kalibrasyon_bitis_tarihi"))
             tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
-            self.tablo.setItem(i, 0, metin_item(k.get("cihaz_adi", ""), kalin=True))
+            cihaz_item = metin_item(k.get("cihaz_adi", ""), kalin=True)
+            if k.get("plan_adi"):
+                cihaz_item.setToolTip(f"Yerine getirilen plan: {k['plan_adi']}")
+            self.tablo.setItem(i, 0, cihaz_item)
             self.tablo.setItem(i, 1, metin_item(k.get("kalibrasyon_yapan_kurum", "")))
             self.tablo.setItem(i, 2, metin_item(k.get("sertifika_no", ""), ortala=True))
             self.tablo.setItem(i, 3, metin_item(tarih_metni, ortala=True))

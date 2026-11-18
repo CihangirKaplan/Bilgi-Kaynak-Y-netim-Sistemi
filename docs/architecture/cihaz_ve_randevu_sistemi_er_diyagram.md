@@ -89,6 +89,7 @@ erDiagram
         timestamp olusturulma_tarihi
         int olusturan_psikolog_id FK
         string yas_grubu
+        boolean psikolog_pasifligi_nedeniyle_pasif
     }
 
     proje_turleri {
@@ -175,13 +176,6 @@ erDiagram
         boolean aktif_mi
         timestamp olusturulma_tarihi
         int varsayilan_oda_id FK
-    }
-
-    giris_captcha_kodlari {
-        string captcha_id PK
-        string kod_ozeti
-        timestamp gecerlilik_sonu
-        timestamp olusturulma_tarihi
     }
 
     giris_istek_limitleri {
