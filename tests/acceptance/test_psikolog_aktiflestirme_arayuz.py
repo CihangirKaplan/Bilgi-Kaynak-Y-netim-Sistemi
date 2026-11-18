@@ -193,3 +193,27 @@ def test_oda_penceresi_secimi_kaydetmeden_cagirana_verir(tkys_qapplication):
     assert form.secilen_odalar == [2, 3] and form.result() == QDialog.Accepted
     istek.assert_not_called()                                                 # oda yetkisi ucuna (PUT) hiç istek gitmez
     form.close()
+
+
+# ------------------------------------------------------------------ danışan sayısı mesajı
+def test_pasife_alinan_danisan_sayisi_basari_mesajinda_gosterilir(ekran_ac):
+    sunucu = Sunucu(cevap({"yeni_durum": False, "pasife_alinan_danisan": 3}))
+    ekran = ekran_ac(sunucu)
+    _, bilgi, _, _ = durum_degistir(ekran, sunucu, "aktif_psikolog")
+    mesaj = bilgi.call_args.args[2]
+    assert "Pasif duruma getirildi" in mesaj and "3 danışan da pasife alındı." in mesaj
+
+
+def test_aktif_edilen_danisan_sayisi_basari_mesajinda_gosterilir(ekran_ac):
+    sunucu = Sunucu(cevap({"yeni_durum": True, "aktif_edilen_danisan": 2}))
+    ekran = ekran_ac(sunucu)
+    _, bilgi, _, _ = durum_degistir(ekran, sunucu, "pasif_psikolog", oda_formu=sahte_oda_formu())
+    assert "2 danışan yeniden aktif edildi." in bilgi.call_args.args[2]
+
+
+def test_danisan_sayisi_yoksa_ya_da_sifirsa_mesaj_degismez(ekran_ac):
+    for yanit in ({"yeni_durum": False}, {"yeni_durum": False, "pasife_alinan_danisan": 0}):
+        sunucu = Sunucu(cevap(yanit))
+        ekran = ekran_ac(sunucu)
+        _, bilgi, _, _ = durum_degistir(ekran, sunucu, "aktif_psikolog")
+        assert "danışan" not in bilgi.call_args.args[2]
