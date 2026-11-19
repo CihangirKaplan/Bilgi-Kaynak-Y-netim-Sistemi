@@ -66,7 +66,7 @@ def sahte_istek(veri, kayit):
     def istek(yontem, url, headers=None, params=None, timeout=None):
         kayit.append((url, dict(params or {})))
         yanit = MagicMock(status_code=200)
-        yanit.json.return_value = veri if url.endswith(("rezervasyon-raporu", "kullanim-raporu", "yetki-raporu", "ogrenci-raporu", "faaliyet-raporu")) else []
+        yanit.json.return_value = veri if url.endswith(("rezervasyon-raporu", "kullanim-raporu", "yetki-raporu", "ogrenci-raporu", "faaliyet-raporu", "bakim-plani-raporu")) else []
         return yanit
     return istek
 

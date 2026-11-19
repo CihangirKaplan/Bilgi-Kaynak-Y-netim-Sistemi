@@ -67,7 +67,7 @@ from server.denetim import (
     psikolog_odalarini_oku,
     satiri_sil_ve_ayrintisini_al,
 )
-from server import giris_siniri, rapor_kullanim, rapor_ogrenci_faaliyet
+from server import giris_siniri, rapor_bakim_plani, rapor_kullanim, rapor_ogrenci_faaliyet
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -9472,6 +9472,32 @@ def faaliyet_raporu_getir(
         return sonuc
     except psycopg2.Error:
         raise HTTPException(status_code=500, detail="Faaliyet raporu alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/bakim-plani-raporu")
+def bakim_plani_raporu_getir(
+    cihaz_id: int | None = None,
+    tur: str | None = Query(None, pattern="^(bakim|kalibrasyon)$"),
+    durum: str | None = Query(None, pattern="^(gecikmis|yaklasiyor|planli|pasif)$"),
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET")),
+):
+    """Geciken Bakım Planı Raporu: bugünkü durum. Geciken (sonraki görev tarihi geçmiş), yaklaşan ve planlı planlar, cihaz ve plan türü
+    bazlı özet, son yapılan bakım/kalibrasyon ve planı olmayan cihazlar. Durum kuralı Bakım Planları ekranıyla aynıdır."""
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        return rapor_bakim_plani.bakim_plani_raporu(cursor, cihaz_id, tur, durum)
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Bakım planı raporu alınamadı.")
     finally:
         if cursor is not None:
             cursor.close()

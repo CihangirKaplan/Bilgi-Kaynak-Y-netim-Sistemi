@@ -12,6 +12,8 @@ import pytest
 
 from server.sunucu import (
     VT_AYARLARI,
+    bakim_plani_durumu,
+    bakim_plani_raporu_getir,
     cihaz_raporlari,
     cihaz_rezervasyon_raporu,
     faaliyet_raporu_getir,
@@ -303,3 +305,63 @@ def test_ogrenci_raporu_gecersiz_tur_reddedilir():
     with pytest.raises(HTTPException) as hata:
         ogrenci_raporu_getir(tur="YOK", durum=None, kullanici_id=0)
     assert hata.value.status_code == 422
+
+
+# ------------------------------------------------------------------ geciken bakım planı raporu
+@pytest.fixture
+def planli_cihaz(veri):
+    """Fixture cihazına 5 plan: geciken bakım (10 gün), yaklaşan bakım (3 gün, uyarı 7), planlı bakım (60 gün), pasif geciken,
+    geciken kalibrasyon (4 gün). Geciken bakıma bağlı bir bakım kaydı da eklenir."""
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    kimlik = {}
+    for ad, gun, uyari, aktif in [("Haftalık Şarj", -10, 1, True), ("Aylık Kontrol", 3, 7, True), ("Yıllık Bakım", 60, 14, True),
+                                  ("Eski Plan", -30, 1, False), ("Kalibrasyon Yıllık", -4, 30, True)]:
+        c.execute("INSERT INTO cihaz_bakim_planlari (cihaz_id, gorev_turu, periyot_gun, uyari_suresi_gun, sonraki_gorev_tarihi, aktif_mi) "
+                  "VALUES (%s, %s, 30, %s, CURRENT_DATE + %s, %s) RETURNING plan_id", (veri["cihaz"], ad, uyari, gun, aktif))
+        kimlik[ad] = c.fetchone()[0]
+    c.execute("INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, bakim_tarihi, plan_id) VALUES (%s, 'x', '2026-01-15', %s)",
+              (veri["cihaz"], kimlik["Haftalık Şarj"]))
+    yield kimlik
+    c.execute("DELETE FROM cihaz_bakimlari WHERE cihaz_id = %s", (veri["cihaz"],))
+    c.execute("DELETE FROM cihaz_bakim_planlari WHERE cihaz_id = %s", (veri["cihaz"],))
+    conn.close()
+
+
+def test_bakim_plani_raporu_durumlar_gecikme_ve_son_yapilan(veri, planli_cihaz):
+    r = bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur=None, durum=None, kullanici_id=0)
+    o = r["ozet"]
+    assert (o["aktif_plan"], o["geciken_plan"], o["yaklasan_plan"], o["planli_plan"], o["pasif_plan"]) == (4, 2, 1, 1, 1)
+    assert o["gecikme_orani"] == 0.5 and o["en_cok_gecikme_gun"] == 10 and o["ortalama_gecikme_gun"] == 7.0      # (10 + 4) / 2
+    assert [p["gorev_turu"] for p in r["geciken"]] == ["Haftalık Şarj", "Kalibrasyon Yıllık"]                      # en çok geciken önce
+    assert r["geciken"][0]["gecikme_gun"] == 10 and r["geciken"][0]["son_yapilan"] == "2026-01-15"                # plana bağlı bakım kaydı
+    assert r["geciken"][1]["tur"] == "Kalibrasyon" and r["geciken"][1]["son_yapilan"] is None
+    pasif = next(p for p in r["planlar"] if p["gorev_turu"] == "Eski Plan")
+    assert pasif["durum"] == "Pasif" and pasif["gecikme_gun"] == 0                                              # pasif plan gecikmiş sayılmaz
+    assert r["yaklasan"][0]["gorev_turu"] == "Aylık Kontrol" and r["yaklasan"][0]["kalan_gun"] == 3
+    assert r["cihaz_ozeti"][0]["geciken"] == 2 and r["cihaz_ozeti"][0]["plan_sayisi"] == 4                       # pasif plan sayılmaz
+    assert {t["tur"]: (t["gecikmis"], t["pasif"]) for t in r["tur_ozeti"]} == {"Bakım": (1, 1), "Kalibrasyon": (1, 0)}
+
+
+def test_bakim_plani_raporu_durum_kurali_bakim_planlari_ekraniyla_ayni(veri, planli_cihaz):
+    for p in bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur=None, durum=None, kullanici_id=0)["planlar"]:
+        assert p["durum"] == bakim_plani_durumu(p["kalan_gun"], p["uyari_suresi_gun"], p["aktif_mi"])
+
+
+def test_bakim_plani_raporu_suzgecleri_ve_planisiz_cihazlar(veri, planli_cihaz):
+    from fastapi import HTTPException
+    kal = bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur="kalibrasyon", durum=None, kullanici_id=0)
+    assert [p["gorev_turu"] for p in kal["planlar"]] == ["Kalibrasyon Yıllık"]
+    bakim = bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur="bakim", durum="gecikmis", kullanici_id=0)
+    assert [p["gorev_turu"] for p in bakim["planlar"]] == ["Haftalık Şarj"] and bakim["ozet"]["geciken_plan"] == 1
+    assert bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur=None, durum="pasif", kullanici_id=0)["ozet"]["pasif_plan"] == 1
+    assert bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur=None, durum=None, kullanici_id=0)["planisiz_cihazlar"] == []   # planı var
+    with pytest.raises(HTTPException):
+        bakim_plani_raporu_getir(cihaz_id=0, tur=None, durum=None, kullanici_id=0)
+
+
+def test_bakim_plani_raporu_aktif_plani_olmayan_cihaz_listelenir(veri):
+    r = bakim_plani_raporu_getir(cihaz_id=veri["cihaz"], tur=None, durum=None, kullanici_id=0)                  # fixture cihazının planı yok
+    assert [c["cihaz_id"] for c in r["planisiz_cihazlar"]] == [veri["cihaz"]] and r["ozet"]["plani_olmayan_cihaz"] == 1
+    assert r["ozet"]["gecikme_orani"] is None and r["ozet"]["ortalama_gecikme_gun"] is None and r["geciken"] == []

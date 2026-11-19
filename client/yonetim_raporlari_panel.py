@@ -25,7 +25,7 @@ RAPOR_TURLERI = (
     "Genel Bakış", "Randevular", "Cihazlar",
     "Öğrenciler", "Proje / Deney",
     "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
-    "Öğrenci Mevcudu", "Faaliyet Onayları",
+    "Öğrenci Mevcudu", "Faaliyet Onayları", "Bakım Gecikmeleri",
 )
 
 # Ayrıntılı rapor sayfalarıyla (Oda Kullanım Raporu, Cihaz Rezervasyon Raporu, Yetki Raporu) aynı uç noktalardan beslenir; böylece
@@ -36,6 +36,7 @@ EK_KAYNAKLAR = {
     "yetki": ("yetki-raporu", False),
     "ogrenci_rapor": ("ogrenci-raporu", False),
     "faaliyet_rapor": ("faaliyet-raporu", True),
+    "bakim_plani": ("bakim-plani-raporu", False),
 }
 
 
@@ -241,6 +242,38 @@ def faaliyet_onay_gorunumu(veri):
             ("Puan = adet × kaydın girildiği andaki faaliyet puanı.",),
             ("Toplam puana onay bekleyen kayıtlar da dahildir.",),
             ("Sayılar Faaliyet Raporu sayfasıyla aynıdır.",),
+        ]),
+    ]
+    return kartlar, tablolar
+
+
+def bakim_gecikme_gorunumu(veri):
+    """'Bakım Gecikmeleri' görünümü: 4 kart + 5 tablo (Geciken Bakım Planı Raporu sayfasıyla aynı veri)."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet = veri["ozet"]
+    cihaz = lambda p: f"{p['envanter_kodu']} - {p['cihaz_adi']}"
+    ort = ozet.get("ortalama_gecikme_gun")
+    kartlar = [
+        ("Geciken Plan", ozet["geciken_plan"],
+         f"Aktif planların {yuzde_metni(ozet['gecikme_orani'])}'i" if ozet.get("gecikme_orani") is not None else "Aktif plan yok"),
+        ("Yaklaşan Plan", ozet["yaklasan_plan"], "Uyarı süresi içinde"),
+        ("Ortalama Gecikme (gün)", sayi_metni(ort) if ort is not None else "—",
+         f"En çok geciken: {ozet['en_cok_gecikme_gun']} gün" if ozet.get("en_cok_gecikme_gun") is not None else "Geciken plan yok"),
+        ("Planı Olmayan Cihaz", ozet["plani_olmayan_cihaz"], "Aktif planı yok"),
+    ]
+    tablolar = [
+        ("Geciken Planlar", ["Cihaz", "Plan", "Gecikme (gün)"],
+         [(cihaz(p), p["gorev_turu"], p["gecikme_gun"]) for p in veri["geciken"][:8]] or [("Geciken plan yok.", "", "")]),
+        ("Yaklaşan Planlar", ["Cihaz", "Plan", "Kalan (gün)"],
+         [(cihaz(p), p["gorev_turu"], p["kalan_gun"]) for p in veri["yaklasan"][:8]] or [("Yaklaşan plan yok.", "", "")]),
+        ("Cihaz Bazlı", ["Cihaz", "Geciken", "Yaklaşan"], [(c["cihaz"], c["geciken"], c["yaklasan"]) for c in veri["cihaz_ozeti"][:8]]),
+        ("Planı Olmayan Cihazlar", ["Cihaz"], [(f"{c['envanter_kodu']} - {c['cihaz_adi']}",) for c in veri["planisiz_cihazlar"][:8]]
+         or [("Tüm cihazların planı var.",)]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Gecikmiş: sonraki görev tarihi geçmiş aktif plan.",),
+            ("Pasif planlar gecikmiş sayılmaz.",),
+            ("Rapor bugünkü durumdur, dönemden bağımsızdır.",),
         ]),
     ]
     return kartlar, tablolar
@@ -1110,6 +1143,9 @@ class YonetimRaporlariEkrani(QWidget):
 
         elif tur == "Faaliyet Onayları":
             kartlar, tablolar = faaliyet_onay_gorunumu(self.veriler.get("faaliyet_rapor"))
+
+        elif tur == "Bakım Gecikmeleri":
+            kartlar, tablolar = bakim_gecikme_gorunumu(self.veriler.get("bakim_plani"))
 
         else:
             self.proje_grafigi.guncelle(
