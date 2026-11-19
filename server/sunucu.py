@@ -63,7 +63,7 @@ from server.denetim import (
     psikolog_odalarini_oku,
     satiri_sil_ve_ayrintisini_al,
 )
-from server import giris_siniri, rapor_kullanim
+from server import giris_siniri, rapor_kullanim, rapor_ogrenci_faaliyet
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -9183,6 +9183,64 @@ def yetki_raporu_getir(
         return rapor_kullanim.yetki_raporu(cursor, rol_id, durum, matris=detay)
     except psycopg2.Error:
         raise HTTPException(status_code=500, detail="Yetki raporu alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/ogrenci-raporu")
+def ogrenci_raporu_getir(
+    tur: str | None = None,
+    durum: str | None = Query(None, pattern="^(aktif|pasif)$"),
+    kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
+):
+    """Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (10 yıl) durumu, faaliyetsiz aktif
+    öğrenciler ve öğrenci listesi. Telefon raporda yer almaz."""
+    if tur is not None and tur not in OGRENCI_TUR_ETIKETLERI:
+        raise HTTPException(status_code=422, detail="Geçersiz öğrenci türü.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        return rapor_ogrenci_faaliyet.ogrenci_raporu(cursor, OGRENCI_TUR_ETIKETLERI, tur, durum)
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Öğrenci raporu alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/faaliyet-raporu")
+def faaliyet_raporu_getir(
+    baslangic: _yr_date,
+    bitis: _yr_date,
+    faaliyet_id: int | None = None,
+    onay: str | None = Query(None, pattern="^(onayli|bekleyen)$"),
+    detay: bool = False,
+    kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
+):
+    """Faaliyet Raporu: dönemdeki (faaliyet tarihi) kayıtların faaliyet türü, birim ve öğrenci türü dağılımı, puanlar, onay durumu ve
+    onay bekleyen kayıtlar. Puan = adet x kaydın girildiği andaki puan (Puan Raporu ile aynı). detay=true ise tek tek kayıtlar da döner."""
+    _rapor_donemi_dogrula(baslangic, bitis)
+    if faaliyet_id is not None and faaliyet_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir faaliyet seçilmelidir.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        sonuc = rapor_ogrenci_faaliyet.faaliyet_raporu(
+            cursor, OGRENCI_TUR_ETIKETLERI, baslangic, bitis, faaliyet_id, onay, detay,
+        )
+        sonuc["donem"] = {"baslangic": baslangic.isoformat(), "bitis": bitis.isoformat()}
+        return sonuc
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Faaliyet raporu alınamadı.")
     finally:
         if cursor is not None:
             cursor.close()

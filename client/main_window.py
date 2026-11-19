@@ -254,6 +254,10 @@ MENU = [
             aciklama="Öğrencilerin faaliyet puanlarına göre sıralaması ve Excel raporu",
             aksiyon=[]
         ),
+        dict(ikon="👥", ad="Öğrenci Raporu", izin="Faaliyet kayıtlarını düzenleme",
+             aciklama="Öğrenci mevcudu, tür/bölüm dağılımı, kayıt saklama süresi ve Excel raporu", aksiyon=[]),
+        dict(ikon="📈", ad="Faaliyet Raporu", izin="Faaliyet kayıtlarını düzenleme",
+             aciklama="Faaliyet türü, birim ve onay durumuna göre dönemsel rapor ve Excel", aksiyon=[]),
         dict(ikon="🛎️", ad="Danışma Masası",
              izin="Danışma masası oturumunu yönetme",
              aciklama="Görev başlatma, bitirme ve geçmiş görevler",
@@ -1778,6 +1782,8 @@ QLabel {
         "Oda Kullanım Raporu": ("oda_kullanim_raporu_ekrani", "yenile"),
         "Cihaz Rezervasyon Raporu": ("cihaz_rezervasyon_raporu_ekrani", "yenile"),
         "Yetki Raporu": ("yetki_raporu_ekrani", "yenile"),
+        "Öğrenci Raporu": ("ogrenci_raporu_ekrani", "yenile"),
+        "Faaliyet Raporu": ("faaliyet_raporu_ekrani", "yenile"),
     }
     # Sağ panelin sayfa çevresindeki boşlukları (sol, üst, sağ, alt). Tablo/takvim gibi dikey alan isteyen sayfalar daha dar boşlukla açılır.
     SAYFA_KENAR_BOSLUKLARI = (28, 24, 28, 18)
@@ -2352,6 +2358,18 @@ QLabel {
                 token=self.token,
             )
             lay.addWidget(self.puan_raporu_ekrani, 1)
+
+        elif oge["ad"] == "Öğrenci Raporu":
+            from client.ogrenci_raporu_ekrani import OgrenciRaporuEkrani
+
+            self.ogrenci_raporu_ekrani = OgrenciRaporuEkrani(self.api_url, self.token)
+            lay.addWidget(self.ogrenci_raporu_ekrani, 1)
+
+        elif oge["ad"] == "Faaliyet Raporu":
+            from client.faaliyet_raporu_ekrani import FaaliyetRaporuEkrani
+
+            self.faaliyet_raporu_ekrani = FaaliyetRaporuEkrani(self.api_url, self.token)
+            lay.addWidget(self.faaliyet_raporu_ekrani, 1)
 
         elif oge["ad"] == "Faaliyet Kayıtları":
             ik = kart_olustur()

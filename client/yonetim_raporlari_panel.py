@@ -25,6 +25,7 @@ RAPOR_TURLERI = (
     "Genel Bakış", "Randevular", "Cihazlar",
     "Öğrenciler", "Proje / Deney",
     "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
+    "Öğrenci Mevcudu", "Faaliyet Onayları",
 )
 
 # Ayrıntılı rapor sayfalarıyla (Oda Kullanım Raporu, Cihaz Rezervasyon Raporu, Yetki Raporu) aynı uç noktalardan beslenir; böylece
@@ -33,6 +34,8 @@ EK_KAYNAKLAR = {
     "oda": ("oda-kullanim-raporu", True),
     "cihaz_rez": ("cihaz-rezervasyon-raporu", True),
     "yetki": ("yetki-raporu", False),
+    "ogrenci_rapor": ("ogrenci-raporu", False),
+    "faaliyet_rapor": ("faaliyet-raporu", True),
 }
 
 
@@ -181,6 +184,63 @@ def yetki_gorunumu(veri):
             ("Parola ve parola özeti raporda yer almaz.",),
             ("Rol-izin matrisi Yetki Raporu sayfasının Excel çıktısındadır.",),
             ("Yetkiler dönemden bağımsız, güncel durumdur.",),
+        ]),
+    ]
+    return kartlar, tablolar
+
+
+def ogrenci_mevcut_gorunumu(veri):
+    """'Öğrenci Mevcudu' görünümü: 4 kart + 5 tablo (Öğrenci Raporu sayfasıyla aynı veri; telefon yok)."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet, ogrenciler, kural = veri["ozet"], veri["ogrenciler"], veri.get("kurallar", {})
+    saklama = [o for o in ogrenciler if o["saklama_durumu"]]
+    faaliyetsiz = [o for o in ogrenciler if o["faaliyetsiz_mi"]]
+    kartlar = [
+        ("Toplam Öğrenci", ozet["toplam"], f"{ozet['aktif']} aktif · {ozet['pasif']} pasif"),
+        ("Yeni Kayıt (30 gün)", ozet["son_30_gun_yeni"], "Son 30 günde kaydedilen"),
+        ("Saklama Süresi Dolmuş", ozet["saklama_suresi_dolmus"], f"{ozet['saklama_ertelenen']} ertelendi · {ozet['saklama_yaklasan']} yaklaşıyor"),
+        ("Faaliyetsiz Aktif Öğrenci", ozet["faaliyetsiz_aktif"], f"Son {kural.get('faaliyetsiz_gun', 90)} günde faaliyeti yok"),
+    ]
+    tablolar = [
+        ("Öğrenci Türüne Göre", ["Tür", "Toplam", "Aktif", "Pasif"], [(g["etiket"], g["toplam"], g["aktif"], g["pasif"]) for g in veri["tur_dagilimi"]]),
+        ("Bölüme Göre", ["Bölüm", "Öğrenci"], [(b["bolum"], b["ogrenci"]) for b in veri["bolum_dagilimi"][:8]]),
+        ("Saklama Süresi Takibi", ["Öğrenci", "Durum"], [(o["ad_soyad"], o["saklama_durumu"]) for o in saklama[:8]] or [("Takip gerektiren kayıt yok.", "")]),
+        ("Faaliyetsiz Aktif Öğrenciler", ["Öğrenci", "Son Faaliyet"],
+         [(o["ad_soyad"], (o["son_faaliyet_tarihi"] or "Hiç yok")) for o in faaliyetsiz[:8]] or [("Faaliyetsiz aktif öğrenci yok.", "")]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Telefon raporda yer almaz.",),
+            (f"Saklama süresi: Gönüllü öğrenciler, {kural.get('saklama_yil', 10)} yıl (ertelenebilir).",),
+            ("Öğrenci mevcudu dönemden bağımsız, güncel durumdur.",),
+        ]),
+    ]
+    return kartlar, tablolar
+
+
+def faaliyet_onay_gorunumu(veri):
+    """'Faaliyet Onayları' görünümü: 4 kart + 5 tablo (Faaliyet Raporu sayfasıyla aynı veri)."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet = veri["ozet"]
+    eski = ozet.get("en_eski_bekleyen_gun")
+    kartlar = [
+        ("Faaliyet Kaydı", ozet["kayit_sayisi"], f"Toplam miktar: {ozet['faaliyet_miktari']}"),
+        ("Toplam Puan", sayi_metni(ozet["toplam_puan"]), f"Onaylı: {sayi_metni(ozet['onayli_puan'])} · Bekleyen: {sayi_metni(ozet['onay_bekleyen_puan'])}"),
+        ("Onay Bekleyen Kayıt", ozet["onay_bekleyen_kayit"], f"En eski {eski} gündür bekliyor" if eski is not None else "Bekleyen kayıt yok"),
+        ("Faaliyet Yapan Öğrenci", ozet["faaliyet_yapan_ogrenci"],
+         f"Kayıt başına ort. {sayi_metni(ozet['ortalama_puan_kayit'])} puan" if ozet.get("ortalama_puan_kayit") is not None else ""),
+    ]
+    tablolar = [
+        ("Faaliyet Türüne Göre", ["Faaliyet", "Kayıt", "Puan", "Bekleyen"],
+         [(f["faaliyet"], f["kayit_sayisi"], sayi_metni(f["puan"]), f["onay_bekleyen"]) for f in veri["faaliyetler"][:8]]),
+        ("Birime Göre", ["Birim", "Kayıt", "Miktar"], [(b["birim"], b["kayit_sayisi"], b["miktar"]) for b in veri["birimler"][:8]]),
+        ("Öğrenci Türüne Göre", ["Tür", "Öğrenci", "Puan"], [(t["etiket"], t["ogrenci_sayisi"], sayi_metni(t["puan"])) for t in veri["ogrenci_turleri"]]),
+        ("Onay Bekleyen Kayıtlar", ["Öğrenci", "Faaliyet", "Gün"],
+         [(b["ogrenci"], b["faaliyet"], b["bekleme_gun"]) for b in veri["onay_bekleyenler"][:8]] or [("Onay bekleyen kayıt yok.", "", "")]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Puan = adet × kaydın girildiği andaki faaliyet puanı.",),
+            ("Toplam puana onay bekleyen kayıtlar da dahildir.",),
+            ("Sayılar Faaliyet Raporu sayfasıyla aynıdır.",),
         ]),
     ]
     return kartlar, tablolar
@@ -1044,6 +1104,12 @@ class YonetimRaporlariEkrani(QWidget):
 
         elif tur == "Yetkiler":
             kartlar, tablolar = yetki_gorunumu(self.veriler.get("yetki"))
+
+        elif tur == "Öğrenci Mevcudu":
+            kartlar, tablolar = ogrenci_mevcut_gorunumu(self.veriler.get("ogrenci_rapor"))
+
+        elif tur == "Faaliyet Onayları":
+            kartlar, tablolar = faaliyet_onay_gorunumu(self.veriler.get("faaliyet_rapor"))
 
         else:
             self.proje_grafigi.guncelle(
