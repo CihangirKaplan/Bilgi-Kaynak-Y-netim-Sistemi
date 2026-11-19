@@ -20,6 +20,7 @@ IZINLI_HOSTLAR = {
 }
 
 POSTGRESQL_TEST_DOSYALARI = {
+    "test_rezervasyon_psikolog_yaris_pg.py",
     "test_oda_etkinlikleri_rbac.py",
     "test_oda_etkinlikleri_eszamanlilik.py",
     "test_oda_etkinlikleri_ters_api_cakisma.py",
