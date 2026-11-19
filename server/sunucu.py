@@ -2158,10 +2158,13 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
                 raise HTTPException(status_code=403, detail="Yalnızca kendi adınıza randevu oluşturabilirsiniz.")
 
         # DİKKAT EDİN BURASI DEĞİŞTİ: Artık otomatik kod üretmiyoruz, frontend'den gelen kodu kontrol ediyoruz.
-        cursor.execute("SELECT yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (randevu.danisan_kod_id,))
+        cursor.execute("SELECT yas_grubu, olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (randevu.danisan_kod_id,))
         danisan_kaydi = cursor.fetchone()
         if danisan_kaydi is None:
             raise HTTPException(status_code=422, detail="Seçilen danışan kodu bulunamadı veya aktif değil.")
+        # Danışan başka bir psikoloğa aitse ona randevu verilemez (kodlar sıralı ve tahmin edilebilir olduğundan sunucuda da denetlenir)
+        if not danisan_psikologa_ait_mi(danisan_kaydi[1] if len(danisan_kaydi) > 1 else None, randevu.psikolog_id):
+            raise HTTPException(status_code=422, detail=DANISAN_PSIKOLOG_MESAJI)
         # Randevunun terapi türü danışanın yaş grubuna uymalıdır (yetişkin: bireysel terapi; çocuk: seçilmeli)
         try:
             terapi_turu = randevu_terapisini_belirle(danisan_kaydi[0], getattr(randevu, "terapi_turu", None))
@@ -2235,9 +2238,12 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
     except Exception as e:
         if conn is not None:
             conn.rollback()
+        # İç hata metni (SQL, tablo adı vb.) istemciye sızdırılmaz; ayrıntı yalnızca sunucu günlüğüne yazılır.
+        import logging
+        logging.getLogger(__name__).exception("Randevu oluşturulurken beklenmeyen hata: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Randevu oluşturulurken bir hata oluştu: {str(e)}"
+            detail="Randevu oluşturulurken bir hata oluştu. Lütfen daha sonra tekrar deneyin."
         )
     finally:
         if cursor is not None:
@@ -2317,6 +2323,32 @@ GECMIS_TARIH_MESAJI = "Geçmiş bir tarihe randevu verilemez."
 def gecmis_tarihe_mi(zaman) -> bool:
     """Başlangıç günü bugünden önceyse True. Bugünün geçmiş saatleri serbesttir (görüşme yapılıp sonradan girilebilir)."""
     return zaman.date() < datetime.now(zaman.tzinfo).date()
+
+
+DANISAN_PSIKOLOG_MESAJI = "Seçilen danışan bu psikoloğa ait değil. Bir danışanın randevusu yalnızca kendi psikoloğuna verilebilir."
+
+
+def danisan_psikologa_ait_mi(sahip_psikolog_id, psikolog_id) -> bool:
+    """Danışanın kayıtlı psikoloğu varsa randevu o psikoloğa verilmelidir (eski kayıtlarda psikolog boş olabilir)."""
+    return sahip_psikolog_id is None or sahip_psikolog_id == psikolog_id
+
+
+def randevu_taraflarini_denetle(cursor, danisan_kod_id, psikolog_id, danisan_degisti=True):
+    """Randevunun danışanı aktif mi, psikologu aktif bir psikolog mu ve danışan bu psikoloğa mı ait? Danışanın yaş grubunu döndürür."""
+    cursor.execute("SELECT yas_grubu, olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (danisan_kod_id,))
+    danisan = cursor.fetchone()
+    if danisan is None:
+        raise HTTPException(status_code=422, detail="Seçilen danışan kodu bulunamadı veya aktif değil.")
+    cursor.execute(
+        "SELECT 1 FROM personel p JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id JOIN roller r ON k.rol_id = r.rol_id "
+        "WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG';",
+        (psikolog_id,),
+    )
+    if cursor.fetchone() is None:
+        raise HTTPException(status_code=422, detail="Geçerli ve aktif bir psikolog seçilmelidir.")
+    if not danisan_psikologa_ait_mi(danisan[1] if len(danisan) > 1 else None, psikolog_id):
+        raise HTTPException(status_code=422, detail=DANISAN_PSIKOLOG_MESAJI)
+    return danisan[0]
 
 
 @app.get("/api/randevular/doluluk")
@@ -2434,7 +2466,8 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
 
-        if rol[0] == "PSIKOLOG":
+        psikolog_mu = rol is not None and str(rol[0]).upper() == "PSIKOLOG"
+        if psikolog_mu:
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != mevcut[1]:
@@ -2450,7 +2483,7 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         baslangic = degisiklikler.get("baslangic_zamani", mevcut[3])
         bitis = degisiklikler.get("bitis_zamani", mevcut[4])
 
-        if rol[0] == "PSIKOLOG" and psikolog_id != mevcut[1]:
+        if psikolog_mu and psikolog_id != mevcut[1]:
             raise HTTPException(status_code=403, detail="Randevuyu başka psikoloğa devredemezsiniz.")
         if baslangic >= bitis:
             raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
@@ -2476,6 +2509,10 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         # Başlangıç değişiyorsa geçmiş bir tarihe alınamaz (geçmiş randevunun terapi türü vb. yine düzeltilebilir).
         if "baslangic_zamani" in degisiklikler and baslangic != mevcut[3] and gecmis_tarihe_mi(baslangic):
             raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
+        # Danışan ya da psikolog DEĞİŞİYORSA yeni taraf oluşturmadakiyle aynı kurallardan geçer: danışan aktif mi, psikolog aktif bir
+        # psikolog mu, danışan bu psikoloğa mı ait. Değişmeyen taraf oluşturulurken doğrulanmıştı (planlı randevusu olan taraf pasife alınamaz).
+        if danisan_kod_id != mevcut[0] or psikolog_id != mevcut[1]:
+            randevu_taraflarini_denetle(cursor, danisan_kod_id, psikolog_id)
         if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 
