@@ -31,5 +31,5 @@ def upgrade():
 
 def downgrade():
     # Geri alma (rollback) durumunda yapılacaklar
-    op.drop_constraint('fk_danisankodlari_personel', 'danisan_kodlari', type_='foreign key')
+    op.drop_constraint('fk_danisankodlari_personel', 'danisan_kodlari', type_='foreignkey')
     op.drop_column('danisan_kodlari', 'olusturan_psikolog_id')

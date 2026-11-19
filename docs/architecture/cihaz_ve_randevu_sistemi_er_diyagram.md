@@ -33,7 +33,6 @@ erDiagram
         int kullanilacak_oda_id FK
         string proje_turu
         string proje_adi_aciklamasi
-        timestamp rezervasyon_tarihi
     }
 
     cihaz_arizalari {
@@ -131,6 +130,13 @@ erDiagram
         boolean iptal_edildi_mi
     }
 
+    oda_etkinlik_gunleri {
+        int gun_id PK
+        int etkinlik_id FK
+        timestamp baslangic_zamani
+        timestamp bitis_zamani
+    }
+
     psikolog_odalar {
         int kullanici_id PK, FK
         int oda_id PK, FK
@@ -175,7 +181,6 @@ erDiagram
         string personel_kodu UK
         boolean aktif_mi
         timestamp olusturulma_tarihi
-        int varsayilan_oda_id FK
     }
 
     giris_istek_limitleri {
@@ -202,6 +207,8 @@ erDiagram
         string tur
         boolean aktif_mi
         timestamp olusturulma_tarihi
+        string bolum
+        string sinif
     }
 
     danisma_masasi_oturumlari {
@@ -271,13 +278,13 @@ erDiagram
     odalar ||--o{ randevular : "oda_id"
     odalar ||--o{ oda_etkinlikleri : "oda_id"
     personel ||--o{ oda_etkinlikleri : "organize_eden_personel_id"
+    oda_etkinlikleri ||--o{ oda_etkinlik_gunleri : "etkinlik_id"
     kullanicilar ||--o{ psikolog_odalar : "kullanici_id"
     odalar ||--o{ psikolog_odalar : "oda_id"
     roller ||--o{ rol_izinleri : "rol_id"
     izinler ||--o{ rol_izinleri : "izin_id"
     roller ||--o{ kullanicilar : "rol_id"
     kullanicilar ||--o| personel : "kullanici_id"
-    odalar o|--o{ personel : "varsayilan_oda_id"
     kullanicilar ||--o{ parola_sifirlama_talepleri : "kullanici_id"
     kullanicilar o|--o{ parola_sifirlama_talepleri : "kapatan_kullanici_id"
     kullanicilar o|--o| ogrenciler : "kullanici_id"

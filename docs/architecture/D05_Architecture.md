@@ -343,6 +343,7 @@ Tablolar mimari sorumluluklarına göre aşağıdaki gruplarda değerlendirilir.
 - `odalar`
 - `randevular`
 - `oda_etkinlikleri`
+- `oda_etkinlik_gunleri`
 - `psikolog_odalar`
 
 ### Cihaz ve Kaynak Yönetimi

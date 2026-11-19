@@ -2529,13 +2529,6 @@ QLabel {
     
 
 
-    def randevu_listesi_ekrani_ac(self):
-        self.liste_formu = RandevuListesiFormu(
-            api_url=self.api_url, token=self.token, mevcut_psikolog_id=self.kullanici_id
-        )
-        self.liste_formu.finished.connect(lambda: self.randevu_ana_ekrani.verileri_cek() if hasattr(self, 'randevu_ana_ekrani') else None)
-        self.liste_formu.show()
-
     def hizli_danisan_kod_olustur(self):
         from client.danisan_diyalog import DanisanOlusturDialog
 
