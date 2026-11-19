@@ -82,7 +82,7 @@ def _guncelle(istemci, degisiklik, mevcut_bas=CUMA):
     conn = MagicMock()
     c = conn.cursor.return_value
     mevcut = ("DAN-2026-0001", 3, 2, mevcut_bas, mevcut_bas.replace(hour=11), "PLANLANDI")
-    c.fetchone.side_effect = [(1,), (2,), mevcut, ("MEMUR",), None, None, None, None]
+    c.fetchone.side_effect = [(1,), (2,), mevcut, ("MEMUR",), ("YETISKIN", None), (1,), None, None, None, None]   # ..., danışan (sahipsiz), psikolog aktif
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.patch("/api/randevular/1", json=degisiklik)
     sorgular = [a[0] for a, _ in c.execute.call_args_list]
