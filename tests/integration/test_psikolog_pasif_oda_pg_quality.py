@@ -244,3 +244,68 @@ def test_kullanilmayan_danisan_kodu_sayaci_kaldirilmistir_gercek_veritabaninda()
         _dogru_veritabani(cur)
         cur.execute("SELECT to_regclass('danisan_kodu_seq')")
         assert cur.fetchone()[0] is None
+
+
+def test_pasif_rol_kullanicilarin_girisini_engeller_gercek_veritabaninda(ortam):
+    """Rol pasife alınınca o roldekiler giremez (yeni giriş ve açık oturum); aktif edilince girebilirler; kendi rolünü kimse pasife alamaz."""
+    from server.guvenlik import parola_hashle
+    from server.sunucu import ROL_PASIF_GIRIS_MESAJI
+
+    c, admin = ortam[0], ortam[1]
+    etiket = uuid4().hex[:8]
+    parola = "Test-Parola-1!"
+    c.execute("INSERT INTO roller (rol_adi, gorunen_ad) VALUES (%s, %s) RETURNING rol_id", (f"PR_ROL_{etiket}".upper(), f"pr_rol_{etiket}"))
+    rol_id = c.fetchone()[0]
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, ilk_giris_mi) VALUES (%s, %s, %s, FALSE) RETURNING kullanici_id",
+              (f"pr_k_{etiket}", parola_hashle(parola), rol_id))
+    kullanici = c.fetchone()[0]
+    c.execute("INSERT INTO personel (kullanici_id, personel_kodu) VALUES (%s, %s) RETURNING personel_id", (kullanici, f"PR-{etiket}"))
+    personel = c.fetchone()[0]
+    try:
+        istemci = TestClient(app)
+        giris = lambda: istemci.post("/api/login", json={"kullanici_adi": f"pr_k_{etiket}", "parola": parola})
+        yanit = giris()
+        assert yanit.status_code == 200
+        baslik = {"Authorization": f"Bearer {yanit.json()['access_token']}"}
+        assert istemci.get("/api/yetkilerim", headers=baslik).status_code == 200                # açık oturum çalışıyor
+
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        yanit = istemci.put(f"/api/roller/{rol_id}", json={"gorunen_ad": f"pr_rol_{etiket}", "aktif_mi": False})
+        assert yanit.status_code == 200 and yanit.json()["etkilenen_kullanici"] == 1
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+
+        yanit = giris()
+        assert yanit.status_code == 403 and yanit.json()["detail"] == ROL_PASIF_GIRIS_MESAJI       # yeni giriş engellendi
+        yanlis = istemci.post("/api/login", json={"kullanici_adi": f"pr_k_{etiket}", "parola": "Yanlis-Parola-1"})
+        assert yanlis.status_code == 401                                                           # yanlış parola hiçbir şey ele vermez
+        yanit = istemci.get("/api/yetkilerim", headers=baslik)
+        assert yanit.status_code == 403 and yanit.json()["detail"] == ROL_PASIF_GIRIS_MESAJI       # açık oturum da düştü
+
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        assert istemci.put(f"/api/roller/{rol_id}", json={"gorunen_ad": f"pr_rol_{etiket}", "aktif_mi": True}).status_code == 200
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        assert giris().status_code == 200                                                          # aktif edilince geri girer
+
+        # Kendi rolünü pasife alma: rolün kullanıcısı rolü pasife alamaz
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: kullanici
+        c.execute("INSERT INTO rol_izinleri (rol_id, izin_id, izin_var) SELECT %s, izin_id, 1 FROM izinler WHERE izin_adi = 'ROL_DUZENLE'", (rol_id,))
+        yanit = istemci.put(f"/api/roller/{rol_id}", json={"gorunen_ad": f"pr_rol_{etiket}", "aktif_mi": False})
+        assert yanit.status_code == 409 and "Kendi rolünüzü" in yanit.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM rol_izinleri WHERE rol_id = %s", (rol_id,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR (hedef_tablo = 'roller' AND hedef_kayit_id = %s) OR (hedef_tablo = 'kullanicilar' AND hedef_kayit_id = %s)",
+                  (kullanici, rol_id, kullanici))
+        c.execute("DELETE FROM personel WHERE personel_id = %s", (personel,))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (kullanici,))
+        c.execute("DELETE FROM roller WHERE rol_id = %s", (rol_id,))
+
+
+def test_personel_aktifligi_api_ile_degistirilemez_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel = ortam[0], ortam[1], ortam[2], ortam[3]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    yanit = istemci.patch(f"/api/personel/{personel}", json={"aktif_mi": False})
+    assert yanit.status_code == 422                                                              # alan artık kabul edilmiyor
+    c.execute("SELECT aktif_mi FROM personel WHERE personel_id = %s", (personel,))
+    assert c.fetchone()[0] is True

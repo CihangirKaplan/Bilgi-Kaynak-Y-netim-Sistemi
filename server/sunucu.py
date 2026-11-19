@@ -9,6 +9,7 @@ from server.oda_etkinlikleri_kurallari import (
 )
 import os
 import time
+from functools import lru_cache
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta, date
@@ -134,6 +135,16 @@ def otomatik_danisan_kodu_uret(cursor, yil=None, kilitle=True) -> str:
     return f"DAN-{yil}-{cursor.fetchone()[0]:04d}"
 
 
+ROL_PASIF_ATAMA_MESAJI = "Seçilen rol pasif; pasif role kullanıcı atanamaz. Önce rolü aktif edin."
+ROL_PASIF_GIRIS_MESAJI = "Rolünüz pasif durumda; sisteme giriş engellendi. Yöneticinize başvurun."
+
+
+@lru_cache(maxsize=1)
+def _sahte_parola_hash() -> str:
+    """Var olmayan kullanıcı adında da bir bcrypt doğrulaması yapılır; yanıt süresi hesabın var olup olmadığını ele vermesin."""
+    return parola_hashle("zamanlama-korumasi-sahte-parola")
+
+
 def psikolog_rolu_mu(rol_adi) -> bool:
     """Rol adı PSIKOLOG mu? Tek karşılaştırma yeri: büyük/küçük harf ve boşluk farkı önemsenmez, alt metin eşleşmesi yapılmaz."""
     return str(rol_adi or "").strip().upper() == "PSIKOLOG"
@@ -159,8 +170,9 @@ def token_kullanici_id(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT parola_hash, aktif_mi FROM kullanicilar "
-            "WHERE kullanici_id = %s;",
+            "SELECT k.parola_hash, k.aktif_mi, COALESCE(r.aktif_mi, TRUE) FROM kullanicilar k "
+            "LEFT JOIN roller r ON r.rol_id = k.rol_id "
+            "WHERE k.kullanici_id = %s;",
             (kullanici_id,)
         )
         kayit = cursor.fetchone()
@@ -176,6 +188,9 @@ def token_kullanici_id(
                 status_code=403,
                 detail="Kullanıcı hesabı aktif değil."
             )
+
+        if len(kayit) > 2 and kayit[2] is False:
+            raise HTTPException(status_code=403, detail=ROL_PASIF_GIRIS_MESAJI)
 
         if not token_parola_gecerli(token, kayit[0]):
             raise HTTPException(
@@ -206,13 +221,19 @@ def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bear
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT aktif_mi, ilk_giris_mi, parola_hash FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
+        cursor.execute(
+            "SELECT k.aktif_mi, k.ilk_giris_mi, k.parola_hash, COALESCE(r.aktif_mi, TRUE) FROM kullanicilar k "
+            "LEFT JOIN roller r ON r.rol_id = k.rol_id WHERE k.kullanici_id = %s;",
+            (kullanici_id,),
+        )
         kullanici = cursor.fetchone()
 
         if kullanici is None:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         if not kullanici[0]:
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
+        if len(kullanici) > 3 and kullanici[3] is False:
+            raise HTTPException(status_code=403, detail=ROL_PASIF_GIRIS_MESAJI)
         if not token_parola_gecerli(token, kullanici[2]):
             raise HTTPException(
                 status_code=401,
@@ -314,7 +335,8 @@ def giris_yap(giris: GirisModeli, request: Request = None):
         cursor.execute(
             """
             SELECT k.kullanici_id, k.kullanici_adi, k.parola_hash, k.rol_id, k.aktif_mi,
-                   k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi, k.gecici_parola_bitis
+                   k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi, k.gecici_parola_bitis,
+                   COALESCE(r.aktif_mi, TRUE)
             FROM kullanicilar k
             LEFT JOIN roller r ON k.rol_id = r.rol_id
             WHERE k.kullanici_adi = %s;
@@ -323,12 +345,10 @@ def giris_yap(giris: GirisModeli, request: Request = None):
         kullanici = cursor.fetchone()
 
         if kullanici is None:
+            parola_dogrula(giris.parola, _sahte_parola_hash())      # yanıt süresi, hesabın var olup olmadığını ele vermesin
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", hedef_tablo="kullanicilar")
             giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
-        if not kullanici[4]:
-            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
-            raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if kullanici[6] is not None and kullanici[6] > datetime.now():
             denetim_kaydi_olustur(
                 VT_AYARLARI,
@@ -345,13 +365,16 @@ def giris_yap(giris: GirisModeli, request: Request = None):
             )
 
         if not parola_dogrula(giris.parola, kullanici[2]):
-            yeni_basarisiz_giris_sayisi = kullanici[5] + 1
+            # Sayaç tek SQL ile artırılır (okuyup +1 yazmak eşzamanlı denemelerde eksik sayardı ve kilidi geciktirirdi).
+            cursor.execute(
+                "UPDATE kullanicilar SET basarisiz_giris_sayisi = basarisiz_giris_sayisi + 1 WHERE kullanici_id = %s RETURNING basarisiz_giris_sayisi;",
+                (kullanici[0],),
+            )
+            yeni_basarisiz_giris_sayisi = cursor.fetchone()[0]
             if yeni_basarisiz_giris_sayisi >= 5:
                 kilit_saniye = 900 if yeni_basarisiz_giris_sayisi >= 10 else 60
                 kilit_bitis_zamani = datetime.now() + timedelta(seconds=kilit_saniye)
-                cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s, kilit_bitis_zamani = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kilit_bitis_zamani, kullanici[0]))
-            else:
-                cursor.execute("UPDATE kullanicilar SET basarisiz_giris_sayisi = %s WHERE kullanici_id = %s;", (yeni_basarisiz_giris_sayisi, kullanici[0]))
+                cursor.execute("UPDATE kullanicilar SET kilit_bitis_zamani = %s WHERE kullanici_id = %s;", (kilit_bitis_zamani, kullanici[0]))
             conn.commit()
             denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
             giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
@@ -362,6 +385,14 @@ def giris_yap(giris: GirisModeli, request: Request = None):
                     headers={"Retry-After": str(kilit_saniye)},
                 )
             raise HTTPException(status_code=401, detail="Kullanıcı adı veya parola hatalı.")
+
+        # Parola DOĞRU: hesap ya da rol pasifse bu ancak şimdi söylenir (parolayı bilmeyen biri hesabın var/pasif olduğunu öğrenemez).
+        if not kullanici[4]:
+            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
+            raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
+        if len(kullanici) > 10 and kullanici[10] is False:
+            denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN_FAILED", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
+            raise HTTPException(status_code=403, detail=ROL_PASIF_GIRIS_MESAJI)
 
         # Parola doğru ama GEÇİCİ parolanın süresi dolmuşsa giriş yapılamaz (yanlış parolada bu bilgi verilmez).
         gecici_bitis = kullanici[9] if len(kullanici) > 9 else None
@@ -596,7 +627,7 @@ def kullanici_olustur(
             )
 
         cursor.execute(
-            "SELECT rol_adi FROM roller WHERE rol_id = %s;",
+            "SELECT rol_adi, aktif_mi FROM roller WHERE rol_id = %s;",
             (yeni_kullanici.rol_id,),
         )
         hedef_rol = cursor.fetchone()
@@ -606,6 +637,8 @@ def kullanici_olustur(
                 status_code=422,
                 detail="Geçersiz rol seçildi.",
             )
+        if len(hedef_rol) > 1 and hedef_rol[1] is False:
+            raise HTTPException(status_code=422, detail=ROL_PASIF_ATAMA_MESAJI)
 
         rol_adi = hedef_rol[0]
 
@@ -886,10 +919,12 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
         mevcut_rol = hedef_kullanici[0]
 
-        cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s;", (veri.rol_id,))
+        cursor.execute("SELECT rol_adi, aktif_mi FROM roller WHERE rol_id = %s;", (veri.rol_id,))
         yeni_rol = cursor.fetchone()
         if yeni_rol is None:
             raise HTTPException(status_code=404, detail="Atanacak rol bulunamadı.")
+        if len(yeni_rol) > 1 and yeni_rol[1] is False:
+            raise HTTPException(status_code=422, detail=ROL_PASIF_ATAMA_MESAJI)
         yeni_rol_adi = yeni_rol[0]
 
         # ADMIN rolu normal rol degistirme islemlerine kapali.
@@ -1228,7 +1263,7 @@ def rol_guncelle(rol_id: int, veri: RolGorunenAdModeli, kullanici_id: int = Depe
         cursor = conn.cursor()
  
         # 1. Rolün teknik adını (rol_adi) çekip satırı kilitliyoruz
-        cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s FOR UPDATE;", (rol_id,))
+        cursor.execute("SELECT rol_adi, aktif_mi, gorunen_ad FROM roller WHERE rol_id = %s FOR UPDATE;", (rol_id,))
         kayit = cursor.fetchone()
         
         if kayit is None:
@@ -1237,8 +1272,20 @@ def rol_guncelle(rol_id: int, veri: RolGorunenAdModeli, kullanici_id: int = Depe
         # 2. GÜVENLİK KİLİDİ: Admin rolü asla değiştirilemez veya pasife alınamaz!
         if kayit[0] == "ADMIN":
             raise HTTPException(status_code=403, detail="SİSTEM UYARISI: ADMIN rolü düzenlenemez ve pasife alınamaz.")
+
+        # 3. Pasif rol = o roldeki kullanıcılar sisteme giremez (giriş ve her istek rol aktifliğini denetler). Kişi kendi rolünü
+        #    pasife alıp kendini dışarıda bırakamaz.
+        etkilenen = 0
+        onceki_aktif = kayit[1] if len(kayit) > 1 else True
+        if veri.aktif_mi is False and onceki_aktif is not False:
+            cursor.execute("SELECT rol_id FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
+            yapan = cursor.fetchone()
+            if yapan is not None and yapan[0] == rol_id:
+                raise HTTPException(status_code=409, detail="Kendi rolünüzü pasife alamazsınız; oturumunuz kapanırdı.")
+            cursor.execute("SELECT COUNT(*) FROM kullanicilar WHERE rol_id = %s AND aktif_mi = TRUE;", (rol_id,))
+            etkilenen = cursor.fetchone()[0]
  
-        # 3. Güncelleme işlemi
+        # 4. Güncelleme işlemi
         cursor.execute(
             "UPDATE roller SET gorunen_ad = %s, aktif_mi = %s WHERE rol_id = %s;",
             (veri.gorunen_ad.strip(), veri.aktif_mi, rol_id),
@@ -1251,9 +1298,18 @@ def rol_guncelle(rol_id: int, veri: RolGorunenAdModeli, kullanici_id: int = Depe
             hedef_tablo="roller",
             hedef_kayit_id=rol_id,
             mevcut_cursor=cursor,
+            ayrinti={
+                "onceki": {"gorunen_ad": kayit[2] if len(kayit) > 2 else None, "aktif_mi": onceki_aktif},
+                "yeni": {"gorunen_ad": veri.gorunen_ad.strip(), "aktif_mi": veri.aktif_mi},
+                "girisi_engellenen_kullanici": etkilenen,
+            },
         )
         conn.commit()
-        return {"durum": "basarili", "mesaj": "Rol güncellendi."}
+        yanit = {"durum": "basarili", "mesaj": "Rol güncellendi."}
+        if etkilenen:
+            yanit["etkilenen_kullanici"] = etkilenen
+            yanit["mesaj"] = f"Rol pasife alındı; bu roldeki {etkilenen} aktif kullanıcının sisteme girişi engellendi."
+        return yanit
     except HTTPException:
         if conn is not None:
             conn.rollback()
@@ -1384,9 +1440,13 @@ def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET")))
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT rol_id, rol_adi, gorunen_ad, aktif_mi FROM roller ORDER BY rol_id ASC;")
+        cursor.execute(
+            "SELECT r.rol_id, r.rol_adi, r.gorunen_ad, r.aktif_mi, "
+            "(SELECT COUNT(*) FROM kullanicilar k WHERE k.rol_id = r.rol_id AND k.aktif_mi = TRUE) "
+            "FROM roller r ORDER BY r.rol_id ASC;"
+        )
         return [
-            {"rol_id": k[0], "rol_adi": k[1], "gorunen_ad": k[2], "aktif_mi": k[3]}
+            {"rol_id": k[0], "rol_adi": k[1], "gorunen_ad": k[2], "aktif_mi": k[3], "aktif_kullanici_sayisi": k[4] if len(k) > 4 else 0}
             for k in cursor.fetchall()
         ]
     except Exception:
@@ -2116,13 +2176,13 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Personel bulunamadı.")
 
+        # Yalnızca personel kodu değişir; aktiflik kullanıcı durum ucundan yönetilir (kurallar atlanmasın).
         yeni_kod = degisiklikler.get("personel_kodu", mevcut[1])
-        yeni_aktiflik = degisiklikler.get("aktif_mi", mevcut[2])
 
-        cursor.execute("UPDATE personel SET personel_kodu = %s, aktif_mi = %s WHERE personel_id = %s;", (yeni_kod, yeni_aktiflik, personel_id))
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "personel", personel_id))
+        cursor.execute("UPDATE personel SET personel_kodu = %s WHERE personel_id = %s;", (yeni_kod, personel_id))
+        durum_degisikligi_yaz(cursor, islem_yapan_id, "UPDATE", "personel", personel_id, onceki={"personel_kodu": mevcut[1]}, yeni={"personel_kodu": yeni_kod})
         conn.commit()
-        return {"mesaj": "Personel başarıyla güncellendi.", "personel_id": personel_id, "personel_kodu": yeni_kod, "aktif_mi": yeni_aktiflik}
+        return {"mesaj": "Personel başarıyla güncellendi.", "personel_id": personel_id, "personel_kodu": yeni_kod, "aktif_mi": mevcut[2]}
     except psycopg2.errors.UniqueViolation:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=409, detail="Bu personel kodu başka bir kayıtta kullanılıyor.")
