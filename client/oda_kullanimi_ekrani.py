@@ -33,7 +33,7 @@ ODA_TAKVIMI_SAATLERI = list(range(8, 18))     # mesai 08:00-18:00; her satır bi
 
 
 # ------------------------------------------------------------------ saf işlevler (arayüzden bağımsız, testlenebilir)
-ETKINLIK_RENK = ("#DDF4EA", "#147D62")
+ETKINLIK_RENK = ("#FFF3CD", "#9A6700")
 
 
 def hafta_basi(gun):
@@ -110,13 +110,6 @@ def rezervasyon_kayitlari(rezervasyonlar):
             gun += timedelta(days=1)
     return kayitlar
 
-
-ETKINLIK_DURUM_RENKLERI = {
-    "Planlandı": ("#DDF4EA", "#147D62"),
-    "Devam Ediyor": ("#E2EDFF", "#165DDC"),
-    "Tamamlandı": ("#EFF1F5", "#64748B"),
-    "İptal Edildi": ("#FCE8EA", "#C3344A"),
-}
 
 
 def etkinlik_durumu_hesapla(etkinlik, simdi=None):
@@ -609,9 +602,7 @@ class OdaKullanimiEkrani(QWidget):
         gizli = r.get("cihaz_adi") is None if cihaz else (r.get("psikolog") is None and r.get("danisan_kod_id") is None)
         bg, fg = CIHAZ_RENK if cihaz else (GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"]))
         if etkinlik:
-            bg, fg = ETKINLIK_DURUM_RENKLERI.get(
-                r.get("etkinlik_durumu"), ETKINLIK_RENK
-            )
+            bg, fg = ETKINLIK_RENK
         kutu = QFrame()
         kutu.setObjectName("blok")
         kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
