@@ -29,7 +29,7 @@ def istemci():
     app.dependency_overrides.pop(mevcut_kullanici_id, None)
 
 
-def _degistir(istemci, sorgu, danisan=(True, 3), rol="ADMIN", personel=(3,), planli=0):
+def _degistir(istemci, sorgu, danisan=(True, 3), rol="ADMIN", personel=(3,), planli=0, psikolog_aktif=True):
     """danisan: (aktif_mi, olusturan_psikolog_id) satırı; None ise danışan yok."""
     conn = MagicMock()
     c = conn.cursor.return_value
@@ -38,7 +38,10 @@ def _degistir(istemci, sorgu, danisan=(True, 3), rol="ADMIN", personel=(3,), pla
         sirali.append((rol,))
         if rol == "PSIKOLOG":
             sirali.append(personel)
-        sirali.append((planli,))
+        if "aktif_mi=true" in sorgu and danisan[0] is False and danisan[1] is not None:
+            sirali.append((1,) if psikolog_aktif else None)          # aktifleştirmede danışanın psikologu aktif mi?
+        else:
+            sirali.append((planli,))
     c.fetchone.side_effect = sirali
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.patch("/api/danisan-kodlari/DAN-2026-0001/durum" + sorgu)
@@ -65,6 +68,23 @@ def test_pasif_danisan_yeniden_aktif_edilir_planli_randevu_kontrolu_gerekmez(ist
     assert not any("FROM randevular" in s for s, _ in sorgular)
 
 
+def test_psikologu_pasif_danisan_elle_aktiflestirilemez(istemci):
+    yanit, sorgular, conn = _degistir(istemci, "?aktif_mi=true", danisan=(False, 3), psikolog_aktif=False)
+    assert yanit.status_code == 409 and "psikologu şu an pasif" in yanit.json()["detail"]
+    assert guncelleme_var(sorgular) == []
+    conn.commit.assert_not_called()
+
+
+def test_psikologu_aktif_danisan_aktiflestirilir(istemci):
+    yanit, sorgular, _ = _degistir(istemci, "?aktif_mi=true", danisan=(False, 3), psikolog_aktif=True)
+    assert yanit.status_code == 200 and guncelleme_var(sorgular) == [(True, "DAN-2026-0001")]
+
+
+def test_psikologu_bos_eski_danisan_aktiflestirilebilir(istemci):
+    yanit, sorgular, _ = _degistir(istemci, "?aktif_mi=true", danisan=(False, None))
+    assert yanit.status_code == 200 and guncelleme_var(sorgular) == [(True, "DAN-2026-0001")]
+
+
 def test_elle_durum_degisikligi_psikolog_pasifligi_isaretini_temizler(istemci):
     for aktif, danisan in (("false", (True, 3)), ("true", (False, 3))):
         _, sorgular, _ = _degistir(istemci, f"?aktif_mi={aktif}", danisan=danisan)
@@ -80,7 +100,7 @@ def test_ayni_durum_istenirse_islem_yapilmaz_basarili_doner(istemci):
 
 def test_planlanmis_randevusu_olan_danisan_pasife_alinamaz(istemci):
     yanit, sorgular, conn = _degistir(istemci, "?aktif_mi=false", planli=2)
-    assert yanit.status_code == 409 and "2 planlanmış randevusu" in yanit.json()["detail"]
+    assert yanit.status_code == 409 and "2 planlı randevusu" in yanit.json()["detail"] and "Tamamlandı / Gelmedi" in yanit.json()["detail"]
     assert guncelleme_var(sorgular) == []
     conn.commit.assert_not_called()
 
@@ -88,8 +108,8 @@ def test_planlanmis_randevusu_olan_danisan_pasife_alinamaz(istemci):
 def test_planli_randevu_kontrolu_gelecekteki_planlilara_bakar(istemci):
     _, sorgular, _ = _degistir(istemci, "?aktif_mi=false")
     sql, parametre = next((s, p) for s, p in sorgular if "FROM randevular" in s)
-    assert "durum = 'PLANLANDI'" in sql and "bitis_zamani > %s" in sql
-    assert abs(parametre[1] - datetime.now()) < timedelta(seconds=30)
+    # Tek tanım: durumu PLANLANDI ve başlangıç günü bugün ya da sonrası (saat bazlı değil)
+    assert "durum = 'PLANLANDI'" in sql and "baslangic_zamani >= CURRENT_DATE" in sql and "bitis_zamani" not in sql
 
 
 def test_psikolog_kendi_danisanini_degistirebilir(istemci):

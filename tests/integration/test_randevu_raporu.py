@@ -137,26 +137,32 @@ def _secenekler(istemci, sorgu="", rol="ADMIN"):
     conn = MagicMock()
     c = conn.cursor.return_value
     c.fetchone.side_effect = [(1,), (rol,)]
-    c.fetchall.side_effect = [[(3, "Ayşe"), (7, "Fatma")], [(2, "Oda-2")]]
+    c.fetchall.side_effect = [[(3, "Ayşe", True), (7, "Fatma", True), (9, "Eski", False)], [(2, "Oda-2", True), (4, "Oda-4", False)]]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.get("/api/randevu-raporu/secenekler" + sorgu)
     sorgular = [x.args for x in c.execute.call_args_list if "FROM odalar o" in x.args[0] or "FROM personel p" in x.args[0]]
     return yanit, sorgular
 
 
-def test_secenekler_yalnizca_psikologlara_atanmis_aktif_odalari_dondurur(istemci):
+def test_secenekler_aktifleri_ve_randevu_gecmisi_olan_pasif_psikolog_ve_odalari_dondurur(istemci):
     yanit, sorgular = _secenekler(istemci)
-    assert yanit.json() == {"psikologlar": [{"personel_id": 3, "ad_soyad": "Ayşe"}, {"personel_id": 7, "ad_soyad": "Fatma"}], "odalar": [{"oda_id": 2, "oda_adi": "Oda-2"}]}
-    oda_sql = sorgular[1][0]
-    assert "JOIN psikolog_odalar" in oda_sql and "o.aktif_mi = TRUE" in oda_sql and "UPPER(r.rol_adi) = 'PSIKOLOG'" in oda_sql
+    assert yanit.json() == {
+        "psikologlar": [{"personel_id": 3, "ad_soyad": "Ayşe", "aktif_mi": True}, {"personel_id": 7, "ad_soyad": "Fatma", "aktif_mi": True},
+                        {"personel_id": 9, "ad_soyad": "Eski (pasif)", "aktif_mi": False}],     # geçmiş kayıtları süzülebilsin
+        "odalar": [{"oda_id": 2, "oda_adi": "Oda-2", "aktif_mi": True}, {"oda_id": 4, "oda_adi": "Oda-4 (pasif)", "aktif_mi": False}],
+    }
+    psikolog_sql, oda_sql = sorgular[0][0], sorgular[1][0]
+    assert "FROM randevular x WHERE x.psikolog_id = p.personel_id" in psikolog_sql           # randevusu olan eski psikolog da gelir
+    assert "psikolog_odalar" in oda_sql and "o.aktif_mi = TRUE" in oda_sql and "UPPER(r.rol_adi) = 'PSIKOLOG'" in oda_sql
+    assert "FROM randevular x" in oda_sql and "x.oda_id = o.oda_id" in oda_sql                 # randevu yapılmış oda da gelir
     assert sorgular[1][1] == ()                                                           # psikolog seçilmediyse tümü
 
 
 def test_secenekler_psikolog_secilince_odalar_daralir_psikolog_yalnizca_kendini_gorur(istemci):
     _, sorgular = _secenekler(istemci, "?psikolog_id=7")
-    assert "p.personel_id = %s" in sorgular[1][0] and sorgular[1][1] == (7,)
+    assert "p.personel_id = %s" in sorgular[1][0] and sorgular[1][1] == (7, 7)          # iki alt sorgu (atanmış oda, randevu yapılmış oda)
     _, sorgular = _secenekler(istemci, "?psikolog_id=7", rol="PSIKOLOG")
-    assert "p.kullanici_id = %s" in sorgular[1][0] and "p.personel_id = %s" not in sorgular[1][0] and sorgular[1][1] == (5,)
+    assert "p.kullanici_id = %s" in sorgular[1][0] and "p.personel_id = %s" not in sorgular[1][0] and sorgular[1][1] == (5, 5)
     assert "p.kullanici_id = %s" in sorgular[0][0] and sorgular[0][1] == (5,)             # psikolog listesinde de yalnızca kendisi
 
 

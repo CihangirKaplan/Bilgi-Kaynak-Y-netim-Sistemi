@@ -144,7 +144,7 @@ def test_oda_duzenleme_izni_yoksa_403_ve_hicbir_sey_yazilmaz():
 
 
 def test_oda_pasife_alinir_kayit_silinmez_ve_denetim_yazilir():
-    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (2, "Oda 2", 3, False)], fetchall=[[]])
+    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 3, False)], fetchall=[[]])
     assert yanit.status_code == 200
     assert yanit.json()["oda"] == {"oda_id": 2, "oda_adi": "Oda 2", "kapasite": 3, "aktif_mi": False}
     guncelleme = next((s, p) for s, p in sorgular(cursor) if s.startswith("UPDATE odalar"))
@@ -152,6 +152,21 @@ def test_oda_pasife_alinir_kayit_silinmez_ve_denetim_yazilir():
     assert not any(s.upper().startswith("DELETE") for s, _ in sorgular(cursor))       # pasifleştirme silme değildir
     assert denetim(cursor) == [(KULLANICI, "UPDATE", "odalar", 2)]
     conn.commit.assert_called_once()
+
+
+def test_planli_randevusu_olan_oda_pasife_alinamaz_ve_sonuc_girme_uyarisi_doner():
+    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (3,)], fetchall=[[]])
+    assert yanit.status_code == 409
+    detay = yanit.json()["detail"]
+    assert "3 planlı randevu" in detay and "Tamamlandı / Gelmedi" in detay
+    assert not any(s.startswith("UPDATE odalar") for s, _ in sorgular(cursor))
+    conn.commit.assert_not_called()
+
+
+def test_oda_planli_randevu_sorgusu_bugun_ve_sonrasina_bakar():
+    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[]])
+    sql, parametre = next((s, p) for s, p in sorgular(cursor) if "FROM randevular" in s)
+    assert "durum = 'PLANLANDI'" in sql and "baslangic_zamani >= CURRENT_DATE" in sql and parametre == (2,)
 
 
 def test_pasif_oda_yeniden_aktiflestirilebilir_ve_psikolog_kontrolu_yapilmaz():
@@ -162,7 +177,7 @@ def test_pasif_oda_yeniden_aktiflestirilebilir_ve_psikolog_kontrolu_yapilmaz():
 
 
 def test_pasiflestirmede_satir_kilitlenir_yaris_durumunu_onler():
-    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (2, "Oda 2", 1, False)], fetchall=[[]])
+    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[]])
     assert any(s.startswith("SELECT oda_id FROM odalar WHERE oda_id = %s FOR UPDATE") for s, _ in sorgular(cursor))
 
 

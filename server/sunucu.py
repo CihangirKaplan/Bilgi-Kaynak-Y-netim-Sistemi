@@ -1843,7 +1843,7 @@ def kullanici_durum_degistir(
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
             oda_etkinlikli_odalari_denetle(cursor, istenen_odalar)
         elif psikolog_pasiflesiyor:
-            # Oda boşa düşeceği için bugün ve sonrasındaki planlı randevular önce iptal edilmeli (ya da durumu güncellenmeli). Dünden önceki kayıtlar engellemez.
+            # Oda boşa düşeceği için bugün ve sonrasındaki planlı randevular önce sonuçlandırılmalı ya da iptal edilmeli. Dünden önceki kayıtlar engellemez.
             cursor.execute(
                 "SELECT COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
                 "WHERE p.kullanici_id = %s AND r.durum = 'PLANLANDI' AND r.baslangic_zamani >= CURRENT_DATE;",
@@ -1853,7 +1853,7 @@ def kullanici_durum_degistir(
             if planli:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Bu psikologun bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce bu randevuları iptal edin ya da durumlarını güncelleyin.",
+                    detail=f"Bu psikologun bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce {PLANLI_RANDEVU_COZUMU}",
                 )
 
         # Her iki tabloyu da eşzamanlı güncelle
@@ -2660,6 +2660,8 @@ def danisan_kodu_olustur(
         raise HTTPException(status_code=422, detail="Geçersiz istisna türü. İzinli değerler: " + ", ".join(IZINLI_ISTISNA_TURLERI) + ".")
     if ucretli_mi and istisna_turu != "YOK":
         raise HTTPException(status_code=422, detail="Ücretli danışan için istisna türü YOK olmalıdır.")
+    if not ucretli_mi and istisna_turu == "YOK":
+        raise HTTPException(status_code=422, detail="Ücretsiz danışan için istisna türü (Kanser / Şehit-Gazi) seçilmelidir.")
     # Kapalı listeler: gelen metin doğrulanır ve hata mesajına yazılmaz (FR-008)
     if yas_grubu not in YAS_GRUPLARI:
         raise HTTPException(status_code=422, detail="Geçersiz yaş grubu. İzinli değerler: " + ", ".join(YAS_GRUPLARI) + ".")
@@ -2771,6 +2773,11 @@ class OdaYetkileriModeli(_OdaYetkiBaseModel):
     oda_idleri: list[int] = _OdaYetkiField(min_length=1)
 
 
+# "Planlı randevu" her yerde aynı anlama gelir: durumu PLANLANDI ve başlangıç günü bugün ya da sonrası. Bugünün geçmiş saatindeki
+# ama sonucu girilmemiş randevu da sayılır; böylece unutulan "Tamamlandı / Gelmedi" işareti pasife almayı engelleyerek fark ettirilir.
+PLANLI_RANDEVU_COZUMU = "bugünkü randevuların sonucunu (Tamamlandı / Gelmedi) girin, sonraki günlerin randevularını iptal edin."
+
+
 def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri=None):
     """Psikologun bugün ve sonrası için planlı (PLANLANDI) randevusu varken odası boşalacak bir işlem yapılamaz (409).
 
@@ -2810,10 +2817,10 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
         return
     if kalacak_oda_idleri is None:
         toplam = sum(sayi for _, sayi in planlilar)
-        detay = f"Bu psikologun bugün ve sonrası için {toplam} planlı randevusu var. Rolü değiştirmeden önce bu randevuları iptal edin ya da durumlarını güncelleyin."
+        detay = f"Bu psikologun bugün ve sonrası için {toplam} planlı randevusu var. Rolü değiştirmeden önce {PLANLI_RANDEVU_COZUMU}"
     else:
         ayrinti = ", ".join(f"{ad} ({sayi} randevu)" for ad, sayi in planlilar)
-        detay = f"Kaldırılmak istenen odalarda bugün ve sonrası için planlı randevu var: {ayrinti}. Odayı kaldırmadan önce bu randevuları iptal edin ya da durumlarını güncelleyin."
+        detay = f"Kaldırılmak istenen odalarda bugün ve sonrası için planlı randevu var: {ayrinti}. Odayı kaldırmadan önce {PLANLI_RANDEVU_COZUMU}"
     raise HTTPException(status_code=409, detail=detay)
 
 
@@ -3165,6 +3172,18 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
                            + ". Önce onlara başka bir oda atayın.",
                 )
 
+            # Odada bugün ve sonrası için planlı randevu varsa pasife alınamaz (randevu sahibi psikolog odasız kalır).
+            cursor.execute(
+                "SELECT COUNT(*) FROM randevular WHERE oda_id = %s AND durum = 'PLANLANDI' AND baslangic_zamani >= CURRENT_DATE;",
+                (oda_id,),
+            )
+            planli = cursor.fetchone()[0]
+            if planli:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu odada bugün ve sonrası için {planli} planlı randevu var. Odayı pasife almadan önce {PLANLI_RANDEVU_COZUMU}",
+                )
+
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())
 
@@ -3287,14 +3306,27 @@ def danisan_durumunu_degistir(
 
         if not aktif_mi:
             cursor.execute(
-                "SELECT COUNT(*) FROM randevular WHERE danisan_kod_id = %s AND durum = 'PLANLANDI' AND bitis_zamani > %s;",
-                (danisan_kod_id, datetime.now()),
+                "SELECT COUNT(*) FROM randevular WHERE danisan_kod_id = %s AND durum = 'PLANLANDI' AND baslangic_zamani >= CURRENT_DATE;",
+                (danisan_kod_id,),
             )
             planli = cursor.fetchone()[0]
             if planli:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Bu danışanın {planli} planlanmış randevusu var. Pasife almadan önce randevuları iptal edin.",
+                    detail=f"Bu danışanın bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce {PLANLI_RANDEVU_COZUMU}",
+                )
+        elif danisan[1] is not None:
+            # Danışanı aktifleştirmek için psikoloğu aktif bir psikolog olmalı; aksi halde danışan randevu alamaz (psikolog dönünce
+            # psikolog pasifliği nedeniyle pasif olanlar zaten otomatik geri açılır).
+            cursor.execute(
+                "SELECT 1 FROM personel p JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id JOIN roller r ON r.rol_id = k.rol_id "
+                "WHERE p.personel_id = %s AND p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG';",
+                (danisan[1],),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Bu danışanın psikologu şu an pasif. Danışanı aktifleştirmeden önce psikoloğu aktifleştirin (danışan da otomatik açılır).",
                 )
 
         # Elle yapılan durum değişikliği, "psikolog pasifliği nedeniyle pasif" işaretini temizler (psikolog dönünce otomatik geri açılmasın/kapanmasın).
@@ -5467,8 +5499,9 @@ def randevu_raporu_secenekleri(
     psikolog_id: int | None = None,
     kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
 ):
-    """Randevu raporu süzgeç listeleri: aktif psikologlar ve yalnızca PSİKOLOGLARA ATANMIŞ aktif odalar.
-    psikolog_id verilirse odalar o psikologun odalarına daralır. Psikolog yalnızca kendisini ve kendi odalarını görür."""
+    """Randevu raporu süzgeç listeleri: aktif psikologlar ve onların aktif odaları, ayrıca randevu geçmişi olan pasif/eski psikologlar
+    ve odalar ("(pasif)" etiketiyle); böylece geçmiş kayıtlar da süzülebilir. psikolog_id verilirse odalar o psikologa daralır.
+    Psikolog yalnızca kendisini ve kendi odalarını görür."""
     conn = None
     cursor = None
     try:
@@ -5487,27 +5520,42 @@ def randevu_raporu_secenekleri(
             parametreler.append(psikolog_id)
         ek_kosul = "".join(f" AND {k}" for k in kosullar)
 
+        # Aktif psikologlar + randevusu olan (pasif, ya da psikolog rolünden ayrılmış) eski psikologlar
         cursor.execute(f"""
-            SELECT DISTINCT p.personel_id, k.kullanici_adi
+            SELECT DISTINCT p.personel_id, k.kullanici_adi,
+                   (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') AS aktif
             FROM personel p
             JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
             JOIN roller r ON r.rol_id = k.rol_id
-            WHERE p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{" AND p.kullanici_id = %s" if psikolog_mu else ""}
+            WHERE ((p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG')
+                   OR EXISTS (SELECT 1 FROM randevular x WHERE x.psikolog_id = p.personel_id)){" AND p.kullanici_id = %s" if psikolog_mu else ""}
             ORDER BY k.kullanici_adi;
         """, ((kullanici_id,) if psikolog_mu else ()))
-        psikologlar = [{"personel_id": s[0], "ad_soyad": s[1]} for s in cursor.fetchall()]
+        psikologlar = [
+            {"personel_id": s[0], "ad_soyad": s[1] if s[2] else f"{s[1]} (pasif)", "aktif_mi": bool(s[2])}
+            for s in cursor.fetchall()
+        ]
 
+        # Aktif psikologlara atanmış aktif odalar + (seçilen) psikologların randevu yaptığı odalar (pasif oda "(pasif)" etiketiyle)
         cursor.execute(f"""
-            SELECT DISTINCT o.oda_id, o.oda_adi
+            SELECT DISTINCT o.oda_id, o.oda_adi, o.aktif_mi
             FROM odalar o
-            JOIN psikolog_odalar po ON po.oda_id = o.oda_id
-            JOIN personel p ON p.kullanici_id = po.kullanici_id
-            JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
-            JOIN roller r ON r.rol_id = k.rol_id
-            WHERE o.aktif_mi = TRUE AND p.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{ek_kosul}
+            WHERE EXISTS (
+                      SELECT 1 FROM psikolog_odalar po
+                      JOIN personel p ON p.kullanici_id = po.kullanici_id
+                      JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
+                      JOIN roller r ON r.rol_id = k.rol_id
+                      WHERE po.oda_id = o.oda_id AND o.aktif_mi = TRUE AND p.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{ek_kosul})
+               OR EXISTS (
+                      SELECT 1 FROM randevular x
+                      JOIN personel p ON p.personel_id = x.psikolog_id
+                      WHERE x.oda_id = o.oda_id{ek_kosul})
             ORDER BY o.oda_adi;
-        """, tuple(parametreler))
-        odalar = [{"oda_id": o[0], "oda_adi": o[1]} for o in cursor.fetchall()]
+        """, tuple(parametreler) * 2)
+        odalar = [
+            {"oda_id": o[0], "oda_adi": o[1] if o[2] else f"{o[1]} (pasif)", "aktif_mi": bool(o[2])}
+            for o in cursor.fetchall()
+        ]
         return {"psikologlar": psikologlar, "odalar": odalar}
     finally:
         if cursor is not None: cursor.close()

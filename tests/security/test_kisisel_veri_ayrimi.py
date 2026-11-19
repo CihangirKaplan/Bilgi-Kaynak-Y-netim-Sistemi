@@ -166,3 +166,10 @@ def test_izinli_istisna_listesi_arayuzun_sundugu_degerlerle_ayni():
     for deger in sunucu.IZINLI_ISTISNA_TURLERI:
         assert f'"{deger}"' in kaynak
 
+
+
+@pytest.mark.parametrize("sorgu", ["?ucretli_mi=false&istisna_turu=YOK", "?ucretli_mi=false"])
+def test_ucretsiz_danisan_icin_istisna_turu_zorunludur(sorgu):
+    yanit, parametreler = _kod_olustur(sorgu)
+    assert yanit.status_code == 422 and "Ücretsiz" in yanit.json()["detail"]
+    assert parametreler is None                                  # kayıt yapılmadı

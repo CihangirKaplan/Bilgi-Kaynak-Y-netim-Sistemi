@@ -127,7 +127,7 @@ def test_planli_randevusu_olan_odayi_kaldirmak_409_verir_ve_uyari_doner():
     yanit = istek("put", "/api/kullanicilar/11/odalar", conn, json={"oda_idleri": [2]})
     assert yanit.status_code == 409
     detay = yanit.json()["detail"]
-    assert "Görüşme Odası-1 (2 randevu)" in detay and "bugün ve sonrası için planlı randevu var" in detay and "iptal edin ya da durumlarını güncelleyin" in detay
+    assert "Görüşme Odası-1 (2 randevu)" in detay and "bugün ve sonrası için planlı randevu var" in detay and "Tamamlandı / Gelmedi" in detay
     assert not yazma_sorgusu_var_mi(cursor)                                                 # atama değişmez
     conn.commit.assert_not_called()
     conn.rollback.assert_called()
@@ -331,7 +331,10 @@ def test_odasiz_roller_eskisi_gibi_olusturulur():
 def oda_guncelle_dene(degisiklik, fetchall, fetchone=((2,), (2, "Oda", 1, False))):
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = list(fetchone)
+    fetchone = list(fetchone)
+    if degisiklik.get("aktif_mi") is False and len(fetchone) == 2:
+        fetchone.insert(1, (0,))                         # pasife alırken odadaki planlı randevu sayısı (0)
+    cursor.fetchone.side_effect = fetchone
     cursor.fetchall.side_effect = list(fetchall)
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         try:
