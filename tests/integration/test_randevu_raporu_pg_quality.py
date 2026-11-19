@@ -135,3 +135,47 @@ def test_secenekler_yalnizca_psikologlara_atanmis_aktif_odalari_getirir(kayitlar
     finally:
         c.execute("DELETE FROM psikolog_odalar WHERE oda_id = ANY(%s)", ([atanmamis, pasif],))
         c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", ([atanmamis, pasif],))
+
+
+def test_secenekler_pasif_psikologun_ve_odasinin_randevu_gecmisi_suzulebilir(kayitlar):
+    c, admin, (psi_a, psi_b), (cocuk, yetiskin, eski) = kayitlar
+    _ekle(c, cocuk, psi_b, 0, "TAMAMLANDI")                                                 # yalnızca psi_b'nin randevu geçmişi var
+    c.execute("UPDATE personel SET aktif_mi = FALSE WHERE personel_id = ANY(%s)", ([psi_a[1], psi_b[1]],))
+    c.execute("UPDATE odalar SET aktif_mi = FALSE WHERE oda_id = %s", (psi_b[2],))
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    veri = istemci.get("/api/randevu-raporu/secenekler").json()
+    psikologlar = {p["personel_id"]: p for p in veri["psikologlar"]}
+    assert psikologlar[psi_b[1]]["aktif_mi"] is False and psikologlar[psi_b[1]]["ad_soyad"].endswith("(pasif)")
+    assert psi_a[1] not in psikologlar                                                      # pasif ve randevusu yok: listede yok
+    odalar = {o["oda_id"]: o for o in veri["odalar"]}
+    assert odalar[psi_b[2]]["aktif_mi"] is False and odalar[psi_b[2]]["oda_adi"].endswith("(pasif)")
+    dar = istemci.get(f"/api/randevu-raporu/secenekler?psikolog_id={psi_b[1]}").json()
+    assert [o["oda_id"] for o in dar["odalar"]] == [psi_b[2]]                              # odalar seçilen psikologa daralır
+
+
+def test_planli_randevusu_olan_oda_pasife_alinamaz_gercek_veritabani(kayitlar):
+    c, admin, (psi_a, psi_b), (cocuk, yetiskin, eski) = kayitlar
+    _ekle(c, cocuk, psi_a, 0, "PLANLANDI")                                                  # 2031: bugün ve sonrası
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    yanit = istemci.patch(f"/api/odalar/{psi_a[2]}", json={"aktif_mi": False})
+    assert yanit.status_code == 409 and "1 planlı randevu" in yanit.json()["detail"] and "Tamamlandı / Gelmedi" in yanit.json()["detail"]
+    c.execute("SELECT aktif_mi FROM odalar WHERE oda_id = %s", (psi_a[2],))
+    assert c.fetchone()[0] is True                                                          # değişmedi
+    c.execute("UPDATE randevular SET durum = 'TAMAMLANDI' WHERE danisan_kod_id = %s", (cocuk,))    # sonuç girilince pasife alınabilir
+    assert istemci.patch(f"/api/odalar/{psi_a[2]}", json={"aktif_mi": False}).status_code == 200
+
+
+def test_bugunku_sonucsuz_randevusu_olan_danisan_pasife_alinamaz_sonuc_girilince_alinir(kayitlar):
+    """Planlı randevu = durumu PLANLANDI ve günü bugün ya da sonrası: saati geçmiş ama sonucu girilmemiş bugünkü randevu da engeller."""
+    c, admin, (psi_a, psi_b), (cocuk, yetiskin, eski) = kayitlar
+    bugun = datetime.now().replace(hour=0, minute=5, second=0, microsecond=0)                # bugünün erken (geçmiş) saati
+    c.execute("INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'PLANLANDI')",
+              (cocuk, psi_a[1], psi_a[2], bugun, bugun + timedelta(minutes=30)))
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    yanit = istemci.patch(f"/api/danisan-kodlari/{cocuk}/durum", params={"aktif_mi": "false"})
+    assert yanit.status_code == 409 and "Tamamlandı / Gelmedi" in yanit.json()["detail"]
+    c.execute("UPDATE randevular SET durum = 'TAMAMLANDI' WHERE danisan_kod_id = %s", (cocuk,))
+    assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/durum", params={"aktif_mi": "false"}).status_code == 200

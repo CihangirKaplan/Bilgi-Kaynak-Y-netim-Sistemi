@@ -241,7 +241,7 @@ def test_planli_randevusu_olan_psikolog_pasife_alinamaz():
     with pytest.raises(HTTPException) as hata:
         calistir(conn)
     assert hata.value.status_code == 409
-    assert "bugün ve sonrası için 2 planlı randevusu var" in hata.value.detail and "iptal edin ya da durumlarını güncelleyin" in hata.value.detail
+    assert "bugün ve sonrası için 2 planlı randevusu var" in hata.value.detail and "Tamamlandı / Gelmedi" in hata.value.detail
     assert not yazan_sorgu_var_mi(cursor, "UPDATE")                       # durum değişmez
     assert not yazan_sorgu_var_mi(cursor, "DELETE")                       # oda atamaları da kalkmaz
     conn.commit.assert_not_called()

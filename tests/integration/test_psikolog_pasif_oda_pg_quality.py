@@ -175,11 +175,12 @@ def test_psikolog_pasife_alininca_danisanlari_pasife_alinir_aktiflesince_geri_ac
         c.execute("SELECT count(*) FROM denetim_kayitlari WHERE kullanici_id = %s AND hedef_tablo = 'danisan_kodlari'", (admin,))
         assert c.fetchone()[0] == 1
 
-        assert istemci.patch(f"/api/danisan-kodlari/{kod_elle_acilan}/durum", params={"aktif_mi": "true"}).status_code == 200      # biri elle yeniden açılır
-        assert durum(kod_elle_acilan) == (True, False)                                           # işaret temizlenir
+        yanit = istemci.patch(f"/api/danisan-kodlari/{kod_elle_acilan}/durum", params={"aktif_mi": "true"})   # psikolog pasifken elle açılamaz
+        assert yanit.status_code == 409 and "psikologu şu an pasif" in yanit.json()["detail"]
+        assert durum(kod_elle_acilan) == (False, True)                                           # değişmedi, işaret duruyor
 
         yanit = degistir(oda_idleri=[oda_a])                                                     # psikolog yeniden aktif
-        assert yanit.status_code == 200 and yanit.json()["aktif_edilen_danisan"] == 1            # yalnızca kod geri açıldı
+        assert yanit.status_code == 200 and yanit.json()["aktif_edilen_danisan"] == 2            # psikolog yüzünden pasif olan ikisi geri açıldı
         assert durum(kod) == (True, False) and durum(kod_elle_acilan) == (True, False)
         assert durum(kod_elle) == (False, False)                                                 # elle pasif olan pasif kaldı
     finally:

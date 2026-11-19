@@ -92,7 +92,7 @@ def test_cihaz_rezervasyonlu_odayla_psikolog_olunamaz_ve_uyari_doner():
 def test_planli_randevusu_olan_psikolog_baska_role_gecemez_ve_uyari_doner():
     conn, cursor, _, hata = rol_degistir("PSIKOLOG", "MEMUR", planli=[("EEG Odası", 1), ("Oda-2", 2)])
     assert hata.status_code == 409
-    assert "bugün ve sonrası için 3 planlı randevusu var" in hata.detail and "iptal edin ya da durumlarını güncelleyin" in hata.detail
+    assert "bugün ve sonrası için 3 planlı randevusu var" in hata.detail and "Tamamlandı / Gelmedi" in hata.detail
     assert not rol_guncellendi_mi(cursor)                                   # rol değişmez
     assert not any(s.strip().upper().startswith("DELETE FROM PSIKOLOG_ODALAR") for s in sorgular(cursor))   # odalar da kalkmaz
     conn.commit.assert_not_called()
