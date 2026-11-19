@@ -268,6 +268,41 @@ Yeni sürüm geldiğinde sunucu bilgisayarında, sunucuyu durdurduktan sonra:
 Migration'dan önce her zaman yedek alın. `sema_dogrula.py` çıktısında `ŞEMA UYUMLU` görmeden sunucuyu başlatmayın.
 Sunucu kodu değiştiğinde çalışan sunucu yeniden başlatılmalıdır.
 
+**Geliştirme bilgisayarlarında da** (her `git pull origin develop` sonrası) aynı kontrol gerekir; çünkü yeni kod, henüz oluşturulmamış bir
+tablo ya da sütun bekleyebilir ve uygulamada "Veritabanı şeması sunucu sürümüyle uyumlu değil" (503) hatası çıkar:
+
+    python -m alembic heads              # tek satır göstermeli
+    python -m alembic upgrade head
+    python scripts/sema_dogrula.py       # son satır: ŞEMA UYUMLU
+
+`alembic heads` **iki satır** gösteriyorsa (iki geliştirici aynı anda migration eklemiş) `upgrade` çalıştırmayın; ekibe bildirin, `develop`'ta
+bu iki ucu birleştiren bir migration gerekir.
+
+### `alembic upgrade head` hata verirse: `column ... does not exist`
+
+Örnek hata:
+
+    psycopg2.errors.UndefinedColumn: column "psikolog_pasifligi_nedeniyle_pasif" of relation "danisan_kodlari" does not exist
+
+**Anlamı:** `alembic current` veritabanını "güncel" gösteriyor ama eski bir migration'ın oluşturması gereken sütun ya da indeks gerçekte yok
+(migration o bilgisayarda atlanmış ya da farklı bir sırayla işlenmiş). Yeni bir migration o sütunu kullanmaya çalışınca hata verir.
+Hata olduğunda işlem geri alınır, **veri bozulmaz**. Temiz kurulumda (örn. CI) bu sorun çıkmaz; yalnızca daha önce kurulmuş bir veritabanında görülür.
+
+**Yapılacaklar:**
+
+1. Sunucuyu durdurun ve yedek alın: `python scripts/backup/veritabani_yedekle.py`
+2. Neyin eksik olduğunu bulun (veritabanına yazmaz):
+
+       python scripts/sema_dogrula.py --ayrinti
+
+   Çıktıdaki **`EKSİK (olması gereken ama veritabanında yok)`** bölümü eksik tablo, sütun ve indeksleri tek tek listeler.
+3. Eksik nesneleri bir geliştiriciyle birlikte tamamlayın: hata mesajındaki tablo adına göre `database/migrations/versions/` altındaki ilgili
+   migration'daki komutu `IF NOT EXISTS` ile çalıştırmak yeterlidir (nesne zaten varsa hiçbir şey yapmaz, veri silmez).
+4. `python -m alembic upgrade head` komutunu tekrar çalıştırın, ardından `python scripts/sema_dogrula.py` ile `ŞEMA UYUMLU` sonucunu görün.
+
+**Yapmayın:** `python -m alembic stamp ...` ile sürümü zorla "güncel" işaretlemeyin. `stamp` yalnızca sürüm numarasını değiştirir, eksik nesneleri
+oluşturmaz; sorunu çözmez, aksine gizler ve bu hatanın asıl nedeni olur.
+
 ### Veritabanı şeması kontrolü (`sema_dogrula.py`)
 
 Kod yeni bir tablo ya da sütun beklediği hâlde veritabanında yoksa (migration çalıştırılmamış ya da atlanmış), kullanıcılar
@@ -287,7 +322,7 @@ bunlar yoksa `DB_USER` / `DB_PASSWORD` kullanılır). Sonuçlar:
 |---|---|---|
 | `ŞEMA UYUMLU` | Her şey yolunda | Bir şey yapmayın |
 | `ŞEMA ESKİ` | Alembic sürümü geride | `python -m alembic upgrade head`, sonra aracı tekrar çalıştırın |
-| `TUTARSIZ ŞEMA` | Sürüm güncel görünüyor ama bazı tablo/sütunlar eksik (bir migration atlanmış ya da tablolar elle değiştirilmiş) | `alembic upgrade head` bunu **düzeltmez**; yedek alın ve bir geliştiriciye danışın |
+| `TUTARSIZ ŞEMA` | Sürüm güncel görünüyor ama bazı tablo/sütunlar eksik (bir migration atlanmış ya da tablolar elle değiştirilmiş) | `alembic upgrade head` bunu **düzeltmez**; yedek alın, `--ayrinti` çıktısındaki `EKSİK` listesini bir geliştiriciye gösterin (yukarıdaki `column ... does not exist` bölümüne bakın) |
 
 `FAZLA` olarak listelenen nesneler (eski sürümlerden kalan sütun gibi) genellikle zararsızdır, kontrolü başarısız saymaz.
 
