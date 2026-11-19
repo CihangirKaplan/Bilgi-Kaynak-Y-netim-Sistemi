@@ -25,6 +25,7 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
     etkinlik_ids = []
     randevu_ids = []
     rezervasyon_ids = []
+    cihaz_id = None
 
     def yetkili_kullanici(cur, izin):
         cur.execute("""
@@ -79,21 +80,19 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
             assert cihaz_odasi, "Cihaz kullanımına uygun oda yok."
             cihaz_oda_id = cihaz_odasi[0]
 
-            cur.execute("""
-                SELECT cihaz_id FROM cihazlar
-                WHERE envanter_kodu LIKE 'OE-CI-%'
-                  AND durum IN ('Kullanima_Hazir', 'Rezerve')
-                  AND NOT EXISTS (
-                      SELECT 1 FROM cihaz_rezervasyonlari cr
-                      WHERE cr.cihaz_id = cihazlar.cihaz_id
-                        AND COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE
-                        AND cr.baslangic_zamani < '2048-06-15 13:00'
-                        AND cr.bitis_zamani > '2048-06-15 12:00'
-                  )
-                LIMIT 1
-            """)
-            cihaz = cur.fetchone()
-            assert cihaz, "Uygun cihaz bulunamadı."
+            cur.execute(
+                """
+                INSERT INTO cihazlar
+                    (envanter_kodu, cihaz_adi, durum)
+                VALUES (%s, %s, 'Kullanima_Hazir')
+                RETURNING cihaz_id
+                """,
+                (
+                    f"OE-TERS-{uuid4().hex[:12]}",
+                    "Oda etkinligi cakisma test cihazi",
+                ),
+            )
+            cihaz_id = cur.fetchone()[0]
 
             cur.execute("""
                 SELECT danisan_kod_id FROM danisan_kodlari
@@ -219,7 +218,7 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
             cihaz_kullanici,
             "/api/rezervasyonlar",
             {
-                "cihaz_id": cihaz[0],
+                "cihaz_id": cihaz_id,
                 "kullanilacak_oda_id": cihaz_oda_id,
                 "baslangic_zamani": cihaz_bas.isoformat(),
                 "bitis_zamani": cihaz_bit.isoformat(),
@@ -268,6 +267,19 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
                     cur.execute(
                         f"DELETE FROM {tablo} WHERE {pk} = ANY(%s)",
                         (ids,),
+                    )
+
+            if cihaz_id is not None:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM denetim_kayitlari "
+                        "WHERE hedef_tablo = 'cihazlar' "
+                        "AND hedef_kayit_id = %s",
+                        (cihaz_id,),
+                    )
+                    cur.execute(
+                        "DELETE FROM cihazlar WHERE cihaz_id = %s",
+                        (cihaz_id,),
                     )
 
             conn.commit()
