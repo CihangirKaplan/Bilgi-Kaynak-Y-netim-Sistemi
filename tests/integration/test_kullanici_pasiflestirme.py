@@ -109,6 +109,7 @@ def test_pasif_kullanici_yeniden_aktiflestirilebilir():
     mock_cursor.fetchall.side_effect = [
         [(3,)],  # seçilen oda aktif
         [],      # cihaz rezervasyonu için kullanılan oda yok
+        [],      # oda etkinliği yok
         [],      # denetim için önceki oda atamaları
         [(3,)],  # denetim için yeni oda atamaları
     ]

@@ -3,6 +3,10 @@ from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
+from server.oda_etkinlikleri_kurallari import (
+    oda_kilidini_al,
+    oda_cakismasi_bul,
+)
 import os
 import time
 from dotenv import load_dotenv
@@ -642,7 +646,11 @@ def kullanici_olustur(
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            etkinlik_oda_atama_kilitlerini_al(
+                cursor, istenen_odalar
+            )
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
+            oda_etkinlikli_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -905,7 +913,11 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                     status_code=422,
                     detail="Seçilen odalardan biri bulunamadı veya aktif değil.",
                 )
+            etkinlik_oda_atama_kilitlerini_al(
+                cursor, istenen_odalar
+            )
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
+            oda_etkinlikli_odalari_denetle(cursor, istenen_odalar)
         elif istenen_odalar:
             raise HTTPException(
                 status_code=422,
@@ -1825,7 +1837,11 @@ def kullanici_durum_degistir(
             cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (istenen_odalar,))
             if {k[0] for k in cursor.fetchall()} != set(istenen_odalar):
                 raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+            etkinlik_oda_atama_kilitlerini_al(
+                cursor, istenen_odalar
+            )
             cihaz_rezervasyonlu_odalari_denetle(cursor, istenen_odalar)
+            oda_etkinlikli_odalari_denetle(cursor, istenen_odalar)
         elif psikolog_pasiflesiyor:
             # Oda boşa düşeceği için bugün ve sonrasındaki planlı randevular önce iptal edilmeli (ya da durumu güncellenmeli). Dünden önceki kayıtlar engellemez.
             cursor.execute(
@@ -2171,6 +2187,20 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if not psikolog_odasina_atanmis_mi(cursor, randevu.psikolog_id, randevu.oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
 
+        # Tüm oda kullanım türleriyle ortak transaction kontrolü.
+        oda_kilidini_al(cursor, randevu.oda_id)
+        cakisma = oda_cakismasi_bul(
+            cursor,
+            randevu.oda_id,
+            randevu.baslangic_zamani,
+            randevu.bitis_zamani,
+        )
+        if cakisma:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Oda bu saatlerde dolu (çakışan kayıt: {cakisma}).",
+            )
+
         # 4. Çakışma kontrolü
         cursor.execute("SELECT 1 FROM randevular WHERE durum = 'PLANLANDI' AND (psikolog_id = %s OR oda_id = %s) AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (randevu.psikolog_id, randevu.oda_id, randevu.bitis_zamani, randevu.baslangic_zamani))
         if cursor.fetchone() is not None:
@@ -2355,8 +2385,47 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
+        # Satır kilidinden önce mevcut odayı belirle.
+        cursor.execute(
+            "SELECT oda_id FROM randevular WHERE randevu_id = %s;",
+            (randevu_id,),
+        )
+        ilk_kayit = cursor.fetchone()
+
+        if ilk_kayit is None:
+            raise HTTPException(status_code=404, detail="Randevu bulunamadı.")
+
+        ilk_oda_id = ilk_kayit[0]
+        istenen = guncelleme.model_dump(exclude_unset=True)
+
+        # Boş/null güncellemeler oda kilidi alınmadan reddedilir.
+        if not istenen or any(
+            deger is None for deger in istenen.values()
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Geçerli güncelleme alanları gönderilmelidir.",
+            )
+
+        hedef_oda_id = istenen.get("oda_id", ilk_oda_id)
+
+        # Oda kilitleri her zaman sabit sırayla alınır.
+        for kilit_oda_id in sorted({
+            ilk_oda_id,
+            hedef_oda_id,
+        }):
+            if kilit_oda_id is not None:
+                oda_kilidini_al(cursor, kilit_oda_id)
+
         cursor.execute("SELECT danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, gorusme_tipi, terapi_turu FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
         mevcut = cursor.fetchone()
+
+        if mevcut is not None and mevcut[2] != ilk_oda_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Randevunun odası başka bir işlemde değişti. "
+                       "Listeyi yenileyip tekrar deneyiniz.",
+            )
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Randevu bulunamadı.")
         if mevcut[5] != "PLANLANDI":
@@ -2385,6 +2454,22 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
             raise HTTPException(status_code=403, detail="Randevuyu başka psikoloğa devredemezsiniz.")
         if baslangic >= bitis:
             raise HTTPException(status_code=422, detail="Başlangıç zamanı bitiş zamanından önce olmalıdır.")
+
+        # TKYS_RANDEVU_MESAI_0800_1800
+        # Saat değiştiriliyorsa mevcut kayıtla birlikte doğrula.
+        if (
+            "baslangic_zamani" in degisiklikler
+            or "bitis_zamani" in degisiklikler
+        ):
+            from server.modeller import randevu_mesai_dogrula
+
+            try:
+                randevu_mesai_dogrula(baslangic, bitis)
+            except ValueError as hata:
+                raise HTTPException(
+                    status_code=422,
+                    detail=str(hata),
+                ) from hata
         # Zaman değişiyorsa hafta sonuna alınamaz (eskiden kalan hafta sonu randevusunun yalnızca oda/danışanı değişebilir)
         if ("baslangic_zamani" in degisiklikler or "bitis_zamani" in degisiklikler) and hafta_sonuna_denk_mi(baslangic, bitis):
             raise HTTPException(status_code=422, detail=HAFTA_SONU_MESAJI)
@@ -2393,6 +2478,20 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
             raise HTTPException(status_code=422, detail=GECMIS_TARIH_MESAJI)
         if (psikolog_id != mevcut[1] or oda_id != mevcut[2]) and not psikolog_odasina_atanmis_mi(cursor, psikolog_id, oda_id):
             raise HTTPException(status_code=422, detail="Seçilen oda bu psikoloğa atanmamış.")
+
+        # Oda kilitleri satır kilidinden önce alındı.
+        cakisma = oda_cakismasi_bul(
+            cursor,
+            oda_id,
+            baslangic,
+            bitis,
+            haric_randevu_id=randevu_id,
+        )
+        if cakisma:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Oda bu saatlerde dolu (çakışan kayıt: {cakisma}).",
+            )
 
         cursor.execute("SELECT 1 FROM randevular WHERE randevu_id != %s AND durum = 'PLANLANDI' AND (psikolog_id = %s OR oda_id = %s) AND baslangic_zamani < %s AND bitis_zamani > %s LIMIT 1;", (randevu_id, psikolog_id, oda_id, bitis, baslangic))
         if cursor.fetchone() is not None:
@@ -2681,6 +2780,63 @@ def psikolog_planli_randevulari_denetle(cursor, kullanici_id, kalacak_oda_idleri
     raise HTTPException(status_code=409, detail=detay)
 
 
+def etkinlik_oda_atama_kilitlerini_al(cursor, oda_idleri):
+    """Oda etkinliği API'siyle aynı transaction kilitlerini kullan."""
+    for oda_id in sorted(set(oda_idleri)):
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(%s, %s)",
+            (391284, oda_id),
+        )
+
+
+def oda_etkinlikli_odalari_denetle(
+    cursor, oda_idleri, haric_kullanici_id=None
+):
+    """Süren veya gelecekteki etkinliği olan odaları psikolog atamasına kapat."""
+    if not oda_idleri:
+        return
+
+    cursor.execute(
+        """
+        SELECT o.oda_adi, COUNT(DISTINCT e.etkinlik_id)
+        FROM oda_etkinlikleri e
+        JOIN oda_etkinlik_gunleri g
+          ON g.etkinlik_id = e.etkinlik_id
+        JOIN odalar o
+          ON o.oda_id = e.oda_id
+        WHERE e.oda_id = ANY(%s)
+          AND COALESCE(e.iptal_edildi_mi, FALSE) = FALSE
+          AND g.bitis_zamani > NOW()
+          AND NOT EXISTS (
+              SELECT 1
+              FROM psikolog_odalar po
+              WHERE po.oda_id = e.oda_id
+                AND po.kullanici_id = %s
+          )
+        GROUP BY o.oda_id, o.oda_adi
+        ORDER BY o.oda_adi
+        """,
+        (list(oda_idleri), haric_kullanici_id),
+    )
+
+    etkinlikli_odalar = cursor.fetchall()
+
+    if etkinlikli_odalar:
+        ayrinti = ", ".join(
+            f"{ad} ({sayi} etkinlik)"
+            for ad, sayi in etkinlikli_odalar
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Devam eden veya gelecekte planlanmış oda etkinliği "
+                f"bulunan oda psikoloğa atanamaz: {ayrinti}. "
+                "Önce ilgili etkinlikleri iptal edin veya "
+                "başka bir oda seçin."
+            ),
+        )
+
+
 def cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=None):
     """Cihaz rezervasyonu için kullanılan oda psikologa atanamaz (409).
 
@@ -2763,7 +2919,11 @@ def psikolog_oda_yetkilerini_guncelle(
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (oda_idleri,))
         if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
             raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
+        etkinlik_oda_atama_kilitlerini_al(
+            cursor, oda_idleri
+        )
         cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
+        oda_etkinlikli_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
         psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
 
         # Pasif odalardaki atamalara dokunma (oda yeniden aktif olunca yetki geri gelir).
@@ -3584,6 +3744,8 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
                 )
 
             if rez.kullanilacak_oda_id is not None:
+                # Oda uygunluğu, aynı transaction kilidi altında kontrol edilmeli.
+                oda_kilidini_al(cursor, rez.kullanilacak_oda_id)
                 cursor.execute("SELECT 1 FROM (" + CIHAZ_ODALARI_SORGUSU + ") d WHERE d.oda_id = %s;", (rez.kullanilacak_oda_id,))
                 if cursor.fetchone() is None:
                     raise HTTPException(status_code=422, detail="Seçilen oda cihaz rezervasyonu için uygun değil (psikologa atanmış ya da aktif değil).")
@@ -3594,6 +3756,22 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
                     raise HTTPException(status_code=422, detail="Bölüm bulunamadı veya aktif değil.")
 
             if rez.kullanilacak_oda_id is not None:
+                # Oda kilidi, uygunluk kontrolünden önce alındı.
+                cakisma = oda_cakismasi_bul(
+                    cursor,
+                    rez.kullanilacak_oda_id,
+                    rez.baslangic_zamani,
+                    rez.bitis_zamani,
+                )
+                if cakisma:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Oda bu saatlerde dolu "
+                            f"(çakışan kayıt: {cakisma})."
+                        ),
+                    )
+
                 # Aynı oda aynı saatte yalnızca tek rezervasyona verilir (başka bir CİHAZ için de olsa).
                 cursor.execute(
                     """
@@ -5326,7 +5504,9 @@ def oda_kullanimi(
             """
             SELECT r.rol_adi,
                    COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
-                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'CIHAZ_REZERVASYON'), 0)
+                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'CIHAZ_REZERVASYON'), 0),
+                   COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
+                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'ODA_ETKINLIK_GORUNTULE'), 0)
             FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;
             """,
             (kullanici_id,),
@@ -5334,6 +5514,9 @@ def oda_kullanimi(
         rol = cursor.fetchone()
         psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
         cihaz_detayi_gorur = rol is not None and rol[1] == 1
+        etkinlik_detayi_gorur = (
+            rol is not None and len(rol) > 2 and rol[2] == 1
+        )
 
         cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_adi, oda_id;")
         odalar = [{"oda_id": o[0], "oda_adi": o[1], "kapasite": o[2], "aktif_mi": o[3]} for o in cursor.fetchall()]
@@ -5372,7 +5555,50 @@ def oda_kullanimi(
              "cihaz_adi": k[4] if cihaz_detayi_gorur else None, "bolum_adi": k[5] if cihaz_detayi_gorur else None}
             for k in cursor.fetchall()
         ]
-        return {"odalar": odalar, "randevular": randevular, "rezervasyonlar": rezervasyonlar}
+        # Oda etkinlikleri: seçilen tarihlerle kesişen, iptal edilmemiş kayıtlar.
+        cursor.execute("""
+            SELECT
+                e.etkinlik_id,
+                e.oda_id,
+                e.etkinlik_adi,
+                e.katilimci_sayisi,
+                g.baslangic_zamani,
+                g.bitis_zamani,
+                e.organize_eden_personel_id,
+                COALESCE(e.iptal_edildi_mi, FALSE)
+            FROM oda_etkinlikleri e
+            JOIN oda_etkinlik_gunleri g
+              ON g.etkinlik_id = e.etkinlik_id
+            WHERE g.baslangic_zamani < %s
+              AND g.bitis_zamani > %s
+            ORDER BY g.baslangic_zamani, e.etkinlik_id;
+        """, (
+            datetime.combine(bitis, datetime.min.time()) + timedelta(days=1),
+            datetime.combine(baslangic, datetime.min.time()),
+        ))
+
+        etkinlikler = [
+            {
+                "etkinlik_id": k[0],
+                "oda_id": k[1],
+                "etkinlik_adi": k[2] if etkinlik_detayi_gorur else None,
+                "katilimci_sayisi": k[3] if etkinlik_detayi_gorur else None,
+                "baslangic_zamani": k[4],
+                "bitis_zamani": k[5],
+                "organize_eden_personel_id": (
+                    k[6] if etkinlik_detayi_gorur else None
+                ),
+                "iptal_edildi_mi": bool(k[7]),
+            }
+            for k in cursor.fetchall()
+        ]
+
+        return {
+            "odalar": odalar,
+            "randevular": randevular,
+            "rezervasyonlar": rezervasyonlar,
+            "etkinlikler": etkinlikler,
+        }
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -8867,10 +9093,15 @@ def yonetim_proje_etkinlik_ozet(
                     COALESCE(SUM(katilimci_sayisi) FILTER (
                         WHERE iptal_edildi_mi IS NOT TRUE
                     ), 0)
-                FROM oda_etkinlikleri
-                WHERE baslangic_zamani >= %s::date
-                  AND baslangic_zamani
-                      < (%s::date + INTERVAL '1 day')
+                FROM oda_etkinlikleri e
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM oda_etkinlik_gunleri g
+                    WHERE g.etkinlik_id = e.etkinlik_id
+                      AND g.baslangic_zamani >= %s::date
+                      AND g.baslangic_zamani
+                          < (%s::date + INTERVAL '1 day')
+                )
             """, (ilk, son))
 
             etkinlik_toplam, etkinlik_iptal_edilmemis, katilimci = (
@@ -9316,12 +9547,14 @@ def yonetim_bugun_merkezde(
         """)
 
         etkinlik = say("""
-            SELECT COUNT(*)
-            FROM oda_etkinlikleri
-            WHERE baslangic_zamani >= %s::date
-              AND baslangic_zamani <
+            SELECT COUNT(DISTINCT e.etkinlik_id)
+            FROM oda_etkinlikleri e
+            JOIN oda_etkinlik_gunleri g
+              ON g.etkinlik_id = e.etkinlik_id
+            WHERE g.baslangic_zamani >= %s::date
+              AND g.baslangic_zamani <
                   (%s::date + INTERVAL '1 day')
-              AND iptal_edildi_mi IS NOT TRUE
+              AND e.iptal_edildi_mi IS NOT TRUE
         """)
 
         imlec.execute("""
@@ -9484,12 +9717,14 @@ def yonetim_bugun_merkezde(
                 "oda_etkinligi",
                 "Oda etkinliği planlandı",
                 """
-                SELECT etkinlik_id, baslangic_zamani
-                FROM oda_etkinlikleri
-                WHERE iptal_edildi_mi IS NOT TRUE
-                  AND baslangic_zamani >= %s::date
-                  AND baslangic_zamani < (%s::date + INTERVAL '1 day')
-                ORDER BY baslangic_zamani DESC LIMIT 100
+                SELECT e.etkinlik_id, g.baslangic_zamani
+                FROM oda_etkinlikleri e
+                JOIN oda_etkinlik_gunleri g
+                  ON g.etkinlik_id = e.etkinlik_id
+                WHERE e.iptal_edildi_mi IS NOT TRUE
+                  AND g.baslangic_zamani >= %s::date
+                  AND g.baslangic_zamani < (%s::date + INTERVAL '1 day')
+                ORDER BY g.baslangic_zamani DESC LIMIT 100
                 """,
                 True,
             ),
@@ -9679,15 +9914,17 @@ def yonetim_gunluk_detay(
         "planlanan_oda_etkinligi": (
             "Bugüne Planlanan Oda Etkinlikleri",
             """
-            SELECT etkinlik_id::text,
-                   COALESCE(etkinlik_adi, 'Oda etkinliği'),
-                   TO_CHAR(baslangic_zamani, 'DD.MM.YYYY HH24:MI'),
+            SELECT e.etkinlik_id::text,
+                   COALESCE(e.etkinlik_adi, 'Oda etkinliği'),
+                   TO_CHAR(g.baslangic_zamani, 'DD.MM.YYYY HH24:MI'),
                    'Planlandı'
-            FROM oda_etkinlikleri
-            WHERE iptal_edildi_mi IS NOT TRUE
-              AND baslangic_zamani >= %s::date
-              AND baslangic_zamani < %s::date + INTERVAL '1 day'
-            ORDER BY baslangic_zamani
+            FROM oda_etkinlikleri e
+            JOIN oda_etkinlik_gunleri g
+              ON g.etkinlik_id = e.etkinlik_id
+            WHERE e.iptal_edildi_mi IS NOT TRUE
+              AND g.baslangic_zamani >= %s::date
+              AND g.baslangic_zamani < %s::date + INTERVAL '1 day'
+            ORDER BY g.baslangic_zamani
             LIMIT 200
             """,
             True,
@@ -9790,3 +10027,9 @@ def yonetim_gunluk_detay(
         "sinir": 200,
         "kapsam": "Seçilen gün" if tarihli else "Güncel / tüm dönemler",
     }
+
+
+# Oda Etkinlikleri API
+from server.oda_etkinlikleri_api import router_olustur
+
+app.include_router(router_olustur(izin_kontrol, VT_AYARLARI))

@@ -62,6 +62,7 @@ def test_atanmamis_odaya_randevu_olusturulamaz():
 def test_guncellemede_atanmamis_odaya_tasinamaz():
     conn, cursor = baglanti()
     cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         ("DAN-2026-0001", 3, 1, BASLANGIC, BITIS, "PLANLANDI"),  # mevcut randevu
         ("ADMIN",),                                              # kullanıcı rolü
         None,                                                    # yeni oda atanmamış
@@ -82,10 +83,11 @@ def test_guncellemede_oda_ve_psikolog_degismiyorsa_atama_sorgulanmaz():
     """Yalnızca saat değişiyorsa oda atama kontrolü yapılmaz (ek sorgu yok)."""
     conn, cursor = baglanti()
     cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         ("DAN-2026-0001", 3, 1, BASLANGIC, BITIS, "PLANLANDI"),
         ("ADMIN",),
         None,  # çakışma yok
-    ]
+    ] + [None] * 8
     guncelleme = MagicMock()
     guncelleme.model_dump.return_value = {"bitis_zamani": BITIS + timedelta(hours=1)}
 

@@ -24,7 +24,7 @@ def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, akt
         fetchone.append((planli,))
     cursor.fetchone.side_effect = fetchone
     # son iki liste: denetim kaydı için önceki ve yeni oda atamaları
-    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), [], []]
+    cursor.fetchall.side_effect = [[(o,) for o in aktif_odalar], list(rezervasyonlu), [], [], []]
     return conn, cursor
 
 

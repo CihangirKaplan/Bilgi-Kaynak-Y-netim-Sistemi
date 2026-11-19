@@ -111,15 +111,11 @@ def test_baslangic_bitisten_sonra_olamaz():
     veriler["baslangic_zamani"] = "2031-10-16T12:00:00"
     veriler["bitis_zamani"] = "2031-10-16T11:00:00"
 
-    randevu = RandevuOlusturModeli(**veriler)
-
+    # Geçersiz tarih artık API'ye ulaşmadan Pydantic'te reddedilir.
     with patch("server.sunucu.psycopg2.connect") as mock_connect:
-        with pytest.raises(HTTPException) as hata:
-            randevu_olustur(randevu, kullanici_id=1)
+        with pytest.raises(ValidationError):
+            RandevuOlusturModeli(**veriler)
 
-        assert hata.value.status_code == 422
-
-        # Hatalı istekte veritabanına bağlanılmamalı.
         mock_connect.assert_not_called()
 
 # 9. Danışan kodu otomatik oluşturulmalı
@@ -215,6 +211,7 @@ def test_bos_guncelleme_reddedilir():
         # Randevu mevcut ve PLANLANDI durumunda
         # Kullanıcı ADMIN
         mock_cursor.fetchone.side_effect = [
+            (1,),  # İlk sorgu: mevcut oda_id
             (
                 "DAN-2026-0001",
                 1,
@@ -260,6 +257,7 @@ def test_null_guncelleme_reddedilir():
 
         # Randevu mevcut ve planlandı, kullanıcı ADMIN
         mock_cursor.fetchone.side_effect = [
+            (1,),  # İlk sorgu: mevcut oda_id
             (
                 "DAN-2026-0001",
                 1,
@@ -308,6 +306,7 @@ def test_guncellemede_gecersiz_tarih_reddedilir():
         # Mevcut randevu 10.00 - 11.00 arasında
         # Kullanıcı ADMIN
         mock_cursor.fetchone.side_effect = [
+            (1,),  # İlk sorgu: mevcut oda_id
             (
                 "DAN-2026-0001",
                 1,
@@ -352,6 +351,7 @@ def test_gecerli_randevu_guncellenir():
         mock_cursor = mock_conn.cursor.return_value
 
         mock_cursor.fetchone.side_effect = [
+            (1,),  # İlk sorgu: mevcut oda_id
             # Mevcut randevu
             (
                 "DAN-2026-0001",
@@ -364,7 +364,7 @@ def test_gecerli_randevu_guncellenir():
             ("ADMIN",),  # Kullanıcı rolü
             (1,),        # Oda psikoloğa atanmış
             None,        # Randevu çakışması yok
-        ]
+        ] + [None] * 8
 
         sonuc = randevu_guncelle(
             randevu_id=1,

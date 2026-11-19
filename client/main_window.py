@@ -103,6 +103,33 @@ IZIN_LISTESI = [
     ("Faaliyet birimlerini yönetme",         "Sistem Yönetimi",   "HHHHHE"),
 ]
 
+# Oda Etkinlikleri: mevcut rol maskeleri ve merkezi RBAC uyumu.
+_oda_etkinlik_kategori = next(
+    kat for ad, kat, _ in IZIN_LISTESI
+    if ad == "Oda kullanım durumunu görüntüleme"
+)
+IZIN_LISTESI.extend([
+    (
+        "Oda etkinliklerini görüntüleme",
+        _oda_etkinlik_kategori,
+        "".join(
+            "E" if rol in (
+                "ADMIN", "MUDUR", "MEMUR",
+                "PSIKOLOG", "DANISMA_OGRENCISI"
+            ) else "H"
+            for rol in ROLLER
+        ),
+    ),
+    (
+        "Oda etkinliklerini yönetme",
+        _oda_etkinlik_kategori,
+        "".join(
+            "E" if rol in ("ADMIN", "MUDUR", "MEMUR") else "H"
+            for rol in ROLLER
+        ),
+    ),
+])
+
 IZIN = {ad: (kat, kod) for ad, kat, kod in IZIN_LISTESI}
 
 # Parola sıfırlama: yalnızca ADMIN rolüne açık.
@@ -123,6 +150,12 @@ IZIN_KODLARI = {
     "Randevu iptal etme": ("RANDEVU_IPTAL",),
     "Randevu takvimini görüntüleme": ("TAKVIM_GORUNTULE",),
     "Oda kullanım durumunu görüntüleme": ("ODA_DURUMU_GORUNTULE",),
+    "Oda etkinliklerini görüntüleme": (
+        "ODA_ETKINLIK_GORUNTULE",
+    ),
+    "Oda etkinliklerini yönetme": (
+        "ODA_ETKINLIK_YONET",
+    ),
     "Oda yönetimi": ("ODA_EKLE", "ODA_DUZENLE"),
     "Cihaz uygunluğunu görüntüleme": ("CIHAZ_UYGUNLUK_GORUNTULE",),
     "Cihaz envanterini yönetme": ("CIHAZ_ENVANTER_YONET",),
@@ -227,6 +260,13 @@ MENU = [
              aksiyon=[("＋  Yeni Danışan", "Randevu oluşturma")]),
         dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
+        dict(
+            ikon="🗓️",
+            ad="Oda Etkinlikleri",
+            izin="Oda etkinliklerini görüntüleme",
+            aciklama="Oda etkinliklerini listeleme ve yönetme",
+            aksiyon=[],
+        ),
         dict(ikon="📈", ad="Randevu Raporları", izin="Randevu takvimini görüntüleme",
              aciklama="Randevu sayıları, durumlar, iptal nedenleri, dağılımlar ve Excel raporu", aksiyon=[]),
         dict(ikon="📊", ad="Oda Kullanım Raporu", izin="Yönetim raporlarını görüntüleme",
@@ -1776,6 +1816,9 @@ QLabel {
         # Oda tablosu ana pencerenin kendi içinde olduğundan ekran yerine None (= ana pencerenin kendisi) yazılır.
         "Oda Yönetimi": (None, "odalari_getir"),
         "Danışanlar": ("danisanlar_ekrani", "verileri_cek"),
+        "Oda Etkinlikleri": (
+            "oda_etkinlikleri_ekrani", "yenile"
+        ),
         "Oda Kullanımı": ("oda_kullanimi_ekrani", "yenile"),
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
         "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
@@ -2259,6 +2302,16 @@ QLabel {
             )
             lay.addWidget(self.aktif_personel_ekrani, 1)
             
+        elif oge["ad"] == "Oda Etkinlikleri":
+            from client.oda_etkinlikleri_ekrani import (
+                OdaEtkinlikleriEkrani,
+            )
+            self.oda_etkinlikleri_ekrani = OdaEtkinlikleriEkrani(
+                api_url=self.api_url,
+                token=self.token,
+            )
+            lay.addWidget(self.oda_etkinlikleri_ekrani, 1)
+
         elif oge["ad"] == "Oda Kullanımı":
             from client.oda_kullanimi_ekrani import OdaKullanimiEkrani
             self.oda_kullanimi_ekrani = OdaKullanimiEkrani(api_url=self.api_url, token=self.token)

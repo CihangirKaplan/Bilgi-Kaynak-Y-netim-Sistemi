@@ -50,7 +50,7 @@ def _guncelle(mevcut_baslangic, degisiklikler):
     mevcut = ("DAN-2026-0001", 1, 1, mevcut_baslangic, mevcut_baslangic + timedelta(hours=1), "PLANLANDI", "YUZ_YUZE", "BIREYSEL_TERAPI")
     conn = MagicMock()
     imlec = conn.cursor.return_value
-    imlec.fetchone.side_effect = [mevcut, ("MUDUR",)] + [None] * 6
+    imlec.fetchone.side_effect = [(1,), mevcut, ("MUDUR",)] + [None] * 6
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         try:
             return randevu_guncelle(1, RandevuGuncelleModeli(**degisiklikler), kullanici_id=1), conn

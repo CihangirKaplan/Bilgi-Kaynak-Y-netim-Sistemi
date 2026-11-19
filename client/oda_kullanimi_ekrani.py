@@ -33,6 +33,9 @@ ODA_TAKVIMI_SAATLERI = list(range(8, 18))     # mesai 08:00-18:00; her satır bi
 
 
 # ------------------------------------------------------------------ saf işlevler (arayüzden bağımsız, testlenebilir)
+ETKINLIK_RENK = ("#DDF4EA", "#147D62")
+
+
 def hafta_basi(gun):
     return gun - timedelta(days=gun.weekday())
 
@@ -64,11 +67,19 @@ def saat_dilimleri(kayitlar=None):
 
 
 def _kapsanan_saat(bas, bit):
-    """Randevunun kapladığı saat dilimi sayısı (en az 1)."""
-    if bit is None or bit <= bas:
+    """Başlangıç ve bitişle kesişen saat dilimlerinin sayısı."""
+    if bas is None or bit is None or bit <= bas:
         return 1
-    dakika = (bit - bas).total_seconds() / 60
-    return max(1, int(-(-dakika // 60)))
+
+    ilk_saat = bas.replace(minute=0, second=0, microsecond=0)
+    son_saat = (bit - timedelta(microseconds=1)).replace(
+        minute=0, second=0, microsecond=0
+    )
+
+    return max(
+        1,
+        int((son_saat - ilk_saat).total_seconds() // 3600) + 1
+    )
 
 
 def rezervasyon_kayitlari(rezervasyonlar):
@@ -98,6 +109,77 @@ def rezervasyon_kayitlari(rezervasyonlar):
                 })
             gun += timedelta(days=1)
     return kayitlar
+
+
+ETKINLIK_DURUM_RENKLERI = {
+    "Planlandı": ("#DDF4EA", "#147D62"),
+    "Devam Ediyor": ("#E2EDFF", "#165DDC"),
+    "Tamamlandı": ("#EFF1F5", "#64748B"),
+    "İptal Edildi": ("#FCE8EA", "#C3344A"),
+}
+
+
+def etkinlik_durumu_hesapla(etkinlik, simdi=None):
+    """Oda etkinliğinin ekranda gösterilecek durumu."""
+    if etkinlik.get("iptal_edildi_mi"):
+        return "İptal Edildi"
+
+    bas = zaman(etkinlik.get("baslangic_zamani"))
+    bit = zaman(etkinlik.get("bitis_zamani"))
+
+    if bas is None or bit is None:
+        return "Planlandı"
+
+    if simdi is None:
+        simdi = datetime.now(bas.tzinfo)
+
+    if simdi < bas:
+        return "Planlandı"
+    if simdi < bit:
+        return "Devam Ediyor"
+    return "Tamamlandı"
+
+
+def etkinlik_kayitlari(etkinlikler):
+    """Etkinlikleri takvimin günlük blok biçimine dönüştürür."""
+    sonuc = []
+    for e in etkinlikler:
+        bas = zaman(e.get("baslangic_zamani"))
+        bit = zaman(e.get("bitis_zamani"))
+        if bas is None or bit is None or bit <= bas:
+            continue
+
+        durum_etiketi = etkinlik_durumu_hesapla(e)
+        iptal = bool(e.get("iptal_edildi_mi"))
+
+        gun = bas.date()
+        while gun <= (bit - timedelta(microseconds=1)).date():
+            gun_bas = datetime.combine(gun, datetime.min.time())
+            parca_bas = max(bas, gun_bas)
+            parca_bit = min(bit, gun_bas + timedelta(days=1))
+
+            sonuc.append({
+                "etkinlik_id": e.get("etkinlik_id"),
+                "oda_id": e.get("oda_id"),
+                "etkinlik": True,
+                "durum": "ETKINLIK",
+                "etkinlik_durumu": durum_etiketi,
+                "iptal_edildi_mi": iptal,
+                "etkinlik_adi": e.get("etkinlik_adi"),
+                "katilimci_sayisi": e.get("katilimci_sayisi"),
+                "baslangic_zamani": parca_bas.isoformat(),
+                "bitis_zamani": parca_bit.isoformat(),
+            })
+            gun += timedelta(days=1)
+    return sonuc
+
+
+def takvim_kayit_onceligi(kayit):
+    """İptal edilmiş etkinlikleri aktif kayıtların arkasına koyar."""
+    return 1 if (
+        kayit.get("etkinlik")
+        and kayit.get("iptal_edildi_mi", False)
+    ) else 0
 
 
 def blok_haritasi(randevular):
@@ -175,6 +257,7 @@ class OdaKullanimiEkrani(QWidget):
         self.odalar = []
         self.randevular = []
         self.rezervasyonlar = []          # cihaz rezervasyonları (randevu biçiminde); randevu sayaçlarına girmez, doluluğa girer
+        self.etkinlikler = []
         self._yukleniyor = False
 
         self._arayuz_kur()
@@ -335,6 +418,16 @@ class OdaKullanimiEkrani(QWidget):
         cihaz = QLabel(f"<span style='color:{CIHAZ_RENK[1]}; font-size:15px;'>■</span>  Cihaz rezervasyonu")
         cihaz.setStyleSheet("color: #243653; font-size: 12px;")
         alt.addWidget(cihaz)
+
+        etkinlik_gosterge = QLabel(
+            f"<span style='color:{ETKINLIK_RENK[1]}; "
+            "font-size:15px;'>■</span>  Oda etkinliği"
+        )
+        etkinlik_gosterge.setStyleSheet(
+            "color: #243653; font-size: 12px;"
+        )
+        alt.addWidget(etkinlik_gosterge)
+
         iptal = QLabel("İptal edilen randevu ve rezervasyonlar gösterilmez")
         iptal.setStyleSheet("color: #8A98B0; font-size: 12px;")
         alt.addWidget(iptal)
@@ -411,13 +504,22 @@ class OdaKullanimiEkrani(QWidget):
         self.odalar = veri.get("odalar", [])
         self.randevular = veri.get("randevular", [])
         self.rezervasyonlar = rezervasyon_kayitlari(veri.get("rezervasyonlar", []))
+        self.etkinlikler = etkinlik_kayitlari(veri.get("etkinlikler", []))
         self._oda_listesini_doldur()
         self._goster()
         self.durum_etiketi.setText(f"Son güncelleme: {datetime.now().strftime('%H:%M')}")
 
     def _tum_kayitlar(self):
-        """Odayı dolduran her şey: randevular ve cihaz rezervasyonları (ızgara ve doluluk için)."""
-        return self.randevular + self.rezervasyonlar
+        """Takvimde gösterilecek bütün kayıtlar."""
+        return self.randevular + self.rezervasyonlar + self.etkinlikler
+
+    def _doluluk_kayitlari(self):
+        """İptal edilen etkinlikleri doluluk hesabından çıkar."""
+        aktif_etkinlikler = [
+            e for e in self.etkinlikler
+            if not e.get("iptal_edildi_mi", False)
+        ]
+        return self.randevular + self.rezervasyonlar + aktif_etkinlikler
 
     def _aktif_odalar(self):
         return [o for o in self.odalar if o.get("aktif_mi", True)]
@@ -486,7 +588,7 @@ class OdaKullanimiEkrani(QWidget):
                 parcalar.append(f"{sayi} {ad}")
         alt.setText(" · ".join(parcalar) or "randevu yok")
 
-        ozet = doluluk_hesapla(self._tum_kayitlar(), self.odalar, gunler, saatler)
+        ozet = doluluk_hesapla(self._doluluk_kayitlari(), self.odalar, gunler, saatler)
         etiket, deger, alt = self.kartlar["doluluk"]
         deger.setText(yuzde(ozet["oran"]))
         alt.setText(f"{ozet['dolu']} / {ozet['toplam']} saat dilimi dolu" if ozet["toplam"] else "aktif oda yok")
@@ -503,8 +605,13 @@ class OdaKullanimiEkrani(QWidget):
         """Bir randevuyu ya da cihaz rezervasyonunu renkli blok olarak çizer; başkasının randevusunda (kimlik gelmediyse) yalnızca
         'Dolu' görünür. Cihaz rezervasyonunda cihaz adı gelmediyse (yetkisiz kullanıcı) 'Dolu · Cihaz kullanımı' görünür."""
         cihaz = bool(r.get("cihaz"))
+        etkinlik = bool(r.get("etkinlik"))
         gizli = r.get("cihaz_adi") is None if cihaz else (r.get("psikolog") is None and r.get("danisan_kod_id") is None)
         bg, fg = CIHAZ_RENK if cihaz else (GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"]))
+        if etkinlik:
+            bg, fg = ETKINLIK_DURUM_RENKLERI.get(
+                r.get("etkinlik_durumu"), ETKINLIK_RENK
+            )
         kutu = QFrame()
         kutu.setObjectName("blok")
         kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
@@ -518,7 +625,20 @@ class OdaKullanimiEkrani(QWidget):
             gb, gt = zaman(r.get("gercek_baslangic")), zaman(r.get("gercek_bitis"))
             if gb and gt:
                 saat = f"{gb:%H:%M} – {gt:%H:%M}" if gb.date() == gt.date() else f"{gb:%d.%m %H:%M} – {gt:%d.%m %H:%M}"
-        if cihaz and gizli:
+        if etkinlik:
+            satirlar = [
+                (
+                    str(r.get("etkinlik_adi") or "Oda Etkinliği"),
+                    f"color: {fg}; font-weight: bold; font-size: 12px;"
+                ),
+                (
+                    "Oda etkinliği · " +
+                    str(r.get("etkinlik_durumu") or "Planlandı"),
+                    f"color: {fg}; font-size: 10px;"
+                ),
+                (saat, f"color: {fg}; font-size: 9px;"),
+            ]
+        elif cihaz and gizli:
             satirlar = [
                 ("Dolu", f"color: {fg}; font-weight: bold; font-size: 12px;"),
                 ("Cihaz kullanımı", f"color: {fg}; font-size: 10px;"),
@@ -559,7 +679,7 @@ class OdaKullanimiEkrani(QWidget):
         self.bos_mesaj.setVisible(False)
 
         harita = blok_haritasi(self._tum_kayitlar())
-        ozet = doluluk_hesapla(self._tum_kayitlar(), self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
+        ozet = doluluk_hesapla(self._doluluk_kayitlari(), self.odalar, [self.secili_gun] if self.gorunum == "gun" else gunler, saatler)
         if self.gorunum == "gun":
             sutunlar = [(o["oda_id"], oda_basligi(o.get("oda_adi"), yuzde(ozet["odalar"][o["oda_id"]]["oran"]))) for o in aktif]
             anahtar = lambda sutun, saat: (sutun[0], self.secili_gun, saat)
@@ -587,6 +707,12 @@ class OdaKullanimiEkrani(QWidget):
                 kayitlar = harita.get(anahtar(sutun, saat), [])
                 if not kayitlar:
                     continue
+
+                # Aktif kayıtlar iptal edilmiş etkinliklerden önce görünür.
+                kayitlar = sorted(
+                    kayitlar,
+                    key=takvim_kayit_onceligi
+                )
                 r = kayitlar[0]
                 kapsam = min(_kapsanan_saat(zaman(r.get("baslangic_zamani")), zaman(r.get("bitis_zamani"))), len(saatler) - satir_no)
                 self.tablo.setCellWidget(satir_no, sutun_no, self._blok_kapsayici(r, len(kayitlar)))

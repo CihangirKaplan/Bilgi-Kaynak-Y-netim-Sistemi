@@ -62,7 +62,7 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
     # Henüz bu role ait personel kodu bulunmuyor.
     # 1. cevap: oda doğrulama sorgusu (istenen oda aktif), 2. cevap: cihaz rezervasyonlu oda sorgusu (yok),
     # 3. cevap: personel kodu sorgusu
-    mock_cursor.fetchall.side_effect = [[(2,)], [], []]
+    mock_cursor.fetchall.side_effect = [[(2,)], [], [], []]
 
     yeni_kullanici = KullaniciOlusturModeli(
         kullanici_adi="test_psikolog",

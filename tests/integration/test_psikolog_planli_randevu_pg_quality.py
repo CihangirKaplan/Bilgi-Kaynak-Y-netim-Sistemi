@@ -105,6 +105,285 @@ def test_planli_randevusu_olan_odayi_kaldirma_ve_rol_degistirme_engellenir_gerce
     assert c.fetchall() == [(planli, oda_a), (eski_planli, oda_a)]                          # randevular ve oda bilgileri aynen
 
 
+def test_gelecek_etkinligi_olan_oda_psikologa_atanamaz(ortam):
+    """Gelecek etkinliği olan oda 409; iptalden sonra atama serbest."""
+    c, admin, psikolog, personel, odalar, kod, etiket = ortam
+
+    # Testin var olan oda/psikolog kayıtlarını kullan, yeni oda aç.
+    c.execute(
+        "INSERT INTO odalar (oda_adi, kapasite) "
+        "VALUES (%s, 10) RETURNING oda_id",
+        (f"etkinlik_atama_{etiket}",),
+    )
+    yeni_oda = c.fetchone()[0]
+    odalar.append(yeni_oda)  # Mevcut fixture bu odayı da temizleyecek.
+
+    etkinlik_id = None
+    try:
+        bas = (
+            datetime.now() + timedelta(days=10)
+        ).replace(hour=10, minute=0, second=0, microsecond=0)
+        bit = bas + timedelta(hours=1)
+
+        c.execute(
+            """
+            INSERT INTO oda_etkinlikleri
+                (oda_id, organize_eden_personel_id,
+                 etkinlik_adi, katilimci_sayisi,
+                 baslangic_zamani, bitis_zamani)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING etkinlik_id
+            """,
+            (
+                yeni_oda, personel,
+                f"Atama testi {etiket}", 1, bas, bit,
+            ),
+        )
+        etkinlik_id = c.fetchone()[0]
+
+        c.execute(
+            """
+            INSERT INTO oda_etkinlik_gunleri
+                (etkinlik_id, baslangic_zamani, bitis_zamani)
+            VALUES (%s, %s, %s)
+            """,
+            (etkinlik_id, bas, bit),
+        )
+
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+
+        def atanmis_odalar():
+            c.execute(
+                "SELECT oda_id FROM psikolog_odalar "
+                "WHERE kullanici_id = %s ORDER BY oda_id",
+                (psikolog,),
+            )
+            return [satir[0] for satir in c.fetchall()]
+
+        ilk = atanmis_odalar()
+        istenen = sorted(set(ilk + [yeni_oda]))
+
+        with TestClient(app) as istemci:
+            url = f"/api/kullanicilar/{psikolog}/odalar"
+
+            yanit = istemci.put(
+                url, json={"oda_idleri": istenen}
+            )
+            assert yanit.status_code == 409, yanit.text
+            assert "etkinli" in yanit.json()["detail"].lower()
+            assert atanmis_odalar() == ilk
+            print("PASS | Etkinlikli oda atanamadı: 409")
+            print("PASS | Eski oda atamaları korundu")
+
+            c.execute(
+                "UPDATE oda_etkinlikleri "
+                "SET iptal_edildi_mi = TRUE "
+                "WHERE etkinlik_id = %s",
+                (etkinlik_id,),
+            )
+
+            yanit = istemci.put(
+                url, json={"oda_idleri": istenen}
+            )
+            assert yanit.status_code == 200, yanit.text
+            assert atanmis_odalar() == istenen
+            print("PASS | Etkinlik iptal edilince atama: 200")
+
+            yanit = istemci.put(
+                url, json={"oda_idleri": ilk}
+            )
+            assert yanit.status_code == 200, yanit.text
+            assert atanmis_odalar() == ilk
+            print("PASS | Geçici oda ataması geri alındı")
+
+    finally:
+        # Önce testin oluşturduğu etkinlik, ardından fixture odaları temizler.
+        if etkinlik_id is not None:
+            c.execute(
+                "DELETE FROM denetim_kayitlari "
+                "WHERE hedef_tablo = 'oda_etkinlikleri' "
+                "AND hedef_kayit_id = %s",
+                (etkinlik_id,),
+            )
+            c.execute(
+                "DELETE FROM oda_etkinlik_gunleri "
+                "WHERE etkinlik_id = %s",
+                (etkinlik_id,),
+            )
+            c.execute(
+                "DELETE FROM oda_etkinlikleri "
+                "WHERE etkinlik_id = %s",
+                (etkinlik_id,),
+            )
+
+
+def test_es_zamanli_etkinlik_ve_psikolog_oda_atamasi(ortam):
+    """Aynı odada eşzamanlı POST ve PUT birlikte başarılı olamaz."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    c, admin, psikolog, personel, odalar, kod, etiket = ortam
+    _dogru_veritabani(c)
+
+    c.execute(
+        "INSERT INTO odalar (oda_adi, kapasite) "
+        "VALUES (%s, 10) RETURNING oda_id",
+        (f"es_zamanli_oda_{etiket}",),
+    )
+    yeni_oda = c.fetchone()[0]
+    odalar.append(yeni_oda)
+
+    c.execute(
+        "SELECT oda_id FROM psikolog_odalar "
+        "WHERE kullanici_id = %s ORDER BY oda_id",
+        (psikolog,),
+    )
+    eski_odalar = [r[0] for r in c.fetchall()]
+    istenen_odalar = sorted(set(eski_odalar + [yeni_oda]))
+
+    bas = (
+        datetime.now() + timedelta(days=10)
+    ).replace(hour=10, minute=0, second=0, microsecond=0)
+    bit = bas + timedelta(hours=1)
+
+    payload = {
+        "oda_id": yeni_oda,
+        "organize_eden_personel_id": personel,
+        "etkinlik_adi": f"Es zamanli test {etiket}",
+        "katilimci_sayisi": 1,
+        "gunler": [{
+            "baslangic_zamani": bas.isoformat(),
+            "bitis_zamani": bit.isoformat(),
+        }],
+    }
+
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+
+    # İlk bağlantı aynı oda kilidini geçici olarak tutar.
+    # İki API isteği de aynı kilit için yarışacaktır.
+    kilit_conn = psycopg2.connect(**VT_AYARLARI)
+    etkinlik_id = None
+
+    try:
+        with kilit_conn.cursor() as kc:
+            kc.execute("SELECT current_database()")
+            assert kc.fetchone()[0] == "crkys_alembic_test"
+
+            kc.execute(
+                "SELECT pg_advisory_xact_lock(%s, %s)",
+                (391284, yeni_oda),
+            )
+
+        baslama = Barrier(3)
+
+        def etkinlik_olustur():
+            with TestClient(app) as istemci:
+                baslama.wait(timeout=10)
+                return istemci.post(
+                    "/api/oda-etkinlikleri",
+                    json=payload,
+                )
+
+        def psikologa_oda_ata():
+            with TestClient(app) as istemci:
+                baslama.wait(timeout=10)
+                return istemci.put(
+                    f"/api/kullanicilar/{psikolog}/odalar",
+                    json={"oda_idleri": istenen_odalar},
+                )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as havuz:
+                gelecek_etkinlik = havuz.submit(etkinlik_olustur)
+                gelecek_atama = havuz.submit(psikologa_oda_ata)
+
+                baslama.wait(timeout=10)
+                time.sleep(0.3)
+
+                # Kilidi serbest bırak: iki gerçek API isteği yarışsın.
+                kilit_conn.rollback()
+
+                etkinlik_yanit = gelecek_etkinlik.result(timeout=20)
+                atama_yanit = gelecek_atama.result(timeout=20)
+        finally:
+            kilit_conn.rollback()
+
+        print("Etkinlik POST:", etkinlik_yanit.status_code)
+        print("Psikolog PUT:", atama_yanit.status_code)
+
+        if etkinlik_yanit.status_code == 201:
+            etkinlik_id = etkinlik_yanit.json()["etkinlik_id"]
+
+        assert sorted([
+            etkinlik_yanit.status_code,
+            atama_yanit.status_code,
+        ]) in ([200, 409], [201, 409]), (
+            etkinlik_yanit.text,
+            atama_yanit.text,
+        )
+
+        c.execute(
+            "SELECT COUNT(*) FROM psikolog_odalar "
+            "WHERE kullanici_id = %s AND oda_id = %s",
+            (psikolog, yeni_oda),
+        )
+        atama_var = c.fetchone()[0] == 1
+
+        c.execute(
+            "SELECT COUNT(*) FROM oda_etkinlikleri "
+            "WHERE oda_id = %s "
+            "AND COALESCE(iptal_edildi_mi, FALSE) = FALSE",
+            (yeni_oda,),
+        )
+        etkinlik_var = c.fetchone()[0] > 0
+
+        assert atama_var != etkinlik_var, (
+            "Oda ataması ve etkinlik birlikte oluştu "
+            "veya ikisi de oluşmadı."
+        )
+
+        print("PASS | İşlemlerden yalnızca biri başarılı.")
+        print("PASS | Oda ataması ve etkinlik çakışmadı.")
+        print("PASS | Beklenmeyen HTTP 500 oluşmadı.")
+
+    finally:
+        kilit_conn.rollback()
+        kilit_conn.close()
+
+        # Teste ait olası kayıtları temizle.
+        c.execute(
+            "DELETE FROM psikolog_odalar "
+            "WHERE kullanici_id = %s AND oda_id = %s",
+            (psikolog, yeni_oda),
+        )
+
+        c.execute(
+            "SELECT etkinlik_id FROM oda_etkinlikleri "
+            "WHERE oda_id = %s",
+            (yeni_oda,),
+        )
+        test_etkinlikleri = [r[0] for r in c.fetchall()]
+
+        for eid in test_etkinlikleri:
+            c.execute(
+                "DELETE FROM denetim_kayitlari "
+                "WHERE hedef_tablo = 'oda_etkinlikleri' "
+                "AND hedef_kayit_id = %s",
+                (eid,),
+            )
+            c.execute(
+                "DELETE FROM oda_etkinlik_gunleri "
+                "WHERE etkinlik_id = %s",
+                (eid,),
+            )
+            c.execute(
+                "DELETE FROM oda_etkinlikleri "
+                "WHERE etkinlik_id = %s",
+                (eid,),
+            )
+
+
 def test_bugunku_planli_randevu_pasife_almayi_engeller_gercek_veritabaninda(ortam):
     """Bugün (saati geçmiş olsa bile) planlı randevusu olan psikolog pasife alınamaz; durumu güncellenince ya da iptalde alınır."""
     c, admin, psikolog, personel, (oda_a, oda_b), kod, etiket = ortam

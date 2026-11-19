@@ -103,7 +103,14 @@ def test_quality_randevu_guncelleme_hata_senaryolari(
     conn = MagicMock()
     cursor = conn.cursor.return_value
 
-    cursor.fetchone.side_effect = cevaplar
+    # Güncelleme artık önce mevcut oda_id değerini okuyor.
+    ilk_cevap = cevaplar[0]
+    ilk_oda = (
+        (ilk_cevap[2],)
+        if ilk_cevap is not None
+        else None
+    )
+    cursor.fetchone.side_effect = [ilk_oda, *cevaplar]
 
     guncelleme = MagicMock()
     guncelleme.model_dump.return_value = degisiklikler
@@ -222,10 +229,14 @@ def test_quality_randevu_guncelleme_basarili():
     cursor = conn.cursor.return_value
 
     cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         MEVCUT_RANDEVU,
         ("ADMIN",),
         (1,),  # Oda psikoloğa atanmış
-        None,  # Cakisma yok
+        None,  # Ortak kontrol: randevu yok
+        None,  # Ortak kontrol: cihaz yok
+        None,  # Ortak kontrol: etkinlik yok
+        None,  # Mevcut randevu çakışması yok
     ]
 
     guncelleme = MagicMock()
@@ -265,10 +276,14 @@ def test_quality_randevu_guncelleme_exclusion_violation():
     cursor = conn.cursor.return_value
 
     cursor.fetchone.side_effect = [
+        (1,),  # İlk sorgu: mevcut oda_id
         MEVCUT_RANDEVU,
         ("ADMIN",),
         (1,),  # Oda psikoloğa atanmış
-        None,
+        None,  # Ortak kontrol: randevu yok
+        None,  # Ortak kontrol: cihaz yok
+        None,  # Ortak kontrol: etkinlik yok
+        None,  # Mevcut randevu çakışması yok
     ]
 
     def sorgu_calistir(sql, *args, **kwargs):

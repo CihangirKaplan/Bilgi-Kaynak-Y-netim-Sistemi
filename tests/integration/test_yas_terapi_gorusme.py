@@ -170,7 +170,18 @@ BAS = datetime(2026, 12, 7, 10, 0)
 def _randevu_olustur(danisan_yas, **alanlar):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [("ADMIN",), (danisan_yas,), (1,), (1,), (1,), None, (123,)]
+    c.fetchone.side_effect = [
+        ("ADMIN",),       # Kullanıcı rolü
+        (danisan_yas,),   # Danışanın yaş grubu
+        (1,),             # Psikolog aktif
+        (1,),             # Oda aktif
+        (1,),             # Oda psikoloğa atanmış
+        None,             # Randevu çakışması yok
+        None,             # Cihaz rezervasyonu çakışması yok
+        None,             # Oda etkinliği çakışması yok
+        None,             # Psikolog / oda çakışması yok
+        (123,),           # Oluşturulan randevu ID
+    ]
     randevu = SimpleNamespace(danisan_kod_id="DAN-2026-0001", psikolog_id=3, oda_id=2,
                               baslangic_zamani=BAS, bitis_zamani=BAS + timedelta(hours=1), **alanlar)
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
@@ -224,7 +235,18 @@ def _guncelle(istemci, govde, yas=("COCUK",)):
     conn = MagicMock()
     c = conn.cursor.return_value
     mevcut = ("DAN-2026-0001", 3, 2, datetime(2026, 12, 7, 10, 0), datetime(2026, 12, 7, 11, 0), "PLANLANDI", "YUZ_YUZE", None)
-    c.fetchone.side_effect = [(1,), mevcut, ("MEMUR",), None, yas, None]      # izin, mevcut, rol, çakışma yok, danışan yaş grubu
+    c.fetchone.side_effect = [
+        (1,),          # Yetki kontrolü
+        (2,),          # İlk oda ID
+        mevcut,        # Kilitlenen randevu bilgileri
+        ("MEMUR",),    # Kullanıcı rolü
+        None,          # Oda: randevu çakışması yok
+        None,          # Oda: cihaz çakışması yok
+        None,          # Oda: etkinlik çakışması yok
+        None,          # Psikolog / oda çakışması yok
+        yas,           # Danışanın yaş grubu
+        None,          # Ek sorgular için boş yanıt
+    ]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.patch("/api/randevular/7", json=govde)
     sorgular = [(x.args[0], x.args[1] if len(x.args) > 1 else None) for x in c.execute.call_args_list]
