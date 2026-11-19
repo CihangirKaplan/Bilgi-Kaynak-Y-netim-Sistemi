@@ -71,7 +71,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
     alt = sayfa.cell(
         row=satir, column=1,
         value="Bu rapor, sisteme girilmiş randevulardan oluşturulmuştur. Danışanlar yalnızca kodla yer alır; kişisel bilgi içermez. "
-              "Randevu randevu ayrıntı için 'Randevu Detayı' sayfasına bakın.",
+              "Tek tek ayrıntı için 'Randevu Detayı' sayfasına bakın.",
     )
     alt.font = ACIKLAMA_FONT
     satir += 1
@@ -102,7 +102,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
     for ad, aciklama in [
         ("Psikolog Bazlı", "Her psikolog için randevu sayıları ve durum dağılımı."),
         ("Dağılımlar", "İptal nedenleri; görüşme tipi, terapi türü ve yaş grubu dağılımı (iptal edilenler hariç)."),
-        ("Randevu Detayı", "Tüm randevular, randevu randevu: tarih, saat, danışan kodu, psikolog, oda, görüşme, terapi, durum."),
+        ("Randevu Detayı", "Tüm randevular, tek tek: tarih, saat, danışan kodu, psikolog, oda, görüşme, terapi, durum."),
     ]:
         yaz(ad, None, aciklama, kalin=True)
 
