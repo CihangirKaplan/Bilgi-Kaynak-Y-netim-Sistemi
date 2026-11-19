@@ -9,7 +9,7 @@ def personel_listesini_getir(token):
     url = f"{BASE_URL}/personel"
     
     try:
-        cevap = requests.get(url, headers=headers)
+        cevap = requests.get(url, headers=headers, timeout=15)
         
         if cevap.status_code == 200:
             return cevap.json()  # Veriyi başarıyla aldık, geri gönderiyoruz

@@ -9,7 +9,7 @@ Aşağıdaki ENUM tipleri şemada tanımlıdır. Bir tipin tanımlı olması, be
 
 - **`cihaz_durumu`:** `Kullanima_Hazir`, `Rezerve`, `Kullanimda`, `Arizali`, `Bakimda`, `Kalibrasyonda`, `Kullanim_Disi`
 - **`denetim_olay_turu`:** `LOGIN`, `LOGIN_FAILED`, `CREATE`, `UPDATE`, `CANCEL`, `ROLE_CHANGE`, `DEVICE_STATUS_CHANGE`, `DELETE`, `PASSWORD_RESET`, `PASSWORD_CHANGE`, `PASSWORD_CHANGE_FAILED`
-- **`ogrenci_turu`:** `GONULLU`, `DANISMA_MASASI`
+- **`ogrenci_turu`:** `GONULLU`, `DANISMA_MASASI`, `ASISTAN`
 
 ## Notasyon
 
@@ -70,7 +70,6 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `kullanilacak_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Cihazın kullanılacağı fiziksel oda. |
 | `proje_turu` | VARCHAR(50) | NULL | Rezervasyonun ilişkili olduğu proje türü. |
 | `proje_adi_aciklamasi` | VARCHAR(255) | NULL | İlgili projenin adı veya açıklaması. |
-| `rezervasyon_tarihi` | TIMESTAMP | NULL; DEFAULT `CURRENT_TIMESTAMP` | Rezervasyon kaydının oluşturulma zamanı. |
 
 **CHECK kısıtları:**
 
@@ -219,6 +218,20 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Etkinlik bitişi. |
 | `iptal_edildi_mi` | BOOLEAN | NULL; DEFAULT `false` | Etkinliğin iptal durumu. |
 
+### Tablo: `oda_etkinlik_gunleri`
+
+Çok günlü bir etkinliğin her günü için ayrı bir satır tutar (örn. 3 günlük eğitim = 3 satır). Etkinlik silinirse günleri de silinir.
+
+| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
+| :--- | :--- | :--- | :--- |
+| `gun_id` | SERIAL (INTEGER) | PK; NOT NULL | Etkinlik günü kaydının kimliği. |
+| `etkinlik_id` | INTEGER | FK → `oda_etkinlikleri(etkinlik_id)` ON DELETE CASCADE; NOT NULL | Günün ait olduğu etkinlik. |
+| `baslangic_zamani` | TIMESTAMP | NOT NULL | O günkü başlangıç saati. |
+| `bitis_zamani` | TIMESTAMP | NOT NULL | O günkü bitiş saati. |
+
+**Kısıtlar:** `uq_oda_etkinlik_gun_baslangic` (`etkinlik_id`, `baslangic_zamani` benzersiz); `oda_etkinlik_gunleri_zaman_check` (`bitis_zamani > baslangic_zamani`);
+`oda_etkinlik_gunleri_ayni_gun_check` (her satır tek bir takvim gününe sığmalıdır).
+
 ### Tablo: `psikolog_odalar`
 
 | Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
@@ -284,7 +297,6 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `personel_kodu` | VARCHAR(50) | UNIQUE; NOT NULL | Kurum sicil/personel numarası. |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Kurumda çalışma durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
-| `varsayilan_oda_id` | INTEGER | FK → `odalar(oda_id)`; NULL | Personelle ilişkilendirilmiş varsayılan oda. |
 
 ### Tablo: `giris_istek_limitleri`
 
@@ -327,9 +339,11 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `ad_soyad` | VARCHAR(100) | NOT NULL | Öğrencinin adı ve soyadı. |
 | `ogrenci_numarasi` | VARCHAR(50) | UNIQUE; NOT NULL | Öğrencinin benzersiz öğrenci numarası. |
 | `telefon` | VARCHAR(20) | NULL | Öğrencinin iletişim telefonu. |
-| `tur` | `ogrenci_turu` (ENUM) | NOT NULL | Öğrenci türü: `GONULLU` veya `DANISMA_MASASI`. |
+| `tur` | `ogrenci_turu` (ENUM) | NOT NULL | Öğrenci türü: `GONULLU`, `DANISMA_MASASI` veya `ASISTAN`. |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Öğrenci kaydının etkinlik durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Öğrenci kaydının oluşturulma zamanı. |
+| `bolum` | VARCHAR(100) | NULL | Öğrencinin bölümü (özellikle Asistan öğrenciler için). |
+| `sinif` | VARCHAR(20) | NULL | Öğrencinin sınıfı. |
 
 ### Tablo: `danisma_masasi_oturumlari`
 

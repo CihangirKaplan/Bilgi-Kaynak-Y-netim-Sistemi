@@ -140,7 +140,7 @@ class RolOlusturDialog(QDialog):
         hedef_url = f"{self.api_url}/api/roller" 
         
         try:
-            res = requests.post(hedef_url, json=payload, headers=headers)
+            res = requests.post(hedef_url, json=payload, headers=headers, timeout=15)
             if res.status_code in (200, 201):
                 QMessageBox.information(self, "Başarılı", f"'{rol_adi}' rolü başarıyla oluşturuldu.")
                 self.accept()
@@ -395,7 +395,7 @@ class RolDuzenleDialog(QDialog):
                 "gorunen_ad": yeni_ad,
                 "aktif_mi": self.switch_aktif.isChecked()
             }
-            yanit = requests.put(f"{self.api_url}/api/roller/{rol_id}", json=data, headers=headers)
+            yanit = requests.put(f"{self.api_url}/api/roller/{rol_id}", json=data, headers=headers, timeout=15)
             if yanit.status_code == 200:
                 self.accept()
             else:
@@ -666,7 +666,7 @@ class IzinDuzenleDialog(QDialog):
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             # 3. Sunucudaki doğru PUT rotasına istek atalım (/api/izinler/{izin_id})
-            yanit = requests.put(f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers)
+            yanit = requests.put(f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers, timeout=15)
             
             if yanit.status_code == 200:
                 QMessageBox.information(self, "Başarılı", "İzin yetkileri başarıyla güncellendi.")
