@@ -8,7 +8,11 @@ Tanımlar
   Planlanmış (henüz yapılmamış) ve iptal edilmiş randevular oranlara girmez.
 - Görüşme tipi, terapi türü ve yaş grubu dağılımı iptal edilmeyen randevular üzerindendir.
 - İptal nedenleri yalnızca iptal edilen randevular üzerindendir; neden kaydedilmemiş eski iptaller ayrı satırda görünür.
+- "Sonucu girilmemiş geçmiş" = durumu hâlâ Planlandı olan ama günü bugünden önce olan randevular; bunlar Tamamlandı/Gelmedi
+  işaretlenmediği için oranlara girmez ve oranları olduğundan farklı gösterebilir (ayrı sayılarak fark ettirilir).
 """
+
+from datetime import date, datetime
 
 DURUMLAR = ("PLANLANDI", "TAMAMLANDI", "GELMEDI", "IPTAL_EDILDI")
 BELIRTILMEDI = ("BELIRTILMEDI", "Belirtilmedi")
@@ -34,6 +38,22 @@ def _say(satirlar, anahtar_fn, etiketler, bos):
     return liste
 
 
+def _gun(deger):
+    """datetime/date/ISO metin -> date (çözülemezse None)."""
+    if isinstance(deger, datetime):
+        return deger.date()
+    if isinstance(deger, date):
+        return deger
+    try:
+        return datetime.fromisoformat(str(deger)).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _sonucsuz_gecmis(satirlar, bugun):
+    return sum(1 for s in satirlar if s["durum"] == "PLANLANDI" and (_gun(s.get("baslangic_zamani")) or bugun) < bugun)
+
+
 def _durum_sayilari(satirlar):
     sayilar = {d: 0 for d in DURUMLAR}
     for s in satirlar:
@@ -42,13 +62,15 @@ def _durum_sayilari(satirlar):
     return sayilar
 
 
-def randevu_raporu_hesapla(satirlar, etiketler, detay=False):
+def randevu_raporu_hesapla(satirlar, etiketler, detay=False, bugun=None):
     """satirlar: randevu sözlükleri; etiketler: {"iptal", "gorusme", "terapi", "yas"} kod -> görünen ad sözlükleri."""
+    bugun = bugun or date.today()
     sayilar = _durum_sayilari(satirlar)
     gerceklesen = sayilar["TAMAMLANDI"] + sayilar["GELMEDI"]
     ozet = {
         "toplam": len(satirlar),
         "planlandi": sayilar["PLANLANDI"],
+        "sonucsuz_gecmis": _sonucsuz_gecmis(satirlar, bugun),
         "tamamlandi": sayilar["TAMAMLANDI"],
         "gelmedi": sayilar["GELMEDI"],
         "iptal_edildi": sayilar["IPTAL_EDILDI"],

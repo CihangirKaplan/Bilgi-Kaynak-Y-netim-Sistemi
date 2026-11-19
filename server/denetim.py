@@ -147,3 +147,14 @@ def psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id: int, kullanici_id: in
             None, "DELETE", islem_yapan_id, "psikolog_odalar", kullanici_id, mevcut_cursor=cursor,
             ayrinti={"silinen": {"kullanici_id": kullanici_id, "oda_idleri": kaldirilan}},
         )
+
+
+def durum_degisikligi_yaz(cursor, kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, onceki, yeni, **ek):
+    """Durum değişikliğini ÖNCEKİ ve YENİ değerle denetim kaydına yazar (kim, neyi, neyden neye). Aynı işlemde (transaction) çağrılır.
+
+    Yalnızca kod/durum gibi kişisel olmayan değerler verilmelidir (FR-008); danışan kodu da kişisel veri değildir."""
+    cursor.execute(
+        "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, ayrinti) VALUES (%s, %s, %s, %s, %s);",
+        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id,
+         Json({"onceki": onceki, "yeni": yeni, **ek}, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str))),
+    )

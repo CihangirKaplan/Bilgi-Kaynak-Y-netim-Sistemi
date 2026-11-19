@@ -185,3 +185,52 @@ def test_psikolog_pasife_alininca_danisanlari_pasife_alinir_aktiflesince_geri_ac
         assert durum(kod_elle) == (False, False)                                                 # elle pasif olan pasif kaldı
     finally:
         c.execute("DELETE FROM danisan_kodlari WHERE danisan_kod_id = ANY(%s)", ([kod_elle, kod_elle_acilan],))
+
+
+def test_rol_degisince_danisanlar_pasife_alinir_psikolog_olunca_geri_acilir_gercek_veritabaninda(ortam):
+    """Psikologluktan çıkan kişinin danışanları pasife alınır; yeniden psikolog olunca yalnızca BU YÜZDEN pasifleşenler geri açılır."""
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    kod_elle = f"{kod}-E"
+    c.execute("INSERT INTO danisan_kodlari (danisan_kod_id, olusturan_psikolog_id, aktif_mi) VALUES (%s, %s, FALSE)", (kod_elle, personel))     # elle pasif
+    durum = lambda k: (c.execute("SELECT aktif_mi, psikolog_pasifligi_nedeniyle_pasif FROM danisan_kodlari WHERE danisan_kod_id = %s", (k,)), c.fetchone())[1]
+    c.execute("SELECT rol_adi, rol_id FROM roller WHERE rol_adi IN ('MEMUR', 'PSIKOLOG')")
+    roller = dict(c.fetchall())
+    try:
+        istemci = TestClient(app)
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        yanit = istemci.patch(f"/api/kullanicilar/{psikolog}/rol", json={"rol_id": roller["MEMUR"]})
+        assert yanit.status_code == 200 and yanit.json()["pasife_alinan_danisan"] == 1 and "1 danışan pasife alındı" in yanit.json()["mesaj"]
+        assert durum(kod) == (False, True) and durum(kod_elle) == (False, False)
+
+        yanit = istemci.patch(f"/api/kullanicilar/{psikolog}/rol", json={"rol_id": roller["PSIKOLOG"], "oda_idleri": [oda_a]})
+        assert yanit.status_code == 200 and yanit.json()["aktif_edilen_danisan"] == 1
+        assert durum(kod) == (True, False) and durum(kod_elle) == (False, False)               # elle pasif olan pasif kaldı
+    finally:
+        c.execute("DELETE FROM danisan_kodlari WHERE danisan_kod_id = %s", (kod_elle,))
+
+
+def test_danisan_kodu_yil_bazli_ve_sayac_tuketmez_gercek_veritabaninda(ortam):
+    from server.sunucu import otomatik_danisan_kodu_uret
+    c = ortam[0]
+    kodlar = ["DAN-2077-0004", "DAN-2077-0010", "DAN-2077-ABC"]                                 # sonuncusu kalıba uymaz, yok sayılır
+    for k in kodlar:
+        c.execute("INSERT INTO danisan_kodlari (danisan_kod_id) VALUES (%s)", (k,))
+    try:
+        assert otomatik_danisan_kodu_uret(c, yil=2077) == "DAN-2077-0011"                       # o yılın en büyüğü + 1
+        assert otomatik_danisan_kodu_uret(c, yil=2077, kilitle=False) == "DAN-2077-0011"        # önizleme aynı kodu verir, tüketmez
+        assert otomatik_danisan_kodu_uret(c, yil=2078) == "DAN-2078-0001"                       # yeni yıl 0001'den başlar
+    finally:
+        c.execute("DELETE FROM danisan_kodlari WHERE danisan_kod_id = ANY(%s)", (kodlar,))
+
+
+def test_iptal_notunu_randevu_duzenleme_izni_olan_gorur_ve_durum_degisikligi_denetlenir_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    randevu = _randevu(c, kod, personel, oda_a, datetime.now() + timedelta(days=3))
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    yanit = istemci.patch(f"/api/randevular/{randevu}/iptal", json={"iptal_nedeni": "DANISAN_TALEBI", "iptal_notu": "ozel not"})
+    assert yanit.status_code == 200
+    satir = next(r for r in istemci.get("/api/randevular").json() if r["randevu_id"] == randevu)
+    assert satir["iptal_notu"] == "ozel not"                                                    # admin RANDEVU_DUZENLE iznine sahip
+    c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu = 'CANCEL' AND hedef_kayit_id = %s", (admin, randevu))
+    assert c.fetchone()[0] == {"onceki": "PLANLANDI", "yeni": "IPTAL_EDILDI", "iptal_nedeni": "DANISAN_TALEBI"}   # neyden neye
