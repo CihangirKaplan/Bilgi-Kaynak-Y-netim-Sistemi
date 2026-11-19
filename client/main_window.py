@@ -229,6 +229,8 @@ MENU = [
              aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
         dict(ikon="📈", ad="Randevu Raporları", izin="Randevu takvimini görüntüleme",
              aciklama="Randevu sayıları, durumlar, iptal nedenleri, dağılımlar ve Excel raporu", aksiyon=[]),
+        dict(ikon="📊", ad="Oda Kullanım Raporu", izin="Yönetim raporlarını görüntüleme",
+             aciklama="Oda bazlı kullanım saatleri, doluluk oranı, gün dağılımı ve Excel raporu", aksiyon=[]),
     ]),
     ("ÖĞRENCİ & FAALİYET YÖNETİMİ", [
         dict(
@@ -290,6 +292,8 @@ MENU = [
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
         dict(ikon="📈", ad="Cihaz Raporları", izin="Cihaz raporlarını görüntüleme",
              aciklama="Bakım, kalibrasyon ve arıza raporları", aksiyon=[]),
+        dict(ikon="📊", ad="Cihaz Rezervasyon Raporu", izin="Cihaz raporlarını görüntüleme",
+             aciklama="Cihaz, proje türü ve bölüm bazlı rezervasyon kullanımı ve Excel raporu", aksiyon=[]),
 
     ]),
     ("YÖNETİM & DENETİM", [
@@ -306,6 +310,8 @@ MENU = [
                       ("🔑  Parola Sıfırla", "Kullanıcı parola sıfırlama")]),
         dict(ikon="🧾", ad="Audit Kayıtları", izin="Audit kayıtlarını inceleme",
              aciklama="Sistem denetim izleri", aksiyon=[]),
+        dict(ikon="🛂", ad="Yetki Raporu", izin="Audit kayıtlarını inceleme",
+             aciklama="Kullanıcılar, roller, son girişler, kilitli hesaplar ve rol-izin matrisi", aksiyon=[]),
         dict(ikon="🏢", ad="Oda Yönetimi", izin="Oda yönetimi",
              aciklama="Sistemdeki fiziksel odaların tanımlanması ve düzenlenmesi",
              aksiyon=[("＋  Yeni Oda Ekle", "Oda yönetimi"),
@@ -1769,6 +1775,9 @@ QLabel {
         "Oda Kullanımı": ("oda_kullanimi_ekrani", "yenile"),
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
         "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
+        "Oda Kullanım Raporu": ("oda_kullanim_raporu_ekrani", "yenile"),
+        "Cihaz Rezervasyon Raporu": ("cihaz_rezervasyon_raporu_ekrani", "yenile"),
+        "Yetki Raporu": ("yetki_raporu_ekrani", "yenile"),
     }
     # Sağ panelin sayfa çevresindeki boşlukları (sol, üst, sağ, alt). Tablo/takvim gibi dikey alan isteyen sayfalar daha dar boşlukla açılır.
     SAYFA_KENAR_BOSLUKLARI = (28, 24, 28, 18)
@@ -2121,6 +2130,24 @@ QLabel {
                 token=self.token
             )
             lay.addWidget(self.audit_ekrani, 1)
+
+        elif oge["ad"] == "Yetki Raporu":
+            from client.yetki_raporu_ekrani import YetkiRaporuEkrani
+
+            self.yetki_raporu_ekrani = YetkiRaporuEkrani(self.api_url, self.token)
+            lay.addWidget(self.yetki_raporu_ekrani, 1)
+
+        elif oge["ad"] == "Oda Kullanım Raporu":
+            from client.oda_kullanim_raporu_ekrani import OdaKullanimRaporuEkrani
+
+            self.oda_kullanim_raporu_ekrani = OdaKullanimRaporuEkrani(self.api_url, self.token)
+            lay.addWidget(self.oda_kullanim_raporu_ekrani, 1)
+
+        elif oge["ad"] == "Cihaz Rezervasyon Raporu":
+            from client.cihaz_rezervasyon_raporu_ekrani import CihazRezervasyonRaporuEkrani
+
+            self.cihaz_rezervasyon_raporu_ekrani = CihazRezervasyonRaporuEkrani(self.api_url, self.token)
+            lay.addWidget(self.cihaz_rezervasyon_raporu_ekrani, 1)
 
         elif oge["ad"] == "Danışma Masası Yönetimi":
             from client.danisma_masasi_yonetimi import DanismaMasasiYonetimi

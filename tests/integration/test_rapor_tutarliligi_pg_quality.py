@@ -13,6 +13,9 @@ import pytest
 from server.sunucu import (
     VT_AYARLARI,
     cihaz_raporlari,
+    cihaz_rezervasyon_raporu,
+    oda_kullanim_raporu,
+    yetki_raporu_getir,
     puan_raporu,
     randevu_raporu,
     yonetim_cihaz_ozet,
@@ -160,3 +163,59 @@ def test_kullanim_raporu_tarih_dogrulamasi(veri):
     with pytest.raises(HTTPException) as hata:
         yonetim_kullanim_ozet(baslangic=date(2000, 1, 1), bitis=date(2001, 12, 31), kullanici_id=0)
     assert hata.value.status_code == 422
+
+
+# ------------------------------------------------------------------ ayrıntılı rapor sayfaları (uç noktalar)
+def test_cihaz_rezervasyon_raporu_iptali_saymaz_ve_detayda_durumu_gosterir(veri):
+    sonuc = cihaz_rezervasyon_raporu(baslangic=BAS, bitis=BIT, cihaz_id=veri["cihaz"], proje_turu=None, detay=True, kullanici_id=0)
+    assert sonuc["ozet"]["rezervasyon_sayisi"] == 1 and sonuc["ozet"]["iptal_edilen_rezervasyon"] == 1
+    assert sonuc["ozet"]["toplam_saat"] == 1.0 and sonuc["ozet"]["ortalama_sure_saat"] == 1.0
+    assert [c["cihaz_id"] for c in sonuc["cihazlar"]] == [veri["cihaz"]]
+    assert sonuc["proje_turleri"][0]["ad"] == "Belirtilmemiş" and sonuc["bolumler"][0]["rezervasyon_sayisi"] == 1
+    assert sorted(r["durum"] for r in sonuc["rezervasyonlar"]) == ["Aktif", "İptal"]
+    assert "parola" not in str(sonuc).lower()
+
+
+def test_cihaz_rezervasyon_raporu_proje_turu_suzgeci_ve_dogrulama(veri):
+    from fastapi import HTTPException
+    bos = cihaz_rezervasyon_raporu(baslangic=BAS, bitis=BIT, cihaz_id=veri["cihaz"], proje_turu="TÜBİTAK", detay=False, kullanici_id=0)
+    assert bos["ozet"]["rezervasyon_sayisi"] == 0 and bos["ozet"]["ortalama_sure_saat"] is None
+    for kwargs in ({"baslangic": BIT, "bitis": BAS}, {"baslangic": date(2000, 1, 1), "bitis": date(2001, 12, 31)}):
+        with pytest.raises(HTTPException) as hata:
+            cihaz_rezervasyon_raporu(cihaz_id=None, proje_turu=None, detay=False, kullanici_id=0, **kwargs)
+        assert hata.value.status_code == 422
+    with pytest.raises(HTTPException):
+        cihaz_rezervasyon_raporu(baslangic=BAS, bitis=BIT, cihaz_id=0, proje_turu=None, detay=False, kullanici_id=0)
+
+
+def test_oda_kullanim_raporu_doluluk_gun_dagilimi_ve_detay(veri):
+    sonuc = oda_kullanim_raporu(baslangic=BAS, bitis=BIT, oda_id=veri["oda"], detay=True, kullanici_id=0)
+    assert [o["oda_id"] for o in sonuc["odalar"]] == [veri["oda"]]
+    oda = sonuc["odalar"][0]
+    assert oda["randevu_saati"] == 3.0 and oda["toplam_saat"] == 3.0
+    assert sonuc["varsayim"]["is_gunu_sayisi"] == 22                                # Mart 2001: 22 hafta içi gün
+    assert oda["mesai_doluluk_orani"] == pytest.approx(3.0 / (22 * 8), abs=1e-4)
+    gunler = {g["gun"]: g for g in sonuc["gun_dagilimi"]}
+    assert (gunler["Cuma"]["saat"], gunler["Cumartesi"]["saat"], gunler["Pazar"]["saat"], gunler["Pazartesi"]["saat"]) == (1.0, 1.0, 1.0, 0.0)
+    assert len(sonuc["kayitlar"]) == 3 and all(k["tur"] == "Randevu" for k in sonuc["kayitlar"])   # iptal edilen yok
+    assert any(x["oda_id"] == veri["oda"] for x in sonuc["oda_secenekleri"])             # süzgeç listesi tüm aktif odaları içerir
+
+
+def test_oda_kullanim_raporu_tum_odalar_ozeti_tutarli(veri):
+    sonuc = oda_kullanim_raporu(baslangic=BAS, bitis=BIT, oda_id=None, detay=False, kullanici_id=0)
+    assert sonuc["ozet"]["toplam_saat"] == round(sum(o["toplam_saat"] for o in sonuc["odalar"]), 1)
+    assert "kayitlar" not in sonuc
+    yonetim = yonetim_kullanim_ozet(baslangic=BAS, bitis=BIT, kullanici_id=0)
+    assert yonetim["ozet"]["oda_toplam_saat"] == sonuc["ozet"]["toplam_saat"]       # iki rapor aynı toplamı verir
+
+
+def test_yetki_raporu_kullanici_rol_ve_matris_parola_icermez(veri):
+    sonuc = yetki_raporu_getir(rol_id=None, durum=None, detay=True, kullanici_id=0)
+    satir = next(k for k in sonuc["kullanicilar"] if k["kullanici_id"] == veri["kullanici"])
+    assert satir["rol_adi"] == "PSIKOLOG" and satir["aktif_mi"] is True and satir["son_giris"] is None
+    assert sonuc["ozet"]["kullanici_sayisi"] == len(sonuc["kullanicilar"]) and sonuc["ozet"]["hic_giris_yapmamis"] >= 1
+    assert {r["rol_adi"] for r in sonuc["roller"]} >= {"ADMIN", "PSIKOLOG"}
+    assert sonuc["matris"]["izinler"] and set(sonuc["matris"]["roller"]) >= {"ADMIN", "PSIKOLOG"}
+    assert "parola_hash" not in str(sonuc) and "$2" not in str(sonuc)               # parola özeti sızmaz
+    pasif = yetki_raporu_getir(rol_id=None, durum="pasif", detay=False, kullanici_id=0)
+    assert all(not k["aktif_mi"] for k in pasif["kullanicilar"]) and "matris" not in pasif
