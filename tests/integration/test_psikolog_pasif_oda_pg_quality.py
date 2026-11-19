@@ -7,6 +7,7 @@
 CI'daki "PostgreSQL Entegrasyon Testleri" işinde (alembic upgrade head sonrası) çalışır; gerçek kayıt oluşturur, sonunda temizler.
 """
 import os
+from contextlib import closing
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -234,3 +235,12 @@ def test_iptal_notunu_randevu_duzenleme_izni_olan_gorur_ve_durum_degisikligi_den
     assert satir["iptal_notu"] == "ozel not"                                                    # admin RANDEVU_DUZENLE iznine sahip
     c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu = 'CANCEL' AND hedef_kayit_id = %s", (admin, randevu))
     assert c.fetchone()[0] == {"onceki": "PLANLANDI", "yeni": "IPTAL_EDILDI", "iptal_nedeni": "DANISAN_TALEBI"}   # neyden neye
+
+
+def test_kullanilmayan_danisan_kodu_sayaci_kaldirilmistir_gercek_veritabaninda():
+    """Kod artık yıl bazlı üretilir; global sayaç (danisan_kodu_seq) migration ile kaldırılmıştır."""
+    with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
+        cur = conn.cursor()
+        _dogru_veritabani(cur)
+        cur.execute("SELECT to_regclass('danisan_kodu_seq')")
+        assert cur.fetchone()[0] is None

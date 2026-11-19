@@ -42,7 +42,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
 | FR-006 | Operasyonel danışan kodu | ✅ | `danisan_kodlari` tablosu, `GET /api/danisan-kodlari` | `test_randevu_branch_quality.py` |
-| FR-007 | Danışan kodu oluşturma | ✅ | `otomatik_danisan_kodu_uret`, `danisan_kodu_seq`, `GET /api/randevular/siradaki-kod` | `test_randevu_branch_quality.py`, `test_randevu_girdi_dogrulama.py` |
+| FR-007 | Danışan kodu oluşturma | ✅ | `otomatik_danisan_kodu_uret` (yıl bazlı: DAN-<yıl>-<sıra>, kayıt anında kilit altında), `GET /api/randevular/siradaki-kod` (önizleme, sayaç tüketmez) | `test_randevu_branch_quality.py`, `test_randevu_girdi_dogrulama.py` |
 | FR-008 | Kişisel veri ayrımı | ✅ | `danisan_kodlari` tablosunda yalnızca kod, ücret/istisna, aktiflik, tarih ve oluşturan psikolog var; danışan koduna yalnızca `randevular` başvurur; kişi tablolarıyla (öğrenci, kullanıcı, personel) bağlantı yok; kodu oluşturan psikolog dışında kişi göstergesi yok | Şema: `test_kisisel_veri_ayrimi_pg_quality.py` (gerçek PostgreSQL; fazladan sütun, eşleştirme tablosu, serbest metin sütunu eklenirse kırılır); uygulama: `test_kisisel_veri_ayrimi.py` (modeller, yazılan sütunlar, uçlar, yanıtlar, fazladan kişisel alanlar yok sayılır). `istisna_turu` yalnızca YOK, KANSER, SEHIT_GAZI olabilir (başka metin 422; ücretli danışanda yalnızca YOK), serbest metin yazılamaz |
 
 ### 5.3 Randevu ve takvim yönetimi
