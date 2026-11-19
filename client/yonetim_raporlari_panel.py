@@ -546,6 +546,7 @@ class YonetimRaporlariEkrani(QWidget):
         self.donem.currentTextChanged.connect(
             self.tarih_alanlarini_guncelle
         )
+        self.donem.currentTextChanged.connect(self._donem_degisti)
         self.rapor_turu.currentTextChanged.connect(
             self._tur_degisti
         )
@@ -742,10 +743,18 @@ class YonetimRaporlariEkrani(QWidget):
         return sonuc
 
     def _tur_degisti(self, *_):
-        """Görünüm değişince ekranı günceller. 'Bugün Merkezde' dönemden bağımsız olduğu için seçilince kendiliğinden yüklenir."""
+        """Görünüm değişince ekranı günceller ve raporu kendiliğinden yükler (Yenile'ye basmak gerekmez)."""
         self.gorunumu_guncelle()
-        if self.rapor_turu.currentText() == "Bugün Merkezde":
+        self.raporu_yukle()
+
+    def _donem_degisti(self, secim):
+        """Hazır dönem seçilince rapor kendiliğinden yenilenir; 'Tarih Aralığı'nda kullanıcı tarihleri seçip Yenile'ye basar."""
+        if secim != "Tarih Aralığı":
             self.raporu_yukle()
+
+    def sayfa_gosterildi(self):
+        """Menüden açılınca ya da yeniden girilince güncel raporu getirir."""
+        self.raporu_yukle()
 
     def raporu_yukle(self):
         if self.rapor_turu.currentText() == "Bugün Merkezde":

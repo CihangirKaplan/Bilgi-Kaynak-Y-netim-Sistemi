@@ -532,6 +532,9 @@ def _tkys_dashboard_kompakt(sayfa):
     return sayfa
 
 
+FAALIYET_LISTE_SINIRI = 1000
+
+
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()
 
@@ -1406,6 +1409,7 @@ QLabel {
 
         self.sayfa_bilgi = []
         self.nav_btnler = {}
+        self._bekleyen_sayfalar = {}
 
         ilk_btn = None
         for bolum, ogeler in MENU:
@@ -1417,8 +1421,16 @@ QLabel {
             self.nav_layout.addWidget(lbl)
 
             for oge in gorunen:
-                sayfa = self.sayfa_dashboard() if oge.get("dashboard") else self.sayfa_modul(oge)
+                if oge.get("dashboard"):
+                    sayfa = self.sayfa_dashboard()
+                    bekleyen = None
+                else:
+                    # Sayfalar ilk açılışta kurulur: giriş hızlı olur, kullanılmayan ekranlar sunucuya istek atmaz.
+                    sayfa = QWidget()
+                    bekleyen = oge
                 idx = self.stack.addWidget(sayfa)
+                if bekleyen is not None:
+                    self._bekleyen_sayfalar[idx] = bekleyen
                 self.sayfa_bilgi.append((oge["ad"], oge.get("aciklama", info["aciklama"])))
 
                 btn = QPushButton(f"{oge['ikon']}   {oge['ad']}")
@@ -1805,6 +1817,7 @@ QLabel {
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
     SAYFA_YENILEME = {
+        "Yönetim Raporları ve İstatistikler": ("yonetim_raporlari_ekrani", "sayfa_gosterildi"),
         "Öğrenciler": ("ogrenciler_ekrani", "yenile"),
         "Puan Raporu": ("puan_raporu_ekrani", "yenile"),
         "Cihaz Uygunluğu": ("aktif_uygunluk_ekrani", "verileri_yukle"),
@@ -1854,8 +1867,26 @@ QLabel {
         except Exception as e:
             print(f"Sayfa yenileme hatası ({ad}):", e)
 
+    def _sayfayi_olustur(self, idx):
+        """Henüz kurulmamış sayfayı (yer tutucu) gerçek ekranla değiştirir; kuruluysa hiçbir şey yapmaz."""
+        oge = self._bekleyen_sayfalar.pop(idx, None)
+        if oge is None:
+            return
+        gercek = self.sayfa_modul(oge)
+        yer_tutucu = self.stack.widget(idx)
+        self.stack.insertWidget(idx, gercek)
+        if yer_tutucu is not None:
+            self.stack.removeWidget(yer_tutucu)
+            yer_tutucu.deleteLater()
+
+    def tum_sayfalari_olustur(self):
+        """Tembel sayfaların hepsini hemen kurar (test ve toplu işlemler için)."""
+        for idx in list(self._bekleyen_sayfalar):
+            self._sayfayi_olustur(idx)
+
     def sayfa_ac(self, idx):
         ad, alt = self.sayfa_bilgi[idx]
+        self._sayfayi_olustur(idx)
         self.ust_sayfa.setText(f"›   {ad}")
 
         # Ana panelden gelen durum filtresi yalnızca o geçişe aittir; menüden/bildirimden açılışta temiz başlar.
@@ -2471,6 +2502,10 @@ QLabel {
                 }
             """)
             il.addWidget(self.tablo_faaliyetler)
+            self.lbl_faaliyet_sinir = QLabel("")
+            self.lbl_faaliyet_sinir.setStyleSheet("color: #64748B; font-size: 12px;")
+            self.lbl_faaliyet_sinir.hide()
+            il.addWidget(self.lbl_faaliyet_sinir)
 
             # Tablo çizildiği an veriyi çekecek fonksiyonu çağırıyoruz
             self.faaliyet_tablosunu_guncelle()
@@ -2603,12 +2638,29 @@ QLabel {
             from PySide6.QtWidgets import QTableWidgetItem, QMessageBox
 
             headers = {"Authorization": f"Bearer {self.token}"}
-            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/faaliyet-kayitlari", headers=headers)
+            res = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/faaliyet-kayitlari", headers=headers,
+                params={"limit": FAALIYET_LISTE_SINIRI},
+            )
             if oturum_hatasi_mi(res):
                 return
 
             if res.status_code == 200:
                 kayitlar = res.json()
+                sinir_etiketi = getattr(self, "lbl_faaliyet_sinir", None)
+                if sinir_etiketi is not None:
+                    try:
+                        toplam = int(res.headers.get("X-Toplam-Kayit", len(kayitlar)))
+                    except (TypeError, ValueError):
+                        toplam = len(kayitlar)
+                    if toplam > len(kayitlar):
+                        sinir_etiketi.setText(
+                            f"Toplam {toplam} kaydın en yeni {len(kayitlar)} tanesi gösteriliyor. "
+                            "Tüm kayıtlar için Faaliyet Raporu'nu kullanabilirsiniz."
+                        )
+                        sinir_etiketi.show()
+                    else:
+                        sinir_etiketi.hide()
                 self.tablo_faaliyetler.setRowCount(len(kayitlar))
 
                 for satir_no, kayit in enumerate(kayitlar):
@@ -2616,7 +2668,12 @@ QLabel {
                     self.tablo_faaliyetler.setItem(satir_no, 1, QTableWidgetItem(str(kayit.get("ad_soyad", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 2, QTableWidgetItem(str(kayit.get("ogrenci_no", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 3, QTableWidgetItem(str(kayit.get("faaliyet_adi", ""))))
-                    self.tablo_faaliyetler.setItem(satir_no, 4, QTableWidgetItem(str(kayit.get("miktar", ""))))
+                    from client.gorunum_bicimleri import birim_goster
+                    ham_miktar = str(kayit.get("miktar", ""))
+                    sayi, _, birim = ham_miktar.partition(" ")
+                    miktar_ogesi = QTableWidgetItem(f"{sayi} {birim_goster(birim)}".strip())
+                    miktar_ogesi.setData(Qt.UserRole, ham_miktar)   # düzenleme ekranı birimi bu ham değerden eşler
+                    self.tablo_faaliyetler.setItem(satir_no, 4, miktar_ogesi)
                     self.tablo_faaliyetler.setItem(satir_no, 5, QTableWidgetItem(f"{kayit.get('toplam_puan', '0')} Puan"))
                     self.tablo_faaliyetler.setItem(satir_no, 6, QTableWidgetItem(str(kayit.get("tarih", ""))))
 
@@ -2667,7 +2724,8 @@ QLabel {
         print(f"Seçilen satırın ID'si: {takip_id}") # ID'yi yakaladık mı görelim
 
         # Miktar sütununda hem rakam hem birim var, onları parçalıyoruz
-        miktar_hücresi = self.tablo_faaliyetler.item(satir, 4).text().split(" ")
+        miktar_oge = self.tablo_faaliyetler.item(satir, 4)
+        miktar_hücresi = str(miktar_oge.data(Qt.UserRole) or miktar_oge.text()).split(" ")
         miktar_rakam = miktar_hücresi[0]
         birim_adi = miktar_hücresi[1] if len(miktar_hücresi) > 1 else ""
 

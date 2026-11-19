@@ -12,6 +12,7 @@ import time
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta, date
+from typing import Optional
 from server.modeller import (
     FaaliyetBirimIslemModeli,
     GirisModeli,
@@ -2308,24 +2309,57 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if conn is not None:
             conn.close()
 
+RANDEVU_LISTE_SUTUNLARI = (
+    "r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, "
+    "r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu, r.gorusme_tipi, r.terapi_turu"
+)
+RANDEVU_LISTE_ENCOK = 5000
+
+
 @app.get("/api/randevular")
-def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
+def randevulari_listele(
+    baslangic: Optional[date] = None,
+    bitis: Optional[date] = None,
+    durum: Optional[str] = None,
+    danisan_kod_id: Optional[str] = None,
+    oda_id: Optional[int] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    response: Response = None,
+    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
+):
+    """Randevu listesi. Süzgeçler isteğe bağlıdır; hiçbiri verilmezse eskisi gibi tüm kayıtlar döner.
+
+    baslangic/bitis: başlangıç gününe göre (ikisi de dahil). limit verilirse en yeni randevular
+    önce gelir ve toplam kayıt sayısı X-Toplam-Kayit başlığında bildirilir (liste kesilmişse
+    istemci bunu kullanıcıya gösterebilsin diye).
+    """
+    if limit is not None:
+        if limit < 1 or limit > RANDEVU_LISTE_ENCOK:
+            raise HTTPException(status_code=422, detail=f"limit 1 ile {RANDEVU_LISTE_ENCOK} arasında olmalıdır.")
+    if offset < 0:
+        raise HTTPException(status_code=422, detail="offset negatif olamaz.")
+    if baslangic is not None and bitis is not None and baslangic > bitis:
+        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitiş tarihinden sonra olamaz.")
+    if durum is not None and durum not in ("PLANLANDI", "TAMAMLANDI", "GELMEDI", "IPTAL_EDILDI"):
+        raise HTTPException(status_code=422, detail="Geçersiz randevu durumu.")
+
     conn = None
     cursor = None
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        
+
         # Rol adını net bir şekilde string olarak almak için tablodaki sütun adını garantiye alıyoruz
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol_sonuc = cursor.fetchone()
-        
-        if not rol_sonuc: 
+
+        if not rol_sonuc:
             return []
-            
+
         # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
         rol_adi = str(rol_sonuc[0]).lower() if rol_sonuc else ""
-        
+
         # Serbest metin olan iptal notu yalnızca randevu düzenleme yetkisi olanlara gösterilir; diğerleri iptal NEDENİNİ (liste) görür.
         cursor.execute(
             "SELECT ri.izin_var FROM kullanicilar k JOIN rol_izinleri ri ON k.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id "
@@ -2334,34 +2368,57 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         )
         notu_gorebilir = (cursor.fetchone() or (0,))[0] == 1
 
-        # 1. DURUM: Psikolog ise yalnızca kendi randevularını görür
+        kosullar = []
+        parametreler = []
+        gelen = ""
+        # Psikolog yalnızca kendi randevularını görür
         if psikolog_rolu_mu(rol_adi):
-            sorgu = """
-                SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu, r.gorusme_tipi, r.terapi_turu 
-                FROM randevular r
-                JOIN personel p ON p.personel_id = r.psikolog_id
-                WHERE p.kullanici_id = %s
-                ORDER BY r.baslangic_zamani;
-            """
-            cursor.execute(sorgu, (kullanici_id,))
-            
-        # 2. DURUM: Diğer roller (Admin vb.)
-        else:
+            gelen = "JOIN personel p ON p.personel_id = r.psikolog_id "
+            kosullar.append("p.kullanici_id = %s")
+            parametreler.append(kullanici_id)
+        if baslangic is not None:
+            kosullar.append("r.baslangic_zamani >= %s")
+            parametreler.append(baslangic)
+        if bitis is not None:
+            kosullar.append("r.baslangic_zamani < %s::date + 1")
+            parametreler.append(bitis)
+        if durum is not None:
+            kosullar.append("r.durum = %s")
+            parametreler.append(durum)
+        if danisan_kod_id is not None:
+            kosullar.append("r.danisan_kod_id = %s")
+            parametreler.append(danisan_kod_id)
+        if oda_id is not None:
+            kosullar.append("r.oda_id = %s")
+            parametreler.append(oda_id)
+        nerede = (" WHERE " + " AND ".join(kosullar)) if kosullar else ""
+
+        if limit is None:
             cursor.execute(
-                "SELECT randevu_id, danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum, olusturulma_tarihi, iptal_nedeni, iptal_notu, gorusme_tipi, terapi_turu "
-                "FROM randevular ORDER BY baslangic_zamani;"
+                f"SELECT {RANDEVU_LISTE_SUTUNLARI} FROM randevular r {gelen}{nerede} ORDER BY r.baslangic_zamani;",
+                tuple(parametreler),
             )
-            
+        else:
+            cursor.execute(f"SELECT COUNT(*) FROM randevular r {gelen}{nerede};", tuple(parametreler))
+            toplam = (cursor.fetchone() or (0,))[0]
+            if response is not None:
+                response.headers["X-Toplam-Kayit"] = str(toplam)
+            cursor.execute(
+                f"SELECT {RANDEVU_LISTE_SUTUNLARI} FROM randevular r {gelen}{nerede} "
+                "ORDER BY r.baslangic_zamani DESC, r.randevu_id DESC LIMIT %s OFFSET %s;",
+                tuple(parametreler) + (limit, offset),
+            )
+
         kayitlar = cursor.fetchall()
 
         return [
             {
-                "randevu_id": kayit[0], 
-                "danisan_kod_id": kayit[1], 
-                "psikolog_id": kayit[2], 
-                "oda_id": kayit[3], 
-                "baslangic_zamani": kayit[4], 
-                "bitis_zamani": kayit[5], 
+                "randevu_id": kayit[0],
+                "danisan_kod_id": kayit[1],
+                "psikolog_id": kayit[2],
+                "oda_id": kayit[3],
+                "baslangic_zamani": kayit[4],
+                "bitis_zamani": kayit[5],
                 "durum": kayit[6],
                 "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None,
                 "iptal_nedeni": kayit[8] if len(kayit) > 8 else None,
@@ -6579,7 +6636,17 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
 
 # --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
 @app.get("/api/faaliyet-kayitlari")
-def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
+def faaliyet_kayitlarini_getir(
+    limit: Optional[int] = None,
+    offset: int = 0,
+    response: Response = None,
+    kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
+):
+    """Faaliyet kayıtları (en yeni önce). limit verilirse toplam sayı X-Toplam-Kayit başlığında döner."""
+    if limit is not None and (limit < 1 or limit > 5000):
+        raise HTTPException(status_code=422, detail="limit 1 ile 5000 arasında olmalıdır.")
+    if offset < 0:
+        raise HTTPException(status_code=422, detail="offset negatif olamaz.")
     conn = None
     cursor = None
     try:
@@ -6601,9 +6668,15 @@ def faaliyet_kayitlarini_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYE
         JOIN ogrenciler o ON t.ogrenci_id = o.ogrenci_id
         JOIN faaliyetler f ON t.faaliyet_id = f.faaliyet_id
         JOIN faaliyet_birimleri b ON t.birim_id = b.birim_id
-        ORDER BY t.olusturulma_tarihi DESC;
+        ORDER BY t.olusturulma_tarihi DESC, t.takip_id DESC
         """
-        cursor.execute(sorgu)
+        if limit is None:
+            cursor.execute(sorgu + ";")
+        else:
+            cursor.execute("SELECT COUNT(*) FROM ogrenci_faaliyet_takip;")
+            if response is not None:
+                response.headers["X-Toplam-Kayit"] = str((cursor.fetchone() or (0,))[0])
+            cursor.execute(sorgu + " LIMIT %s OFFSET %s;", (limit, offset))
 
         kayitlar = []
         for row in cursor.fetchall():

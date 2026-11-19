@@ -34,6 +34,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
 )
 
+from client.gorunum_bicimleri import telefon_goster
 from client.ogrenci_dialog import OgrenciEkleDialog
 
 
@@ -705,7 +706,7 @@ class OgrenciYonetimEkrani(QWidget):
                     "telefon",
                     "kullanici_adi"
                 )
-            ).casefold()
+            ).casefold() + " " + telefon_goster(ogrenci.get("telefon"), "")
 
             if aranan not in arama_metni:
                 continue
@@ -728,7 +729,7 @@ class OgrenciYonetimEkrani(QWidget):
             alanlar = [
                 ogrenci.get("ad_soyad") or "—",
                 ogrenci.get("ogrenci_numarasi") or "—",
-                ogrenci.get("telefon") or "—",
+                telefon_goster(ogrenci.get("telefon")),
                 ogrenci.get("tur_etiketi") or "—",
                 ogrenci.get("kullanici_adi") or "—",
                 tarih_goster(
@@ -944,7 +945,7 @@ class OgrenciYonetimEkrani(QWidget):
         bilgi = QLabel(
             f"{ogrenci.get('tur_etiketi') or '—'}"
             f"   |   Telefon: "
-            f"{ogrenci.get('telefon') or '—'}"
+            f"{telefon_goster(ogrenci.get('telefon'))}"
             f"   |   Kayıt: "
             f"{tarih_goster(ogrenci.get('olusturulma_tarihi'))}"
         )

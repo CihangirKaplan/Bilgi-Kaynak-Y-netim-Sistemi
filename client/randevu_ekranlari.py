@@ -872,6 +872,7 @@ DONEM_SECENEKLERI = [
     ("tumu", "Tüm tarihler"), ("bugun", "Bugün"), ("hafta", "Bu hafta"),
     ("ay", "Bu ay"), ("ozel", "Özel aralık"),
 ]
+RANDEVU_LISTE_SINIRI = 2000   # "Tüm tarihler" seçiliyken sunucudan istenen en çok kayıt (en yeniler)
 DURUM_SECENEKLERI = [
     (None, "Tüm durumlar"), ("PLANLANDI", "Planlandı"), ("TAMAMLANDI", "Tamamlandı"),
     ("GELMEDI", "Gelmedi"), ("IPTAL_EDILDI", "İptal Edildi"),
@@ -1061,6 +1062,7 @@ class RandevuAnaEkrani(QWidget):
         self.mevcut_psikolog_id = mevcut_psikolog_id
         self.rol = rol
         self.randevular = []
+        self.randevu_toplam = 0
         self.psikolog_adlari = {}
         self.oda_adlari = {}
 
@@ -1141,6 +1143,8 @@ class RandevuAnaEkrani(QWidget):
         for anahtar, etiket in DONEM_SECENEKLERI:
             self.cmb_donem.addItem(etiket, anahtar)
         self.cmb_donem.currentIndexChanged.connect(self._donem_degisti)
+        self._son_pencere = None   # sunucudan en son istenen (başlangıç, bitiş); None = tüm tarihler
+        self._pencere_yuklendi = False
 
         bugun = QDate.currentDate()
         self.dt_bas = QDateEdit(bugun.addDays(-30))
@@ -1150,7 +1154,7 @@ class RandevuAnaEkrani(QWidget):
             kutu.setCalendarPopup(True)
             kutu.setMinimumWidth(125)
             kutu.setVisible(False)
-            kutu.dateChanged.connect(self.tabloyu_guncelle)
+            kutu.dateChanged.connect(self._pencere_degisti)
         self.lbl_tire = QLabel("–")
         self.lbl_tire.setVisible(False)
 
@@ -1187,7 +1191,14 @@ class RandevuAnaEkrani(QWidget):
         ozel = self.cmb_donem.currentData() == "ozel"
         for parca in (self.dt_bas, self.lbl_tire, self.dt_bit):
             parca.setVisible(ozel)
-        self.tabloyu_guncelle()
+        self._pencere_degisti()
+
+    def _pencere_degisti(self, *_):
+        """Tarih penceresi değiştiyse yalnızca o aralığı sunucudan yeniden ister; değişmediyse süzgeci uygular."""
+        if self._pencere_yuklendi and self._aralik() != self._son_pencere:
+            self.verileri_cek()
+        else:
+            self.tabloyu_guncelle()
 
     def _aralik(self):
         anahtar = self.cmb_donem.currentData()
@@ -1225,11 +1236,16 @@ class RandevuAnaEkrani(QWidget):
         headers = {"Authorization": f"Bearer {self.token}"}
 
         try:
+            pencere = self._aralik()
+            params = {"limit": RANDEVU_LISTE_SINIRI} if pencere is None else {
+                "baslangic": pencere[0].isoformat(), "bitis": pencere[1].isoformat(),
+            }
             cevap = oturum_kontrollu_istek(
                 "GET",
                 f"{self.api_url}/api/randevular",
                 headers=headers,
-                timeout=5
+                params=params,
+                timeout=10
             )
 
             if oturum_hatasi_mi(cevap):
@@ -1244,6 +1260,12 @@ class RandevuAnaEkrani(QWidget):
                 raise ValueError("Geçersiz randevu listesi")
 
             self.randevular = randevular
+            self._son_pencere = pencere
+            self._pencere_yuklendi = True
+            try:
+                self.randevu_toplam = int(cevap.headers.get("X-Toplam-Kayit", len(randevular)))
+            except (TypeError, ValueError, AttributeError):
+                self.randevu_toplam = len(randevular)
             self.tabloyu_guncelle()
 
         except Exception as hata:
@@ -1319,7 +1341,10 @@ class RandevuAnaEkrani(QWidget):
             self.tablo.setCellWidget(satir, DURUM_SUTUNU, kap)
             self.tablo.setRowHeight(satir, 40)
 
-        self.lbl_sayac.setText(f"{len(liste)} / {len(self.randevular)} randevu")
+        sayac = f"{len(liste)} / {len(self.randevular)} randevu"
+        if self.randevu_toplam > len(self.randevular):
+            sayac += f" (toplam {self.randevu_toplam}; en yeniler yüklendi, daraltmak için dönem seçin)"
+        self.lbl_sayac.setText(sayac)
         self.lbl_bos.setVisible(len(liste) == 0)
         self.tablo.setVisible(len(liste) > 0)
         self._iptal_bilgisini_guncelle()

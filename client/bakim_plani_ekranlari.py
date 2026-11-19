@@ -385,9 +385,9 @@ class BakimPlanlariEkrani(QWidget):
         baslik.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         baslik.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         baslik.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        baslik.setSectionResizeMode(5, QHeaderView.Fixed)
+        baslik.setSectionResizeMode(5, QHeaderView.ResizeToContents)   # "Gecikmiş · 120 gün gecikti" gibi uzun metinler kesilmesin
         baslik.setSectionResizeMode(6, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(5, 190)
+        baslik.setMinimumSectionSize(190)
         self.tablo.setColumnWidth(6, 110)
 
         cift_tikla_ac(self.tablo, self.plan_duzenle)                           # satıra çift tıklayınca düzenleme açılır
