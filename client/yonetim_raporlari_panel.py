@@ -26,6 +26,7 @@ RAPOR_TURLERI = (
     "Öğrenciler", "Proje / Deney",
     "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
     "Öğrenci Mevcudu", "Faaliyet Onayları", "Bakım Gecikmeleri",
+    "Bugün Merkezde",
 )
 
 # Ayrıntılı rapor sayfalarıyla (Oda Kullanım Raporu, Cihaz Rezervasyon Raporu, Yetki Raporu) aynı uç noktalardan beslenir; böylece
@@ -546,7 +547,7 @@ class YonetimRaporlariEkrani(QWidget):
             self.tarih_alanlarini_guncelle
         )
         self.rapor_turu.currentTextChanged.connect(
-            self.gorunumu_guncelle
+            self._tur_degisti
         )
         self.yenile_btn.clicked.connect(self.raporu_yukle)
         self.pdf_btn.clicked.connect(self.pdf_kaydet)
@@ -739,6 +740,12 @@ class YonetimRaporlariEkrani(QWidget):
                 sonuc[ad] = None
 
         return sonuc
+
+    def _tur_degisti(self, *_):
+        """Görünüm değişince ekranı günceller. 'Bugün Merkezde' dönemden bağımsız olduğu için seçilince kendiliğinden yüklenir."""
+        self.gorunumu_guncelle()
+        if self.rapor_turu.currentText() == "Bugün Merkezde":
+            self.raporu_yukle()
 
     def raporu_yukle(self):
         if self.rapor_turu.currentText() == "Bugün Merkezde":

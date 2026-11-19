@@ -228,3 +228,18 @@ def test_panel_bir_ek_rapor_alinamazsa_digerleri_gosterilir():
         panel = YonetimRaporlariEkrani("http://x", "t")
         sonuc = panel.verileri_getir({"baslangic": "2026-11-01", "bitis": "2026-11-30"})
     assert sonuc["yetki"] is None and sonuc["oda"] == ODA and sonuc["cihaz_rez"] == CIHAZ
+
+
+def test_panel_bugun_merkezde_secenek_olarak_sunulur_ve_secilince_yuklenir():
+    """'Bugün Merkezde' görünümü kodda vardı ama seçenek listesinde yoktu; kullanıcı ona hiç ulaşamıyordu."""
+    assert "Bugün Merkezde" in RAPOR_TURLERI
+    with patch("client.yonetim_raporlari_panel.oturum_kontrollu_istek"):
+        panel = YonetimRaporlariEkrani("http://x", "t")
+    assert panel.rapor_turu.findText("Bugün Merkezde") >= 0
+    with patch.object(panel.bugun_panel, "yukle") as yukle:
+        panel.rapor_turu.setCurrentText("Bugün Merkezde")
+    yukle.assert_called_once_with("http://x", "t")                       # seçilince kendiliğinden yüklenir
+    assert panel.bugun_panel.isHidden() is False and panel.pdf_btn.isEnabled() is False   # PDF bu görünümde kapalı
+    with patch.object(panel.bugun_panel, "yukle") as yukle:
+        panel.rapor_turu.setCurrentText("Randevular")
+    yukle.assert_not_called()                                            # diğer görünümlerde gereksiz istek yok
