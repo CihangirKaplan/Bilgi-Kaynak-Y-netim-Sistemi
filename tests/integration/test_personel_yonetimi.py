@@ -277,10 +277,7 @@ def test_personel_basariyla_guncellenir():
     mock_cursor = mock_conn.cursor.return_value
     mock_cursor.fetchone.return_value = (15, "PSK-025", True)
 
-    guncelleme = PersonelGuncelleModeli(
-        personel_kodu="PSK-NEW",
-        aktif_mi=False
-    )
+    guncelleme = PersonelGuncelleModeli(personel_kodu="PSK-NEW")
 
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
         sonuc = personel_guncelle(
@@ -290,7 +287,7 @@ def test_personel_basariyla_guncellenir():
         )
 
     assert sonuc["personel_kodu"] == "PSK-NEW"
-    assert sonuc["aktif_mi"] is False
+    assert sonuc["aktif_mi"] is True                          # aktiflik bu uçtan değişmez, mevcut değer döner
     mock_conn.commit.assert_called_once()
 
     sorgular = [
@@ -299,6 +296,7 @@ def test_personel_basariyla_guncellenir():
     ]
 
     assert any("UPDATE personel" in sorgu for sorgu in sorgular)
+    assert not any("aktif_mi" in sorgu for sorgu in sorgular if sorgu.startswith("UPDATE personel"))
     assert any("INSERT INTO denetim_kayitlari" in sorgu for sorgu in sorgular)
 
 
@@ -311,7 +309,7 @@ def test_olmayan_personel_guncellenemez():
         with pytest.raises(HTTPException) as hata:
             personel_guncelle(
                 personel_id=999,
-                guncelleme=PersonelGuncelleModeli(aktif_mi=False),
+                guncelleme=PersonelGuncelleModeli(personel_kodu="PSK-099"),
                 islem_yapan_id=10
             )
 
@@ -389,3 +387,10 @@ def test_yetkisiz_personel_islemleri_reddedilir(method, url, payload):
 
     finally:
         app.dependency_overrides.pop(mevcut_kullanici_id, None)
+
+def test_personel_aktifligi_bu_uctan_degistirilemez():
+    """aktif_mi gönderilemez: psikolog pasife alma kuralları (planlı randevu, oda, danışan) yalnızca kullanıcı durum ucundan işler."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PersonelGuncelleModeli(personel_kodu="PSK-1", aktif_mi=False)

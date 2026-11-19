@@ -69,7 +69,7 @@ def test_giris_ucu_cok_uzun_parolada_500_degil_401_doner():
     hash_ = bcrypt.hashpw(b"dogru-parola", bcrypt.gensalt(4)).decode()
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.return_value = (7, "kullanici", hash_, 3, True, 0, None, False, "MEMUR", None)
+    cursor.fetchone.side_effect = [(7, "kullanici", hash_, 3, True, 0, None, False, "MEMUR", None), (1,)]   # kullanıcı satırı, atomik sayaç artışı
     with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"):
         with pytest.raises(HTTPException) as hata:
             giris_yap(GirisModeli(kullanici_adi="kullanici", parola="x" * 200))

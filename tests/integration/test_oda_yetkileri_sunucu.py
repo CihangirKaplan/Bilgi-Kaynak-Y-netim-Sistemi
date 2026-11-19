@@ -234,7 +234,7 @@ def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3), rezervasyonlu=None):
             return ("ADMIN",)
         if "ROL_IZINLERI" in s:
             return (1,)
-        if "SELECT ROL_ADI FROM ROLLER" in s:
+        if "FROM ROLLER WHERE ROL_ID" in s:
             return (rol,)
         if "INSERT INTO KULLANICILAR" in s:
             return (25,)

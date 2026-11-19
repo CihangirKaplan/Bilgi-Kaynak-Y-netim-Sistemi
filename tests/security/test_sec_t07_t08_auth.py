@@ -30,9 +30,7 @@ def sahte_kullanici(
 def test_besinci_hatali_giris_hesabi_kilitler():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.return_value = sahte_kullanici(
-        hata_sayisi=4
-    )
+    cursor.fetchone.side_effect = [sahte_kullanici(hata_sayisi=4), (5,)]      # kullanıcı satırı, atomik artıştan dönen yeni sayı
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
@@ -49,15 +47,20 @@ def test_besinci_hatali_giris_hesabi_kilitler():
 
     assert hata.value.status_code == 429
 
+    artis = [
+        c for c in cursor.execute.call_args_list
+        if "basarisiz_giris_sayisi = basarisiz_giris_sayisi + 1" in c.args[0]
+    ]
+    assert len(artis) == 1 and artis[0].args[1] == (5,)                       # sayaç tek SQL ile artırılır (okuyup +1 yazılmaz)
+
     guncelleme = [
         c for c in cursor.execute.call_args_list
-        if "UPDATE kullanicilar SET basarisiz_giris_sayisi" in c.args[0]
+        if "SET kilit_bitis_zamani = %s" in c.args[0]
     ]
 
     assert len(guncelleme) == 1
-    assert guncelleme[0].args[1][0] == 5
 
-    kilit_zamani = guncelleme[0].args[1][1]
+    kilit_zamani = guncelleme[0].args[1][0]
     kalan = kilit_zamani - datetime.now()
     assert timedelta(seconds=59) < kalan <= timedelta(seconds=60)
 
@@ -176,7 +179,7 @@ def test_kilit_suresi_dolunca_dogru_parolayla_giris():
 def test_onuncu_hatali_giris_on_bes_dakika_kilitler():
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.return_value = sahte_kullanici(hata_sayisi=9)
+    cursor.fetchone.side_effect = [sahte_kullanici(hata_sayisi=9), (10,)]
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
@@ -196,13 +199,12 @@ def test_onuncu_hatali_giris_on_bes_dakika_kilitler():
 
     guncellemeler = [
         c for c in cursor.execute.call_args_list
-        if "kilit_bitis_zamani = %s" in c.args[0]
+        if "SET kilit_bitis_zamani = %s" in c.args[0]
     ]
 
     assert len(guncellemeler) == 1
-    assert guncellemeler[0].args[1][0] == 10
 
-    kalan = guncellemeler[0].args[1][1] - datetime.now()
+    kalan = guncellemeler[0].args[1][0] - datetime.now()
     assert timedelta(seconds=899) < kalan <= timedelta(seconds=900)
     conn.commit.assert_called_once()
 

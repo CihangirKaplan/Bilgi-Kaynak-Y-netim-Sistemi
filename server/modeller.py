@@ -60,9 +60,20 @@ class KullaniciModeli(BaseModel):
     olusturulma_tarihi: Optional[datetime.datetime] = None
 
 # AUTH: Yeni kullanıcı oluşturma modeli
+# Kullanıcı adı: yalnızca ASCII harf, rakam ve . _ - (başta/sonda harf ya da rakam). Boşluk, görünmez karakter ve Kiril/Yunan gibi
+# Latin'e benzeyen harfler (taklit hesap) kabul edilmez. Başta/sonda boşluk kaydedilmeden önce kırpılır.
+KULLANICI_ADI_DESENI = r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
+
+
 class KullaniciOlusturModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kullanici_adi: str = Field(min_length=3, max_length=100)
+    kullanici_adi: str = Field(min_length=3, max_length=100, pattern=KULLANICI_ADI_DESENI)
+
+    @field_validator("kullanici_adi", mode="before")
+    @classmethod
+    def kullanici_adini_kirp(cls, deger):
+        return deger.strip() if isinstance(deger, str) else deger
+
     rol_id: int = Field(gt=0)
     oda_idleri: Optional[List[int]] = Field(default_factory=list)
 
@@ -558,7 +569,8 @@ class PersonelGuncelleModeli(BaseModel):
         max_length=50,
         pattern=r"^\s*\S(?:.*\S)?\s*$"
     )
-    aktif_mi: bool | None = None
+    # aktif_mi bilerek YOK: psikolog/personel aktifliği yalnızca kullanıcı durum ucundan (planlı randevu, oda ve danışan kuralları
+    # ile birlikte) değişir; burada değişirse bu kurallar atlanır ve personel/kullanıcı kayıtları birbirini tutmaz.
 
 # ==========================================
 # KALİBRASYON YÖNETİMİ MODELLERİ (CALB)

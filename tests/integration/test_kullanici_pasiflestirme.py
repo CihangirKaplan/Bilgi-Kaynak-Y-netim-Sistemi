@@ -266,16 +266,18 @@ def test_pasif_kullanici_giris_yapamaz():
         False           # ilk_giris_mi
     )
 
+    # Parola DOĞRU: pasif hesap ancak şimdi "aktif değil" diye reddedilir.
     with patch("server.sunucu.psycopg2.connect", return_value=mock_conn):
-        with patch("server.sunucu.denetim_kaydi_olustur") as mock_audit:
-            with patch("server.sunucu.access_token_olustur") as mock_token:
-                with pytest.raises(HTTPException) as hata:
-                    giris_yap(
-                        GirisModeli(
-                            kullanici_adi="test_psikolog",
-                            parola="test_parola"
+        with patch("server.sunucu.parola_dogrula", return_value=True):
+            with patch("server.sunucu.denetim_kaydi_olustur") as mock_audit:
+                with patch("server.sunucu.access_token_olustur") as mock_token:
+                    with pytest.raises(HTTPException) as hata:
+                        giris_yap(
+                            GirisModeli(
+                                kullanici_adi="test_psikolog",
+                                parola="test_parola"
+                            )
                         )
-                    )
 
     assert hata.value.status_code == 403
     assert hata.value.detail == "Kullanıcı hesabı aktif değil."
@@ -285,6 +287,26 @@ def test_pasif_kullanici_giris_yapamaz():
 
     # Başarısız giriş denetim kaydına alınmalı
     assert mock_audit.call_args.kwargs["olay_turu"] == "LOGIN_FAILED"
+
+
+def test_pasif_hesap_yanlis_parolayla_hesabin_pasif_oldugunu_ele_vermez():
+    """Parolayı bilmeyen biri, kullanıcı adının var ve pasif olduğunu öğrenemez: yanıt var olmayan adla aynıdır (401)."""
+    import pytest
+    from fastapi import HTTPException
+    from server.modeller import GirisModeli
+    from server.sunucu import giris_yap
+
+    mock_conn = MagicMock()
+    mock_cursor = mock_conn.cursor.return_value
+    mock_cursor.fetchone.side_effect = [(5, "test_psikolog", "hash", 2, False, 0, None, False, "PSIKOLOG", None, True), (1,)]
+    with patch("server.sunucu.psycopg2.connect", return_value=mock_conn), patch("server.sunucu.parola_dogrula", return_value=False), \
+            patch("server.sunucu.denetim_kaydi_olustur"), patch("server.sunucu.giris_siniri") as sinir:
+        sinir.engel_suresi.return_value = 0
+        with pytest.raises(HTTPException) as hata:
+            giris_yap(GirisModeli(kullanici_adi="test_psikolog", parola="yanlis"))
+    assert hata.value.status_code == 401 and hata.value.detail == "Kullanıcı adı veya parola hatalı."
+
+
 def test_psikolog_http_uzerinden_kullanici_pasiflestiremez():
     from fastapi.testclient import TestClient
     from server.sunucu import app, mevcut_kullanici_id

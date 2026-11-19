@@ -41,7 +41,7 @@ def test_gecerli_token_kullanici_id_doner():
 
     sorgu, parametreler = mock_cursor.execute.call_args.args
 
-    assert "SELECT parola_hash, aktif_mi" in sorgu
+    assert "SELECT k.parola_hash, k.aktif_mi" in sorgu
     assert parametreler == (42,)
 
     mock_conn.close.assert_called_once()

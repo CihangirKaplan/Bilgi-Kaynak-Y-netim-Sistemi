@@ -36,7 +36,7 @@ def sahte_veritabani(rol="PSIKOLOG", hatali_tablo=None):
         if "ROL_IZINLERI" in sorgu:
             return (1,)
 
-        if "SELECT ROL_ADI FROM ROLLER" in sorgu:
+        if "FROM ROLLER WHERE ROL_ID" in sorgu:
             return (rol,)
 
         if "INSERT INTO KULLANICILAR" in sorgu:

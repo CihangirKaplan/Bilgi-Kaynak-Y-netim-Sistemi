@@ -41,7 +41,7 @@ def test_veritabaninda_olmayan_kullanici_401():
     assert hata.value.detail == "Kullanıcı bulunamadı."
 
     sorgu, parametreler = mock_cursor.execute.call_args.args
-    assert "WHERE kullanici_id = %s" in sorgu
+    assert "WHERE k.kullanici_id = %s" in sorgu
     assert parametreler == (42,)
 
     mock_cursor.close.assert_called_once()

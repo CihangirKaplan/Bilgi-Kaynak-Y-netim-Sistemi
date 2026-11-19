@@ -389,6 +389,18 @@ class RolDuzenleDialog(QDialog):
             QMessageBox.warning(self, "Uyarı", f"'{yeni_ad}' isminde başka bir rol var.")
             return
     
+        # Pasif rol = o roldeki kullanıcılar sisteme giremez: pasife almadan önce kaç kişinin etkileneceği söylenir ve onay istenir.
+        eski_rol = next((r for r in self.roller if r.get("rol_id") == rol_id), {})
+        if eski_rol.get("aktif_mi", True) and not self.switch_aktif.isChecked():
+            sayi = eski_rol.get("aktif_kullanici_sayisi", 0)
+            if sayi:
+                metin = (f"'{yeni_ad}' rolünde {sayi} aktif kullanıcı var ve bunların sisteme girişi engellenecek.\n\n"
+                         "Rolü pasife almak istiyor musunuz?")
+            else:
+                metin = f"'{yeni_ad}' rolü pasife alınacak (bu rolde aktif kullanıcı yok).\n\nDevam edilsin mi?"
+            if QMessageBox.question(self, "Rolü Pasife Al", metin, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                return
+
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
             data = {
@@ -399,7 +411,11 @@ class RolDuzenleDialog(QDialog):
             if yanit.status_code == 200:
                 self.accept()
             else:
-                QMessageBox.warning(self, "Hata", f"Güncellenemedi. Kod: {yanit.status_code}")
+                try:
+                    ayrinti = str(yanit.json().get("detail", ""))
+                except ValueError:
+                    ayrinti = ""
+                QMessageBox.warning(self, "Hata", ayrinti or f"Güncellenemedi. Kod: {yanit.status_code}")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası:\n{e}")
 

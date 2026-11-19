@@ -102,9 +102,10 @@ def test_talep_listesi_yonetici_hesaplarini_gostermez():
 
 
 # ------------------------------------------------------------------ geçici parola süresi: giriş
-def giris(kullanici, parola=GECICI):
+def giris(kullanici, parola=GECICI, ikinci=(7,)):
+    """ikinci: başarılı girişte personel kaydı, yanlış parolada atomik sayaç artışının (RETURNING) sonucu."""
     conn = MagicMock()
-    conn.cursor.return_value.fetchone.side_effect = [kullanici, (7,)]
+    conn.cursor.return_value.fetchone.side_effect = [kullanici, ikinci]
     with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur") as denetim:
         yanit = TestClient(sunucu.app).post("/api/login", json={"kullanici_adi": "ayse", "parola": parola})
     return yanit, denetim
@@ -131,7 +132,7 @@ def test_suresiz_eski_kayit_ve_normal_parola_etkilenmez():
 
 
 def test_yanlis_parolada_sure_bilgisi_sizdirilmaz():
-    yanit, _ = giris(kullanici(bitis=datetime.now() - timedelta(days=3)), parola="Yanlis-Parola-1")
+    yanit, _ = giris(kullanici(bitis=datetime.now() - timedelta(days=3)), parola="Yanlis-Parola-1", ikinci=(1,))
     assert yanit.status_code == 401 and "süresi" not in yanit.text
 
 
