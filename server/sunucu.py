@@ -875,6 +875,11 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
         islem_yapan_rol = islem_yapan[0]
 
+        # KİLİT SIRASI (deadlock önleme): önce oda kilitleri, sonra kullanıcı satırı. Rezervasyon/randevu yolları oda kilidini alıp sonra
+        # denetim kaydıyla kullanıcı satırını (FK) okur; burada tersi sıra (önce satır, sonra oda kilidi) karşılıklı beklemeye yol açıyordu.
+        if veri.oda_idleri:
+            etkinlik_oda_atama_kilitlerini_al(cursor, sorted(set(veri.oda_idleri)))
+
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s FOR UPDATE OF k;", (kullanici_id,))
         hedef_kullanici = cursor.fetchone()
         if hedef_kullanici is None:
@@ -1137,6 +1142,10 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             status_code=409,
             detail="Öğrenci numarası veya personel kodu zaten kullanılıyor.",
         )
+    except DeadlockDetected:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=503, detail="İşlem eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin.")
     except HTTPException:
         if conn is not None:
             conn.rollback()
@@ -1846,6 +1855,11 @@ def kullanici_durum_degistir(
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (islem_yapan_id,))
         islem_yapan = cursor.fetchone()
 
+        # KİLİT SIRASI (deadlock önleme): önce oda kilitleri, sonra kullanıcı satırı. Rezervasyon/randevu yolları oda kilidini alıp sonra
+        # denetim kaydıyla kullanıcı satırını (FK) okur; burada tersi sıra (önce satır, sonra oda kilidi) karşılıklı beklemeye yol açıyordu.
+        if veri is not None and veri.oda_idleri:
+            etkinlik_oda_atama_kilitlerini_al(cursor, sorted(set(veri.oda_idleri)))
+
         cursor.execute("SELECT r.rol_adi, k.aktif_mi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s FOR UPDATE OF k;", (kullanici_id,))
         hedef = cursor.fetchone()
         
@@ -1939,6 +1953,9 @@ def kullanici_durum_degistir(
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
+    except DeadlockDetected:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=503, detail="İşlem eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin.")
     except Exception as e:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -3006,14 +3023,14 @@ def psikolog_oda_yetkilerini_guncelle(
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
+        # KİLİT SIRASI (deadlock önleme): önce oda kilitleri, sonra kullanıcı satırı. Rezervasyon/randevu yolları oda kilidini alıp sonra
+        # denetim kaydıyla kullanıcı satırını (FK) okur; burada tersi sıra (önce satır, sonra oda kilidi) karşılıklı beklemeye yol açıyordu.
+        etkinlik_oda_atama_kilitlerini_al(cursor, oda_idleri)
         _hedef_psikolog_kontrol(cursor, hedef_kullanici_id, kilitle=True)
 
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = ANY(%s) AND aktif_mi = TRUE;", (oda_idleri,))
         if {k[0] for k in cursor.fetchall()} != set(oda_idleri):
             raise HTTPException(status_code=422, detail="Seçilen odalardan biri bulunamadı veya aktif değil.")
-        etkinlik_oda_atama_kilitlerini_al(
-            cursor, oda_idleri
-        )
         cihaz_rezervasyonlu_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
         oda_etkinlikli_odalari_denetle(cursor, oda_idleri, haric_kullanici_id=hedef_kullanici_id)
         psikolog_planli_randevulari_denetle(cursor, hedef_kullanici_id, kalacak_oda_idleri=oda_idleri)
@@ -3039,6 +3056,9 @@ def psikolog_oda_yetkilerini_guncelle(
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
+    except DeadlockDetected:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=503, detail="Oda ataması eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
