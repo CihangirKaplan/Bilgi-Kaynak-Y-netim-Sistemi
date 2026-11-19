@@ -85,15 +85,6 @@ def router_olustur(izin_kontrol, vt_ayarlari):
         if oda is None:
             raise HTTPException(422, "Seçilen oda bulunamadı veya pasif.")
 
-        if (
-            katilimci is not None
-            and oda["kapasite"] is not None
-            and katilimci > oda["kapasite"]
-        ):
-            raise HTTPException(
-                422, "Katılımcı sayısı odanın kapasitesini aşıyor."
-            )
-
         cursor.execute(
             """
             SELECT 1

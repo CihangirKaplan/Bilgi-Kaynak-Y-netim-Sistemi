@@ -81,8 +81,6 @@ class OdaEtkinlikFormu(QDialog):
         self.oda = QComboBox()
         for o in odalar:
             ad = o["oda_adi"]
-            if o.get("kapasite") is not None:
-                ad += f" (Kapasite: {o['kapasite']})"
             self.oda.addItem(ad, o["oda_id"])
 
         self.personel = QComboBox()
