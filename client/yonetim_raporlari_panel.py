@@ -16,6 +16,7 @@ from client.api_yoneticisi import (
     api_hata_mesaji,
 )
 from client.yonetim_genel_bakis import KAYNAKLAR
+from client.rapor_sayfasi_taban import sayi_metni, yuzde_metni
 from client.yonetim_bugun_merkezde import BugunMerkezdeWidget
 from client.yonetim_raporlari_pdf import pdf_olustur
 
@@ -23,7 +24,16 @@ from client.yonetim_raporlari_pdf import pdf_olustur
 RAPOR_TURLERI = (
     "Genel Bakış", "Randevular", "Cihazlar",
     "Öğrenciler", "Proje / Deney",
+    "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
 )
+
+# Ayrıntılı rapor sayfalarıyla (Oda Kullanım Raporu, Cihaz Rezervasyon Raporu, Yetki Raporu) aynı uç noktalardan beslenir; böylece
+# yönetim panelindeki sayılar ayrıntılı sayfalardakiyle birebir aynıdır. Dönemli olanlar dönem parametresi alır.
+EK_KAYNAKLAR = {
+    "oda": ("oda-kullanim-raporu", True),
+    "cihaz_rez": ("cihaz-rezervasyon-raporu", True),
+    "yetki": ("yetki-raporu", False),
+}
 
 
 def oda_kullanim_tablosu(kullanim, en_cok=8):
@@ -61,6 +71,119 @@ def cihaz_kullanim_tablosu(kullanim, en_cok=8):
         for c in kullanim["cihazlar"][:en_cok]
     ]
     return (baslik, sutunlar, satirlar or [("Kayıtlı cihaz yok.", "", "", "")])
+
+
+YETKI_YOK = "Bu rapor alınamadı (yetkiniz olmayabilir)."
+
+
+def _veri_yok_gorunumu():
+    kartlar = [("—", "—", "")] * 4
+    tablolar = [("Rapor alınamadı", ["Bilgi"], [(YETKI_YOK,)])] + [("", ["Bilgi"], [])] * 4
+    return kartlar, tablolar
+
+
+def oda_gorunumu(veri):
+    """'Oda Kullanımı' görünümü: 4 kart + 5 tablo (Oda Kullanım Raporu sayfasıyla aynı veri)."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet, varsayim, odalar = veri["ozet"], veri.get("varsayim", {}), veri["odalar"]
+    toplam = ozet["toplam_saat"]
+    pay = lambda saat: yuzde_metni(saat / toplam) if toplam else "—"
+    kartlar = [
+        ("Toplam Kullanım (saat)", sayi_metni(toplam), f"{ozet['kullanilan_oda_sayisi']} oda kullanıldı"),
+        ("Randevu Saati", sayi_metni(ozet["randevu_saati"]), "İptal edilenler hariç"),
+        ("Cihaz Rez. + Etkinlik (saat)", sayi_metni(ozet["cihaz_rezervasyon_saati"] + ozet["etkinlik_saati"]),
+         f"Cihaz: {sayi_metni(ozet['cihaz_rezervasyon_saati'])} · Etkinlik: {sayi_metni(ozet['etkinlik_saati'])}"),
+        ("Mesai Doluluk Oranı", yuzde_metni(ozet.get("mesai_doluluk_orani")),
+         f"Hafta içi {varsayim.get('is_gunu_sayisi', 0)} gün × {varsayim.get('gunluk_mesai_saati', 8)} saat"),
+    ]
+    tablolar = [
+        ("Oda Bazlı Kullanım", ["Oda", "Randevu (sa)", "Cihaz Rez. (sa)", "Etkinlik (sa)", "Toplam (sa)", "Doluluk"], [
+            (o["oda_adi"] + ("" if o["aktif_mi"] else " (pasif)"), sayi_metni(o["randevu_saati"]), sayi_metni(o["cihaz_rezervasyon_saati"]),
+             sayi_metni(o["etkinlik_saati"]), sayi_metni(o["toplam_saat"]), yuzde_metni(o.get("mesai_doluluk_orani")))
+            for o in odalar[:8]
+        ]),
+        ("Haftanın Günlerine Göre", ["Gün", "Kayıt", "Saat"], [(g["gun"], g["kayit_sayisi"], sayi_metni(g["saat"])) for g in veri["gun_dagilimi"]]),
+        ("Kullanım Türleri", ["Tür", "Saat", "Pay"], [
+            ("Randevu", sayi_metni(ozet["randevu_saati"]), pay(ozet["randevu_saati"])),
+            ("Cihaz rezervasyonu", sayi_metni(ozet["cihaz_rezervasyon_saati"]), pay(ozet["cihaz_rezervasyon_saati"])),
+            ("Oda etkinliği", sayi_metni(ozet["etkinlik_saati"]), pay(ozet["etkinlik_saati"])),
+        ]),
+        ("Hiç Kullanılmayan Odalar", ["Oda"], [(o["oda_adi"],) for o in odalar if o["aktif_mi"] and o["toplam_saat"] == 0]
+         or [("Dönemde boş kalan aktif oda yok.",)]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Saatler planlanan süreyi gösterir (iptaller hariç).",),
+            ("Gerçekleşen kullanım süresi ayrıca ölçülmez.",),
+            (f"Doluluk: hafta içi günlük {varsayim.get('gunluk_mesai_saati', 8)} saat varsayımıyla.",),
+        ]),
+    ]
+    return kartlar, tablolar
+
+
+def cihaz_gorunumu(veri):
+    """'Cihaz Kullanımı' görünümü: 4 kart + 5 tablo (Cihaz Rezervasyon Raporu sayfasıyla aynı veri)."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet, cihazlar = veri["ozet"], veri["cihazlar"]
+    kartlar = [
+        ("Rezervasyon", ozet["rezervasyon_sayisi"],
+         f"Ortalama süre: {sayi_metni(ozet['ortalama_sure_saat'])} saat" if ozet.get("ortalama_sure_saat") is not None else ""),
+        ("Toplam Kullanım (saat)", sayi_metni(ozet["toplam_saat"]), f"{ozet['kullanilan_cihaz_sayisi']} cihaz kullanıldı"),
+        ("İptal Edilen", ozet["iptal_edilen_rezervasyon"], "Kullanım saatine dahil değil"),
+        ("Hiç Kullanılmayan Cihaz", ozet["kullanilmayan_cihaz_sayisi"], "Dönemde hiç rezerve edilmedi"),
+    ]
+    tablolar = [
+        ("Cihaz Bazlı Kullanım", ["Cihaz", "Rezervasyon", "Saat", "İptal"], [
+            (f"{c['envanter_kodu']} - {c['cihaz_adi']}", c["rezervasyon_sayisi"], sayi_metni(c["rezervasyon_saati"]), c["iptal_edilen_rezervasyon"])
+            for c in cihazlar[:8]
+        ]),
+        ("Proje Türüne Göre", ["Proje Türü", "Rezervasyon", "Saat"], [(p["ad"], p["rezervasyon_sayisi"], sayi_metni(p["saat"])) for p in veri["proje_turleri"]]),
+        ("Bölüme Göre", ["Bölüm", "Rezervasyon", "Saat"], [(b["ad"], b["rezervasyon_sayisi"], sayi_metni(b["saat"])) for b in veri["bolumler"]]),
+        ("Hiç Kullanılmayan Cihazlar", ["Cihaz"], [(f"{c['envanter_kodu']} - {c['cihaz_adi']}",) for c in cihazlar if c["rezervasyon_sayisi"] == 0]
+         or [("Dönemde boş kalan cihaz yok.",)]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Saatler planlanan süreyi gösterir (iptaller hariç).",),
+            ("Gerçekleşen kullanım süresi ayrıca ölçülmez.",),
+            ("Rezervasyon, tamamlanmış deney demek değildir.",),
+        ]),
+    ]
+    return kartlar, tablolar
+
+
+def yetki_gorunumu(veri):
+    """'Yetkiler' görünümü: 4 kart + 5 tablo (Yetki Raporu sayfasıyla aynı veri). Parola ya da parola özeti içermez."""
+    if veri is None:
+        return _veri_yok_gorunumu()
+    ozet, kullanicilar = veri["ozet"], veri["kullanicilar"]
+    uyarili = []
+    for k in kullanicilar:
+        uyarilar = [ad for ad, var in (("Kilitli", k["kilitli_mi"]), ("Hiç giriş yok", k["aktif_mi"] and k["son_giris"] is None),
+                                       ("Geçici parola", k["gecici_parola_mi"])) if var]
+        if uyarilar:
+            uyarili.append((k["kullanici_adi"], k["rol_adi"], ", ".join(uyarilar)))
+    son_girisler = sorted((k for k in kullanicilar if k["son_giris"]), key=lambda k: k["son_giris"], reverse=True)[:8]
+    kartlar = [
+        ("Kullanıcı", ozet["kullanici_sayisi"], f"{ozet['aktif_kullanici']} aktif · {ozet['pasif_kullanici']} pasif"),
+        ("Kilitli Hesap", ozet["kilitli_kullanici"], "Şu an geçici olarak kilitli"),
+        ("Hiç Giriş Yapmamış", ozet["hic_giris_yapmamis"], "Aktif ama hiç giriş kaydı yok"),
+        ("Başarısız Giriş (30 gün)", ozet["son_30_gun_basarisiz_giris"], f"{ozet['rol_sayisi']} rol · {ozet['izin_sayisi']} izin tanımlı"),
+    ]
+    tablolar = [
+        ("Roller", ["Rol", "Kullanıcı", "İzin"], [(r["rol_adi"], f"{r['aktif_kullanici_sayisi']} / {r['kullanici_sayisi']}", r["izin_sayisi"]) for r in veri["roller"]]),
+        ("Hesap Durumu", ["Gösterge", "Sayı"], [
+            ("Aktif", ozet["aktif_kullanici"]), ("Pasif", ozet["pasif_kullanici"]),
+            ("Kilitli", ozet["kilitli_kullanici"]), ("Geçici parolalı", ozet["gecici_parolali"]),
+        ]),
+        ("Uyarılı Hesaplar", ["Kullanıcı", "Rol", "Uyarı"], uyarili[:8] or [("Uyarılı hesap yok.", "", "")]),
+        ("Son Girişler", ["Kullanıcı", "Son Giriş"], [(k["kullanici_adi"], k["son_giris"].replace("T", " ")[:16]) for k in son_girisler]
+         or [("Giriş kaydı yok.", "")]),
+        ("Önemli Açıklamalar", ["Bilgi"], [
+            ("Parola ve parola özeti raporda yer almaz.",),
+            ("Rol-izin matrisi Yetki Raporu sayfasının Excel çıktısındadır.",),
+            ("Yetkiler dönemden bağımsız, güncel durumdur.",),
+        ]),
+    ]
+    return kartlar, tablolar
 
 
 def metin(deger):
@@ -240,6 +363,8 @@ class YonetimRaporlariEkrani(QWidget):
         self.analiz_layout.addWidget(self.proje_grafigi)
 
         self.tablolari_olustur(self.analiz_layout)
+        # Grafiği olmayan görünümlerde (Oda Kullanımı, Yetkiler...) boş alan tablolar arasına dağılmasın, sona toplansın.
+        self.analiz_layout.addStretch(1)
         panel_lay.addWidget(self.analiz_alani)
 
         self.durum = QLabel(
@@ -504,22 +629,21 @@ class YonetimRaporlariEkrani(QWidget):
 
             sonuc[ad] = yanit.json()
 
-        # Oda/cihaz kullanım raporu ek bilgidir: alınamazsa diğer raporlar yine gösterilir.
-        try:
-            yanit = oturum_kontrollu_istek(
-                "GET",
-                f"{self.api_url}/api/yonetim-raporlari/kullanim-ozet",
-                headers={
-                    "Authorization": f"Bearer {self.token}"
-                },
-                params=params,
-                timeout=15,
-            )
-            sonuc["kullanim"] = (
-                yanit.json() if yanit.status_code == 200 else None
-            )
-        except (requests.RequestException, ValueError):
-            sonuc["kullanim"] = None
+        # Oda/cihaz kullanımı ve yetki raporları ek bilgidir: biri alınamazsa (örn. yetki yok) diğer raporlar yine gösterilir.
+        for ad, (yol, donemli) in EK_KAYNAKLAR.items():
+            try:
+                yanit = oturum_kontrollu_istek(
+                    "GET",
+                    f"{self.api_url}/api/{yol}",
+                    headers={
+                        "Authorization": f"Bearer {self.token}"
+                    },
+                    params=params if donemli else {},
+                    timeout=15,
+                )
+                sonuc[ad] = yanit.json() if yanit.status_code == 200 else None
+            except (requests.RequestException, ValueError):
+                sonuc[ad] = None
 
         return sonuc
 
@@ -585,7 +709,7 @@ class YonetimRaporlariEkrani(QWidget):
         widget.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
-        if "Kullanımı" in baslik and len(sutunlar) > 1:
+        if "Kullanım" in baslik and len(sutunlar) > 1:
             # Ad sütunu esnek kalır (oda/cihaz adı kırpılmasın); sayı sütunları içeriğe göre daralır.
             for sutun in range(1, len(sutunlar)):
                 widget.horizontalHeader().setSectionResizeMode(
@@ -815,7 +939,7 @@ class YonetimRaporlariEkrani(QWidget):
                     ("Gelmedi", ro["gelmedi"]),
                     ("İptal", ro["iptal_edildi"]),
                 ]),
-                oda_kullanim_tablosu(self.veriler.get("kullanim")),
+                oda_kullanim_tablosu(self.veriler.get("oda")),
             ]
 
         elif tur == "Cihazlar":
@@ -849,7 +973,7 @@ class YonetimRaporlariEkrani(QWidget):
                  ["İşlem", "Seçilen Dönem", "Önceki Dönem"], [
                      (ad, co[kod], cr[kod]) for ad, kod in kodlar
                  ]),
-                cihaz_kullanim_tablosu(self.veriler.get("kullanim")),
+                cihaz_kullanim_tablosu(self.veriler.get("cihaz_rez")),
                 ("Bu Dönem", ["İşlem", "Kayıt"], [
                     (ad, co[kod]) for ad, kod in kodlar
                 ]),
@@ -911,6 +1035,15 @@ class YonetimRaporlariEkrani(QWidget):
                      o["guncel_ogrenci"]["aktif"]),
                 ]),
             ]
+
+        elif tur == "Oda Kullanımı":
+            kartlar, tablolar = oda_gorunumu(self.veriler.get("oda"))
+
+        elif tur == "Cihaz Kullanımı":
+            kartlar, tablolar = cihaz_gorunumu(self.veriler.get("cihaz_rez"))
+
+        elif tur == "Yetkiler":
+            kartlar, tablolar = yetki_gorunumu(self.veriler.get("yetki"))
 
         else:
             self.proje_grafigi.guncelle(
