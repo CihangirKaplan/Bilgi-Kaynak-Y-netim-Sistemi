@@ -499,7 +499,17 @@ class AuditKayitlariEkrani(QWidget):
         yenile_btn.clicked.connect(self.kayitlari_getir)
         arama_satiri.addWidget(yenile_btn)
 
-        for buton in (filtre_btn, temizle_btn, yenile_btn):
+        excel_btn = QPushButton("⬇ Excel'e Aktar")
+        excel_btn.setObjectName("excelBtn")
+        excel_btn.setStyleSheet(
+            "QPushButton#excelBtn { background: #16803C; color: white; border: none; border-radius: 9px; padding: 0 16px; font-weight: bold; }"
+            "QPushButton#excelBtn:hover { background: #126A31; }"
+        )
+        excel_btn.setFixedHeight(36)
+        excel_btn.clicked.connect(self.excel_aktar)
+        arama_satiri.addWidget(excel_btn)
+
+        for buton in (filtre_btn, temizle_btn, yenile_btn, excel_btn):
             buton.setCursor(Qt.CursorShape.PointingHandCursor)
 
         filtre_alani.addLayout(arama_satiri)
@@ -809,6 +819,92 @@ class AuditKayitlariEkrani(QWidget):
         self.sonraki_btn.setEnabled(
             self.offset + self.limit < self.toplam
         )
+
+    def _suzgec_parametreleri(self):
+        """Ekrandaki süzgeçlerden API parametreleri (sayfalama olmadan); tarih aralığı geçersizse ValueError."""
+        self._donem_degisti()
+        parametreler = {}
+        kullanici = self.kullanici_arama.text().strip()
+        if kullanici:
+            parametreler["kullanici"] = kullanici
+        olay = self.olay_secimi.secilenler()
+        if olay:
+            parametreler["olay_turu"] = olay
+        if self.donem_secimi.currentIndex() != 0:
+            if self.baslangic.date() > self.bitis.date():
+                raise ValueError("Başlangıç tarihi bitiş tarihinden sonra olamaz.")
+            parametreler["baslangic_tarihi"] = self.baslangic.date().toString("yyyy-MM-dd")
+            parametreler["bitis_tarihi"] = self.bitis.date().toString("yyyy-MM-dd")
+        return parametreler
+
+    def _excel_icin_kayitlari_getir(self, parametreler, en_fazla):
+        """Süzgece uyan kayıtları 200'lük sayfalarla toplar; (kayıtlar, özet, kesildi) döner."""
+        kayitlar, ozet, offset = [], {}, 0
+        while len(kayitlar) < en_fazla:
+            yanit = oturum_kontrollu_istek(
+                "GET", f"{self.api_url}/api/audit-kayitlari", headers={"Authorization": f"Bearer {self.token}"},
+                params={**parametreler, "limit": 200, "offset": offset}, timeout=30,
+            )
+            if oturum_hatasi_mi(yanit):
+                return None
+            yanit.raise_for_status()
+            veri = yanit.json()
+            ozet = veri.get("ozet", ozet)
+            sayfa = veri.get("kayitlar", [])
+            kayitlar.extend(sayfa)
+            offset += 200
+            if len(sayfa) < 200 or offset >= int(ozet.get("toplam_kayit", 0)):
+                break
+        kesildi = int(ozet.get("toplam_kayit", 0)) > en_fazla
+        return kayitlar[:en_fazla], ozet, kesildi
+
+    def excel_aktar(self):
+        """Süzgece uyan denetim kayıtlarını (silinen verinin içeriğiyle birlikte) Excel dosyasına yazar."""
+        from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+        from client.audit_excel import EN_FAZLA_KAYIT, audit_excel_olustur
+
+        try:
+            parametreler = self._suzgec_parametreleri()
+        except ValueError as hata:
+            QMessageBox.warning(self, "Geçersiz Tarih", str(hata))
+            return
+        varsayilan = f"denetim_kayitlari_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)")
+        if not dosya_yolu:
+            return
+        if not dosya_yolu.lower().endswith(".xlsx"):
+            dosya_yolu += ".xlsx"
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            sonuc = self._excel_icin_kayitlari_getir(parametreler, EN_FAZLA_KAYIT)
+        except (requests.RequestException, ValueError) as hata:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "Rapor Hatası", f"Denetim kayıtları alınamadı:\n{hata}")
+            return
+        QApplication.restoreOverrideCursor()
+        if sonuc is None:
+            return
+        kayitlar, ozet, kesildi = sonuc
+
+        gun = lambda metin: QDate.fromString(metin, "yyyy-MM-dd").toString("dd.MM.yyyy")
+        donem = (f"{gun(parametreler['baslangic_tarihi'])} - {gun(parametreler['bitis_tarihi'])}"
+                 if "baslangic_tarihi" in parametreler else "Tümü")
+        filtre = [
+            ("Dönem", donem),
+            ("Kullanıcı", parametreler.get("kullanici", "Tümü")),
+            ("İşlem türü", ", ".join(OLAY_ADLARI.get(o, o) for o in parametreler.get("olay_turu", [])) or "Tümü"),
+        ]
+        try:
+            audit_excel_olustur(dosya_yolu, kayitlar, ozet, filtre, kesildi)
+        except OSError as hata:
+            QMessageBox.warning(
+                self, "Kaydedilemedi",
+                f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
+            )
+            return
+        uyari = f"\n\nNot: Dosya en yeni {EN_FAZLA_KAYIT} kayıtla sınırlandırıldı; süzgeçle daraltabilirsiniz." if kesildi else ""
+        QMessageBox.information(self, "Excel'e Aktar", f"{len(kayitlar)} kayıt kaydedildi:\n{dosya_yolu}{uyari}")
 
     def kayitlari_getir(self):
         self._donem_degisti()

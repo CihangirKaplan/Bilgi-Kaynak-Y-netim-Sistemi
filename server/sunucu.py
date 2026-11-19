@@ -67,7 +67,7 @@ from server.denetim import (
     psikolog_odalarini_oku,
     satiri_sil_ve_ayrintisini_al,
 )
-from server import giris_siniri
+from server import giris_siniri, rapor_kullanim
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
@@ -9218,96 +9218,20 @@ def yonetim_kullanim_ozet(
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        # Sabit SQL parçaları: kullanıcı girdisi SQL metnine eklenmez, yalnızca parametre olarak geçer.
-        def saat(bas, bit):
-            return (
-                f"ROUND(COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST({bit}, d.bit) - GREATEST({bas}, d.bas))) / 3600.0), 0)::numeric, 1)"
-            )
-
-        cursor.execute(f"""
-            WITH d AS (
-                SELECT %s::date::timestamp AS bas, (%s::date + INTERVAL '1 day')::timestamp AS bit
-            ),
-            rnd AS (
-                SELECT r.oda_id, COUNT(*) AS sayi, {saat("r.baslangic_zamani", "r.bitis_zamani")} AS saat
-                FROM randevular r, d
-                WHERE r.durum <> 'IPTAL_EDILDI' AND r.baslangic_zamani < d.bit AND r.bitis_zamani > d.bas
-                GROUP BY r.oda_id
-            ),
-            rez AS (
-                SELECT cr.kullanilacak_oda_id AS oda_id, COUNT(*) AS sayi,
-                       {saat("cr.baslangic_zamani", "cr.bitis_zamani")} AS saat
-                FROM cihaz_rezervasyonlari cr, d
-                WHERE cr.iptal_edildi_mi IS NOT TRUE AND cr.kullanilacak_oda_id IS NOT NULL
-                  AND cr.baslangic_zamani < d.bit AND cr.bitis_zamani > d.bas
-                GROUP BY cr.kullanilacak_oda_id
-            ),
-            etk AS (
-                SELECT e.oda_id, COUNT(*) AS sayi, {saat("e.baslangic_zamani", "e.bitis_zamani")} AS saat
-                FROM oda_etkinlikleri e, d
-                WHERE e.iptal_edildi_mi IS NOT TRUE AND e.baslangic_zamani < d.bit AND e.bitis_zamani > d.bas
-                GROUP BY e.oda_id
-            )
-            SELECT o.oda_id, o.oda_adi, o.aktif_mi,
-                   COALESCE(rnd.sayi, 0), COALESCE(rnd.saat, 0),
-                   COALESCE(rez.sayi, 0), COALESCE(rez.saat, 0),
-                   COALESCE(etk.sayi, 0), COALESCE(etk.saat, 0)
-            FROM odalar o
-            LEFT JOIN rnd ON rnd.oda_id = o.oda_id
-            LEFT JOIN rez ON rez.oda_id = o.oda_id
-            LEFT JOIN etk ON etk.oda_id = o.oda_id
-            WHERE o.aktif_mi IS TRUE OR rnd.sayi IS NOT NULL OR rez.sayi IS NOT NULL OR etk.sayi IS NOT NULL
-            ORDER BY (COALESCE(rnd.saat, 0) + COALESCE(rez.saat, 0) + COALESCE(etk.saat, 0)) DESC, o.oda_adi;
-        """, (baslangic, bitis))
-        odalar = []
-        for k in cursor.fetchall():
-            randevu_saati, rezervasyon_saati, etkinlik_saati = float(k[4]), float(k[6]), float(k[8])
-            odalar.append({
-                "oda_id": k[0], "oda_adi": k[1], "aktif_mi": bool(k[2]),
-                "randevu_sayisi": int(k[3]), "randevu_saati": randevu_saati,
-                "cihaz_rezervasyon_sayisi": int(k[5]), "cihaz_rezervasyon_saati": rezervasyon_saati,
-                "etkinlik_sayisi": int(k[7]), "etkinlik_saati": etkinlik_saati,
-                "toplam_saat": round(randevu_saati + rezervasyon_saati + etkinlik_saati, 1),
-            })
-
-        cursor.execute(f"""
-            WITH d AS (
-                SELECT %s::date::timestamp AS bas, (%s::date + INTERVAL '1 day')::timestamp AS bit
-            ),
-            rez AS (
-                SELECT cr.cihaz_id, COUNT(*) AS sayi, {saat("cr.baslangic_zamani", "cr.bitis_zamani")} AS saat
-                FROM cihaz_rezervasyonlari cr, d
-                WHERE cr.iptal_edildi_mi IS NOT TRUE AND cr.baslangic_zamani < d.bit AND cr.bitis_zamani > d.bas
-                GROUP BY cr.cihaz_id
-            ),
-            ipt AS (
-                SELECT cr.cihaz_id, COUNT(*) AS sayi
-                FROM cihaz_rezervasyonlari cr, d
-                WHERE cr.iptal_edildi_mi IS TRUE AND cr.baslangic_zamani >= d.bas AND cr.baslangic_zamani < d.bit
-                GROUP BY cr.cihaz_id
-            ),
-            arz AS (
-                SELECT a.cihaz_id, COUNT(*) AS sayi
-                FROM cihaz_arizalari a, d
-                WHERE a.bildirim_tarihi >= d.bas AND a.bildirim_tarihi < d.bit
-                GROUP BY a.cihaz_id
-            )
-            SELECT c.cihaz_id, c.envanter_kodu, c.cihaz_adi,
-                   COALESCE(rez.sayi, 0), COALESCE(rez.saat, 0), COALESCE(ipt.sayi, 0), COALESCE(arz.sayi, 0)
-            FROM cihazlar c
-            LEFT JOIN rez ON rez.cihaz_id = c.cihaz_id
-            LEFT JOIN ipt ON ipt.cihaz_id = c.cihaz_id
-            LEFT JOIN arz ON arz.cihaz_id = c.cihaz_id
-            ORDER BY COALESCE(rez.saat, 0) DESC, c.cihaz_adi, c.cihaz_id;
-        """, (baslangic, bitis))
+        odalar = rapor_kullanim.oda_kullanimi(cursor, baslangic, bitis)
         cihazlar = [
-            {
-                "cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2],
-                "rezervasyon_sayisi": int(k[3]), "rezervasyon_saati": float(k[4]),
-                "iptal_edilen_rezervasyon": int(k[5]), "ariza_sayisi": int(k[6]),
-            }
-            for k in cursor.fetchall()
+            {k: v for k, v in c.items() if k != "son_kullanim"}
+            | {"ariza_sayisi": 0}
+            for c in rapor_kullanim.cihaz_rezervasyonlari(cursor, baslangic, bitis)["cihazlar"]
         ]
+        cursor.execute(
+            "SELECT cihaz_id, COUNT(*) FROM cihaz_arizalari "
+            "WHERE bildirim_tarihi >= %s::date AND bildirim_tarihi < (%s::date + INTERVAL '1 day') GROUP BY cihaz_id;",
+            (baslangic, bitis),
+        )
+        arizalar = {k[0]: int(k[1]) for k in cursor.fetchall()}
+        for c in cihazlar:
+            c["ariza_sayisi"] = arizalar.get(c["cihaz_id"], 0)
 
         return {
             "donem": {"baslangic": baslangic.isoformat(), "bitis": bitis.isoformat()},
@@ -9332,6 +9256,164 @@ def yonetim_kullanim_ozet(
             status_code=500,
             detail="Kullanım raporu alınamadı."
         )
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+# TKYS_DETAYLI_RAPORLAR_V1
+
+def _rapor_donemi_dogrula(baslangic, bitis):
+    if baslangic > bitis:
+        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten sonra olamaz.")
+    if (bitis - baslangic).days + 1 > 366:
+        raise HTTPException(status_code=422, detail="Tarih aralığı en fazla 366 gün olabilir.")
+
+
+@app.get("/api/cihaz-rezervasyon-raporu")
+def cihaz_rezervasyon_raporu(
+    baslangic: _yr_date,
+    bitis: _yr_date,
+    cihaz_id: int | None = None,
+    proje_turu: str | None = Query(None, max_length=50),
+    detay: bool = False,
+    kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET")),
+):
+    """Cihaz Rezervasyon Raporu: cihaz, proje türü ve bölüm bazlı rezervasyon sayısı ve planlanan kullanım saati.
+
+    İptal edilen rezervasyonlar kullanım sayılmaz (ayrıca gösterilir). Saatler dönem sınırlarına kırpılır. detay=true ise tek tek
+    rezervasyonlar da döner (Excel için; iptaller 'durum' sütunuyla ayrılır)."""
+    _rapor_donemi_dogrula(baslangic, bitis)
+    if cihaz_id is not None and cihaz_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir cihaz seçilmelidir.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        veri = rapor_kullanim.cihaz_rezervasyonlari(cursor, baslangic, bitis, cihaz_id, proje_turu)
+        cihazlar = veri["cihazlar"]
+        kullanilan = [c for c in cihazlar if c["rezervasyon_sayisi"] > 0]
+        toplam_rezervasyon = sum(c["rezervasyon_sayisi"] for c in cihazlar)
+        toplam_saat = round(sum(c["rezervasyon_saati"] for c in cihazlar), 1)
+        sonuc = {
+            "donem": {"baslangic": baslangic.isoformat(), "bitis": bitis.isoformat()},
+            "ozet": {
+                "rezervasyon_sayisi": toplam_rezervasyon,
+                "iptal_edilen_rezervasyon": sum(c["iptal_edilen_rezervasyon"] for c in cihazlar),
+                "toplam_saat": toplam_saat,
+                "ortalama_sure_saat": round(toplam_saat / toplam_rezervasyon, 1) if toplam_rezervasyon else None,
+                "kullanilan_cihaz_sayisi": len(kullanilan),
+                "kullanilmayan_cihaz_sayisi": len(cihazlar) - len(kullanilan),
+            },
+            "cihazlar": cihazlar,
+            "proje_turleri": veri["proje_turleri"],
+            "bolumler": veri["bolumler"],
+            "aciklama": (
+                "Saatler planlanan süreyi gösterir (iptaller hariç, dönem sınırlarına kırpılmış). "
+                "Gerçekleşen kullanım süresi ayrıca ölçülmez."
+            ),
+        }
+        if detay:
+            sonuc["rezervasyonlar"] = [
+                {**r, "baslangic_zamani": r["baslangic_zamani"].isoformat(), "bitis_zamani": r["bitis_zamani"].isoformat()}
+                for r in rapor_kullanim.cihaz_rezervasyon_detaylari(cursor, baslangic, bitis, cihaz_id, proje_turu)
+            ]
+        return sonuc
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Cihaz rezervasyon raporu alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/oda-kullanim-raporu")
+def oda_kullanim_raporu(
+    baslangic: _yr_date,
+    bitis: _yr_date,
+    oda_id: int | None = None,
+    detay: bool = False,
+    kullanici_id: int = Depends(izin_kontrol("YONETIM_RAPORLARI_GORUNTULE")),
+):
+    """Oda Kullanım Raporu: oda bazlı randevu, cihaz rezervasyonu ve etkinlik saatleri, mesai doluluk oranı ve haftanın günlerine
+    göre dağılım. Mesai doluluk oranı = toplam saat / (hafta içi gün sayısı x günlük 8 saat) varsayımıyla hesaplanır; hafta sonu
+    kullanımı oranı %100'ün üzerine çıkarabilir. detay=true ise tek tek kayıtlar da döner (Excel için)."""
+    _rapor_donemi_dogrula(baslangic, bitis)
+    if oda_id is not None and oda_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir oda seçilmelidir.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        odalar = rapor_kullanim.oda_kullanimi(cursor, baslangic, bitis, oda_id)
+        olaylar = rapor_kullanim.oda_kullanim_olaylari(cursor, baslangic, bitis, oda_id)
+        cursor.execute("SELECT oda_id, oda_adi FROM odalar WHERE aktif_mi IS TRUE ORDER BY oda_adi, oda_id;")
+        secenekler = [{"oda_id": k[0], "oda_adi": k[1]} for k in cursor.fetchall()]
+
+        toplam = round(sum(o["toplam_saat"] for o in odalar), 1)
+        is_gunu = rapor_kullanim.is_gunu_sayisi(baslangic, bitis)
+        kapasite = is_gunu * rapor_kullanim.GUNLUK_MESAI_SAATI * len([o for o in odalar if o["aktif_mi"]])
+        sonuc = {
+            "donem": {"baslangic": baslangic.isoformat(), "bitis": bitis.isoformat()},
+            "varsayim": {"is_gunu_sayisi": is_gunu, "gunluk_mesai_saati": rapor_kullanim.GUNLUK_MESAI_SAATI},
+            "ozet": {
+                "toplam_saat": toplam,
+                "randevu_saati": round(sum(o["randevu_saati"] for o in odalar), 1),
+                "cihaz_rezervasyon_saati": round(sum(o["cihaz_rezervasyon_saati"] for o in odalar), 1),
+                "etkinlik_saati": round(sum(o["etkinlik_saati"] for o in odalar), 1),
+                "kullanilan_oda_sayisi": sum(1 for o in odalar if o["toplam_saat"] > 0),
+                "kullanilmayan_oda_sayisi": sum(1 for o in odalar if o["aktif_mi"] and o["toplam_saat"] == 0),
+                "mesai_doluluk_orani": round(toplam / kapasite, 4) if kapasite else None,
+            },
+            "odalar": odalar,
+            "gun_dagilimi": rapor_kullanim.gun_dagilimi(olaylar),
+            "oda_secenekleri": secenekler,
+            "aciklama": (
+                "Saatler planlanan süreyi gösterir (iptaller hariç, dönem sınırlarına kırpılmış). Mesai doluluk oranı, hafta içi günlük "
+                f"{rapor_kullanim.GUNLUK_MESAI_SAATI} saat varsayımıyla hesaplanır."
+            ),
+        }
+        if detay:
+            sonuc["kayitlar"] = [
+                {**o, "baslangic_zamani": o["baslangic_zamani"].isoformat(), "bitis_zamani": o["bitis_zamani"].isoformat()}
+                for o in olaylar
+            ]
+        return sonuc
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Oda kullanım raporu alınamadı.")
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@app.get("/api/yetki-raporu")
+def yetki_raporu_getir(
+    rol_id: int | None = None,
+    durum: str | None = Query(None, pattern="^(aktif|pasif)$"),
+    detay: bool = False,
+    kullanici_id: int = Depends(izin_kontrol("AUDIT_KAYITLARI_INCELE")),
+):
+    """Yetki Raporu: kullanıcılar, rolleri, son giriş zamanları, kilit/pasiflik durumu ve rollere göre izin sayıları. detay=true ise
+    rol-izin matrisi de döner (Excel için). Parola ya da parola özeti hiçbir zaman dönmez."""
+    if rol_id is not None and rol_id <= 0:
+        raise HTTPException(status_code=422, detail="Geçerli bir rol seçilmelidir.")
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        return rapor_kullanim.yetki_raporu(cursor, rol_id, durum, matris=detay)
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Yetki raporu alınamadı.")
     finally:
         if cursor is not None:
             cursor.close()
