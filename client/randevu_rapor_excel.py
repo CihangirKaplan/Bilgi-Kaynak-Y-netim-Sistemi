@@ -90,6 +90,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
     bolum("GENEL ÖZET")
     yaz("Toplam randevu", ozet.get("toplam", 0), "Dönemdeki tüm randevular (iptaller dahil).", kalin=True)
     yaz("Planlanmış", ozet.get("planlandi", 0), "Henüz yapılmamış, planlı randevular.", kalin=True)
+    yaz("Sonucu girilmemiş geçmiş", ozet.get("sonucsuz_gecmis", 0), "Günü geçmiş ama hâlâ Planlandı olan randevular; Tamamlandı/Gelmedi girilmediği için oranlara girmez.", kalin=True)
     yaz("Tamamlanan", ozet.get("tamamlandi", 0), "Seansı yapılan randevular.", kalin=True)
     yaz("Gelmedi", ozet.get("gelmedi", 0), "Danışanın gelmediği randevular.", kalin=True)
     yaz("İptal edilen", ozet.get("iptal_edildi", 0), "İptal nedenleri 'Dağılımlar' sayfasında.", kalin=True)

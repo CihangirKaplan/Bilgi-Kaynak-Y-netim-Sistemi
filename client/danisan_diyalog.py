@@ -163,29 +163,12 @@ class DanisanOlusturDialog(QDialog):
             self.cmb_istisna.setEnabled(True)
 
     def siradaki_kodu_yukle(self):
-        """Sistemdeki mevcut danışan kodlarına bakarak sıradaki kodu tahmin edip ekrana yazar."""
+        """Sıradaki kodu sunucudan alır (yıl bazlı: her yıl 0001'den başlar; önizleme sayaç tüketmez). Alınamazsa kod kayıtta atanır."""
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            cevap = oturum_kontrollu_istek(
-                "GET", f"{self.api_url}/api/danisan-kodlari", params={"pasifler_dahil": "true"},
-                headers=headers, timeout=5
-            )
-            if cevap.status_code == 200:
-                danisanlar = cevap.json()
-                max_sira = 0
-                yil = datetime.now().year
-
-                for d in danisanlar:
-                    kod = str(d.get("danisan_kod_id", ""))
-                    match = re.search(r"DAN-\d+-(\d+)", kod)
-                    if match:
-                        max_sira = max(max_sira, int(match.group(1)))
-
-                siradaki_no = max_sira + 1
-                siradaki_kod = f"DAN-{yil}-{siradaki_no:04d}"
-                self.txt_kod.setText(siradaki_kod)
-            else:
-                self.txt_kod.setText("Otomatik Atanacak")
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/randevular/siradaki-kod", headers=headers, timeout=5)
+            kod = cevap.json().get("siradaki_kod") if cevap.status_code == 200 else None
+            self.txt_kod.setText(str(kod) if kod else "Otomatik Atanacak")
         except Exception:
             self.txt_kod.setText("Otomatik Atanacak")
 

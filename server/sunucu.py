@@ -63,6 +63,7 @@ from server.guvenlik import (
 )
 from server.denetim import (
     denetim_kaydi_olustur,
+    durum_degisikligi_yaz,
     psikolog_oda_degisikligini_yaz,
     psikolog_odalarini_oku,
     satiri_sil_ve_ayrintisini_al,
@@ -118,16 +119,25 @@ VT_AYARLARI = {
     "port": os.getenv("DB_PORT")
 }
 
-def otomatik_danisan_kodu_uret(cursor) -> str:
-    yil = datetime.now().year
-    cursor.execute("SELECT nextval('danisan_kodu_seq');")
-    sira_degeri = cursor.fetchone()[0]
-    
-    # Eğer veritabanından direkt sayı geliyorsa formatlıyoruz, 
-    # zaten metin geldiyse direkt olarak dönüyoruz:
-    if isinstance(sira_degeri, int):
-        return f"DAN-{yil}-{sira_degeri:04d}"
-    return str(sira_degeri)
+def otomatik_danisan_kodu_uret(cursor, yil=None, kilitle=True) -> str:
+    """Yıl bazlı sıradaki danışan kodu: DAN-<yıl>-<sıra>. Sıra, o yılın en büyük kodunun bir fazlasıdır; her yıl 0001'den başlar.
+
+    kilitle=True (kayıt anı): aynı yılın kod üretimi transaction sonuna kadar kilitlenir, böylece iki kayıt aynı kodu almaz.
+    kilitle=False (önizleme): kilit alınmaz ve hiçbir sayaç tüketilmez; ekran açılıp kapanınca numara atlamaz."""
+    yil = int(yil or datetime.now().year)
+    if kilitle:
+        cursor.execute("SELECT pg_advisory_xact_lock(%s, %s);", (4210, yil))
+    cursor.execute(
+        "SELECT COALESCE(MAX(CAST(SUBSTRING(danisan_kod_id FROM %s) AS INTEGER)), 0) + 1 FROM danisan_kodlari WHERE danisan_kod_id ~ %s;",
+        (f"^DAN-{yil}-([0-9]+)$", f"^DAN-{yil}-[0-9]+$"),
+    )
+    return f"DAN-{yil}-{cursor.fetchone()[0]:04d}"
+
+
+def psikolog_rolu_mu(rol_adi) -> bool:
+    """Rol adı PSIKOLOG mu? Tek karşılaştırma yeri: büyük/küçük harf ve boşluk farkı önemsenmez, alt metin eşleşmesi yapılmaz."""
+    return str(rol_adi or "").strip().upper() == "PSIKOLOG"
+
 
 def token_kullanici_id(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
@@ -628,7 +638,7 @@ def kullanici_olustur(
                 detail="Öğrenci bilgileri yalnızca danışma öğrencisi rolü için girilebilir.",
             )
 
-        psikolog_rolu = str(rol_adi).upper() == "PSIKOLOG"
+        psikolog_rolu = psikolog_rolu_mu(rol_adi)
         istenen_odalar = sorted(set(yeni_kullanici.oda_idleri or []))
         if psikolog_rolu:
             # Her psikologun en az bir (aktif) odası olmalı.
@@ -892,8 +902,8 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             )
 
         # Her psikologun en az bir (aktif) odası olmalı: psikolog yapılırken oda seçilmesi zorunludur.
-        psikolog_olacak = str(yeni_rol_adi).upper() == "PSIKOLOG"
-        psikolog_idi = str(mevcut_rol).upper() == "PSIKOLOG"
+        psikolog_olacak = psikolog_rolu_mu(yeni_rol_adi)
+        psikolog_idi = psikolog_rolu_mu(mevcut_rol)
         istenen_odalar = sorted(set(veri.oda_idleri or []))
         if psikolog_idi and not psikolog_olacak:
             # Psikologluktan çıkarken odaları kalkar: bugün ve sonrası için planlı randevusu varsa önce iptal edilmeli.
@@ -1068,6 +1078,28 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                     ),
                 )
 
+        # Bir danışanın tek psikoloğu vardır: psikologluktan çıkan kişinin danışanları pasife alınır (randevu geçmişi korunur); yeniden
+        # psikolog olunca yalnızca BU YÜZDEN pasifleşenler geri açılır (elle pasif olanlar pasif kalır). Pasif kullanıcıda geri açma bekler.
+        danisan_sayisi = 0
+        if psikolog_idi and not psikolog_olacak:
+            cursor.execute(
+                "UPDATE danisan_kodlari SET aktif_mi = FALSE, psikolog_pasifligi_nedeniyle_pasif = TRUE "
+                "WHERE aktif_mi = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s);",
+                (kullanici_id,),
+            )
+        elif psikolog_olacak and not psikolog_idi:
+            cursor.execute(
+                "UPDATE danisan_kodlari SET aktif_mi = TRUE, psikolog_pasifligi_nedeniyle_pasif = FALSE "
+                "WHERE psikolog_pasifligi_nedeniyle_pasif = TRUE "
+                "AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s) "
+                "AND EXISTS (SELECT 1 FROM kullanicilar WHERE kullanici_id = %s AND aktif_mi = TRUE);",
+                (kullanici_id, kullanici_id),
+            )
+        if psikolog_idi != psikolog_olacak:
+            danisan_sayisi = cursor.rowcount if isinstance(cursor.rowcount, int) else 0
+            if danisan_sayisi:
+                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (islem_yapan_id, "UPDATE", "danisan_kodlari"))
+
         # Oda yetkileri yalnızca psikologlar içindir: psikolog olurken verilen odalar yazılır,
         # psikologluktan çıkarken silinir (yeniden psikolog olursa odalar yeniden seçilir).
         if psikolog_olacak or psikolog_idi:
@@ -1089,7 +1121,15 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         )
         conn.commit()
 
-        return {"mesaj": "Kullanıcı rolü ve personel kodu başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi, "yeni_personel_kodu": yeni_personel_kodu}
+        yanit = {"mesaj": "Kullanıcı rolü ve personel kodu başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi, "yeni_personel_kodu": yeni_personel_kodu}
+        if danisan_sayisi:
+            if psikolog_idi:
+                yanit["pasife_alinan_danisan"] = danisan_sayisi
+                yanit["mesaj"] += f" {danisan_sayisi} danışan pasife alındı (psikolog yeniden psikolog olunca geri açılır)."
+            else:
+                yanit["aktif_edilen_danisan"] = danisan_sayisi
+                yanit["mesaj"] += f" {danisan_sayisi} danışan yeniden aktif edildi."
+        return yanit
     except psycopg2.errors.UniqueViolation:
         if conn is not None:
             conn.rollback()
@@ -1822,7 +1862,7 @@ def kullanici_durum_degistir(
         # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
         yeni_durum = not mevcut_durum
 
-        psikolog_mu = str(hedef_rol).upper() == "PSIKOLOG"
+        psikolog_mu = psikolog_rolu_mu(hedef_rol)
         istenen_odalar = sorted(set((veri.oda_idleri if veri is not None else None) or []))
         psikolog_aktiflesiyor = psikolog_mu and yeni_durum
         psikolog_pasiflesiyor = psikolog_mu and not yeni_durum
@@ -2093,11 +2133,11 @@ def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEV
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        siradaki_kod = otomatik_danisan_kodu_uret(cursor)
+        siradaki_kod = otomatik_danisan_kodu_uret(cursor, kilitle=False)     # önizleme: kilit ve sayaç tüketimi yok
         return {"siradaki_kod": siradaki_kod}
     except Exception:
-        yil = datetime.now().year
-        return {"siradaki_kod": f"DAN-{yil}-0001"}
+        # Uydurma bir kod (DAN-yıl-0001) dönmek gerçek koda çarpabilir; kod alınamazsa açıkça hata verilir.
+        raise HTTPException(status_code=503, detail="Sıradaki danışan kodu şu an alınamadı. Kod kayıt sırasında otomatik atanır.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -2151,7 +2191,7 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
 
-        if rol is not None and rol[0].lower() == "psikolog": # <-- 'psikolog' olarak güncellendi
+        if rol is not None and psikolog_rolu_mu(rol[0]):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != randevu.psikolog_id:
@@ -2269,8 +2309,16 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
         # Eğer rol_sonuc[0] sayı gelme ihtimaline karşı stringe çevirip .lower() yapıyoruz
         rol_adi = str(rol_sonuc[0]).lower() if rol_sonuc else ""
         
+        # Serbest metin olan iptal notu yalnızca randevu düzenleme yetkisi olanlara gösterilir; diğerleri iptal NEDENİNİ (liste) görür.
+        cursor.execute(
+            "SELECT ri.izin_var FROM kullanicilar k JOIN rol_izinleri ri ON k.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id "
+            "WHERE k.kullanici_id = %s AND i.izin_adi = 'RANDEVU_DUZENLE';",
+            (kullanici_id,),
+        )
+        notu_gorebilir = (cursor.fetchone() or (0,))[0] == 1
+
         # 1. DURUM: Psikolog ise yalnızca kendi randevularını görür
-        if "psikolog" in rol_adi:
+        if psikolog_rolu_mu(rol_adi):
             sorgu = """
                 SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, r.olusturulma_tarihi, r.iptal_nedeni, r.iptal_notu, r.gorusme_tipi, r.terapi_turu 
                 FROM randevular r
@@ -2288,7 +2336,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
             )
             
         kayitlar = cursor.fetchall()
-        
+
         return [
             {
                 "randevu_id": kayit[0], 
@@ -2300,7 +2348,7 @@ def randevulari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTU
                 "durum": kayit[6],
                 "olusturma_tarihi": kayit[7] if len(kayit) > 7 else None,
                 "iptal_nedeni": kayit[8] if len(kayit) > 8 else None,
-                "iptal_notu": kayit[9] if len(kayit) > 9 else None,
+                "iptal_notu": (kayit[9] if len(kayit) > 9 else None) if notu_gorebilir else None,
                 "gorusme_tipi": kayit[10] if len(kayit) > 10 else "YUZ_YUZE",
                 "terapi_turu": kayit[11] if len(kayit) > 11 else None
             } for kayit in kayitlar
@@ -2466,7 +2514,7 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
 
-        psikolog_mu = rol is not None and str(rol[0]).upper() == "PSIKOLOG"
+        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
         if psikolog_mu:
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
@@ -2577,7 +2625,7 @@ def randevu_iptal_et(randevu_id: int, iptal: RandevuIptalModeli, kullanici_id: i
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
 
-        if rol[0] == "PSIKOLOG":
+        if rol is not None and psikolog_rolu_mu(rol[0]):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != randevu[0]:
@@ -2587,7 +2635,7 @@ def randevu_iptal_et(randevu_id: int, iptal: RandevuIptalModeli, kullanici_id: i
             raise HTTPException(status_code=409, detail="Bu randevu iptal edilemez.")
 
         cursor.execute("UPDATE randevular SET durum = 'IPTAL_EDILDI', iptal_nedeni = %s, iptal_notu = %s WHERE randevu_id = %s;", (iptal.iptal_nedeni, iptal.iptal_notu, randevu_id))
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "CANCEL", "randevular", randevu_id))
+        durum_degisikligi_yaz(cursor, kullanici_id, "CANCEL", "randevular", randevu_id, onceki=randevu[1], yeni="IPTAL_EDILDI", iptal_nedeni=iptal.iptal_nedeni)
         conn.commit()
         return {"durum": "basarili", "mesaj": "Randevu iptal edildi.", "randevu_id": randevu_id}
     finally:
@@ -2617,7 +2665,7 @@ def randevu_durumunu_isaretle(
 
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
-        if rol is not None and rol[0].upper() == "PSIKOLOG":
+        if rol is not None and psikolog_rolu_mu(rol[0]):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != randevu[0]:
@@ -2631,7 +2679,7 @@ def randevu_durumunu_isaretle(
             return {"durum": "basarili", "randevu_id": randevu_id, "randevu_durumu": isaret.durum, "mesaj": "Randevu zaten bu durumda."}
 
         cursor.execute("UPDATE randevular SET durum = %s WHERE randevu_id = %s;", (isaret.durum, randevu_id))
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (kullanici_id, "UPDATE", "randevular", randevu_id))
+        durum_degisikligi_yaz(cursor, kullanici_id, "UPDATE", "randevular", randevu_id, onceki=randevu[1], yeni=isaret.durum)
         conn.commit()
         return {"durum": "basarili", "randevu_id": randevu_id, "randevu_durumu": isaret.durum, "mesaj": "Randevu durumu güncellendi."}
     finally:
@@ -2681,7 +2729,7 @@ def danisan_kodu_olustur(
         kimlik = cursor.fetchone()
         personel_id, rol_adi = (kimlik[0], kimlik[1]) if kimlik else (None, "")
 
-        if rol_adi == "PSIKOLOG":
+        if psikolog_rolu_mu(rol_adi):
             # Psikolog danışanı yalnızca kendi adına açabilir
             if personel_id is None:
                 raise HTTPException(status_code=403, detail="Personel/Psikolog kaydınız bulunamadığı için danışan kodu oluşturamazsınız.")
@@ -2925,7 +2973,7 @@ def _hedef_psikolog_kontrol(cursor, hedef_kullanici_id: int, kilitle: bool = Fal
     kayit = cursor.fetchone()
     if kayit is None:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
-    if str(kayit[0]).upper() != "PSIKOLOG":
+    if not psikolog_rolu_mu(kayit[0]):
         raise HTTPException(status_code=422, detail="Oda yetkisi yalnızca psikolog rolündeki kullanıcılar için tanımlanabilir.")
 
 
@@ -3227,7 +3275,7 @@ def danisan_kodlari_listele(
         aktif_kosulu = "TRUE" if pasifler_dahil else "aktif_mi = TRUE"
 
         # 2. Psikolog yalnızca kendi oluşturduğu danışan kodlarını görür
-        if rol_adi == "PSIKOLOG":
+        if psikolog_rolu_mu(rol_adi):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             pers = cursor.fetchone()
             if not pers:
@@ -3295,7 +3343,7 @@ def danisan_durumunu_degistir(
 
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
-        if rol is not None and rol[0].upper() == "PSIKOLOG":
+        if rol is not None and psikolog_rolu_mu(rol[0]):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != danisan[1]:
@@ -3331,7 +3379,7 @@ def danisan_durumunu_degistir(
 
         # Elle yapılan durum değişikliği, "psikolog pasifliği nedeniyle pasif" işaretini temizler (psikolog dönünce otomatik geri açılmasın/kapanmasın).
         cursor.execute("UPDATE danisan_kodlari SET aktif_mi = %s, psikolog_pasifligi_nedeniyle_pasif = FALSE WHERE danisan_kod_id = %s;", (aktif_mi, danisan_kod_id))
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
+        durum_degisikligi_yaz(cursor, kullanici_id, "UPDATE", "danisan_kodlari", None, onceki={"aktif_mi": danisan[0]}, yeni={"aktif_mi": aktif_mi}, danisan_kod_id=danisan_kod_id)
         conn.commit()
         return {"durum": "basarili", "aktif_mi": aktif_mi, "mesaj": "Danışan aktif edildi." if aktif_mi else "Danışan pasife alındı."}
     finally:
@@ -3362,7 +3410,7 @@ def danisan_bilgilerini_guncelle(
 
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
-        if rol is not None and rol[0].upper() == "PSIKOLOG":
+        if rol is not None and psikolog_rolu_mu(rol[0]):
             cursor.execute("SELECT personel_id FROM personel WHERE kullanici_id = %s AND aktif_mi = TRUE;", (kullanici_id,))
             personel = cursor.fetchone()
             if personel is None or personel[0] != danisan[0]:
@@ -5509,7 +5557,7 @@ def randevu_raporu_secenekleri(
         cursor = conn.cursor()
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
-        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
 
         kosullar, parametreler = [], []
         if psikolog_mu:
@@ -5597,7 +5645,7 @@ def oda_kullanimi(
             (kullanici_id,),
         )
         rol = cursor.fetchone()
-        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
         cihaz_detayi_gorur = rol is not None and rol[1] == 1
         etkinlik_detayi_gorur = (
             rol is not None and len(rol) > 2 and rol[2] == 1
@@ -5711,7 +5759,7 @@ def randevu_raporu(
         cursor = conn.cursor()
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
-        psikolog_mu = rol is not None and "psikolog" in str(rol[0]).lower()
+        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
 
         kosullar, parametreler = [], []
         if baslangic is not None:

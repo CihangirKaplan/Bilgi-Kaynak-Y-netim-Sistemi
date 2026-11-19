@@ -125,17 +125,29 @@ def test_otomatik_danisan_kodu_uretilir():
     from datetime import datetime
 
     mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = (6,)
+    mock_cursor.fetchone.return_value = (6,)                  # o yılın en büyük kodu + 1
 
     yeni_kod = otomatik_danisan_kodu_uret(mock_cursor)
 
     yil = datetime.now().year
 
     assert yeni_kod == f"DAN-{yil}-0006"
+    sorgular = [c.args[0] for c in mock_cursor.execute.call_args_list]
+    assert "pg_advisory_xact_lock" in sorgular[0]             # kayıt anında aynı yılın kod üretimi serileşir
+    assert "danisan_kodu_seq" not in " ".join(sorgular)       # sayaç tüketilmez
 
-    mock_cursor.execute.assert_called_once_with(
-        "SELECT nextval('danisan_kodu_seq');"
-    )
+
+def test_danisan_kodu_onizlemesi_kilit_almaz_ve_yil_bazlidir():
+    from server.sunucu import otomatik_danisan_kodu_uret
+    from unittest.mock import MagicMock
+
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.return_value = (1,)
+
+    assert otomatik_danisan_kodu_uret(mock_cursor, yil=2031, kilitle=False) == "DAN-2031-0001"
+    sorgular = [c.args for c in mock_cursor.execute.call_args_list]
+    assert len(sorgular) == 1 and "pg_advisory" not in sorgular[0][0]
+    assert sorgular[0][1] == ("^DAN-2031-([0-9]+)$", "^DAN-2031-[0-9]+$")
 
 # 10. Geçersiz veya pasif psikologla randevu oluşturulamamalı
 def test_gecersiz_psikolog_reddedilir():

@@ -357,7 +357,9 @@ class RandevuRaporlariEkrani(QWidget):
         ozet = veri.get("ozet", {})
         deger, alt = self.kartlar["toplam"]
         deger.setText(str(ozet.get("toplam", 0)))
-        alt.setText(f"{ozet.get('danisan_sayisi', 0)} danışan · {ozet.get('planlandi', 0)} planlı")
+        sonucsuz = ozet.get("sonucsuz_gecmis", 0)
+        alt.setText(f"{ozet.get('danisan_sayisi', 0)} danışan · {ozet.get('planlandi', 0)} planlı"
+                    + (f" · {sonucsuz} geçmiş randevunun sonucu girilmemiş" if sonucsuz else ""))
         deger, alt = self.kartlar["tamamlandi"]
         deger.setText(str(ozet.get("tamamlandi", 0)))
         alt.setText(f"Tamamlanma oranı {yuzde_metni(ozet.get('tamamlanma_orani'))}")
