@@ -14,6 +14,8 @@ from server.sunucu import (
     VT_AYARLARI,
     cihaz_raporlari,
     cihaz_rezervasyon_raporu,
+    faaliyet_raporu_getir,
+    ogrenci_raporu_getir,
     oda_kullanim_raporu,
     yetki_raporu_getir,
     puan_raporu,
@@ -219,3 +221,85 @@ def test_yetki_raporu_kullanici_rol_ve_matris_parola_icermez(veri):
     assert "parola_hash" not in str(sonuc) and "$2" not in str(sonuc)               # parola özeti sızmaz
     pasif = yetki_raporu_getir(rol_id=None, durum="pasif", detay=False, kullanici_id=0)
     assert all(not k["aktif_mi"] for k in pasif["kullanicilar"]) and "matris" not in pasif
+
+
+# ------------------------------------------------------------------ öğrenci ve faaliyet raporları
+def test_faaliyet_raporu_puan_ve_onay_sayilari_diger_raporlarla_ayni(veri):
+    r = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=veri["faaliyet"], onay=None, detay=True, kullanici_id=0)
+    o = r["ozet"]
+    assert (o["kayit_sayisi"], o["faaliyet_miktari"], o["toplam_puan"]) == (2, 5, 19.0)          # 3x5 + 2x2
+    assert (o["onayli_kayit"], o["onay_bekleyen_kayit"], o["onayli_puan"], o["onay_bekleyen_puan"]) == (1, 1, 4.0, 15.0)
+    assert o["faaliyet_yapan_ogrenci"] == 1 and o["ortalama_puan_kayit"] == 9.5 and o["en_eski_bekleyen_gun"] > 0
+    assert [f["puan"] for f in r["faaliyetler"]] == [19.0] and r["faaliyetler"][0]["onay_bekleyen"] == 1
+    assert r["ogrenci_turleri"][0]["tur"] == "GONULLU" and r["ogrenci_turleri"][0]["kayit_sayisi"] == 2
+    assert len(r["onay_bekleyenler"]) == 1 and r["onay_bekleyenler"][0]["puan"] == 15.0 and r["onay_bekleyenler"][0]["bekleme_gun"] > 0
+    assert sorted(k["durum"] for k in r["kayitlar"]) == ["Onay bekliyor", "Onaylandı"]
+    # Puan Raporu ve Yönetim öğrenci özetiyle aynı toplam
+    puan = puan_raporu(baslangic=BAS, bitis=BIT, tur=None, durum=None, puansizlari_goster=False, detay=False, yetkili_id=0)
+    assert next(x for x in puan["ogrenciler"] if x["ogrenci_id"] == veri["ogrenci"])["toplam_puan"] == o["toplam_puan"]
+    assert yonetim_ogrenci_ozet(baslangic=BAS, bitis=BIT, kullanici_id=0)["ozet"]["toplam_puan"] == o["toplam_puan"]
+
+
+def test_faaliyet_raporu_onay_suzgeci_ve_dogrulama(veri):
+    from fastapi import HTTPException
+    onayli = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=None, onay="onayli", detay=False, kullanici_id=0)
+    assert onayli["ozet"]["kayit_sayisi"] == 1 and onayli["ozet"]["toplam_puan"] == 4.0 and onayli["onay_bekleyenler"] == []
+    assert "kayitlar" not in onayli and any(x["faaliyet_id"] == veri["faaliyet"] for x in onayli["faaliyet_secenekleri"])
+    with pytest.raises(HTTPException) as hata:
+        faaliyet_raporu_getir(baslangic=BIT, bitis=BAS, faaliyet_id=None, onay=None, detay=False, kullanici_id=0)
+    assert hata.value.status_code == 422
+    with pytest.raises(HTTPException):
+        faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=0, onay=None, detay=False, kullanici_id=0)
+
+
+def test_ogrenci_raporu_saklama_suresi_tur_bolum_ve_telefon_yok(veri):
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    etiket = uuid4().hex[:6]
+    eklenen = []
+    try:
+        for ad, tur, tarih, bolum in [
+            ("doldu", "GONULLU", "2010-01-01", None), ("ertelenen", "GONULLU", "2010-01-01", None),
+            ("yaklasan", "GONULLU", None, None), ("asistan", "ASISTAN", "2020-01-01", "Psikoloji"),
+        ]:
+            if tarih is None:        # 10 yıl dolmasına 6 ay kalmış
+                c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, telefon, tur, olusturulma_tarihi) "
+                          "VALUES (%s, %s, '5550000000', %s, (CURRENT_DATE - INTERVAL '10 years' + INTERVAL '6 months')) RETURNING ogrenci_id",
+                          (f"RT {ad} {etiket}", f"{ad[:3]}{etiket}", tur))
+            else:
+                c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, telefon, tur, olusturulma_tarihi, bolum) "
+                          "VALUES (%s, %s, '5550000000', %s, %s, %s) RETURNING ogrenci_id", (f"RT {ad} {etiket}", f"{ad[:3]}{etiket}", tur, tarih, bolum))
+            eklenen.append((ad, c.fetchone()[0]))
+        kimlik = dict(eklenen)
+        c.execute("INSERT INTO ogrenci_kayit_erteleme_gecmisi (ogrenci_id, ogrenci_numarasi, yeni_uyari_tarihi) VALUES (%s, 'x', CURRENT_DATE + 30)",
+                  (kimlik["ertelenen"],))
+
+        r = ogrenci_raporu_getir(tur=None, durum=None, kullanici_id=0)
+        durum = {o["ad_soyad"].split()[1]: o for o in r["ogrenciler"] if o["ad_soyad"].endswith(etiket)}
+        assert durum["doldu"]["saklama_durumu"] == "Süresi doldu" and durum["ertelenen"]["saklama_durumu"] == "Ertelendi"
+        assert durum["yaklasan"]["saklama_durumu"] == "12 ay içinde dolacak" and durum["asistan"]["saklama_durumu"] is None
+        assert durum["asistan"]["saklama_bitis"] is None and durum["doldu"]["saklama_bitis"] == "2020-01-01"
+        assert r["ozet"]["saklama_suresi_dolmus"] >= 1 and r["ozet"]["saklama_ertelenen"] >= 1 and r["ozet"]["saklama_yaklasan"] >= 1
+        assert r["ozet"]["toplam"] == r["ozet"]["aktif"] + r["ozet"]["pasif"] == len(r["ogrenciler"])
+        assert "5550000000" not in str(r) and not any("telefon" in o for o in r["ogrenciler"])        # telefon raporda yok
+        assert any(b["bolum"] == "Psikoloji" for b in r["bolum_dagilimi"])
+        assert next(o for o in r["ogrenciler"] if o["ogrenci_id"] == veri["ogrenci"])["faaliyetsiz_mi"] is True   # son faaliyeti 2001
+
+        asistan = ogrenci_raporu_getir(tur="ASISTAN", durum=None, kullanici_id=0)
+        assert {o["tur"] for o in asistan["ogrenciler"]} == {"ASISTAN"} and asistan["tur_dagilimi"][0]["toplam"] == len(asistan["ogrenciler"])
+        c.execute("UPDATE ogrenciler SET aktif_mi = FALSE WHERE ogrenci_id = %s", (kimlik["asistan"],))
+        pasif = ogrenci_raporu_getir(tur=None, durum="pasif", kullanici_id=0)
+        assert all(not o["aktif_mi"] for o in pasif["ogrenciler"]) and any(o["ogrenci_id"] == kimlik["asistan"] for o in pasif["ogrenciler"])
+    finally:
+        for _, kimlik_no in eklenen:
+            c.execute("DELETE FROM ogrenci_kayit_erteleme_gecmisi WHERE ogrenci_id = %s", (kimlik_no,))
+            c.execute("DELETE FROM ogrenciler WHERE ogrenci_id = %s", (kimlik_no,))
+        conn.close()
+
+
+def test_ogrenci_raporu_gecersiz_tur_reddedilir():
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as hata:
+        ogrenci_raporu_getir(tur="YOK", durum=None, kullanici_id=0)
+    assert hata.value.status_code == 422
