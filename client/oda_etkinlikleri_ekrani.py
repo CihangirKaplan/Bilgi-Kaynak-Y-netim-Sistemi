@@ -4,6 +4,7 @@ from datetime import datetime
 
 import requests
 from PySide6.QtCore import QDateTime, Qt
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout,
     QFormLayout, QTableWidget, QTableWidgetItem,
@@ -96,14 +97,17 @@ class OdaEtkinlikFormu(QDialog):
         self.ad.setMaxLength(150)
         self.ad.setPlaceholderText("Örn. Eğitim Semineri")
 
-        self.katilimci = QSpinBox()
-        self.katilimci.setRange(0, 100000)
-        self.katilimci.setSpecialValueText("Belirtilmedi")
+        self.katilimci = QLineEdit()
+        self.katilimci.setPlaceholderText("Örn. 12")
+        self.katilimci.setValidator(
+            QIntValidator(1, 100000, self.katilimci)
+        )
+        self.katilimci.setMaximumWidth(260)
 
         form.addRow("Oda:", self.oda)
         form.addRow("Düzenleyen personel:", self.personel)
         form.addRow("Etkinlik adı:", self.ad)
-        form.addRow("Katılımcı sayısı:", self.katilimci)
+        form.addRow("Katılımcı sayısı (isteğe bağlı):", self.katilimci)
         ana.addLayout(form)
 
         baslik = QLabel("Etkinlik Günleri ve Saatleri")
@@ -152,8 +156,10 @@ class OdaEtkinlikFormu(QDialog):
                 )
             )
             self.ad.setText(kayit["etkinlik_adi"])
-            self.katilimci.setValue(
-                kayit.get("katilimci_sayisi") or 0
+            self.katilimci.setText(
+                str(kayit["katilimci_sayisi"])
+                if kayit.get("katilimci_sayisi") is not None
+                else ""
             )
 
             gunler = kayit.get("gunler") or []
@@ -320,6 +326,14 @@ class OdaEtkinlikFormu(QDialog):
             )
             return
 
+        if (self.katilimci.text().strip()
+                and not self.katilimci.hasAcceptableInput()):
+            QMessageBox.warning(
+                self, "Geçersiz Katılımcı Sayısı",
+                "1 ile 100000 arasında tam sayı giriniz."
+            )
+            return
+
         from datetime import time as _time
 
         araliklar = []
@@ -377,7 +391,8 @@ class OdaEtkinlikFormu(QDialog):
             "organize_eden_personel_id": self.personel.currentData(),
             "etkinlik_adi": self.ad.text().strip(),
             "katilimci_sayisi": (
-                self.katilimci.value() or None
+                int(self.katilimci.text().strip())
+                if self.katilimci.text().strip() else None
             ),
             "gunler": self.oturum_verileri(),
         }
