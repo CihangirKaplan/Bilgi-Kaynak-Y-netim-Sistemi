@@ -81,7 +81,7 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
 
             cur.execute("""
                 SELECT cihaz_id FROM cihazlar
-                WHERE cihaz_id = 141
+                WHERE envanter_kodu LIKE 'OE-CI-%'
                   AND durum IN ('Kullanima_Hazir', 'Rezerve')
                   AND NOT EXISTS (
                       SELECT 1 FROM cihaz_rezervasyonlari cr

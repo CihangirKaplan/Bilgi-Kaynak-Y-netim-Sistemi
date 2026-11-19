@@ -20,6 +20,14 @@ IZINLI_HOSTLAR = {
 }
 
 POSTGRESQL_TEST_DOSYALARI = {
+    "test_oda_etkinlikleri_eszamanlilik.py",
+    "test_oda_etkinlikleri_ters_api_cakisma.py",
+    "test_oda_etkinlikleri_psikolog_odasi_pg.py",
+    "test_oda_etkinlikleri_es_zamanli_guncelleme.py",
+    "test_oda_etkinlikleri_cok_gun_rapor.py",
+    "test_oda_etkinlikleri_cok_gun_duzenleme.py",
+    "test_oda_etkinlikleri_bes_gun_gercek_pg.py",
+    "test_oda_etkinlikleri_bagimsiz_oturumlar.py",
     "test_oda_etkinlikleri_api_cakisma.py",
     "test_veri_butunlugu_pg_quality.py",
     "test_denetim_silinen_veri_pg_quality.py",
