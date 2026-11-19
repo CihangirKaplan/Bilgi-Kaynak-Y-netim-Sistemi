@@ -256,7 +256,11 @@ def test_arama_kutusu_listeyi_daraltir_ve_bos_durumda_bilgi_gosterir():
 
 
 def test_hazir_donem_ve_ozel_aralik_filtreleri():
-    ekran = ekran_ac(Sunucu([randevu(1, gun=0, saat=10), randevu(2, gun=2), randevu(3, gun=-4)]))
+    sunucu = Sunucu([randevu(1, gun=0, saat=10), randevu(2, gun=2), randevu(3, gun=-4)])
+    ekran = ekran_ac(sunucu)
+    # Dönem değişince liste sunucudan o aralıkla yeniden istenir (sahte sunucu hepsini döndürür, süzgeç istemcide de çalışır).
+    yama = patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu)
+    yama.start()
     ekran.cmb_donem.setCurrentIndex(ekran.cmb_donem.findData("bugun"))
     assert sutun(ekran, 0) == ["1"]
     assert ekran.dt_bas.isHidden()                                  # özel aralık kutuları yalnızca "Özel aralık"ta görünür
@@ -273,6 +277,7 @@ def test_hazir_donem_ve_ozel_aralik_filtreleri():
     ekran.dt_bas.setDate(bugun.addDays(3))                           # başlangıç > bitiş: kendiliğinden düzeltilir
     ekran.dt_bit.setDate(bugun.addDays(1))
     assert sutun(ekran, 0) == ["2"]
+    yama.stop()
     ekran.close()
 
 

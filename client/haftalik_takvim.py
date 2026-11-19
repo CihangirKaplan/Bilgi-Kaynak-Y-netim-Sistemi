@@ -257,8 +257,15 @@ class HaftalikTakvimEkrani(QWidget):
         api_adres = self.api_url if self.api_url else "http://127.0.0.1:8000"
         
         try:
-            # Tüm randevuları çek (İleride back-end'de direkt oda ID ile filtreleyen bir sorgu yazabilirsin)
-            cevap = oturum_kontrollu_istek("GET", f"{api_adres}/api/randevular", headers=headers, timeout=5)
+            # Yalnızca gösterilen haftanın ve seçili odanın randevularını iste (liste büyüdükçe yavaşlamasın)
+            cevap = oturum_kontrollu_istek(
+                "GET", f"{api_adres}/api/randevular", headers=headers, timeout=5,
+                params={
+                    "baslangic": pazartesi.toString("yyyy-MM-dd"),
+                    "bitis": pazartesi.addDays(6).toString("yyyy-MM-dd"),
+                    "oda_id": secili_oda_id,
+                },
+            )
             if oturum_hatasi_mi(cevap):
                 return
             
