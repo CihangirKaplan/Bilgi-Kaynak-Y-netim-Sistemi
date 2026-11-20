@@ -22,29 +22,30 @@ def test_kurallar_bos_hicbiri_saglanmaz():
     assert not any(s for _, s in kural_durumlari("", "", "eski"))
 
 
-def test_kisa_sifre_reddedilir_8_karakter_kabul():
+def test_kisa_sifre_reddedilir_10_karakter_harf_rakam_kabul():
     assert not tum_kurallar_saglandi_mi("Abc123!", "Abc123!", "eski")
-    assert tum_kurallar_saglandi_mi("Abc123!x", "Abc123!x", "eski")
+    assert tum_kurallar_saglandi_mi("Abc123!xyz", "Abc123!xyz", "eski")
+    assert not tum_kurallar_saglandi_mi("abcdefghijk", "abcdefghijk", "eski")        # rakamsız
 
 
 def test_eskiyle_ayni_ve_tekrar_uyusmazligi_reddedilir():
-    assert not tum_kurallar_saglandi_mi("Abc123!x", "Abc123!x", "Abc123!x")
-    assert not tum_kurallar_saglandi_mi("Abc123!x", "Abc123!y", "eski")
+    assert not tum_kurallar_saglandi_mi("Abc123!xyz", "Abc123!xyz", "Abc123!xyz")
+    assert not tum_kurallar_saglandi_mi("Abc123!xyz", "Abc123!xyw", "eski")
 
 
 def test_72_bayt_siniri():
-    assert tum_kurallar_saglandi_mi("a" * 72, "a" * 72, "eski")
-    assert not tum_kurallar_saglandi_mi("a" * 73, "a" * 73, "eski")
+    assert tum_kurallar_saglandi_mi("a" * 71 + "1", "a" * 71 + "1", "eski")
+    assert not tum_kurallar_saglandi_mi("a" * 72 + "1", "a" * 72 + "1", "eski")
     assert not tum_kurallar_saglandi_mi("ş" * 37, "ş" * 37, "eski")      # 37 karakter = 74 bayt
-    assert tum_kurallar_saglandi_mi("ş" * 36, "ş" * 36, "eski")          # 72 bayt
+    assert tum_kurallar_saglandi_mi("ş" * 35 + "1", "ş" * 35 + "1", "eski")          # 72 bayt
 
 
 def test_guc_dereceleri():
     assert guc_hesapla("")[0] == 0
     assert guc_hesapla("abc")[1] == "Zayıf"
-    assert guc_hesapla("abcdefgh")[0] == 1
+    assert guc_hesapla("abcdefghij")[0] == 1
     assert guc_hesapla("Abcdefgh1234")[0] == 3
-    assert guc_hesapla("Abcdefg1")[0] == 2
+    assert guc_hesapla("Abcdefghi1")[0] == 2
 
 
 # ---------------- geçici parola penceresi ----------------
@@ -128,12 +129,12 @@ def yaz(e, eski="", yeni="", tekrar=""):
 def test_baslangicta_dugme_aktif_ve_kurallar_gorunur(ekran):
     assert ekran.kaydet_btn.isEnabled()
     assert len(ekran.kural_satirlari) == 3
-    assert "En az 8 karakter" in ekran.kural_satirlari[0].text()
+    assert "En az 10 karakter" in ekran.kural_satirlari[0].text()
     assert all("72 bayt" not in satir.text()
                for satir in ekran.kural_satirlari)
 
 def test_kurallar_saglaninca_uc_yesil_tik_gorunur(ekran):
-    yaz(ekran, "gecici", "Abc123!x", "Abc123!x")
+    yaz(ekran, "gecici", "Abc123!xyz", "Abc123!xyz")
     assert ekran.kaydet_btn.isEnabled()
     assert len(ekran.kural_satirlari) == 3
     assert all(satir.text().startswith("✔")
@@ -142,10 +143,10 @@ def test_kurallar_saglaninca_uc_yesil_tik_gorunur(ekran):
 def test_gecersiz_sifre_sunucuya_gonderilmez(ekran):
     durumlar = [
         ("gecici", "Abc123!", "Abc123!"),
-        ("gecici", "Abc123!x", "Abc123!y"),
-        ("", "Abc123!x", "Abc123!x"),
-        ("Abc123!x", "Abc123!x", "Abc123!x"),
-        ("gecici", "a" * 73, "a" * 73),
+        ("gecici", "Abc123!xyz", "Abc123!xyw"),
+        ("", "Abc123!xyz", "Abc123!xyz"),
+        ("Abc123!xyz", "Abc123!xyz", "Abc123!xyz"),
+        ("gecici", "a" * 72 + "1", "a" * 72 + "1"),
     ]
 
     for eski, yeni, tekrar in durumlar:
@@ -166,7 +167,7 @@ def test_guc_gostergesi_yazdikca_degisir(ekran):
 
 
 def test_basarisiz_istekten_sonra_dugme_kural_durumuna_gore_kalir(ekran):
-    yaz(ekran, "gecici", "Abc123!x", "Abc123!x")
+    yaz(ekran, "gecici", "Abc123!xyz", "Abc123!xyz")
     yanit = MagicMock(status_code=401)
     yanit.json.return_value = {"detail": "Eski şifre hatalı."}
     with patch('client.sifre_degistir_ekrani.oturum_kontrollu_istek', return_value=yanit), \
@@ -177,7 +178,7 @@ def test_basarisiz_istekten_sonra_dugme_kural_durumuna_gore_kalir(ekran):
 
 
 def test_oturum_bitince_kurallar_saglansa_da_dugme_kapali_kalir(ekran):
-    yaz(ekran, "gecici", "Abc123!x", "Abc123!x")
+    yaz(ekran, "gecici", "Abc123!xyz", "Abc123!xyz")
     ekran._oturum_kapatiliyor = True
     ekran._kurallari_guncelle()
     assert not ekran.kaydet_btn.isEnabled()
@@ -185,7 +186,7 @@ def test_oturum_bitince_kurallar_saglansa_da_dugme_kapali_kalir(ekran):
 
 
 def test_gecerli_sifre_sunucuya_gonderilir(ekran):
-    yaz(ekran, "gecici", "Abc123!x", "Abc123!x")
+    yaz(ekran, "gecici", "Abc123!xyz", "Abc123!xyz")
     yanit = MagicMock(status_code=200)
     class Sayac:
         sayi = 0
@@ -198,5 +199,5 @@ def test_gecerli_sifre_sunucuya_gonderilir(ekran):
     with patch('client.sifre_degistir_ekrani.oturum_kontrollu_istek', return_value=yanit) as api, \
             patch('client.sifre_degistir_ekrani.oturum_hatasi_mi', return_value=False):
         ekran.sifre_degistir()
-    assert api.call_args.kwargs["json"] == {"eski_parola": "gecici", "yeni_parola": "Abc123!x", "yeni_parola_tekrar": "Abc123!x"}
+    assert api.call_args.kwargs["json"] == {"eski_parola": "gecici", "yeni_parola": "Abc123!xyz", "yeni_parola_tekrar": "Abc123!xyz"}
     assert sayac.sayi == 1

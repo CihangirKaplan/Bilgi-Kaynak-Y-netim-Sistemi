@@ -7,7 +7,8 @@ Sırayla şunları yapar:
   3. Sunucu beklenmedik şekilde kapanırsa kısa bir süre sonra yeniden başlatır.
 Çıktılar logs/sunucu.log dosyasına yazılır (5 MB'ı aşınca yeni dosyaya geçilir).
 
-Ayarlar .env ya da ortam değişkenleriyle verilir: TKYS_HOST (varsayılan 0.0.0.0), TKYS_PORT (varsayılan 8000).
+Ayarlar .env ya da ortam değişkenleriyle verilir: TKYS_HOST (varsayılan 0.0.0.0), TKYS_PORT (varsayılan 8000);
+HTTPS için TKYS_SSL_CERTFILE ve TKYS_SSL_KEYFILE (bkz. docs/deployment/TLS_Kurulum_Rehberi.md).
 Elle denemek için proje klasöründe:  python scripts/windows/sunucu_baslat.py
 """
 
@@ -45,8 +46,24 @@ def ayarlar():
     return host, port, db_host, db_port
 
 
+def tls_ayarlari():
+    """(sertifika, anahtar) ya da (None, None). İkisi birlikte verilmelidir; dosyalar yoksa açık bir hatayla durur."""
+    sertifika = os.getenv("TKYS_SSL_CERTFILE") or None
+    anahtar = os.getenv("TKYS_SSL_KEYFILE") or None
+    if bool(sertifika) != bool(anahtar):
+        raise SystemExit("TKYS_SSL_CERTFILE ve TKYS_SSL_KEYFILE birlikte verilmelidir.")
+    for dosya in (sertifika, anahtar):
+        if dosya and not Path(dosya).is_file():
+            raise SystemExit(f"TLS dosyası bulunamadı: {dosya}")
+    return sertifika, anahtar
+
+
 def sunucu_komutu(host, port):
-    return [sys.executable, "-m", "uvicorn", "server.sunucu:app", "--host", host, "--port", str(port)]
+    komut = [sys.executable, "-m", "uvicorn", "server.sunucu:app", "--host", host, "--port", str(port)]
+    sertifika, anahtar = tls_ayarlari()
+    if sertifika:
+        komut += ["--ssl-certfile", sertifika, "--ssl-keyfile", anahtar]
+    return komut
 
 
 def veritabani_hazir_mi(db_host, db_port, zaman_asimi=3):
@@ -96,7 +113,10 @@ def calistir(maks_tur=None, bekle=time.sleep):
         with open(LOG_DOSYASI, "a", encoding="utf-8") as log:
             if not veritabanini_bekle(db_host, db_port, bekle=bekle):
                 yaz(log, f"Veritabanı ({db_host}:{db_port}) {VERITABANI_BEKLEME_SANIYE} saniyede hazır olmadı; sunucu yine de başlatılıyor.")
-            yaz(log, f"Sunucu başlatılıyor: http://{host}:{port}")
+            sertifika, _ = tls_ayarlari()
+            yaz(log, f"Sunucu başlatılıyor: {'https' if sertifika else 'http'}://{host}:{port}")
+            if not sertifika and host not in ("127.0.0.1", "localhost"):
+                yaz(log, "UYARI: Sunucu ağa HTTPS olmadan açık; parolalar ve oturum anahtarları şifresiz taşınır. docs/deployment/TLS_Kurulum_Rehberi.md")
             sonuc = subprocess.run(sunucu_komutu(host, port), cwd=PROJE, stdout=log, stderr=subprocess.STDOUT)
             yaz(log, f"Sunucu kapandı (çıkış kodu {sonuc.returncode}); {YENIDEN_BASLATMA_BEKLEME_SANIYE} saniye sonra yeniden başlatılacak.")
         bekle(YENIDEN_BASLATMA_BEKLEME_SANIYE)

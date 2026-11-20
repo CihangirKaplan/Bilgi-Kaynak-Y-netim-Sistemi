@@ -225,7 +225,7 @@ def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3), rezervasyonlu=None):
     durum = {"sorgu": "", "parametreler": None}
 
     def execute(sorgu, parametreler=None):
-        durum["sorgu"] = sorgu.upper()
+        durum["sorgu"] = " ".join(sorgu.upper().split())              # satır sonu/boşluk farkı önemsiz
         durum["parametreler"] = parametreler
 
     def fetchone():

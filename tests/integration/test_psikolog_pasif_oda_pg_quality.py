@@ -454,3 +454,87 @@ def test_personel_olusturma_ve_guncelleme_kullanici_kaydina_yazar_gercek_veritab
         assert c.fetchone()[0] == 2
     finally:
         _kullaniciyi_temizle(c, ad)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Güvenlik paketi: kullanıcı adında büyük/küçük harf, parola politikası, rol hiyerarşisi (gerçek veritabanı)
+# ----------------------------------------------------------------------------------------------------------------------
+def test_kullanici_adi_buyuk_kucuk_harf_farkiyla_tekrar_olusturulamaz_gercek_veritabaninda(ortam):
+    c, admin = ortam[0], ortam[1]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    ad = f"Ab_{uuid4().hex[:8]}"
+    c.execute("SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'")
+    memur = c.fetchone()[0]
+    try:
+        assert istemci.post("/api/kullanicilar", json={"kullanici_adi": ad, "rol_id": memur}).status_code == 201
+        yanit = istemci.post("/api/kullanicilar", json={"kullanici_adi": ad.lower(), "rol_id": memur})
+        assert yanit.status_code == 409 and "kullanılıyor" in yanit.json()["detail"]
+    finally:
+        _kullaniciyi_temizle(c, ad)
+
+
+def test_giris_kullanici_adinda_buyuk_kucuk_harfi_onemsemez_gercek_veritabaninda(ortam):
+    from server.guvenlik import parola_hashle
+    from server.personel_kaydi import personel_kaydi_ata
+    c = ortam[0]
+    ad = f"Gi_{uuid4().hex[:8]}"
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, ilk_giris_mi) VALUES (%s, %s, (SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'), FALSE) RETURNING kullanici_id", (ad, parola_hashle("Guzel-Parola-2026")))
+    yeni = c.fetchone()[0]
+    personel_kaydi_ata(c, yeni, f"GI-{uuid4().hex[:6]}")
+    istemci = TestClient(app)
+    try:
+        for yazim in (ad, ad.lower(), ad.upper()):
+            yanit = istemci.post("/api/login", json={"kullanici_adi": yazim, "parola": "Guzel-Parola-2026"})
+            assert yanit.status_code == 200, (yazim, yanit.text)
+            assert yanit.json()["kullanici_adi"] == ad                                          # hesap kendi yazımıyla döner
+        assert istemci.post("/api/login", json={"kullanici_adi": ad.lower(), "parola": "yanlis-parola-1"}).status_code == 401
+    finally:
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR hedef_kayit_id = %s", (yeni, yeni))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (yeni,))
+
+
+def test_sifre_degistirme_parola_politikasini_uygular_gercek_veritabaninda(ortam):
+    from server.guvenlik import parola_hashle
+    from server.sunucu import token_kullanici_id
+    c = ortam[0]
+    ad = f"Pp_{uuid4().hex[:8]}"
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, ilk_giris_mi) VALUES (%s, %s, (SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'), FALSE) RETURNING kullanici_id", (ad, parola_hashle("Eski-Parola-2026")))
+    yeni = c.fetchone()[0]
+    app.dependency_overrides[token_kullanici_id] = lambda: yeni
+    istemci = TestClient(app)
+    try:
+        for kotu, parca in (("Kisa1", "en az"), ("sadeceharflerburada", "rakam"), ("Password123", "yaygın"), (ad + "12345", "kullanıcı adı")):
+            yanit = istemci.post("/api/sifre-degistir", json={"eski_parola": "Eski-Parola-2026", "yeni_parola": kotu, "yeni_parola_tekrar": kotu})
+            assert yanit.status_code == 422 and parca in yanit.json()["detail"].lower(), (kotu, yanit.text)
+        iyi = "Yepyeni-Parola-77"
+        assert istemci.post("/api/sifre-degistir", json={"eski_parola": "Eski-Parola-2026", "yeni_parola": iyi, "yeni_parola_tekrar": iyi}).status_code == 200
+    finally:
+        app.dependency_overrides.pop(token_kullanici_id, None)
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR hedef_kayit_id = %s", (yeni, yeni))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (yeni,))
+
+
+def test_rol_hiyerarsisi_ust_ya_da_esit_rolleri_yonetmeyi_engeller_gercek_veritabaninda(ortam):
+    c = ortam[0]
+    etiket = uuid4().hex[:8]
+    mudur = _kullanici(c, f"hm_{etiket}", "MUDUR")
+    esit = _kullanici(c, f"he_{etiket}", "MUDUR")
+    memur = _kullanici(c, f"hk_{etiket}", "MEMUR")
+    c.execute("SELECT rol_id, rol_adi FROM roller WHERE rol_adi IN ('MUDUR', 'MEMUR')")
+    roller = {ad: rid for rid, ad in c.fetchall()}
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: mudur
+    try:
+        yanit = istemci.patch(f"/api/kullanicilar/{esit}/durum-degistir")                        # eşit seviye: engellenir
+        assert yanit.status_code == 403 and "seviyedeki" in yanit.json()["detail"], yanit.text
+        yanit = istemci.patch(f"/api/kullanicilar/{memur}/rol", json={"rol_id": roller["MUDUR"]})  # eşit seviyeli role yükseltme: engellenir
+        assert yanit.status_code == 403, yanit.text
+        yanit = istemci.post("/api/kullanicilar", json={"kullanici_adi": f"hn_{etiket}", "rol_id": roller["MUDUR"]})
+        assert yanit.status_code == 403, yanit.text
+        assert istemci.patch(f"/api/kullanicilar/{memur}/durum-degistir").status_code == 200         # alt seviye: serbest
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        for k in (mudur, esit, memur):
+            c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR (hedef_tablo IN ('kullanicilar','personel') AND hedef_kayit_id = %s)", (k, k))
+            c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (k,))

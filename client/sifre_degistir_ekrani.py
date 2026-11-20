@@ -10,7 +10,7 @@ from client.api_yoneticisi import (
     oturum_olaylari,
 )
 from pathlib import Path
-from client.parola_kurallari import kural_durumlari, tum_kurallar_saglandi_mi, guc_hesapla
+from client.parola_kurallari import EN_AZ_UZUNLUK, kural_durumlari, tum_kurallar_saglandi_mi, guc_hesapla
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
@@ -432,9 +432,9 @@ class SifreDegistirEkrani(QWidget):
             )
             return
 
-        if len(yeni) < 8:
+        if len(yeni) < EN_AZ_UZUNLUK:
             self.hata_lbl.setText(
-                "⚠ Yeni şifreniz en az 8 karakter olmalıdır."
+                f"⚠ Yeni şifreniz en az {EN_AZ_UZUNLUK} karakter olmalıdır."
             )
             return
 

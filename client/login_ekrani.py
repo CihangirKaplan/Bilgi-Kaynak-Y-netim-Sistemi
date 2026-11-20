@@ -24,6 +24,10 @@ sys.excepthook = hata_yakala
 #  TEMA VE SABİTLER
 # ======================================================================
 API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000") # Sunucu adresimiz
+# Sunucu HTTPS'i kendi kendine imzalı ya da kurum sertifikasıyla veriyorsa: TKYS_CA_BUNDLE=<sertifika.pem yolu>.
+# requests kütüphanesi bu sertifikayı REQUESTS_CA_BUNDLE üzerinden güvenilir sayar (doğrulama kapatılmaz).
+if os.getenv("TKYS_CA_BUNDLE"):
+    os.environ["REQUESTS_CA_BUNDLE"] = os.environ["TKYS_CA_BUNDLE"]
 MAX_DENEME = 5
 
 STIL = """
