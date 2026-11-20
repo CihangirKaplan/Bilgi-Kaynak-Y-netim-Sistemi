@@ -219,3 +219,110 @@ def test_quality_randevu_cakisma_kisitlari_postgresql():
             # Basarili veya basarisiz her durumda
             # gecici verileri geri al.
             conn.rollback()
+
+
+# ======================================================================================================================
+# scripts/randevu_cakisma_onar.py: eksik çakışma kurallarının tespiti ve onarımı (gerçek PostgreSQL; her test geri alınır)
+# ======================================================================================================================
+from datetime import datetime as _dt  # noqa: E402
+
+from scripts import randevu_cakisma_onar as onar  # noqa: E402
+
+
+def _onarim_ortami(cursor, etiket):
+    """İşlemde: iki oda, bir psikolog (personel görünümü üzerinden) ve bir danışan; çakışma kurallarını KALDIRIR (eksik kurulumu taklit)."""
+    cursor.execute("SET LOCAL lock_timeout = '3s'")
+    cursor.execute("ALTER TABLE randevular DROP CONSTRAINT IF EXISTS psikolog_randevu_cakisma")
+    cursor.execute("ALTER TABLE randevular DROP CONSTRAINT IF EXISTS oda_randevu_cakisma")
+    odalar = []
+    for i in (1, 2):
+        cursor.execute("INSERT INTO odalar (oda_adi) VALUES (%s) RETURNING oda_id", (f"onar_oda_{i}_{etiket}",))
+        odalar.append(cursor.fetchone()[0])
+    cursor.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id) VALUES (%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = 'PSIKOLOG')) RETURNING kullanici_id",
+                   (f"onar_k_{etiket}",))
+    kullanici = cursor.fetchone()[0]
+    cursor.execute("INSERT INTO personel (kullanici_id, personel_kodu) VALUES (%s, %s) RETURNING personel_id", (kullanici, f"ONR-{etiket}"))
+    psikolog = cursor.fetchone()[0]
+    cursor.execute("INSERT INTO danisan_kodlari (danisan_kod_id) VALUES (%s)", (f"ONR-D-{etiket}",))
+    return odalar, psikolog, f"ONR-D-{etiket}"
+
+
+def _randevu(cursor, kod, psikolog, oda, saat, dakika=60, durum="PLANLANDI"):
+    bas = _dt(2038, 3, 3, saat, 0)
+    cursor.execute(
+        "INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) "
+        "VALUES (%s, %s, %s, %s, %s + make_interval(mins => %s), %s) RETURNING randevu_id", (kod, psikolog, oda, bas, bas, dakika, durum))
+    return cursor.fetchone()[0]
+
+
+def _savepointli(cursor, sql, parametre=()):
+    cursor.execute("SAVEPOINT s")
+    try:
+        cursor.execute(sql, parametre or None)
+    except psycopg2.Error as hata:
+        cursor.execute("ROLLBACK TO SAVEPOINT s")
+        return hata
+    cursor.execute("RELEASE SAVEPOINT s")
+    return None
+
+
+def _onarim_testi(test):
+    def sarmal():
+        assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
+        conn = psycopg2.connect(**VT_AYARLARI)
+        try:
+            with conn.cursor() as cursor:
+                test(cursor, uuid4().hex[:8])
+        finally:
+            conn.rollback()
+            conn.close()
+    sarmal.__name__ = test.__name__
+    return sarmal
+
+
+@_onarim_testi
+def test_onarim_eksik_kurallari_bulur_cakisma_yokken_ekler_ve_kurallar_calisir(cursor, etiket):
+    (oda1, oda2), psikolog, kod = _onarim_ortami(cursor, etiket)
+    assert sorted(a for a, _, _ in onar.eksik_kurallar(cursor)) == ["oda_randevu_cakisma", "psikolog_randevu_cakisma"]
+    _randevu(cursor, kod, psikolog, oda1, 10)
+    _randevu(cursor, kod, psikolog, oda2, 11)                                                # ardışık (10-11, 11-12): çakışma DEĞİL
+    assert onar.cakismalar(cursor, "psikolog_id") == [] and onar.cakismalar(cursor, "oda_id") == []
+    sorun, _, uygulanabilir = onar.karar(onar.eksik_kurallar(cursor), {"psikolog_id": 0, "oda_id": 0})
+    assert uygulanabilir and sorun
+    onar.uygula(cursor, onar.eksik_kurallar(cursor))
+    assert onar.eksik_kurallar(cursor) == []
+    assert isinstance(_savepointli(cursor, "INSERT INTO randevular (danisan_kod_id, psikolog_id, oda_id, baslangic_zamani, bitis_zamani, durum) "
+                                           "VALUES (%s, %s, %s, '2038-03-03 10:30', '2038-03-03 11:30', 'PLANLANDI')", (kod, psikolog, oda2)),
+                      ExclusionViolation)                                                    # kural artık çakışmayı engeller (aynı psikolog)
+
+
+@_onarim_testi
+def test_onarim_cakisan_randevular_varken_kurali_eklemez_cakismalari_listeler(cursor, etiket):
+    (oda1, oda2), psikolog, kod = _onarim_ortami(cursor, etiket)
+    a = _randevu(cursor, kod, psikolog, oda1, 10)
+    b = _randevu(cursor, kod, psikolog, oda2, 10, dakika=30)                                  # aynı psikolog, aynı saat, farklı oda
+    liste = onar.cakismalar(cursor, "psikolog_id")
+    assert [(c["a"], c["b"]) for c in liste] == [(a, b)] and liste[0]["a_kod"] == kod
+    assert onar.cakismalar(cursor, "oda_id") == []                                           # odalar farklı
+    sorun, _, uygulanabilir = onar.karar(onar.eksik_kurallar(cursor), {"psikolog_id": 1, "oda_id": 0})
+    assert uygulanabilir is False and any("psikolog_id: 1 çakışan" in s for s in sorun)
+    assert isinstance(_savepointli(cursor, onar.kural_sql("psikolog_randevu_cakisma", "psikolog_id")), ExclusionViolation)      # veritabanı da reddeder
+
+
+@_onarim_testi
+def test_onarim_iptal_edilen_randevular_cakisma_sayilmaz(cursor, etiket):
+    (oda1, _), psikolog, kod = _onarim_ortami(cursor, etiket)
+    _randevu(cursor, kod, psikolog, oda1, 10)
+    _randevu(cursor, kod, psikolog, oda1, 10, durum="IPTAL_EDILDI")                          # aynı psikolog, aynı oda, aynı saat ama iptal
+    assert onar.cakismalar(cursor, "psikolog_id") == [] and onar.cakismalar(cursor, "oda_id") == []
+    onar.uygula(cursor, onar.eksik_kurallar(cursor))
+    assert onar.eksik_kurallar(cursor) == []
+
+
+@_onarim_testi
+def test_onarim_yalniz_eksik_olan_kurali_ekler(cursor, etiket):
+    _onarim_ortami(cursor, etiket)
+    cursor.execute(onar.kural_sql("oda_randevu_cakisma", "oda_id"))                           # oda kuralı var, psikolog kuralı eksik
+    assert [a for a, _, _ in onar.eksik_kurallar(cursor)] == ["psikolog_randevu_cakisma"]
+    onar.uygula(cursor, onar.eksik_kurallar(cursor))
+    assert onar.eksik_kurallar(cursor) == []

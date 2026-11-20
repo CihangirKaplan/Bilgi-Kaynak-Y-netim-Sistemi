@@ -303,6 +303,15 @@ Hata olduğunda işlem geri alınır, **veri bozulmaz**. Temiz kurulumda (örn. 
    migration'daki komutu `IF NOT EXISTS` ile çalıştırmak yeterlidir (nesne zaten varsa hiçbir şey yapmaz, veri silmez).
 4. `python -m alembic upgrade head` komutunu tekrar çalıştırın, ardından `python scripts/sema_dogrula.py` ile `ŞEMA UYUMLU` sonucunu görün.
 
+**Randevu çakışma kuralları eksikse** (`sema_dogrula.py` çıktısında `randevular.oda_randevu_cakisma` ve `psikolog_randevu_cakisma`): bu kurallar aynı
+psikoloğa ya da odaya aynı saatte iki randevu verilmesini veritabanı seviyesinde engeller. Eklemek için ayrı bir araç vardır; önce yedek alın:
+
+    python scripts/randevu_cakisma_onar.py kontrol          # eksik kural ve çakışan randevu var mı? (yalnızca okur)
+    python scripts/randevu_cakisma_onar.py uygula --dene    # dener, sonunda geri alır
+    python scripts/randevu_cakisma_onar.py uygula           # uygular
+
+Çakışan randevu varsa kural eklenemez; araç çakışmaları listeler ve hiçbir şey değiştirmez (önce arayüzden birini iptal edin ya da saatini değiştirin).
+
 **Yapmayın:** `python -m alembic stamp ...` ile sürümü zorla "güncel" işaretlemeyin. `stamp` yalnızca sürüm numarasını değiştirir, eksik nesneleri
 oluşturmaz; sorunu çözmez, aksine gizler ve bu hatanın asıl nedeni olur.
 
