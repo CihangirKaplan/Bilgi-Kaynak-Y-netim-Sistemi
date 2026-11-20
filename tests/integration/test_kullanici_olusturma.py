@@ -55,8 +55,7 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
         ("ADMIN",),       # İşlemi yapan kullanıcının rolü
         (1,),             # Rol atama yetkisi var
         ("PSIKOLOG",),    # Yeni kullanıcının rolü
-        (25,),            # Oluşturulan kullanıcının ID'si
-        (15,),            # Oluşturulan personelin ID'si
+        (25, 15),         # Oluşturulan kullanıcının ID'si ve personel ID'si (tek INSERT)
     ]
 
     # Henüz bu role ait personel kodu bulunmuyor.
@@ -88,16 +87,16 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
     assert sonuc["personel_kodu"] == "PER-PSK-001"
 
     # Kullanıcıyla birlikte personel de oluşturulmalı.
-    assert any(
-        "INSERT INTO personel" in cagri.args[0]
+    assert not any(
+        "INTO personel" in cagri.args[0]
         for cagri in mock_cursor.execute.call_args_list
     )
 
-    # Kullanıcı ve personel için Audit kayıtları oluşturulmalı.
+    # Kullanıcı ve personel bilgisi tek kayıttır: tek Audit kaydı oluşturulmalı.
     assert sum(
         "INSERT INTO denetim_kayitlari" in cagri.args[0]
         for cagri in mock_cursor.execute.call_args_list
-    ) >= 2
+    ) == 1
 
     # Geçici şifre hash fonksiyonuna gönderilmeli
     mock_hash.assert_called_once_with("TestGecici123!")
@@ -115,6 +114,6 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
 
     assert "ilk_giris_mi" in sorgu
     assert "TRUE, TRUE" in sorgu
-    assert parametreler == ("test_psikolog", "ornek_hash", 1)
+    assert parametreler == ("test_psikolog", "ornek_hash", 1, "PER-PSK-001")
 
     mock_conn.commit.assert_called_once()

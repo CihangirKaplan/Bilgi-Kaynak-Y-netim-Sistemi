@@ -237,9 +237,7 @@ def sahte_olusturma_veritabani(rol, aktif_odalar=(1, 2, 3), rezervasyonlu=None):
         if "FROM ROLLER WHERE ROL_ID" in s:
             return (rol,)
         if "INSERT INTO KULLANICILAR" in s:
-            return (25,)
-        if "INSERT INTO PERSONEL" in s:
-            return (15,)
+            return (25, 15)                              # kullanici_id, personel_id (tek INSERT)
         return None
 
     def fetchall():

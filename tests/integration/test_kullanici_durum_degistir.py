@@ -61,12 +61,8 @@ def test_aktif_pasif_durum_degistirme(mevcut, beklenen):
         c.args for c in cursor.execute.call_args_list
     ]
 
-    for tablo in ("kullanicilar", "personel"):
-        assert any(
-            f"UPDATE {tablo} SET aktif_mi" in args[0]
-            and args[1] == (beklenen, 5)
-            for args in sorgular
-        )
+    assert any("UPDATE kullanicilar SET aktif_mi" in args[0] and args[1] == (beklenen, 5) for args in sorgular)
+    assert not any("UPDATE personel" in args[0] for args in sorgular)                 # tek aktiflik bilgisi: kullanicilar
 
     assert any(
         "INSERT INTO denetim_kayitlari" in args[0]

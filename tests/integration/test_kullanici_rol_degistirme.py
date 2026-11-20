@@ -126,7 +126,7 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
 
     # Psikologluktan çıkarken oda yetkileri silinir ve bunun için ayrıca denetim kaydı düşer.
     assert any(c.args[0].startswith('DELETE FROM psikolog_odalar') for c in mock_cursor.execute.call_args_list)
-    assert len(audit_cagrilari) == 3
+    assert len(audit_cagrilari) == 2                          # oda değişikliği + ROLE_CHANGE (ayrı "personel" kaydı yok)
     assert audit_cagrilari[0].args[1][:4] == (10, "UPDATE", "psikolog_odalar", 5)
     audit_cagrilari = audit_cagrilari[1:]
 
@@ -139,12 +139,10 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
     # Hangi rolden hangisine geçildiği de kayıtlı
     ayrinti = audit_cagrilari[0].args[1][4].adapted
     assert ayrinti["onceki"]["rol"] != ayrinti["yeni"]["rol"] and ayrinti["yeni"]["personel_kodu"] == "PER-MEM-003"
-    assert audit_cagrilari[1].args[1] == (
-        10, "UPDATE", "personel", 20
-    )
+    assert not any(c.args[1][2] == "personel" for c in audit_cagrilari)     # ayrı "personel" denetim kaydı yok
     assert sonuc["yeni_personel_kodu"] == "PER-MEM-003"
     assert any(
-        "UPDATE PERSONEL SET PERSONEL_KODU" in sorgu
+        "UPDATE KULLANICILAR SET ROL_ID = %S, PERSONEL_KODU" in sorgu
         for sorgu in sorgular
     )
 def test_yetkisiz_kullanici_rol_degistiremez():

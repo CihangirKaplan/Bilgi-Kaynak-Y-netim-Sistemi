@@ -30,7 +30,7 @@ def test_admin_yoksa_olusturur_ve_ilk_giris_zorunlu_kilar():
     assert "TRUE, TRUE" in ekle.args[0]                     # aktif_mi, ilk_giris_mi
     assert ekle.args[1][0] == "yonetici" and ekle.args[1][1] != parola   # parola düz yazı saklanmaz
     assert ekle.args[1][2] == 7
-    assert any("INSERT INTO personel" in q for q in calisan_sorgular(c))
+    assert any("personel_kodu = %s" in q for q in calisan_sorgular(c))
 
 
 def test_zaten_admin_varsa_hicbir_sey_eklemez():

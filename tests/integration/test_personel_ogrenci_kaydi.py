@@ -130,7 +130,7 @@ def test_ayni_personel_kodu_eski_mesajla_409_verir():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [(True, "PSIKOLOG")]
     def execute(sorgu, *a, **k):
-        if "INSERT INTO personel" in sorgu:
+        if "personel_kodu = %s" in sorgu:
             raise psycopg2.errors.UniqueViolation()
     cursor.execute.side_effect = execute
     with patch("server.sunucu.psycopg2.connect", return_value=conn):

@@ -40,10 +40,7 @@ def sahte_veritabani(rol="PSIKOLOG", hatali_tablo=None):
             return (rol,)
 
         if "INSERT INTO KULLANICILAR" in sorgu:
-            return (25,)
-
-        if "INSERT INTO PERSONEL" in sorgu:
-            return (15,)
+            return (25, 15)                                  # kullanici_id, personel_id (tek INSERT)
 
         if "INSERT INTO OGRENCILER" in sorgu:
             return (17,)
@@ -92,22 +89,23 @@ def test_kullanici_ve_personel_birlikte_olusturulur():
     sql = sorgular(cursor)
 
     assert any("INSERT INTO KULLANICILAR" in s for s in sql)
-    assert any("INSERT INTO PERSONEL" in s for s in sql)
+    assert any("INSERT INTO KULLANICILAR" in s and "PERSONEL_KODU" in s for s in sql)   # personel bilgisi aynı satırda
+    assert not any("INTO PERSONEL" in s for s in sql)
 
     audit_sayisi = sum(
         "INSERT INTO DENETIM_KAYITLARI" in s
         for s in sql
     )
 
-    assert audit_sayisi >= 2
+    assert audit_sayisi == 1                                  # kullanıcı + personel için tek denetim kaydı
 
     conn.commit.assert_called_once()
     conn.close.assert_called_once()
 
 
-def test_personel_hatasinda_kullanici_geri_alinir():
+def test_personel_alani_yazilirken_hata_olursa_kullanici_geri_alinir():
     conn, cursor = sahte_veritabani(
-        hatali_tablo="personel",
+        hatali_tablo="kullanicilar",
     )
 
     with (
@@ -134,7 +132,8 @@ def test_personel_hatasinda_kullanici_geri_alinir():
     sql = sorgular(cursor)
 
     assert any("INSERT INTO KULLANICILAR" in s for s in sql)
-    assert any("INSERT INTO PERSONEL" in s for s in sql)
+    assert any("INSERT INTO KULLANICILAR" in s and "PERSONEL_KODU" in s for s in sql)   # personel bilgisi aynı satırda
+    assert not any("INTO PERSONEL" in s for s in sql)
 
     conn.commit.assert_not_called()
     conn.rollback.assert_called_once()
@@ -167,7 +166,8 @@ def test_danisma_ogrencisi_kayitlari_birlikte_olusturulur():
     sql = sorgular(cursor)
 
     assert any("INSERT INTO KULLANICILAR" in s for s in sql)
-    assert any("INSERT INTO PERSONEL" in s for s in sql)
+    assert any("INSERT INTO KULLANICILAR" in s and "PERSONEL_KODU" in s for s in sql)   # personel bilgisi aynı satırda
+    assert not any("INTO PERSONEL" in s for s in sql)
     assert any("INSERT INTO OGRENCILER" in s for s in sql)
 
     conn.commit.assert_called_once()
@@ -202,7 +202,8 @@ def test_ogrenci_hatasinda_tum_islem_geri_alinir():
     sql = sorgular(cursor)
 
     assert any("INSERT INTO KULLANICILAR" in s for s in sql)
-    assert any("INSERT INTO PERSONEL" in s for s in sql)
+    assert any("INSERT INTO KULLANICILAR" in s and "PERSONEL_KODU" in s for s in sql)   # personel bilgisi aynı satırda
+    assert not any("INTO PERSONEL" in s for s in sql)
     assert any("INSERT INTO OGRENCILER" in s for s in sql)
 
     conn.commit.assert_not_called()
@@ -239,7 +240,8 @@ def test_audit_hatasinda_tum_islem_geri_alinir():
     sql = sorgular(cursor)
 
     assert any("INSERT INTO KULLANICILAR" in s for s in sql)
-    assert any("INSERT INTO PERSONEL" in s for s in sql)
+    assert any("INSERT INTO KULLANICILAR" in s and "PERSONEL_KODU" in s for s in sql)   # personel bilgisi aynı satırda
+    assert not any("INTO PERSONEL" in s for s in sql)
     assert any("INSERT INTO DENETIM_KAYITLARI" in s for s in sql)
 
     conn.commit.assert_not_called()

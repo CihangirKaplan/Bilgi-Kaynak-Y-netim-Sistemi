@@ -375,3 +375,82 @@ def test_audit_suzgeci_parola_olaylarini_kabul_eder_gercek_veritabaninda(ortam):
     app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
     for olay in ("PASSWORD_RESET", "PASSWORD_CHANGE", "PASSWORD_CHANGE_FAILED", "EXPORT"):
         assert istemci.get("/api/audit-kayitlari", params={"olay_turu": olay}).status_code == 200, olay
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Personel/kullanıcı birleşimi, 2. aşama: yazmalar kullanicilar'a gider, tek denetim kaydı atılır (gerçek veritabanı)
+# ----------------------------------------------------------------------------------------------------------------------
+def _kullaniciyi_temizle(c, kullanici_adi):
+    c.execute("SELECT kullanici_id FROM kullanicilar WHERE kullanici_adi = %s", (kullanici_adi,))
+    satir = c.fetchone()
+    if satir:
+        c.execute("DELETE FROM denetim_kayitlari WHERE hedef_kayit_id = %s AND hedef_tablo IN ('kullanicilar', 'personel')", (satir[0],))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (satir[0],))
+
+
+def test_yeni_kullanici_tek_denetim_kaydiyla_ve_personel_alanlariyla_olusur_gercek_veritabaninda(ortam):
+    c, admin = ortam[0], ortam[1]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    ad = f"pb_{uuid4().hex[:8]}"
+    c.execute("SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'")
+    memur = c.fetchone()[0]
+    try:
+        yanit = istemci.post("/api/kullanicilar", json={"kullanici_adi": ad, "rol_id": memur})
+        assert yanit.status_code == 201, yanit.text
+        govde = yanit.json()
+        yeni = govde["kullanici_id"]
+        c.execute("SELECT personel_id, personel_kodu, personel_kaydi_tarihi IS NOT NULL FROM kullanicilar WHERE kullanici_id = %s", (yeni,))
+        assert c.fetchone() == (govde["personel_id"], govde["personel_kodu"], True)             # tek satırda: kullanıcı + personel bilgisi
+        c.execute("SELECT personel_kodu, aktif_mi FROM personel WHERE kullanici_id = %s", (yeni,))
+        assert c.fetchone() == (govde["personel_kodu"], True)                                    # eski ad hâlâ aynı bilgiyi okur
+        c.execute("SELECT hedef_tablo, olay_turu::text, ayrinti FROM denetim_kayitlari WHERE kullanici_id = %s AND hedef_tablo IN ('kullanicilar', 'personel') AND hedef_kayit_id IN (%s, %s)", (admin, yeni, govde["personel_id"]))
+        kayitlar = c.fetchall()
+        kayitlar = [k for k in kayitlar if k[2] and k[2].get("personel_kodu") == govde["personel_kodu"]]
+        assert len(kayitlar) == 1 and kayitlar[0][:2] == ("kullanicilar", "CREATE")             # eskiden iki kayıttı (kullanıcı + personel)
+        assert kayitlar[0][2]["rol"] == "MEMUR"
+        assert istemci.post("/api/kullanicilar", json={"kullanici_adi": ad, "rol_id": memur}).status_code == 409
+    finally:
+        _kullaniciyi_temizle(c, ad)
+
+
+def test_rol_degistirme_tek_denetim_kaydi_birakir_personel_kaydi_acilmaz_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel = ortam[0], ortam[1], ortam[2], ortam[3]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    c.execute("SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'")
+    memur = c.fetchone()[0]
+    c.execute("SELECT COALESCE(MAX(denetim_id), 0) FROM denetim_kayitlari")
+    esik = c.fetchone()[0]
+    assert istemci.patch(f"/api/kullanicilar/{psikolog}/rol", json={"rol_id": memur}).status_code == 200
+    c.execute("SELECT hedef_tablo, olay_turu::text FROM denetim_kayitlari WHERE denetim_id > %s AND kullanici_id = %s AND hedef_tablo IN ('kullanicilar', 'personel')", (esik, admin))
+    assert c.fetchall() == [("kullanicilar", "ROLE_CHANGE")]                                    # ayrı "personel UPDATE" kaydı yok
+    c.execute("SELECT personel_id, personel_kodu FROM personel WHERE kullanici_id = %s", (psikolog,))
+    satir = c.fetchone()
+    assert satir[0] == personel and satir[1].startswith("PER-MEM-")                                  # kimlik korunur, kod yeni role göre
+
+
+def test_personel_olusturma_ve_guncelleme_kullanici_kaydina_yazar_gercek_veritabaninda(ortam):
+    c, admin = ortam[0], ortam[1]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    ad = f"pc_{uuid4().hex[:8]}"
+    kod = f"PC-{uuid4().hex[:6]}"
+    try:
+        yeni = _kullanici(c, ad, "MEMUR")
+        yanit = istemci.post("/api/personel", json={"kullanici_id": yeni, "personel_kodu": kod})
+        assert yanit.status_code == 201, yanit.text
+        personel_id = yanit.json()["personel_id"]
+        c.execute("SELECT personel_id, personel_kodu FROM kullanicilar WHERE kullanici_id = %s", (yeni,))
+        assert c.fetchone() == (personel_id, kod)
+        assert istemci.post("/api/personel", json={"kullanici_id": yeni, "personel_kodu": kod + "X"}).status_code == 409     # ikinci kez verilemez
+        yanit = istemci.patch(f"/api/personel/{personel_id}", json={"personel_kodu": kod + "Y"})
+        assert yanit.status_code == 200 and yanit.json()["personel_kodu"] == kod + "Y"
+        c.execute("SELECT personel_kodu FROM kullanicilar WHERE kullanici_id = %s", (yeni,))
+        assert c.fetchone()[0] == kod + "Y"
+        c.execute("SELECT count(*) FROM denetim_kayitlari WHERE hedef_tablo = 'personel' AND kullanici_id = %s AND hedef_kayit_id = %s", (admin, personel_id))
+        assert c.fetchone()[0] == 0                                                              # kayıtlar artık kullanıcı kaydına yazılır
+        c.execute("SELECT count(*) FROM denetim_kayitlari WHERE hedef_tablo = 'kullanicilar' AND kullanici_id = %s AND hedef_kayit_id = %s", (admin, yeni))
+        assert c.fetchone()[0] == 2
+    finally:
+        _kullaniciyi_temizle(c, ad)

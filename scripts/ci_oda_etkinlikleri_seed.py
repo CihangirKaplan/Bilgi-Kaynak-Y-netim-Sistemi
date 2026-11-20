@@ -4,6 +4,7 @@ import os
 from uuid import uuid4
 
 import psycopg2
+from server.personel_kaydi import personel_kaydi_ata
 from server.sunucu import VT_AYARLARI
 
 
@@ -39,16 +40,7 @@ def main():
             personeller = {}
 
             for rol, kullanici_id in kullanicilar.items():
-                cur.execute(
-                    """
-                    INSERT INTO personel
-                        (kullanici_id, personel_kodu)
-                    VALUES (%s, %s)
-                    RETURNING personel_id
-                    """,
-                    (kullanici_id, f"OE-{rol[:2]}-{etiket}"),
-                )
-                personeller[rol] = cur.fetchone()[0]
+                personeller[rol] = personel_kaydi_ata(cur, kullanici_id, f"OE-{rol[:2]}-{etiket}")
 
             odalar = []
 
