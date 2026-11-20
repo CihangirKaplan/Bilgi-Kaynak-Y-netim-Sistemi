@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMenu, QWidgetAction,
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle
 )
+from client.tablo_siralama import siralanabilir_yap
 
 
 
@@ -566,6 +567,7 @@ class AuditKayitlariEkrani(QWidget):
 
         # Salt okunur kayıt tablosu
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setMinimumHeight(300)
         self.tablo.setColumnCount(5)
         self.tablo.setHorizontalHeaderLabels([

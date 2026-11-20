@@ -31,6 +31,7 @@ from client.k_personel_ekranlari import KullaniciPersonelEkrani
 from client.faaliyet_dialog import FaaliyetEkleDialog
 from client.sayfalar_rol_izin import RolIzinSayfasi
 from client.rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
+from client.tablo_siralama import siralanabilir_yap
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -2470,6 +2471,7 @@ QLabel {
             il = QVBoxLayout(ik)
 
             self.tablo_faaliyetler = QTableWidget()
+            siralanabilir_yap(self.tablo_faaliyetler)
             self.tablo_faaliyetler.setColumnCount(7)
             self.tablo_faaliyetler.setHorizontalHeaderLabels([
                 "ID", "Öğrenci Adı", "Öğrenci No", "Faaliyet", "Miktar", "Toplam Puan", "Tarih"

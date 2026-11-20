@@ -28,6 +28,7 @@ from client.randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
+from client.tablo_siralama import siralanabilir_yap
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
 DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Ücret", "Randevu", "Durum"]
@@ -219,6 +220,7 @@ class DanisanlarEkrani(QWidget):
 
     def _liste_paneli(self):
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setColumnCount(len(DANISAN_TABLO_BASLIKLARI))
         self.tablo.setHorizontalHeaderLabels(DANISAN_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)

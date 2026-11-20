@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
+from client.tablo_siralama import siralanabilir_yap
 
 DONEMLER = ["Bu Ay", "Geçen Ay", "Son 3 Ay", "Bu Yıl", "Geçen Yıl", "Tümü", "Tarih Aralığı"]
 PSIKOLOG_SUTUNLARI = ["Psikolog", "Toplam", "Planlandı", "Tamamlandı", "Gelmedi", "İptal"]
@@ -71,6 +72,7 @@ class RandevuRaporlariEkrani(QWidget):
 
     def _tablo(self, sutunlar, ilk_genis=True):
         tablo = QTableWidget()
+        siralanabilir_yap(tablo)
         tablo.setColumnCount(len(sutunlar))
         tablo.setHorizontalHeaderLabels(sutunlar)
         tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)

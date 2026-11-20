@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from client.tablo_siralama import siralanabilir_yap
 
 DONEMLER = ["Bu Yıl", "Geçen Yıl", "Son 6 Ay", "Bu Ay", "Tümü", "Tarih Aralığı"]
 TURLER = [("Tümü", None), ("Gönüllü Öğrenci", "GONULLU"), ("Danışma Masası Öğrencisi", "DANISMA_MASASI"),
@@ -223,6 +224,7 @@ class PuanRaporuEkrani(QWidget):
 
         # ---- tablo
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setColumnCount(len(SUTUNLAR))
         self.tablo.setHorizontalHeaderLabels(SUTUNLAR)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)

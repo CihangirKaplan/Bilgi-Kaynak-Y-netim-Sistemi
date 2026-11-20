@@ -376,7 +376,7 @@ class CihazUygunlukEkrani(QWidget):
         ana.addWidget(bul)
 
         # --- ızgara
-        self.tablo = tablo_olustur(["CİHAZ", "ŞU AN"] + [""] * 7 + ["UYARILAR"])
+        self.tablo = tablo_olustur(["CİHAZ", "ŞU AN"] + [""] * 7 + ["UYARILAR"], siralanabilir=False)   # takvim ızgarası: sıralanmaz
         self.tablo.setSelectionMode(self.tablo.SelectionMode.NoSelection)    # seçim rengi durum renklerini ezmesin
         self.tablo.setMouseTracking(True)
         kb = self.tablo.horizontalHeader()

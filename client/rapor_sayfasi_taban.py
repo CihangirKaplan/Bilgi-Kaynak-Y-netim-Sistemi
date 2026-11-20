@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
+from client.tablo_siralama import siralanabilir_yap
 
 DONEMLER = ["Bu Ay", "Geçen Ay", "Son 3 Ay", "Bu Yıl", "Geçen Yıl", "Tarih Aralığı"]
 EN_FAZLA_GUN = 366
@@ -107,6 +108,7 @@ class RaporSayfasiTaban(QWidget):
 
     def _tablo(self, sutunlar):
         tablo = QTableWidget()
+        siralanabilir_yap(tablo)
         tablo.setColumnCount(len(sutunlar))
         tablo.setHorizontalHeaderLabels(sutunlar)
         tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)

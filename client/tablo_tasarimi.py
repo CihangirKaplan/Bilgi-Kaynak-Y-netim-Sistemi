@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushB
                                QMessageBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+from client.tablo_siralama import siralanabilir_yap
 
 SATIR_YUKSEKLIK = 54
 
@@ -55,7 +56,7 @@ ARAMA_STIL = """
 """
 
 
-def tablo_olustur(kolonlar, ortali=False):
+def tablo_olustur(kolonlar, ortali=False, siralanabilir=True):
     """ortali=True: metinler hücrede ortalanır ve sütunlar arası boşluk artar (cihaz yaşam döngüsü ekranları)."""
     tablo = OrtaliTablo(0, len(kolonlar)) if ortali else QTableWidget(0, len(kolonlar))
     tablo.setHorizontalHeaderLabels(kolonlar)
@@ -71,6 +72,8 @@ def tablo_olustur(kolonlar, ortali=False):
     tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     tablo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     tablo.setStyleSheet(ORTALI_TABLO_STIL if ortali else TABLO_STIL)
+    if siralanabilir:
+        siralanabilir_yap(tablo)          # başlığa tıklayınca sıralama (İŞLEM sütunu hariç)
     return tablo
 
 

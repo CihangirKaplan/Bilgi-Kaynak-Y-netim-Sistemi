@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
+from client.tablo_siralama import siralanabilir_yap
 
 
 
@@ -254,6 +255,7 @@ class DanismaMasasiYonetimi(QWidget):
         kart_layout.setContentsMargins(14, 14, 14, 14)
 
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setAlternatingRowColors(False)
         self.tablo.setStyleSheet("""
             QTableWidget {
