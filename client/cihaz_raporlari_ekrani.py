@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import requests
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -243,6 +244,7 @@ class CihazRaporlariEkrani(QWidget):
         duzen = QVBoxLayout(sayfa)
         duzen.setContentsMargins(12, 12, 12, 12)
         tablo = self._tablo_olustur(kolonlar)
+        cihaz_hucresi_uygula(tablo, 0)                                         # ad üstte (kalın), envanter kodu altta (gri)
         duzen.addWidget(tablo)
         self.rapor_sekmeleri.addTab(sayfa, baslik)
         return tablo
@@ -321,6 +323,7 @@ class CihazRaporlariEkrani(QWidget):
             font = hucre.font()
             font.setBold(True)
             hucre.setFont(font)
+            hucre.setToolTip(cihaz_ipucu(str(deger)))                          # "…" ile kısalan ad/kod ipucunda tam
         tablo.setItem(satir, sutun, hucre)
 
     def _tabloyu_doldur(self, tablo, satirlar, renkler=None):

@@ -214,3 +214,163 @@ def test_uygunluk_uzun_cihaz_adi_sutunu_sisirmez_gun_sutunlari_dengeli(qt_app):
     assert e.tablo.rowHeight(0) > 54                                         # satır çok satırlı hücreye göre uzadı
     assert "Çok Kanallı" in e.tablo.item(0, 0).toolTip()                     # kısaltılan ad ipucunda tam görünür
     e.close()
+
+
+# ================================================================== tüm cihaz sayfaları tutarlı
+from datetime import date, timedelta
+
+import client.bakim_plani_ekranlari as plan_modulu
+import client.cihaz_ariza_ekranlari as ariza_modulu
+import client.cihaz_bakim_ekranlari as bakim_modulu
+import client.cihaz_kalibrasyon_ekranlari as kalib_modulu
+from client.tablo_tasarimi import cihaz_ipucu, cihaz_siralama_adi
+
+
+def _gun(n):
+    return (date.today() + timedelta(days=n)).isoformat()
+
+
+def test_cihaz_ipucu_ve_siralama_adi():
+    assert cihaz_ipucu("E-1  ·  EEG") == "EEG\nEnvanter kodu: E-1"
+    assert cihaz_ipucu("E-1 - EEG", "Yerine getirilen plan: X") == "EEG\nEnvanter kodu: E-1\nYerine getirilen plan: X"
+    assert cihaz_ipucu("Sadece Ad") == "Sadece Ad"
+    assert cihaz_siralama_adi("E-9 - Zeta") == "Zeta" and cihaz_siralama_adi("Ad") == "Ad"
+
+
+def test_cihaz_hucresi_satir_yuksekligini_en_az_48_yapar_yuksek_satiri_kucultmez(qt_app):
+    t = tablo_olustur(["A"])
+    t.verticalHeader().setDefaultSectionSize(34)
+    cihaz_hucresi_uygula(t, 0)
+    assert t.verticalHeader().defaultSectionSize() == 48
+    t.verticalHeader().setDefaultSectionSize(60)
+    cihaz_hucresi_uygula(t, 0)
+    assert t.verticalHeader().defaultSectionSize() == 60
+    t2 = tablo_olustur(["A"])
+    onceki = t2.verticalHeader().defaultSectionSize()
+    cihaz_hucresi_uygula(t2, 0, en_az_satir_yuksekligi=0)
+    assert t2.verticalHeader().defaultSectionSize() == onceki
+
+
+UZUN_AD = "ENVANTER-UZUN-KOD-2026-0042 - Çok Kanallı Elektroensefalografi Kayıt ve Analiz Sistemi Pro"
+
+
+def _kayit_ekrani(modul, sinif, veri):
+    with patch.object(modul, "oturum_kontrollu_istek", return_value=_yanit(veri)):
+        e = getattr(modul, sinif)("http://x", "T")
+    e.resize(1500, 400)
+    e.show()
+    QApplication.processEvents()
+    return e
+
+
+def test_bakim_kayitlari_iki_satirli_cihaz_hucresi_ve_islem_dugmeleri_kirpilmaz(qt_app):
+    veri = [{"bakim_id": 7, "cihaz_adi": "DENEME-006 - Ultrason Cihazı", "bakim_yapan_kisi": "k", "yapilan_islem": "i", "maliyet": 1,
+             "bakim_baslangic_tarihi": _gun(-30), "bakim_bitis_tarihi": _gun(-30), "sonraki_bakim_tarihi": _gun(30), "uyari_suresi_gun": 7,
+             "plan_adi": "Yıllık bakım"},
+            {"bakim_id": 9, "cihaz_adi": UZUN_AD, "bakim_yapan_kisi": "k", "yapilan_islem": "i", "maliyet": 1,
+             "bakim_baslangic_tarihi": _gun(-20), "bakim_bitis_tarihi": _gun(-20), "sonraki_bakim_tarihi": None, "uyari_suresi_gun": 7}]
+    e = _kayit_ekrani(bakim_modulu, "BakimYonetimEkrani", veri)
+    assert isinstance(e.tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert e.tablo.item(0, 0).text() == "DENEME-006 - Ultrason Cihazı"                 # metin değişmedi
+    assert e.tablo.columnWidth(0) == 230                                               # uzun ad sütunu şişirmedi
+    assert e.tablo.item(0, 0).data(SIRALAMA_ROLU) == "Ultrason Cihazı"                 # ada göre sıralama
+    ipucu = e.tablo.item(0, 0).toolTip()
+    assert "Envanter kodu: DENEME-006" in ipucu and "Yerine getirilen plan: Yıllık bakım" in ipucu
+    for satir in range(2):                                                             # ✎ / 🗑 düğmeleri sağdan kırpılmıyor
+        kap = e.tablo.cellWidget(satir, 7)
+        assert kap.width() >= kap.sizeHint().width()
+    e.close()
+
+
+def test_kalibrasyon_iki_satirli_cihaz_hucresi_ve_islem_dugmeleri_kirpilmaz(qt_app):
+    veri = [{"kalibrasyon_id": 3, "cihaz_adi": UZUN_AD, "kalibrasyon_yapan_kurum": "K", "sertifika_no": "C-1",
+             "kalibrasyon_baslangic_tarihi": _gun(-100), "kalibrasyon_bitis_tarihi": _gun(-100), "gecerlilik_tarihi": _gun(265), "uyari_suresi_gun": 30}]
+    e = _kayit_ekrani(kalib_modulu, "KalibrasyonYonetimEkrani", veri)
+    assert isinstance(e.tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert "Çok Kanallı" in e.tablo.item(0, 0).toolTip() and e.tablo.item(0, 0).data(SIRALAMA_ROLU).startswith("Çok Kanallı")
+    kap = e.tablo.cellWidget(0, 6)
+    assert kap.width() >= kap.sizeHint().width()
+    e.close()
+
+
+def test_ariza_envanter_kodu_gelirse_ad_ustte_kod_altta_gelmezse_eskisi_gibi(qt_app):
+    veri = [{"ariza_id": 5, "cihaz_adi": "Çok Kanallı EEG", "envanter_kodu": "E-42", "ariza_baslik": "b", "ariza_aciklama": "a",
+             "aciliyet": "Kritik", "durum": "Açık", "bildirim_tarihi": "2026-11-18T10:00:00"},
+            {"ariza_id": 4, "cihaz_adi": "Eski Sunucu Cihazı", "ariza_baslik": "b", "ariza_aciklama": "a",
+             "aciliyet": "Düşük", "durum": "Çözüldü", "bildirim_tarihi": "2026-11-10T10:00:00"}]
+    e = _kayit_ekrani(ariza_modulu, "ArizaYonetimEkrani", veri)
+    assert isinstance(e.tablo.itemDelegateForColumn(1), CihazHucresiDelegate)
+    assert e.tablo.item(0, 1).text() == "E-42  ·  Çok Kanallı EEG" and e.tablo.item(0, 1).data(SIRALAMA_ROLU) == "Çok Kanallı EEG"
+    assert e.tablo.item(1, 1).text() == "Eski Sunucu Cihazı"                         # envanter kodu yoksa (eski sunucu) düz ad
+    for satir in range(2):
+        kap = e.tablo.cellWidget(satir, 4)
+        assert kap.width() >= kap.findChild(QLabel).minimumWidth() + 12               # "Çözüldü"/"Açık" rozeti kesilmiyor
+    e.close()
+
+
+def test_ariza_listesi_ucu_envanter_kodunu_da_dondurur():
+    from server.sunucu import arizalari_listele
+    from datetime import datetime as dt
+    imleç = MagicMock()
+    imleç.fetchall.return_value = [(1, "EEG", "Başlık", "Açıklama", "Yüksek", False, dt(2026, 11, 1, 10, 0), "E-1")]
+    with patch("server.sunucu.psycopg2.connect", return_value=MagicMock(cursor=MagicMock(return_value=imleç))):
+        sonuc = arizalari_listele(kullanici_id=1)
+    assert sonuc[0]["envanter_kodu"] == "E-1" and sonuc[0]["cihaz_adi"] == "EEG"      # eski alanlar aynen duruyor
+
+
+def test_bakim_planlari_cihaz_hucresi_ada_gore_siralanir_ve_islem_kirpilmaz(qt_app):
+    veri = [{"plan_id": 1, "cihaz_id": 1, "envanter_kodu": "E-9", "cihaz_adi": "Zeta", "gorev_turu": "Bakım", "periyot_gun": 30, "uyari_suresi_gun": 7,
+             "sonraki_gorev_tarihi": _gun(-120), "kalan_gun": -120, "durum": "Gecikmiş", "aktif_mi": True, "tur": "Bakım"},
+            {"plan_id": 2, "cihaz_id": 2, "envanter_kodu": "E-1", "cihaz_adi": "Alfa", "gorev_turu": "Bakım", "periyot_gun": 30, "uyari_suresi_gun": 7,
+             "sonraki_gorev_tarihi": _gun(20), "kalan_gun": 20, "durum": "Yaklaşıyor", "aktif_mi": True, "tur": "Bakım"}]
+    e = _kayit_ekrani(plan_modulu, "BakimPlanlariEkrani", veri)
+    assert isinstance(e.tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
+    e.tablo.horizontalHeader().sectionClicked.emit(0)
+    assert [e.tablo.item(s, 0).data(SIRALAMA_ROLU) for s in range(2)] == ["Alfa", "Zeta"]
+    for satir in range(2):
+        kap = e.tablo.cellWidget(satir, 6)
+        assert kap.width() >= kap.sizeHint().width()
+    e.close()
+
+
+def test_rapor_sayfalarinda_cihaz_basligli_sutun_iki_satirli_digerleri_degil(qt_app):
+    import test_rapor_sayfalari as tr
+    import test_rapor_bakim_plani as tb
+    from client.bakim_plani_raporu_ekrani import BakimPlaniRaporuEkrani
+    ekran, _ = tr.ekran_ac(BakimPlaniRaporuEkrani, tb.VERI)
+    geciken = ekran.tablolar["geciken"]                            # ["Cihaz", "Plan", ...]
+    assert isinstance(geciken.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert not isinstance(geciken.itemDelegateForColumn(1), CihazHucresiDelegate)
+    assert not isinstance(ekran.tablolar["tur"].itemDelegateForColumn(0), CihazHucresiDelegate)       # "Tür" sütunu cihaz değil
+    ekran.close()
+
+
+def test_yonetim_paneli_cihaz_sutunu_gorunum_degisince_sifirlanir(qt_app):
+    from client.yonetim_raporlari_panel import YonetimRaporlariEkrani
+    with patch("client.yonetim_raporlari_panel.oturum_kontrollu_istek"):
+        panel = YonetimRaporlariEkrani("http://x", "t")
+    baslik, tablo = panel.tablolar[0]
+    onceki_yukseklik = tablo.verticalHeader().defaultSectionSize()
+    panel.tabloyu_doldur(panel.tablolar[0], "Geciken Planlar", ["Cihaz", "Plan", "Gecikme (gün)"], [("E-1 - EEG", "Bakım", 3)])
+    assert isinstance(tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert tablo.verticalHeader().defaultSectionSize() >= 48
+    panel.tabloyu_doldur(panel.tablolar[0], "Durumlar", ["Durum", "Sayı"], [("Planlandı", 3)])   # başka görünüm: çizici kalkar
+    assert not isinstance(tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert tablo.verticalHeader().defaultSectionSize() == onceki_yukseklik
+
+
+def test_ana_panel_cihaz_tablolari_iki_satirli_satir_yuksekligi_ayni(qt_app):
+    from client.dashboard_ekrani import DashboardEkrani, SATIR_YUKSEKLIK
+    def getir(self, yol, *a, **k):
+        return {"/api/dashboard/ozet": {"acik_ariza_sayisi": 0},
+                "/api/dashboard/yaklasan-islemler": [{"cihaz_adi": "E1 - EEG", "islem_turu": "Bakım", "kalan_gun": 3, "tarih": "01.01.2026"}],
+                "/api/dashboard/bugunku-rezervasyonlar": [{"baslangic": "09:00", "bitis": "10:00", "cihaz": "E1 - EEG", "rezerve_eden": "a", "oda": "O"}],
+                }.get(yol, [])
+    with patch.object(DashboardEkrani, "_getir", getir):
+        p = DashboardEkrani("http://x", "T", cihaz_ozeti=True)
+    p.zamanlayici.stop()
+    assert isinstance(p.tablo_rez.itemDelegateForColumn(1), CihazHucresiDelegate)
+    assert isinstance(p.tablo_islem.itemDelegateForColumn(0), CihazHucresiDelegate)
+    assert p.tablo_islem.verticalHeader().defaultSectionSize() == SATIR_YUKSEKLIK                 # ana panelin yerleşimi değişmedi
+    assert "Envanter kodu: E1" in p.tablo_rez.item(0, 1).toolTip()
+    p.close()

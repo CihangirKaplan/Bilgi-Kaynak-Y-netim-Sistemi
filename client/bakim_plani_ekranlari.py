@@ -475,6 +475,7 @@ class BakimPlanlariEkrani(QWidget):
             "Henüz bakım/kalibrasyon planı yok. Üstteki “Yeni Plan” butonuyla ekleyebilirsiniz."
             if aktiflik is not False else "Pasif plan yok.")
         hap_sutununu_sigdir(self.tablo, 5, en_az=150)            # "Gecikmiş · 120 gün gecikti" rozeti kesilmesin
+        hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())
