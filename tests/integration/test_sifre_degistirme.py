@@ -151,6 +151,7 @@ def test_ilk_giriste_diger_api_erisimleri_engellenir():
         patch("server.sunucu.token_dogrula", return_value=10),
         patch("server.sunucu.psycopg2.connect", return_value=mock_conn),
         patch("server.sunucu.token_parola_gecerli", return_value=True),
+        patch("server.sunucu.token_surumu_gecerli", return_value=True),
     ):
         with pytest.raises(HTTPException) as hata:
             mevcut_kullanici_id(credentials=credentials)
@@ -179,6 +180,7 @@ def test_sifre_degistirildikten_sonra_erisim_acilir():
         patch("server.sunucu.token_dogrula", return_value=10),
         patch("server.sunucu.psycopg2.connect", return_value=mock_conn),
         patch("server.sunucu.token_parola_gecerli", return_value=True),
+        patch("server.sunucu.token_surumu_gecerli", return_value=True),
     ):
         sonuc = mevcut_kullanici_id(credentials=credentials)
 

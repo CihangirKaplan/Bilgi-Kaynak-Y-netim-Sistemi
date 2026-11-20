@@ -1,4 +1,7 @@
-"""Yanıtlara güvenlik başlıkları ekleyen saf ASGI ara katmanı.
+"""Yanıtlara güvenlik başlıkları ekleyen ve istemci adresini istek bağlamına koyan saf ASGI ara katmanı.
+
+- İstemci adresi (denetim kayıtları için): doğrudan bağlanan adres; TKYS_GUVENILIR_VEKIL=1 ise vekilin eklediği X-Forwarded-For değerinin
+  SON girişi (vekilin kendi gördüğü istemci; istemcinin gönderdiği önceki girişlere güvenilmez).
 
 - X-Content-Type-Options: nosniff  (her yanıtta)
 - Strict-Transport-Security        (yalnızca istek HTTPS ile geldiyse; tarayıcı/istemciye "bu adrese hep HTTPS ile bağlan" der).
@@ -6,6 +9,8 @@
   ve TKYS_GUVENILIR_VEKIL=1 verildiyse HTTPS sayılır. Aksi halde bu başlığa güvenilmez (istemci sahteleyebilir).
 """
 import os
+
+from server.vt_baglanti import adresi_ayarla, adresi_sifirla
 
 HSTS_DEGERI = b"max-age=31536000"
 
@@ -19,6 +24,15 @@ def _https_mi(scope) -> bool:
     return False
 
 
+def istemci_adresi(scope):
+    if os.getenv("TKYS_GUVENILIR_VEKIL") == "1":
+        iletilen = dict(scope.get("headers", [])).get(b"x-forwarded-for", b"").decode("latin-1")
+        if iletilen.strip():
+            return iletilen.split(",")[-1].strip()
+    istemci = scope.get("client")
+    return istemci[0] if istemci else None
+
+
 class GuvenlikBasliklari:
     def __init__(self, app):
         self.app = app
@@ -28,6 +42,7 @@ class GuvenlikBasliklari:
             await self.app(scope, receive, send)
             return
         https = _https_mi(scope)
+        belirtec = adresi_ayarla(istemci_adresi(scope))
 
         async def gonder(mesaj):
             if mesaj["type"] == "http.response.start":
@@ -38,4 +53,7 @@ class GuvenlikBasliklari:
                 mesaj = {**mesaj, "headers": basliklar}
             await send(mesaj)
 
-        await self.app(scope, receive, gonder)
+        try:
+            await self.app(scope, receive, gonder)
+        finally:
+            adresi_sifirla(belirtec)

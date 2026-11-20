@@ -23,6 +23,7 @@ def audit_excel_olustur(dosya_yolu, kayitlar, ozet, filtre_ozeti, kesildi=False)
             k.get("hedef_kayit_id"),
             k.get("hedef_kullanici_adi"),
             ayrinti_metni(k.get("ayrinti")),
+            k.get("istemci_adresi"),
         ]
         for k in kayitlar
     ]
@@ -45,11 +46,11 @@ def audit_excel_olustur(dosya_yolu, kayitlar, ozet, filtre_ozeti, kesildi=False)
         [
             ("Denetim Kayıtları",
              [("Kayıt ID", None), ("Tarih / Saat", TARIH_SAAT_BICIMI), ("İşlemi Yapan", None), ("İşlem Türü", None), ("Hedef", None),
-              ("Hedef Kayıt ID", None), ("İşlem Yapılan Kullanıcı", None), ("Ayrıntı", None)],
+              ("Hedef Kayıt ID", None), ("İşlem Yapılan Kullanıcı", None), ("Ayrıntı", None), ("İstemci Adresi", None)],
              satirlar, "Tüm denetim kayıtları, en yeniden eskiye."),
             ("Silmeler",
              [("Kayıt ID", None), ("Tarih / Saat", TARIH_SAAT_BICIMI), ("İşlemi Yapan", None), ("İşlem Türü", None), ("Hedef", None),
-              ("Hedef Kayıt ID", None), ("İşlem Yapılan Kullanıcı", None), ("Silinen Veri / Ayrıntı", None)],
+              ("Hedef Kayıt ID", None), ("İşlem Yapılan Kullanıcı", None), ("Silinen Veri / Ayrıntı", None), ("İstemci Adresi", None)],
              silmeler, "Yalnızca kalıcı silmeler ve silinen verinin içeriği."),
         ],
     )

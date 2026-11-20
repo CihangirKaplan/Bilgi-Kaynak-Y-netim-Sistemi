@@ -55,7 +55,7 @@ def parola_dogrula(parola: str, parola_hash: str) -> bool:
         parola_hash.encode("utf-8")
     )
 
-def access_token_olustur(kullanici_id: int, parola_hash: str | None = None) -> str:
+def access_token_olustur(kullanici_id: int, parola_hash: str | None = None, token_surumu: int | None = None) -> str:
     simdi = datetime.now(timezone.utc)
     bitis_zamani = simdi + timedelta(minutes=JWT_EXPIRE_MINUTES)
 
@@ -67,6 +67,9 @@ def access_token_olustur(kullanici_id: int, parola_hash: str | None = None) -> s
 
     if parola_hash is not None:
         payload["phv"] = parola_token_ozeti(parola_hash)
+
+    if token_surumu is not None:
+        payload["tsv"] = int(token_surumu)           # çıkışta kullanıcının sürümü artar; eski jetonlar geçersiz olur
 
     token = jwt.encode(
         payload,
@@ -104,6 +107,15 @@ def token_parola_gecerli(token: str, parola_hash: str) -> bool:
         gelen_ozet,
         parola_token_ozeti(parola_hash)
     )
+
+
+def token_surumu_gecerli(token: str, mevcut_surum) -> bool:
+    """Jetonun taşıdığı oturum sürümü kullanıcının güncel sürümüyle aynı mı? (Sürüm taşımayan eski jetonlar 0 sayılır.)"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.InvalidTokenError:
+        return False
+    return int(payload.get("tsv", 0)) == int(mevcut_surum or 0)
 
 
 def token_dogrula(token: str) -> int:

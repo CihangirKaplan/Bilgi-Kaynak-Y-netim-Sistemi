@@ -22,6 +22,8 @@ OLAY_ADLARI = {
     "PASSWORD_CHANGE_FAILED": "Başarısız Parola Değiştirme",
     "LOGIN": "Giriş Başarılı",
     "LOGIN_FAILED": "Başarısız Giriş",
+    "LOGOUT": "Çıkış",
+    "VIEW": "Görüntüleme",
     "CREATE": "Oluşturma",
     "UPDATE": "Güncelleme",
     "CANCEL": "İptal",
@@ -62,6 +64,8 @@ OLAY_RENKLERI = {
     "PASSWORD_CHANGE_FAILED": ("#9B3048", "#FCEBF0"),
     "LOGIN": ("#17634F", "#E8F6EF"),
     "LOGIN_FAILED": ("#9B3048", "#FCEBF0"),
+    "LOGOUT": ("#4A5568", "#EEF1F5"),
+    "VIEW": ("#285F88", "#E8F2FB"),
     "CREATE": ("#2457A2", "#E9F1FF"),
     "UPDATE": ("#96601B", "#FFF2DF"),
     "CANCEL": ("#9B3048", "#FCEBF0"),
@@ -719,6 +723,7 @@ class AuditKayitlariEkrani(QWidget):
             )),
             ("Hedef Tablo", kayit.get("hedef_tablo")),
             ("Hedef Kayıt ID", kayit.get("hedef_kayit_id")),
+            ("İstemci Adresi", kayit.get("istemci_adresi")),
         ]
 
         if (
