@@ -365,8 +365,10 @@ def test_psikolog_pasife_alininca_danisanlari_da_pasife_alinir_ve_isaretlenir():
     assert "SET aktif_mi = FALSE, psikolog_pasifligi_nedeniyle_pasif = TRUE" in sql
     assert "WHERE aktif_mi = TRUE AND olusturan_psikolog_id IN (SELECT personel_id FROM personel WHERE kullanici_id = %s)" in sql   # yalnızca zaten aktif olanlar
     assert parametreler == (5,)
-    audit = [a[1] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
-    assert (10, "UPDATE", "danisan_kodlari") in audit
+    audit = [a[1][:3] for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0]]
+    assert (10, "UPDATE", "danisan_kodlari") in audit                                        # toplu pasife alma denetim kaydında (ayrıntıyla: kim, neden, kaç danışan)
+    ayrinti = next(a[1][4].adapted for a in sorgular(cursor) if "INSERT INTO denetim_kayitlari" in a[0] and a[1][2] == "danisan_kodlari")
+    assert ayrinti["etkilenen_danisan"] == 3 and ayrinti["aktif_mi"] == "pasif" and ayrinti["neden"] == "psikolog pasife alındı"
     assert not yazan_sorgu_var_mi(cursor, "DELETE FROM RANDEVULAR") and not yazan_sorgu_var_mi(cursor, "UPDATE RANDEVULAR")   # randevu geçmişi korunur
     conn.commit.assert_called_once()
 

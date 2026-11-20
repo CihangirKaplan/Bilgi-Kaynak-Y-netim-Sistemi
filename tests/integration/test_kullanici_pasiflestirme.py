@@ -211,12 +211,15 @@ def test_pasiflestirme_audit_kaydi_dogru_olusturulur():
     assert len(audit_cagrilari) == 2
 
     assert audit_cagrilari[0].args[1][:4] == (10, "UPDATE", "psikolog_odalar", 5)
-    assert audit_cagrilari[1].args[1] == (
+    assert audit_cagrilari[1].args[1][:4] == (
         10,             # İşlemi yapan kullanıcı
         "UPDATE",       # Audit olay türü
         "kullanicilar", # Hedef tablo
         5               # Pasifleştirilen kullanıcı
     )
+    # Neyin neye döndüğü de kayıtlı: aktif → pasif
+    ayrinti = audit_cagrilari[1].args[1][4].adapted
+    assert ayrinti["onceki"] == {"aktif_mi": True} and ayrinti["yeni"] == {"aktif_mi": False}
 
     mock_conn.commit.assert_called_once()
 def test_pasif_kullanici_mevcut_token_ile_erisim_saglayamaz():

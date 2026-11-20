@@ -149,6 +149,17 @@ def psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id: int, kullanici_id: in
         )
 
 
+def ayrintili_kayit_yaz(cursor, kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, **ayrinti):
+    """Verilen alanları ayrıntı olarak denetim kaydına yazar (önceki/yeni değer, neden, etkilenen sayı...). Aynı işlemde çağrılır.
+
+    Yalnızca kod/durum/rol adı gibi kişisel olmayan değerler verilmelidir (FR-008); parola, ad soyad, telefon gibi alanlar YAZILMAZ."""
+    cursor.execute(
+        "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, ayrinti) VALUES (%s, %s, %s, %s, %s);",
+        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id,
+         Json(ayrinti, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str))),
+    )
+
+
 def durum_degisikligi_yaz(cursor, kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, onceki, yeni, **ek):
     """Durum değişikliğini ÖNCEKİ ve YENİ değerle denetim kaydına yazar (kim, neyi, neyden neye). Aynı işlemde (transaction) çağrılır.
 

@@ -72,6 +72,17 @@ OLAY_RENKLERI = {
 }
 
 
+AYRINTI_ETIKETLERI = {
+    "onceki": "Önceki değer", "yeni": "Yeni değer", "neden": "Neden", "izin": "İzin", "rol": "Rol",
+    "eklenen_roller": "Rolü eklenenler", "kaldirilan_roller": "Rolü kaldırılanlar", "verilen_roller": "Verilen roller",
+    "gorunen_ad": "Görünen ad", "aktif_mi": "Aktif mi", "personel_kodu": "Personel kodu", "yas_grubu": "Yaş grubu",
+    "danisan_kod_id": "Danışan kodu", "iptal_nedeni": "İptal nedeni", "etkilenen_danisan": "Etkilenen danışan",
+    "pasife_alinan_danisan": "Pasife alınan danışan", "aktif_edilen_danisan": "Aktif edilen danışan",
+    "girisi_engellenen_kullanici": "Girişi engellenen kullanıcı", "psikolog_kullanici_id": "Psikolog (kullanıcı no)",
+    "izin_adi": "İzin adı", "rol_adi": "Rol adı", "kullanici_adi": "Kullanıcı adı",
+}
+
+
 def ayrinti_satirlari(ayrinti):
     """Denetim kaydındaki ayrıntıyı (silinen veri, önceki/yeni değer) ekranda gösterilecek (başlık, değer) satırlarına çevirir."""
     if not isinstance(ayrinti, dict):
@@ -84,10 +95,12 @@ def ayrinti_satirlari(ayrinti):
             return "Evet" if deger else "Hayır"
         if isinstance(deger, (list, tuple)):
             return ", ".join(biçimle(d) for d in deger) if deger else "—"
+        if isinstance(deger, dict):                                     # önceki/yeni gibi iç içe değerler: "Alan: değer, Alan: değer"
+            return ", ".join(f"{alan_adi(a)}: {biçimle(d)}" for a, d in deger.items()) if deger else "—"
         return str(deger)
 
     def alan_adi(anahtar):
-        return str(anahtar).replace("_", " ").capitalize()
+        return AYRINTI_ETIKETLERI.get(anahtar) or str(anahtar).replace("_", " ").capitalize()
 
     satirlar = []
     for anahtar, deger in ayrinti.items():
