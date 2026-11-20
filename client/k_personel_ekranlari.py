@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
 from client.tablo_siralama import siralanabilir_yap
+from client.tablo_tasarimi import ortak_liste_stili_uygula
 
 
 def kayit_tarihi_bicimle(deger):
@@ -80,21 +81,7 @@ class KullaniciPersonelEkrani(QWidget):
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tablo.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                border: 1px solid #D0D7E5;
-                border-radius: 8px;
-                gridline-color: #E2E8F0;
-            }
-            QHeaderView::section {
-                background-color: #0A1F5C;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-            }
-        """)
+        ortak_liste_stili_uygula(self.tablo)
 
         il.addWidget(self.tablo)
 

@@ -15,6 +15,7 @@ from client.rapor_excel import TARIH_BICIMI, _tarih_degeri
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
+from client.bildirim_toast import basari_bildirimi
 
 # Sunucu cihaz durumunu veritabanı değeriyle verir; ekranda okunaklı Türkçe adı gösterilir.
 # veritabanı değeri -> (görünen ad, yazı rengi, arka plan)
@@ -108,7 +109,7 @@ class CihazIslemFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Cihaz kullanım dışına alındı.")
+                basari_bildirimi(self, "Cihaz kullanım dışına alındı.")
                 self.accept()
             else:
                 QMessageBox.critical(self, "Hata", str(cevap.json().get("detail", "Bilinmeyen bir hata oluştu.")))
@@ -152,7 +153,7 @@ class CihazIslemFormu(QDialog):
                     return
             
             if cevap.status_code in [200, 201]:
-                QMessageBox.information(self, "Başarılı", "İşlem başarıyla kaydedildi.")
+                basari_bildirimi(self, "İşlem başarıyla kaydedildi.")
                 self.accept()
             else:
                 # Gelen hatayı ne olursa olsun zorla düz metne (str) çeviriyoruz ki PySide6 çökmesin!
@@ -306,6 +307,7 @@ class CihazYonetimEkrani(QWidget):
               DURUMLAR.get(c.get("durum"), (c.get("durum") or "",))[0], _tarih_degeri(c.get("kayit_tarihi"))]
              for c in cihazlar],
             filtre, sayfa_adi="Cihazlar", aciklama="Kayıtlı cihazların envanter listesi (demirbaş sayımı için).",
+            kayit={"api_url": self.api_url, "token": self.token, "liste": "CIHAZ"},
         )
 
     def durum_filtrele(self, durum):

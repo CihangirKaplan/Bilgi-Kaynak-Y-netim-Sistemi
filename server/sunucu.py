@@ -8274,7 +8274,7 @@ def audit_kayitlarini_getir(
     if olay_turu:
         gecerli_olaylar = {
             "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
-            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE"
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE", "EXPORT"
         }
         if (
             len(olay_turu) > len(gecerli_olaylar)
@@ -10345,3 +10345,89 @@ def yonetim_gunluk_detay(
 from server.oda_etkinlikleri_api import router_olustur
 
 app.include_router(router_olustur(izin_kontrol, VT_AYARLARI))
+
+
+# ==========================================
+# SÜRÜM / SİSTEM DURUMU / LİSTE AKTARIM KAYDI
+# ==========================================
+from typing import Literal as _Literal
+
+from server import sistem_durumu as _sistem_durumu
+from server.surum import SURUM as _SURUM, UYGULAMA_ADI as _UYGULAMA_ADI
+
+
+@app.get("/api/surum")
+def surum_bilgisi(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    """Hakkında penceresi için sunucu sürümü ve veritabanı şema sürümü (giriş yapmış herkes görebilir; kişisel veri içermez)."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        return {"uygulama": _UYGULAMA_ADI, "surum": _SURUM, "sema_surumu": _sistem_durumu.sema_surumu(cursor)}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.get("/api/sistem-durumu")
+def sistem_durumu_getir(kullanici_id: int = Depends(izin_kontrol("AUDIT_KAYITLARI_INCELE"))):
+    """Yönetici için sistem durumu: sürüm, şema, son yedek, son girişler, başarısız girişler ve temel sayılar."""
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        return _sistem_durumu.sistem_durumu(cursor, VT_AYARLARI["dbname"])
+    except HTTPException:
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        logging.getLogger(__name__).exception("Sistem durumu alınamadı")
+        raise HTTPException(status_code=500, detail="Sistem durumu alınırken bir hata oluştu.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# Liste ekranlarındaki "Excel'e Aktar" işleminin denetim kaydı: kim, ne zaman, hangi liste, kaç satır.
+# Kayıt için, o listeyi görme yetkisinin aynısı gerekir (listeyi göremeyen kişi aktarım kaydı da yazamaz).
+LISTE_AKTARIM_HEDEFLERI = {
+    "CIHAZ": ("CIHAZ_UYGUNLUK_GORUNTULE", "cihazlar"),
+    "OGRENCI": ("FAALIYET_KAYITLARI_DUZENLE", "ogrenciler"),
+    "DANISAN": ("RANDEVU_OLUSTUR", "danisan_kodlari"),
+}
+
+
+class ListeAktarimModeli(_DurumBaseModel):
+    liste: _Literal["CIHAZ", "OGRENCI", "DANISAN"]
+    satir_sayisi: int = _DurumField(ge=0, le=1_000_000)
+
+
+@app.post("/api/liste-aktarim-kaydi")
+def liste_aktarim_kaydi(veri: ListeAktarimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
+    izin_adi, tablo = LISTE_AKTARIM_HEDEFLERI[veri.liste]
+    conn = None
+    cursor = None
+    try:
+        conn = psycopg2.connect(**VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT ri.izin_var FROM kullanicilar k
+            JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
+            JOIN izinler i ON ri.izin_id = i.izin_id
+            WHERE k.kullanici_id = %s AND i.izin_adi = %s;
+            """, (kullanici_id, izin_adi),
+        )
+        sonuc = cursor.fetchone()
+        if sonuc is None or sonuc[0] != 1:
+            raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz bulunmuyor.")
+        denetim_kaydi_olustur(
+            VT_AYARLARI, olay_turu="EXPORT", kullanici_id=kullanici_id, hedef_tablo=tablo,
+            ayrinti={"liste": veri.liste, "satir_sayisi": veri.satir_sayisi},
+        )
+        return {"durum": "basarili"}
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()

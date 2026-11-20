@@ -26,6 +26,7 @@ OLAY_ADLARI = {
     "UPDATE": "Güncelleme",
     "CANCEL": "İptal",
     "DELETE": "Silme",
+    "EXPORT": "Excel Aktarımı",
     "ROLE_CHANGE": "Rol Değişikliği",
     "DEVICE_STATUS_CHANGE": "Cihaz Durum Değişikliği",
 }
@@ -65,6 +66,7 @@ OLAY_RENKLERI = {
     "UPDATE": ("#96601B", "#FFF2DF"),
     "CANCEL": ("#9B3048", "#FCEBF0"),
     "DELETE": ("#8A1F2D", "#FBE3E6"),
+    "EXPORT": ("#285F88", "#E8F2FB"),
     "ROLE_CHANGE": ("#62499E", "#F0EBFC"),
     "DEVICE_STATUS_CHANGE": ("#285F88", "#E8F2FB"),
 }
@@ -744,7 +746,7 @@ class AuditKayitlariEkrani(QWidget):
         ayrinti = ayrinti_satirlari(kayit.get("ayrinti"))
         if ayrinti:
             alt_baslik = QLabel(
-                "Silinen Veri" if kayit.get("olay_turu") == "DELETE" else "Değişiklik Ayrıntısı"
+                {"DELETE": "Silinen Veri", "EXPORT": "Aktarım Ayrıntısı"}.get(kayit.get("olay_turu"), "Değişiklik Ayrıntısı")
             )
             alt_baslik.setStyleSheet("font-size: 15px; font-weight: bold; color: #102D59;")
             duzen.addWidget(alt_baslik)

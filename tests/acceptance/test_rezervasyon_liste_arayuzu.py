@@ -127,7 +127,7 @@ def test_iptal_onaylanirsa_istek_gider_ve_liste_yenilenir(modul, ac):
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sahte), \
          patch.object(modul.IptalOnayKutusu, "exec", return_value=1), \
-         patch.object(modul.QMessageBox, "information") as bilgi:
+         patch.object(modul, "basari_bildirimi") as bilgi:           # başarı artık pencere değil, kısa bildirim (toast)
         e.rezervasyon_iptal_et(1)
     assert istekler[0] == ("PATCH", "http://x/api/rezervasyonlar/1/iptal") and istekler[1][0] == "GET"
     bilgi.assert_called_once()

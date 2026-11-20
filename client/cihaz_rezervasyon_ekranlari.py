@@ -18,6 +18,7 @@ from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, cift_tikla_ac, hap, metin_item, satira_kimlik_ata, sayfa_basligi, sayi_cipi,
     tablo_olustur, tehlike_dugmesi, tek_islem_butonu, yenile_butonu_olustur,
 )
+from client.bildirim_toast import basari_bildirimi
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
@@ -777,7 +778,7 @@ class RezervasyonYonetimEkrani(QWidget):
                 return
             if res.status_code == 200:
                 self.verileri_yukle()
-                QMessageBox.information(self, "Rezervasyon", "Rezervasyon iptal edildi.")
+                basari_bildirimi(self, "Rezervasyon iptal edildi.")
             else:
                 QMessageBox.warning(self, "Rezervasyon", api_hata_mesaji(res))
         except Exception as e:

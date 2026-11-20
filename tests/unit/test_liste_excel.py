@@ -43,8 +43,9 @@ def kaydet(tmp_path):
     yol = str(tmp_path / "cikti.xlsx")
     with patch.object(liste_excel.QFileDialog, "getSaveFileName", return_value=(yol, "")) as dosya, \
             patch.object(liste_excel.QMessageBox, "information") as bilgi, \
-            patch.object(liste_excel.QMessageBox, "warning") as uyari:
-        yield type("K", (), {"yol": yol, "dosya": dosya, "bilgi": bilgi, "uyari": uyari})
+            patch.object(liste_excel.QMessageBox, "warning") as uyari, \
+            patch.object(liste_excel, "oturum_kontrollu_istek", return_value=_yanit({"durum": "basarili"})) as denetim:
+        yield type("K", (), {"yol": yol, "dosya": dosya, "bilgi": bilgi, "uyari": uyari, "denetim": denetim})
 
 
 # ------------------------------------------------------------------ ortak yardımcı
@@ -87,6 +88,7 @@ def test_yardimci_uzantiyi_tamamlar_ve_yazma_hatasini_bildirir(kaydet, tmp_path)
     with patch.object(liste_excel, "excel_olustur", side_effect=PermissionError("kilitli")):
         assert listeyi_excele_aktar(QWidget(), "Deneme", "deneme", [("Ad", None)], [["a"]]) is None
     kaydet.uyari.assert_called_once()
+    kaydet.denetim.assert_not_called()                                   # kayit verilmediyse denetim isteği atılmaz
 
 
 # ------------------------------------------------------------------ cihaz envanteri
@@ -196,3 +198,45 @@ def test_danisan_excel_yalniz_gorunen_kodlari_yazar(kaydet):
         _, sayfa = _oku(kaydet.yol)
         assert [s[0] for s in _hucreler(sayfa)[1:]] == ["DAN-2026-0003"]
         ekran.close()
+
+
+# ------------------------------------------------------------------ denetim kaydı
+def test_aktarim_denetim_kaydina_yazilir_dogru_liste_ve_satir_sayisiyla(kaydet):
+    ekran = _envanter()
+    ekran.arama.setText("tms")
+    ekran.excele_aktar()
+    yontem, adres = kaydet.denetim.call_args.args[:2]
+    assert (yontem, adres) == ("POST", "http://x/api/liste-aktarim-kaydi")
+    assert kaydet.denetim.call_args.kwargs["json"] == {"liste": "CIHAZ", "satir_sayisi": 1}     # yalnızca görünen 1 cihaz
+    assert kaydet.denetim.call_args.kwargs["headers"] == {"Authorization": "Bearer T"}
+    kaydet.uyari.assert_not_called()
+    ekran.close()
+
+
+def test_ogrenci_ve_danisan_dogru_liste_kodunu_gonderir(kaydet):
+    ekran = _ogrenci_ekrani()
+    ekran.excele_aktar()
+    assert kaydet.denetim.call_args.kwargs["json"] == {"liste": "OGRENCI", "satir_sayisi": 2}
+    ekran.close()
+    import test_danisanlar_ekrani as dt
+    dt.AKTIF.clear()
+    sunucu = dt.Sunucu()
+    dt.AKTIF["s"] = sunucu
+    with patch.object(dt.modul, "oturum_kontrollu_istek", side_effect=sunucu), patch.object(dt.rmodul, "oturum_kontrollu_istek", side_effect=sunucu):
+        d = dt.DanisanlarEkrani("http://testserver", "TOKEN", 11)
+        d.excele_aktar()
+        assert kaydet.denetim.call_args.kwargs["json"]["liste"] == "DANISAN"
+        d.close()
+
+
+def test_denetim_kaydi_yazilamazsa_kullaniciya_acikca_soylenir(kaydet):
+    kaydet.denetim.return_value = MagicMock(status_code=500, _tkys_oturum_reddedildi=False)
+    ekran = _envanter()
+    ekran.excele_aktar()
+    kaydet.uyari.assert_called_once()
+    assert "denetim kaydına yazılamadı" in kaydet.uyari.call_args.args[2]
+    kaydet.denetim.side_effect = ConnectionError("yok")
+    kaydet.uyari.reset_mock()
+    ekran.excele_aktar()
+    kaydet.uyari.assert_called_once()
+    ekran.close()

@@ -18,6 +18,7 @@ from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugm
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
+from client.bildirim_toast import basari_bildirimi
 
 BAKIM_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -178,7 +179,7 @@ class YeniBakimFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
-                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla eklendi.")
+                basari_bildirimi(self, "Bakım kaydı başarıyla eklendi.")
                 self.accept()
             else:
                 # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
@@ -293,7 +294,7 @@ class BakimDuzenleFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Bakım kaydı başarıyla güncellendi.")
+                basari_bildirimi(self, "Bakım kaydı başarıyla güncellendi.")
                 self.accept()
             else:
                 hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")

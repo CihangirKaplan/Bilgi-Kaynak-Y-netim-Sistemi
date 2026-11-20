@@ -13,6 +13,7 @@ from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
+from client.bildirim_toast import basari_bildirimi
 
 # Ortak form stiline ek: kırmızı "bildir" butonu ve uyarı kutusu
 ARIZA_FORM_STIL = FORM_STIL + """
@@ -127,7 +128,7 @@ class ArizaBildirimFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code in [200, 201]:
-                QMessageBox.information(self, "Başarılı", "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
+                basari_bildirimi(self, "Arıza bildirimi oluşturuldu. Cihaz durumu otomatik olarak güncellendi.")
                 self.accept()
             else:
                 hata = str(hata_detayi_metni(cevap, 'Bilinmeyen bir hata oluştu.'))
@@ -339,7 +340,7 @@ class ArizaDuzenleFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Arıza kaydı başarıyla güncellendi.")
+                basari_bildirimi(self, "Arıza kaydı başarıyla güncellendi.")
                 self.accept()
             else:
                 QMessageBox.warning(self, "Hata", f"İşlem reddedildi. Kod: {cevap.status_code}")

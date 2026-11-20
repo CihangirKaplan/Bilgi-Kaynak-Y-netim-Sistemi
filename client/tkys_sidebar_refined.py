@@ -58,6 +58,7 @@ PAGE_ICONS = {
     "Cihaz Raporları": "chart",
     "Kullanıcı & Personel": "users",
     "Audit Kayıtları": "file",
+    "Sistem Durumu": "shield",
     "Oda Yönetimi": "building",
     "Rol & İzin Yönetimi": "shield",
 }

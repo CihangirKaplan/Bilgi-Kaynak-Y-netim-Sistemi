@@ -16,6 +16,7 @@ from client.siniflandirma import (GORUSME_TIPLERI, gorusme_etiketi, terapi_etike
 from client.iptal_nedeni_diyalog import IPTAL_NEDENLERI, IptalNedeniDialog
 from client.ui_components import StandartButon
 from client.tablo_siralama import siralanabilir_yap
+from client.tablo_tasarimi import ortak_liste_stili_uygula
 
 # ======================================================================
 #  APT-002: YENİ RANDEVU OLUŞTURMA FORMU
@@ -1100,10 +1101,7 @@ class RandevuAnaEkrani(QWidget):
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tablo.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.tablo.setStyleSheet("""
-            QTableWidget { background-color: white; border: 1px solid #D0D7E5; border-radius: 8px; gridline-color: #E2E8F0; }
-            QHeaderView::section { background-color: #0A1F5C; color: white; font-weight: bold; padding: 10px; border: none; }
-        """)
+        ortak_liste_stili_uygula(self.tablo)
         self.tablo.cellDoubleClicked.connect(lambda *_: self.duzenle_secilen())
         layout.addWidget(self.tablo, 1)
 
