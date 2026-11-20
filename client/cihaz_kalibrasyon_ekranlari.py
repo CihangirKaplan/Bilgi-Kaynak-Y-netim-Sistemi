@@ -14,6 +14,7 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
+from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
@@ -357,6 +358,7 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.cip_yaklasan.setText(f"{yaklasan} süresi yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} süresi dolmuş")
         self.bos_mesaj.setText("Henüz kalibrasyon kaydı yok. Üstteki “Kalibrasyon Kaydı” butonuyla ekleyebilirsiniz.")
+        hap_sutununu_sigdir(self.tablo, 4, en_az=120)            # geçerlilik rozeti kesilmesin
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())

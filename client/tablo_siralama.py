@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QTableWidgetItem
 
 BOS_DEGERLER = {"", "-", "—", "–"}
+SIRALAMA_ROLU = Qt.UserRole + 77     # hücrenin görünen metninden farklı bir sıralama metni gerekiyorsa (örn. "KOD · Ad" hücresi ada göre)
 SIRASIZ_BASLIKLAR = {"işlem", "islem", ""}
 
 _ALFABE = "abcçdefgğhıijklmnoöprsştuüvyz"
@@ -61,6 +62,10 @@ def siralama_anahtari(metin):
 def _hucre_metni(tablo, satir, sutun):
     """Hücrenin sıralanacak metni: önce öğe metni; yoksa hücre bileşenindeki (rozet) etiket metni."""
     oge = tablo.item(satir, sutun)
+    if oge is not None:
+        ozel = oge.data(SIRALAMA_ROLU)
+        if ozel:
+            return str(ozel)
     if oge is not None and oge.text().strip():
         return oge.text()
     bilesen = tablo.cellWidget(satir, sutun)

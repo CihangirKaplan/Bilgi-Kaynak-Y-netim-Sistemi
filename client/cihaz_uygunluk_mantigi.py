@@ -292,6 +292,14 @@ def saat_araligi_metni(rezervasyonlar, en_cok=2):
     return metin
 
 
+def saat_araligi_satirlari(rezervasyonlar, en_cok=2):
+    """Gün hücresi için her rezerve saat aralığı ayrı satırda: ['09:00–10:00', '11:00–12:00', '+1 daha'] (dar hücrede taşmasın)."""
+    satirlar = [f"{b:%H:%M}–{'24:00' if s.hour == 0 and s.minute == 0 else f'{s:%H:%M}'}" for b, s in rezervasyonlar[:en_cok]]
+    if len(rezervasyonlar) > en_cok:
+        satirlar.append(f"+{len(rezervasyonlar) - en_cok} daha")
+    return satirlar
+
+
 def gun_ipucu(gun, durum):
     """Gün hücresinin üzerine gelince görünen açıklama."""
     satirlar = [f"{uzun_tarih(gun)} — {KOD_ADLARI[durum.kod]}"]

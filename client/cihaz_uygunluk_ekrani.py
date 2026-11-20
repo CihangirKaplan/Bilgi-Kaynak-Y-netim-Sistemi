@@ -11,14 +11,14 @@ geçiş düğmeleri yalnızca kullanıcının o işlem için yetkisi varsa gör�
 from datetime import date, datetime, time, timedelta
 
 from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QBrush, QColor, QPainter
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import (QComboBox, QDateEdit, QDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QStyledItemDelegate, QTableWidgetItem, QVBoxLayout, QWidget)
 
 import client.cihaz_uygunluk_mantigi as mantik
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.cihaz_rezervasyon_ekranlari import varsayilan_rezervasyon_zamanlari
-from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, sayfa_basligi, sayi_cipi, tablo_olustur,
+from client.tablo_tasarimi import (cihaz_hucresi_uygula, FORM_STIL, bos_mesaj_olustur, sayfa_basligi, sayi_cipi, tablo_olustur,
                             yenile_butonu_olustur)
 
 # durum kodu -> (yazı rengi, arka plan)
@@ -57,13 +57,21 @@ ARAC_STILI = """
 UYARI_SATIR_KARAKTER = 36        # uyarı sütununda bir satıra sığan yaklaşık karakter sayısı (sütun 250 px)
 
 
-def satir_yuksekligi(uyari_metinleri):
+def satir_yuksekligi(uyari_metinleri, gun_satirlari=0):
     """Satır yüksekliği: varsayılan 54 px; uyarı metni sütunda kaç satıra sararsa ona göre uzar.
 
+    gun_satirlari: gün hücrelerinin en kalabalığındaki satır sayısı (durum adı + rezerve saat aralıkları); bu da satırı uzatır.
     Yükseklik sütun genişliğine bağlı ölçülmez (pencere açılmadan genişlikler bilinmez), tahmin edilir.
     """
     satir = sum(-(-(len(m) + 2) // UYARI_SATIR_KARAKTER) for m in uyari_metinleri)       # tavan bölme
-    return max(54, 22 + 17 * satir)
+    return max(54, 22 + 17 * satir, 18 + 16 * gun_satirlari)
+
+
+def gun_hucresi_satir_sayisi(metin, sutun_genisligi=120):
+    """Gün hücresindeki görünen satır sayısı: her '\n' bir satırdır; ilk satır (örn. 'Kısmen rezerve') sütuna sığmıyorsa iki satıra sarar."""
+    satirlar = metin.split("\n")
+    sigar = len(satirlar[0]) * 7.2 <= max(sutun_genisligi - 14, 40)          # ~7.2 px/karakter (13 px kalın yazı)
+    return len(satirlar) + (0 if sigar else 1)
 
 
 def _renkli(item, kod, kalin=False):
@@ -83,10 +91,43 @@ def _merkez(metin):
     return item
 
 
+def hucreye_sigdir(metin, font, genislik, yukseklik):
+    """Metni kutuya sığdırır ve (satırlar, yazı tipi) döndürür.
+
+    Sırayla: sözcük kaydırma; hâlâ sığmıyorsa yazıyı en fazla ~%30 küçültme; yine olmuyorsa satırın sonunu "…" ile kısaltma.
+    Böylece uzun metin hücre dışına taşmaz ya da iki kenardan kesilmez (":00–10:0" gibi).
+    """
+    yazi = QFont(font)
+    for _ in range(4):
+        olcu = QFontMetrics(yazi)
+        satirlar = []
+        for ham in str(metin or "").split("\n"):
+            kelimeler, aktif = ham.split(" "), ""
+            for k in kelimeler:
+                deneme = f"{aktif} {k}".strip()
+                if aktif and olcu.horizontalAdvance(deneme) > genislik:
+                    satirlar.append(aktif)
+                    aktif = k
+                else:
+                    aktif = deneme
+            satirlar.append(aktif)
+        sigiyor = all(olcu.horizontalAdvance(sat) <= genislik for sat in satirlar) and len(satirlar) * olcu.lineSpacing() <= yukseklik
+        if sigiyor:
+            return satirlar, yazi
+        boyut = yazi.pointSizeF()
+        if boyut > 0:
+            yazi.setPointSizeF(max(boyut * 0.92, 7))
+        else:
+            yazi.setPixelSize(max(int(yazi.pixelSize() * 0.92), 9))
+    olcu = QFontMetrics(yazi)
+    return [olcu.elidedText(sat, Qt.ElideRight, genislik) for sat in satirlar], yazi
+
+
 class DurumHucreCizici(QStyledItemDelegate):
     """Durum hücrelerini yuvarlak köşeli renkli kutu olarak çizer.
 
     Tablonun genel stilindeki `::item` kuralı öğe arka plan rengini ezdiği için renk burada elle çizilir.
+    Metin kutuya sığdırılır (bkz. hucreye_sigdir): dar sütunda taşmaz, kenarlardan kesilmez.
     """
 
     def paint(self, painter, option, index):
@@ -103,9 +144,12 @@ class DurumHucreCizici(QStyledItemDelegate):
         painter.setBrush(renk)
         painter.drawRoundedRect(kutu, 9, 9)
         yazi = index.data(Qt.FontRole)
-        painter.setFont(yazi if yazi is not None else option.font)
+        alan = kutu.adjusted(4, 2, -4, -2)
+        satirlar, yazi = hucreye_sigdir(index.data(Qt.DisplayRole) or "", yazi if yazi is not None else option.font,
+                                        alan.width(), alan.height())
+        painter.setFont(yazi)
         painter.setPen(yazi_rengi)
-        painter.drawText(kutu.adjusted(4, 0, -4, 0), int(Qt.AlignCenter | Qt.TextWordWrap), index.data(Qt.DisplayRole) or "")
+        painter.drawText(alan, int(Qt.AlignCenter), "\n".join(satirlar))
         painter.restore()
 
 
@@ -380,13 +424,18 @@ class CihazUygunlukEkrani(QWidget):
         self.tablo.setSelectionMode(self.tablo.SelectionMode.NoSelection)    # seçim rengi durum renklerini ezmesin
         self.tablo.setMouseTracking(True)
         kb = self.tablo.horizontalHeader()
-        kb.setSectionResizeMode(SUTUN_CIHAZ, QHeaderView.ResizeToContents)
+        # Cihaz sütunu sabit genişlikte (uzun ad sütunu şişirip gün sütunlarını ezmesin; sığmayan ad "…" ile kısalır, tam hâli ipucunda).
+        kb.setSectionResizeMode(SUTUN_CIHAZ, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(SUTUN_CIHAZ, 210)
         kb.setSectionResizeMode(SUTUN_SU_AN, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(SUTUN_SU_AN, 120)
+        self.tablo.setColumnWidth(SUTUN_SU_AN, 104)
+        kb.setMinimumSectionSize(78)                                   # gün sütunu bundan dar olmaz (pencere dar ise yatay kaydırma çıkar)
         for sutun in range(ILK_GUN_SUTUNU, ILK_GUN_SUTUNU + 7):
             kb.setSectionResizeMode(sutun, QHeaderView.Stretch)
         kb.setSectionResizeMode(UYARI_SUTUNU, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(UYARI_SUTUNU, 250)
+        self.tablo.setColumnWidth(UYARI_SUTUNU, 240)
+        self.tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        cihaz_hucresi_uygula(self.tablo, SUTUN_CIHAZ)
         self.cizici = DurumHucreCizici(self.tablo)
         for sutun in range(SUTUN_SU_AN, ILK_GUN_SUTUNU + 7):
             self.tablo.setItemDelegateForColumn(sutun, self.cizici)
@@ -501,11 +550,15 @@ class CihazUygunlukEkrani(QWidget):
         gorunen = mantik.filtrele(tum, self.arama.text(), self.cmb_filtre.currentData(), self.gunler, bugun,
                                   self.musait_idler, simdi)
         bugun_cihazlari = {c["cihaz_id"]: c for c in (self.bugun_verisi or {}).get("cihazlar", [])}
+        # Gün sütunu genişliği (Stretch): pencere henüz çizilmediyse makul bir varsayılan. Satır yüksekliği buna göre hesaplanır.
+        gorunur = self.tablo.viewport().width()
+        gun_sutun_genisligi = max((gorunur - 210 - 104 - 240) // 7, 78) if gorunur > 700 else 120
         self.tablo.setRowCount(len(gorunen))
         for satir, cihaz in enumerate(gorunen):
             kimlik = cihaz["cihaz_id"]
             ad = QTableWidgetItem(f"{cihaz.get('envanter_kodu', '')}  ·  {cihaz.get('cihaz_adi', '')}")
             ad.setData(Qt.UserRole, kimlik)
+            ad.setToolTip(f"{cihaz.get('cihaz_adi', '')}\nEnvanter kodu: {cihaz.get('envanter_kodu', '')}")   # sığmayan ad/kod tam görünsün
             yazi = ad.font()
             yazi.setBold(True)
             ad.setFont(yazi)
@@ -515,11 +568,14 @@ class CihazUygunlukEkrani(QWidget):
             self.tablo.setItem(satir, SUTUN_SU_AN, _renkli(_merkez(KISA_AD[su_an]), su_an, kalin=True))
 
             donemler = mantik.donemleri_coz(cihaz)
+            en_cok_satir = 1
             for sira, gun in enumerate(self.gunler):
                 durum = mantik.gun_durumu(donemler, gun, simdi)
                 metin = mantik.KOD_ADLARI[durum.kod]
                 if durum.kod in (mantik.KISMEN, mantik.DOLU) and durum.rezervasyonlar:
-                    metin += "\n" + mantik.saat_araligi_metni(durum.rezervasyonlar)          # hangi saatlerde rezerve
+                    # Hangi saatlerde rezerve: her aralık ayrı satırda (yan yana yazınca dar sütunda kesiliyordu)
+                    metin += "\n" + "\n".join(mantik.saat_araligi_satirlari(durum.rezervasyonlar))
+                en_cok_satir = max(en_cok_satir, gun_hucresi_satir_sayisi(metin, gun_sutun_genisligi))
                 item = _renkli(_merkez(metin), durum.kod, kalin=(gun == bugun))
                 item.setToolTip(mantik.gun_ipucu(gun, durum))
                 self.tablo.setItem(satir, ILK_GUN_SUTUNU + sira, item)
@@ -531,7 +587,7 @@ class CihazUygunlukEkrani(QWidget):
                 uyari.setForeground(QBrush(QColor("#991B1B" if kritik else "#854D0E")))
                 uyari.setToolTip("\n".join(m for m, _ in uyarilar))
             self.tablo.setItem(satir, UYARI_SUTUNU, uyari)
-            self.tablo.setRowHeight(satir, satir_yuksekligi([m for m, _ in uyarilar]))
+            self.tablo.setRowHeight(satir, satir_yuksekligi([m for m, _ in uyarilar], en_cok_satir))
 
         if not tum:
             self.bos_mesaj.setText("Henüz cihaz kaydı yok.")
