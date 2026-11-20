@@ -455,6 +455,23 @@ class YonetimRaporlariEkrani(QWidget):
         self.proje_grafigi = YonetimProjeGrafigi()
         self.analiz_layout.addWidget(self.proje_grafigi)
 
+        from client.yonetim_grafik_turleri import grafik_secimi_ekle
+
+        for widget, rapor, varsayilan in (
+            (self.karsilastirma_grafigi, "karsilastirma", "Sütun"),
+            (self.ogrenci_donem_grafigi, "karsilastirma", "Sütun"),
+            (self.randevu_grafigi, "randevu", "Çizgi"),
+            (self.cihaz_grafigi, "karsilastirma", "Sütun"),
+            (self.ogrenci_puan_grafigi, "ogrenci", "Yatay Çubuk"),
+            (self.proje_grafigi, "proje", "Yatay Çubuk"),
+        ):
+            grafik_secimi_ekle(widget, rapor, varsayilan)
+
+        from client.yonetim_ek_rapor_grafigi import EkRaporGrafigi
+
+        self.ek_rapor_grafigi = EkRaporGrafigi()
+        self.analiz_layout.addWidget(self.ek_rapor_grafigi)
+
         self.tablolari_olustur(self.analiz_layout)
         # Grafiği olmayan görünümlerde (Oda Kullanımı, Yetkiler...) boş alan tablolar arasına dağılmasın, sona toplansın.
         self.analiz_layout.addStretch(1)
@@ -852,9 +869,9 @@ class YonetimRaporlariEkrani(QWidget):
         self.operasyon_ozeti.setVisible(genel_bakis)
         self.ogrenci_ozeti.setVisible(genel_bakis)
 
-        self.karsilastirma_grafigi.setVisible(False)
+        self.karsilastirma_grafigi.setVisible(genel_bakis)
 
-        self.ogrenci_donem_grafigi.setVisible(False)
+        self.ogrenci_donem_grafigi.setVisible(genel_bakis)
 
         self.randevu_grafigi.setVisible(
             self.rapor_turu.currentText() == "Randevular"
@@ -870,6 +887,15 @@ class YonetimRaporlariEkrani(QWidget):
 
         self.proje_grafigi.setVisible(
             self.rapor_turu.currentText() == "Proje / Deney"
+        )
+
+        ek_raporlar = (
+            "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
+            "Öğrenci Mevcudu", "Faaliyet Onayları",
+            "Bakım Gecikmeleri",
+        )
+        self.ek_rapor_grafigi.setVisible(
+            self.rapor_turu.currentText() in ek_raporlar
         )
 
         if self.veriler is None:
@@ -1196,6 +1222,13 @@ class YonetimRaporlariEkrani(QWidget):
                     ("Katılımcı toplamı benzersiz kişi sayısı değildir.",),
                 ]),
             ]
+
+        if tur in (
+            "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
+            "Öğrenci Mevcudu", "Faaliyet Onayları",
+            "Bakım Gecikmeleri",
+        ):
+            self.ek_rapor_grafigi.guncelle(tur, self.veriler)
 
         for widgetlar, (ad, deger, alt) in zip(
             self.kartlar, kartlar

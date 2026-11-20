@@ -72,7 +72,10 @@ def router_olustur(izin_kontrol, vt_ayarlari):
             raise HTTPException(404, "Etkinlik bulunamadı.")
         return dict(kayit)
 
-    def oda_ve_personel_kontrol(cursor, oda_id, personel_id, katilimci):
+    def oda_ve_personel_kontrol(
+        cursor, oda_id, personel_id, katilimci,
+        eski_personel_id=None,
+    ):
         cursor.execute(
             """
             SELECT kapasite
@@ -95,6 +98,30 @@ def router_olustur(izin_kontrol, vt_ayarlari):
         )
         if cursor.fetchone() is None:
             raise HTTPException(422, "Geçerli ve aktif bir personel seçilmeli.")
+
+        # Mevcut Admin atamalarını koru, yeni Admin seçimini engelle.
+        if personel_id != eski_personel_id:
+            cursor.execute(
+                """
+                SELECT 1
+                FROM personel p
+                JOIN kullanicilar k
+                  ON k.kullanici_id = p.kullanici_id
+                JOIN roller r
+                  ON r.rol_id = k.rol_id
+                WHERE p.personel_id = %s
+                  AND p.aktif_mi IS TRUE
+                  AND k.aktif_mi IS TRUE
+                  AND UPPER(TRIM(r.rol_adi)) <> 'ADMIN'
+                """,
+                (personel_id,),
+            )
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    422,
+                    "Düzenleyen personel olarak aktif ve "
+                    "Admin olmayan bir personel seçilmelidir.",
+                )
 
     def oda_kilitle(cursor, oda_idleri):
         for oda_id in sorted(set(oda_idleri)):
@@ -150,6 +177,14 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 SELECT o.oda_id, o.oda_adi, o.kapasite
                 FROM odalar o
                 WHERE o.aktif_mi = TRUE
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM psikolog_odalar po
+                      JOIN kullanicilar k
+                        ON k.kullanici_id = po.kullanici_id
+                      WHERE po.oda_id = o.oda_id
+                        AND k.aktif_mi IS TRUE
+                  )
                 ORDER BY o.oda_adi, o.oda_id
             """)
             odalar = [dict(k) for k in cursor.fetchall()]
@@ -161,7 +196,10 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                     p.personel_kodu
                 FROM personel p
                 JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
-                WHERE p.aktif_mi = TRUE AND k.aktif_mi = TRUE
+                JOIN roller r ON r.rol_id = k.rol_id
+                WHERE p.aktif_mi = TRUE
+                  AND k.aktif_mi = TRUE
+                  AND UPPER(TRIM(r.rol_adi)) <> 'ADMIN'
                 ORDER BY k.kullanici_adi, p.personel_id
             """)
             personeller = [dict(k) for k in cursor.fetchall()]
@@ -428,6 +466,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 cursor, yeni["oda_id"],
                 yeni["organize_eden_personel_id"],
                 yeni["katilimci_sayisi"],
+                eski_personel_id=mevcut["organize_eden_personel_id"],
             )
             for ilk, son in araliklar:
                 cakisma_kontrol(
