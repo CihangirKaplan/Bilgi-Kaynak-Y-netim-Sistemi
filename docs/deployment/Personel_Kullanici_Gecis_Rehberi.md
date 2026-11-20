@@ -46,6 +46,10 @@ yaklaşık **0,6 saniye**. Geçiş sırasında ilgili tablolar çok kısa süre 
     Çıktının sonunda `GEÇİŞE HAZIR.` görmelisiniz. `[UYARI]` satırı, aktifliği farklı kayıtlar olduğunu söyler: bu bir engel değildir ama
     hangi hesapların pasif olacağını gösterir. Bunları geçişten önce gözden geçirin.
 
+    **"eski sütun değeri geçişte silinecek"** uyarısı, `personel` tablosunda eski sürümlerden kalmış ve artık hiçbir kodun kullanmadığı bir
+    sütunda (örn. `varsayilan_oda_id`) dolu değer olduğunu gösterir. Geçiş tabloyu kaldırdığı için bu sütun ve değerleri de gider. Bunlar kalıntı
+    veridir (güncel oda atamaları `psikolog_odalar` tablosundadır), bu yüzden engel değildir; yine de değerler geçişten önce aldığınız yedekte durur.
+
 5. Geçişi uygulayın ve doğrulayın:
 
     ```powershell

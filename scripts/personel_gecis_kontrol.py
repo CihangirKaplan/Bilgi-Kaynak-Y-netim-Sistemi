@@ -7,6 +7,9 @@ Geçişten SONRA: veri aynı mı (sağlama özeti), yapı doğru mu (görünüm,
 (personel ekleme/güncelleme/silme; HER ŞEY GERİ ALINIR, kalıcı kayıt kalmaz).
     python scripts/personel_gecis_kontrol.py son
 
+Eski sürümlerden kalan, kodda artık kullanılmayan personel sütunlarında (örn. varsayilan_oda_id) DOLU değer varsa 'on' bunları
+[UYARI] olarak listeler: geçiş bu sütunları değerleriyle birlikte kaldırır. Bu bir engel değildir (kalıntı veri); yalnızca bilgi içindir.
+
 Her iki komut da --dosya ile sağlama dosyasının yerini değiştirebilir (varsayılan: gecis_oncesi.json). Bağlantı bilgisi .env
 dosyasındaki DB_* değerleridir. Çıkış kodu: 0 = tamam, 1 = sorun var.
 """
@@ -20,6 +23,7 @@ KOK = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KOK))
 
 MIGRASYON = "b9d4f7a2c613"
+BILINEN_PERSONEL_SUTUNLARI = ("personel_id", "kullanici_id", "personel_kodu", "aktif_mi", "olusturulma_tarihi")
 BAGLI_TABLOLAR = (
     ("randevular", "psikolog_id", "randevu_id"),
     ("danisan_kodlari", "olusturan_psikolog_id", "danisan_kod_id"),
@@ -63,6 +67,33 @@ def uyumsuz_aktiflikler(cursor):
         "SELECT k.kullanici_adi, k.aktif_mi, p.aktif_mi FROM kullanicilar k JOIN personel p ON p.kullanici_id = k.kullanici_id "
         "WHERE k.aktif_mi <> p.aktif_mi ORDER BY k.kullanici_adi")
     return [{"kullanici_adi": a, "kullanici_aktif": bool(b), "personel_aktif": bool(c)} for a, b, c in cursor.fetchall()]
+
+
+def ekstra_sutunlar(cursor, tablo="personel"):
+    """Tabloda bilinen personel sütunlarının dışında kalan (eski sürümlerden artakalan) sütunlar."""
+    cursor.execute(
+        "SELECT a.attname FROM pg_attribute a WHERE a.attrelid = %s::regclass AND a.attnum > 0 AND NOT a.attisdropped "
+        "AND a.attname <> ALL(%s) ORDER BY a.attnum", (tablo, list(BILINEN_PERSONEL_SUTUNLARI)))
+    return [r[0] for r in cursor.fetchall()]
+
+
+def ekstra_degerler(cursor, tablo="personel"):
+    """Beklenmeyen sütunlardaki DOLU değerler: [{sutun, personel_id, kullanici_adi, deger, oda_adi?}]. Yalnızca okur."""
+    from psycopg2 import sql
+
+    sonuc = []
+    for sutun in ekstra_sutunlar(cursor, tablo):
+        cursor.execute(
+            sql.SQL("SELECT p.personel_id, k.kullanici_adi, p.{s} FROM {t} p JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id "
+                    "WHERE p.{s} IS NOT NULL ORDER BY p.personel_id").format(s=sql.Identifier(sutun), t=sql.Identifier(tablo)))
+        for personel_id, kullanici_adi, deger in cursor.fetchall():
+            kayit = {"sutun": sutun, "personel_id": personel_id, "kullanici_adi": kullanici_adi, "deger": str(deger)}
+            if sutun.endswith("oda_id"):
+                cursor.execute("SELECT oda_adi FROM odalar WHERE oda_id = %s", (deger,))
+                oda = cursor.fetchone()
+                kayit["oda_adi"] = oda[0] if oda else None
+            sonuc.append(kayit)
+    return sonuc
 
 
 def personel_turu(cursor):
@@ -123,9 +154,12 @@ def yazma_denemesi(cursor):
 
 
 # ----------------------------------------------------------------------------- karar mantığı (saf işlevler)
-def on_karar(tur, surumler, uyumsuzlar):
-    """(sorunlar, uyarilar, bilgiler). Sorun varsa geçiş yapılmamalıdır."""
+def on_karar(tur, surumler, uyumsuzlar, ekstra=()):
+    """(sorunlar, uyarilar, bilgiler). Sorun varsa geçiş yapılmamalıdır. ekstra: ekstra_degerler() çıktısı (yalnızca uyarı)."""
     sorunlar, uyarilar, bilgiler = [], [], []
+    for k in ekstra:
+        oda = f" ({k['oda_adi']})" if k.get("oda_adi") else ""
+        uyarilar.append(f"eski sütun değeri geçişte silinecek: {k['kullanici_adi']} → personel.{k['sutun']} = {k['deger']}{oda}")
     if tur == "v":
         sorunlar.append("personel zaten görünüm: geçiş uygulanmış görünüyor. 'son' komutuyla sonucu doğrulayın.")
     elif tur is None:
@@ -206,9 +240,10 @@ def main(argv=None):
             if arg.asama == "on":
                 surumler = alembic_surumleri(cursor)
                 uyumsuzlar = uyumsuz_aktiflikler(cursor) if tur == "r" else []
-                sorunlar, uyarilar, bilgiler = on_karar(tur, surumler, uyumsuzlar)
+                ekstra = ekstra_degerler(cursor) if tur == "r" else []
+                sorunlar, uyarilar, bilgiler = on_karar(tur, surumler, uyumsuzlar, ekstra)
                 if not sorunlar:
-                    kayit = {"goruntu": goruntu_al(cursor), "uyumsuz_aktiflik": len(uyumsuzlar), "alembic": surumler}
+                    kayit = {"goruntu": goruntu_al(cursor), "uyumsuz_aktiflik": len(uyumsuzlar), "alembic": surumler, "ekstra_degerler": ekstra}
                     dosya.write_text(json.dumps(kayit, ensure_ascii=False, indent=2), encoding="utf-8")
                     bilgiler.append(f"sağlama özeti kaydedildi: {dosya}")
                 _yaz(sorunlar, uyarilar, bilgiler)

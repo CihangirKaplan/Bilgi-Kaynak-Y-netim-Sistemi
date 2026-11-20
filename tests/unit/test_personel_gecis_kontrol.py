@@ -65,3 +65,18 @@ def test_gecis_oncesi_aktiflik_uzlastirmasi_bilgi_olarak_yazilir():
     onceki = {**ONCEKI, "uyumsuz_aktiflik": 2}
     _, bilgi = k.son_karar(onceki, {"personel": _g(), "randevular": _g(5, "r")}, "v", YAPI_TAMAM, (True, "x"))
     assert any("2 kayıt" in b and "uzlaştırıldı" in b for b in bilgi)
+
+
+# ------------------------------------------------------------------ eski (artakalan) sütunlardaki dolu değerler: yalnızca bilgi
+def _ekstra():
+    return [{"sutun": "varsayilan_oda_id", "personel_id": 7, "kullanici_adi": "psikolog1", "deger": "2", "oda_adi": "Görüşme Odası-1"}]
+
+
+def test_eski_sutundaki_dolu_deger_uyari_olarak_gosterilir_ama_gecisi_engellemez():
+    sorun, uyari, _ = k.on_karar("r", ["x"], [], _ekstra())
+    assert sorun == []                                                                       # kalıntı veri: engel değil
+    assert len(uyari) == 1 and "psikolog1" in uyari[0] and "varsayilan_oda_id = 2" in uyari[0] and "Görüşme Odası-1" in uyari[0] and "silinecek" in uyari[0]
+
+
+def test_eski_sutun_yoksa_cikti_degismez():
+    assert k.on_karar("r", ["x"], [], []) == k.on_karar("r", ["x"], [])
