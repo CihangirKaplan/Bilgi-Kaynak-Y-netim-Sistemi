@@ -113,9 +113,26 @@ def hap_sutununu_sigdir(tablo, sutun, en_az=96):
     tablo.setColumnWidth(sutun, max(genislikler + [en_az]) + _yatay_dolgu(tablo) + 6)
 
 
-def cihaz_hucresi_uygula(tablo, sutun=0):
-    """Tablonun bu sütununda "KOD · Ad" hücrelerini iki satırlı (ad üstte, kod altta) çizer."""
+def cihaz_ipucu(metin, ek=""):
+    """"KOD · Ad" hücresinin ipucu: tam ad, envanter kodu (ve varsa ek satır). Hücrede "…" ile kısalan metin burada tam görünür."""
+    ad, kod = CihazHucresiDelegate.parcala(metin)
+    satirlar = [ad] + ([f"Envanter kodu: {kod}"] if kod else []) + ([ek] if ek else [])
+    return "\n".join(satirlar)
+
+
+def cihaz_siralama_adi(metin):
+    """"KOD · Ad" hücresinin sıralama metni: cihaz adı (kod değil)."""
+    return CihazHucresiDelegate.parcala(metin)[0]
+
+
+def cihaz_hucresi_uygula(tablo, sutun=0, en_az_satir_yuksekligi=48):
+    """Tablonun bu sütununda "KOD · Ad" hücrelerini iki satırlı (ad üstte, kod altta) çizer.
+
+    İki satır sığsın diye satır yüksekliği en az en_az_satir_yuksekligi olur (daha yüksek satırlar küçültülmez)."""
     tablo.setItemDelegateForColumn(sutun, CihazHucresiDelegate(tablo))
+    baslik = tablo.verticalHeader()
+    if baslik.defaultSectionSize() < en_az_satir_yuksekligi:
+        baslik.setDefaultSectionSize(en_az_satir_yuksekligi)
 
 
 # Cihaz yaşam döngüsü tabloları: hücre metni ortalı, sütunlar arası daha geniş boşluk

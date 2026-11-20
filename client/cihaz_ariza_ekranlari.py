@@ -2,6 +2,8 @@
 
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
+from client.tablo_siralama import SIRALAMA_ROLU
 from client.api_yoneticisi import hata_detayi_metni
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -170,7 +172,9 @@ class ArizaYonetimEkrani(QWidget):
                                     "BİLDİRİM TARİHİ", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(1, QHeaderView.Fixed)                          # uzun cihaz adı sütunu şişirmesin ("…" ile kısalır, ipucunda tam)
+        self.tablo.setColumnWidth(1, 230)
+        cihaz_hucresi_uygula(self.tablo, 1)                                    # ad üstte (kalın), envanter kodu altta (gri)
         kb.setSectionResizeMode(2, QHeaderView.Stretch)
         kb.setSectionResizeMode(3, QHeaderView.Fixed)           # etiket (hap) sütunları: içerikten
         kb.setSectionResizeMode(4, QHeaderView.Fixed)           # ölçülemediği için sabit genişlik
@@ -219,7 +223,12 @@ class ArizaYonetimEkrani(QWidget):
             acik += not cozuldu
 
             self.tablo.setItem(satir, 0, metin_item(str(ariza_id if ariza_id is not None else ""), ortala=True))
-            self.tablo.setItem(satir, 1, metin_item(str(ar.get("cihaz_adi") or "Bilinmeyen"), kalin=True))
+            cihaz_adi = str(ar.get("cihaz_adi") or "Bilinmeyen")
+            kod = ar.get("envanter_kodu")
+            cihaz_item = metin_item(f"{kod}  ·  {cihaz_adi}" if kod else cihaz_adi, kalin=True)      # ad üstte, envanter kodu altta (çizici)
+            cihaz_item.setToolTip(cihaz_ipucu(cihaz_item.text()))
+            cihaz_item.setData(SIRALAMA_ROLU, cihaz_adi)                                              # sıralama cihaz adına göre
+            self.tablo.setItem(satir, 1, cihaz_item)
             self.tablo.setItem(satir, 2, metin_item(ar.get("ariza_baslik") or ""))
 
             aciliyet = ar.get("aciliyet") or "Belirtilmedi"
@@ -246,6 +255,7 @@ class ArizaYonetimEkrani(QWidget):
         self.bos_mesaj.setText("Henüz arıza kaydı yok.")
         hap_sutununu_sigdir(self.tablo, 3)                       # Aciliyet rozeti
         hap_sutununu_sigdir(self.tablo, 4)                       # Durum rozeti ("Çözüldü" / "Açık"): kesilmesin
+        hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # işlem düğmeleri sağdan kırpılmasın
         self.bos_mesaj.setVisible(not arizalar)
         self.tablo.setVisible(bool(arizalar))
         self.filtrele(self.arama.text())

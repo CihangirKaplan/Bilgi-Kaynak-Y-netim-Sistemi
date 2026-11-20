@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
+from client.tablo_tasarimi import cihaz_hucresi_uygula
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     api_hata_mesaji,
@@ -919,6 +920,17 @@ class YonetimRaporlariEkrani(QWidget):
         widget.setColumnCount(len(sutunlar))
         widget.setHorizontalHeaderLabels(sutunlar)
         widget.setRowCount(len(satirlar))
+        # Aynı tablolar farklı görünümlerde yeniden kullanılır: önce eski çizicileri kaldır, sonra "Cihaz" sütununu iki satırlı çiz.
+        varsayilan = widget.property("varsayilan_satir_yuksekligi")
+        if varsayilan is None:
+            varsayilan = widget.verticalHeader().defaultSectionSize()
+            widget.setProperty("varsayilan_satir_yuksekligi", varsayilan)
+        for j in range(len(sutunlar)):
+            widget.setItemDelegateForColumn(j, None)
+        widget.verticalHeader().setDefaultSectionSize(int(varsayilan))
+        for j, ad in enumerate(sutunlar):
+            if ad == "Cihaz":
+                cihaz_hucresi_uygula(widget, j)
 
         for i, satir in enumerate(satirlar):
             for j, deger in enumerate(satir):

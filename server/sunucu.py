@@ -4276,7 +4276,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
 
         cursor.execute("""
             SELECT a.ariza_id, c.cihaz_adi, a.ariza_baslik, a.ariza_aciklamasi, a.aciliyet,
-                   a.cozuldu_mu, a.bildirim_tarihi
+                   a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu
             FROM cihaz_arizalari a
             JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
             ORDER BY a.bildirim_tarihi DESC;
@@ -4290,6 +4290,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
                 "aciliyet": k[4],
                 "durum": "Çözüldü" if k[5] else "Açık",
                 "bildirim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
+                "envanter_kodu": k[7] if len(k) > 7 else None,
             }
             for k in cursor.fetchall()
         ]

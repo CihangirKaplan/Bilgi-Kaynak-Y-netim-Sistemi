@@ -8,6 +8,7 @@ Alt sınıf şunları tanımlar: RAPOR_YOLU, KARTLAR, TABLO_DIZILIMI ve gerekirs
 from datetime import datetime
 
 import requests
+from client.tablo_tasarimi import cihaz_hucresi_uygula
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 
 from PySide6.QtCore import QDate, Qt
@@ -124,6 +125,9 @@ class RaporSayfasiTaban(QWidget):
             QHeaderView::section { background: #E8F0FF; color: #16294B; font-weight: bold; padding: 8px 5px; border: none;
                 border-right: 1px solid #D6E2F3; border-bottom: 1px solid #D6E2F3; }
         """)
+        for sira, ad in enumerate(sutunlar):
+            if ad == "Cihaz":                                                  # "KOD - Ad" -> ad üstte (kalın), envanter kodu altta (gri)
+                cihaz_hucresi_uygula(tablo, sira)
         return tablo
 
     def _bolum(self, baslik, tablo):

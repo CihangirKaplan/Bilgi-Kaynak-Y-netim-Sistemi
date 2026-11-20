@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, cihaz_siralama_adi
+from client.tablo_siralama import SIRALAMA_ROLU
 from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from client.tekrar_uyari_alanlari import TekrarUyariAlanlari
 from client.plan_secimi import PlanSecimi
@@ -334,7 +336,9 @@ class BakimYonetimEkrani(QWidget):
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
                                     "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
-        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(0, QHeaderView.Fixed)                          # uzun cihaz adı sütunu şişirmesin ("…" ile kısalır, ipucunda tam)
+        self.tablo.setColumnWidth(0, 230)
+        cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(2, QHeaderView.Stretch)
         kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
@@ -387,8 +391,8 @@ class BakimYonetimEkrani(QWidget):
             tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
             cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
-            if b.get("plan_adi"):
-                cihaz_item.setToolTip(f"Yerine getirilen plan: {b['plan_adi']}")
+            cihaz_item.setToolTip(cihaz_ipucu(b.get("cihaz_adi", ""), f"Yerine getirilen plan: {b['plan_adi']}" if b.get("plan_adi") else ""))
+            cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(b.get("cihaz_adi", "")))          # sıralama cihaz adına göre
             cihaz_item.setData(Qt.UserRole, b["bakim_id"])
             self.tablo.setItem(i, 0, cihaz_item)
             self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
@@ -419,6 +423,7 @@ class BakimYonetimEkrani(QWidget):
         self.cip_gecmis.setText(f"{gecmis} gecikmiş")
         self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
         hap_sutununu_sigdir(self.tablo, 5, en_az=120)            # "Planlanmadı" / "tarih · N gün gecikti" rozeti kesilmesin
+        hap_sutununu_sigdir(self.tablo, 7, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın
         self.bos_mesaj.setVisible(not bakimlar)
         self.tablo.setVisible(bool(bakimlar))
         self.filtrele(self.arama.text())

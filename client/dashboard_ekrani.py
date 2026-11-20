@@ -1,6 +1,7 @@
 import datetime
 import time
 import requests
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -242,6 +243,7 @@ class DashboardEkrani(QWidget):
 
         if cihaz_ozeti:
             self.tablo_rez = _tablo_olustur(["SAAT", "CİHAZ", "REZERVE EDEN", "ODA"])
+            cihaz_hucresi_uygula(self.tablo_rez, 1, en_az_satir_yuksekligi=0)      # ad üstte, kod altta (satır yüksekliği değişmez)
             self.lbl_rez_bos = QLabel("Bugün için cihaz rezervasyonu bulunmuyor.")
             panel_rez = self.panel_rez = self._panel("Cihaz Rezervasyonları", f"📌  {tarih}",
                                     self.tablo_rez, self.lbl_rez_bos)
@@ -256,6 +258,7 @@ class DashboardEkrani(QWidget):
         # ---- 4. YAKLAŞAN BAKIM / KALİBRASYON ----
         if cihaz_ozeti:
             self.tablo_islem = _tablo_olustur(["CİHAZ", "İŞLEM", "SON TARİH", "KALAN SÜRE"])
+            cihaz_hucresi_uygula(self.tablo_islem, 0, en_az_satir_yuksekligi=0)    # ad üstte, kod altta (satır yüksekliği değişmez)
             self._islem_hedefleri = []          # tablodaki her satırın açacağı sayfa
             self.tablo_islem.cellClicked.connect(self._islem_satiri_tiklandi)
             if self._sayfa_ac is not None:
@@ -476,7 +479,9 @@ class DashboardEkrani(QWidget):
         self._kaydirma_ipucu_guncelle(self.panel_rez, len(rezervasyonlar) if kaydirilabilir else 0)
         for i, r in enumerate(rezervasyonlar):
             self.tablo_rez.setItem(i, 0, _item(f"{r['baslangic']} – {r['bitis']}", kalin=True))
-            self.tablo_rez.setItem(i, 1, _item(r["cihaz"]))
+            rez_cihaz = _item(r["cihaz"])
+            rez_cihaz.setToolTip(cihaz_ipucu(r["cihaz"]))                          # "…" ile kısalan ad/kod ipucunda tam
+            self.tablo_rez.setItem(i, 1, rez_cihaz)
             self.tablo_rez.setItem(i, 2, _item(r["rezerve_eden"]))
             self.tablo_rez.setItem(i, 3, _item(r["oda"]))
 

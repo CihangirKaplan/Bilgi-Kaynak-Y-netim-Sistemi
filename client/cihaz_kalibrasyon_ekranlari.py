@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 import requests
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, cihaz_siralama_adi
+from client.tablo_siralama import SIRALAMA_ROLU
 from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
 from client.tekrar_uyari_alanlari import TekrarUyariAlanlari
 from client.plan_secimi import PlanSecimi
@@ -288,6 +290,7 @@ class KalibrasyonYonetimEkrani(QWidget):
                                     "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
+        cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
         kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
@@ -336,8 +339,8 @@ class KalibrasyonYonetimEkrani(QWidget):
             tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
             cihaz_item = metin_item(k.get("cihaz_adi", ""), kalin=True)
-            if k.get("plan_adi"):
-                cihaz_item.setToolTip(f"Yerine getirilen plan: {k['plan_adi']}")
+            cihaz_item.setToolTip(cihaz_ipucu(k.get("cihaz_adi", ""), f"Yerine getirilen plan: {k['plan_adi']}" if k.get("plan_adi") else ""))
+            cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(k.get("cihaz_adi", "")))          # sıralama cihaz adına göre
             self.tablo.setItem(i, 0, cihaz_item)
             self.tablo.setItem(i, 1, metin_item(k.get("kalibrasyon_yapan_kurum", "")))
             self.tablo.setItem(i, 2, metin_item(k.get("sertifika_no", ""), ortala=True))
@@ -359,6 +362,7 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.cip_gecmis.setText(f"{gecmis} süresi dolmuş")
         self.bos_mesaj.setText("Henüz kalibrasyon kaydı yok. Üstteki “Kalibrasyon Kaydı” butonuyla ekleyebilirsiniz.")
         hap_sutununu_sigdir(self.tablo, 4, en_az=120)            # geçerlilik rozeti kesilmesin
+        hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())
