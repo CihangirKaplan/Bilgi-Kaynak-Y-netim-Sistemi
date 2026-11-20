@@ -391,3 +391,26 @@ def test_gecis_kontrol_araci_goruntusu_tutarlidir(cursor):
     assert ilk == ikinci                                                                    # aynı veri için sağlama özeti sabit
     assert set(ilk) == {"personel", "kullanicilar", "randevular", "danisan_kodlari", "cihaz_rezervasyonlari", "oda_etkinlikleri", "denetim_personel_hedefleri"}
     assert k.uyumsuz_aktiflikler(cursor) == []                                              # tek bayrak: uyumsuzluk artık mümkün değil
+
+
+@_geri_alinabilir
+def test_eski_sutundaki_dolu_degerler_gosterilir_bos_olanlar_ve_bilinen_sutunlar_gosterilmez(cursor):
+    """Eski şemayı taklit eden GEÇİCİ tabloda (işlem sonunda geri alınır): beklenmeyen sütun ve yalnızca DOLU değerleri listelenir."""
+    from scripts import personel_gecis_kontrol as k
+
+    cursor.execute("INSERT INTO odalar (oda_adi) VALUES ('pg_ekstra_oda') RETURNING oda_id")
+    oda = cursor.fetchone()[0]
+    u1, u2 = _gecici_kullanici(cursor, "pg_ekstra_1"), _gecici_kullanici(cursor, "pg_ekstra_2")
+    cursor.execute("CREATE TEMP TABLE personel_gecis_deneme (personel_id integer, kullanici_id integer, personel_kodu varchar(50), "
+                   "aktif_mi boolean, olusturulma_tarihi timestamp, varsayilan_oda_id integer)")
+    cursor.execute("INSERT INTO personel_gecis_deneme VALUES (900001, %s, 'E-1', true, now(), %s), (900002, %s, 'E-2', true, now(), NULL)", (u1, oda, u2))
+    assert k.ekstra_sutunlar(cursor, "personel_gecis_deneme") == ["varsayilan_oda_id"]
+    assert k.ekstra_degerler(cursor, "personel_gecis_deneme") == [
+        {"sutun": "varsayilan_oda_id", "personel_id": 900001, "kullanici_adi": "pg_ekstra_1", "deger": str(oda), "oda_adi": "pg_ekstra_oda"}]
+
+
+@_geri_alinabilir
+def test_gecilmis_semada_ekstra_sutun_yoktur(cursor):
+    from scripts import personel_gecis_kontrol as k
+
+    assert k.ekstra_sutunlar(cursor, "personel") == [] and k.ekstra_degerler(cursor, "personel") == []
