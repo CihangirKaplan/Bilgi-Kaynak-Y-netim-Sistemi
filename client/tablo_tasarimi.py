@@ -241,7 +241,7 @@ def hatirlatma_metni(gun):
     return "Geldiği gün" if gun == 0 else f"{gun} gün kala"
 
 
-def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler):
+def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler, ek_butonlar=()):
     """Ekranın üstündeki beyaz araç çubuğu kartı."""
     kart = QFrame()
     kart.setObjectName("kart")
@@ -262,6 +262,8 @@ def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler):
     ust.addStretch()
     arama_kutusu.setStyleSheet(ARAMA_STIL)
     ust.addWidget(arama_kutusu)
+    for ek in ek_butonlar:          # Yenile'den önce (örn. Excel'e Aktar)
+        ust.addWidget(ek)
     ust.addWidget(yenile_butonu)
     ana.addLayout(ust)
 

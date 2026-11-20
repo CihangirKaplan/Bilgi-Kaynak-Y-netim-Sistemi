@@ -22,6 +22,7 @@ from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.api_yoneticisi import api_hata_mesaji
 from PySide6.QtWidgets import QDialog
 from client.danisan_bilgi_diyalogu import DanisanBilgiDialog
+from client.liste_excel import excel_dugmesi_olustur, listeyi_excele_aktar
 from client.siniflandirma import yas_etiketi
 from client.randevu_ekranlari import (
     DURUM_ETIKETLERI, DURUM_RENKLERI, RandevuAnaEkrani,
@@ -210,6 +211,9 @@ class DanisanlarEkrani(QWidget):
         cubuk.addWidget(self.arama, 1)
         cubuk.addWidget(self.chk_pasif)
         cubuk.addWidget(self.lbl_sayac)
+        self.btn_excel = excel_dugmesi_olustur(self.excele_aktar)
+        self.btn_excel.setStyleSheet(self.btn_excel.styleSheet().replace("padding: 10px 18px", "padding: 7px 14px"))
+        cubuk.addWidget(self.btn_excel)
         cubuk.addWidget(self.btn_yenile)
         return cubuk
 
@@ -532,6 +536,7 @@ class DanisanlarEkrani(QWidget):
         liste = danisanlari_filtrele(self.danisanlar, self.psikolog_adlari, self.arama.text(),
                                      {k: len(v) for k, v in self.randevu_gruplari.items()})
 
+        self.gorunen_danisanlar = list(liste)   # Excel'e aktarılan, ekranda görünen danışanlar
         self.tablo.blockSignals(True)
         self.tablo.setRowCount(0)
         self.tablo.setRowCount(len(liste))
@@ -556,6 +561,27 @@ class DanisanlarEkrani(QWidget):
 
     def _secim_degisti(self):
         self._detay_goster(self.secili_danisan())
+
+    def excele_aktar(self):
+        """Ekranda görünen danışanları (yalnızca kod; ad/soyad yoktur) Excel'e aktarır."""
+        liste = getattr(self, "gorunen_danisanlar", [])
+        satirlar = []
+        for danisan in liste:
+            sayi = len(self.randevu_gruplari.get(danisan.get("danisan_kod_id"), []))
+            metin = danisan_satir_metinleri(danisan, self._psikolog_adi(danisan.get("olusturan_psikolog_id")), sayi)
+            satirlar.append([*metin[:4], sayi, metin[5]])
+        filtre = [
+            ("Psikolog", self.cmb_psikolog.currentText()),
+            ("Pasifler", "Dahil" if self.chk_pasif.isChecked() else "Hariç"),
+            ("Arama", self.arama.text().strip() or "Yok"),
+        ]
+        listeyi_excele_aktar(
+            self, "Danışan Listesi", "danisan_listesi",
+            [("Danışan Kodu", None), ("Psikolog", None), ("Yaş Grubu", None), ("Ücret", None),
+             ("Randevu", "0"), ("Durum", None)],
+            satirlar, filtre, sayfa_adi="Danışanlar",
+            aciklama="Danışanlar sayfasında ekranda görünen danışan kodları. Kişisel bilgi (ad, telefon) içermez.",
+        )
 
     # ------------------------------------------------------------------ işlemler
     @staticmethod

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.liste_excel import excel_dugmesi_olustur, listeyi_excele_aktar
+from client.rapor_excel import TARIH_BICIMI, _tarih_degeri
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
@@ -190,7 +192,8 @@ class CihazYonetimEkrani(QWidget):
         layout.addWidget(sayfa_basligi(
             "Cihaz Envanteri", "Kayıtlı cihazlar ve anlık durumları",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_hazir, self.cip_bakimda, self.cip_arizali]))
+            [self.cip_toplam, self.cip_hazir, self.cip_bakimda, self.cip_arizali],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         # Ana paneldeki durum kartından gelindiğinde görünür; filtreyi tek tıkla kaldırır.
         self.filtre_seridi = QFrame()
@@ -277,6 +280,33 @@ class CihazYonetimEkrani(QWidget):
         self.bos_mesaj.setVisible(not cihazlar)
         self.tablo.setVisible(bool(cihazlar))
         self.filtrele(self.arama.text())
+
+    def gorunen_cihazlar(self):
+        """Arama ve durum filtresine uyan (tabloda görünen) cihazlar, tablo sırasıyla."""
+        sonuc = []
+        for satir in range(self.tablo.rowCount()):
+            kod_item = self.tablo.item(satir, 0)
+            if kod_item is None or self.tablo.isRowHidden(satir):
+                continue
+            cihaz = self.cihaz_detaylari.get(kod_item.data(Qt.UserRole))
+            if cihaz is not None:
+                sonuc.append(cihaz)
+        return sonuc
+
+    def excele_aktar(self):
+        """Ekranda görünen cihazları (demirbaş sayımı için) Excel'e aktarır."""
+        cihazlar = self.gorunen_cihazlar()
+        filtre = [("Arama", self.arama.text().strip() or "Yok")]
+        filtre.append(("Durum filtresi", DURUMLAR.get(self.durum_filtresi, (self.durum_filtresi,))[0] if self.durum_filtresi else "Tümü"))
+        listeyi_excele_aktar(
+            self, "Cihaz Envanteri", "cihaz_envanteri",
+            [("Envanter Kodu", None), ("Cihaz Adı", None), ("Marka / Model", None), ("Seri No", None),
+             ("Durum", None), ("Kayıt Tarihi", TARIH_BICIMI)],
+            [[c.get("envanter_kodu") or "", c.get("cihaz_adi") or "", c.get("marka_model") or "", c.get("seri_no") or "",
+              DURUMLAR.get(c.get("durum"), (c.get("durum") or "",))[0], _tarih_degeri(c.get("kayit_tarihi"))]
+             for c in cihazlar],
+            filtre, sayfa_adi="Cihazlar", aciklama="Kayıtlı cihazların envanter listesi (demirbaş sayımı için).",
+        )
 
     def durum_filtrele(self, durum):
         """Yalnızca bu durumdaki cihazları gösterir (ana paneldeki durum kartlarından gelinir)."""
