@@ -266,6 +266,9 @@ Yeni sürüm geldiğinde sunucu bilgisayarında, sunucuyu durdurduktan sonra:
     uvicorn server.sunucu:app --host 0.0.0.0 --port 8000
 
 Migration'dan önce her zaman yedek alın. `sema_dogrula.py` çıktısında `ŞEMA UYUMLU` görmeden sunucuyu başlatmayın.
+
+**Personel ve kullanıcı tablolarının birleşimi** (migration `b9d4f7a2c613`) için adım adım rehber: `docs/deployment/Personel_Kullanici_Gecis_Rehberi.md`.
+Bu migration'ı **önce bir kopyada deneyin**, sonra gerçek veritabanına uygulayın.
 Sunucu kodu değiştiğinde çalışan sunucu yeniden başlatılmalıdır.
 
 **Geliştirme bilgisayarlarında da** (her `git pull origin develop` sonrası) aynı kontrol gerekir; çünkü yeni kod, henüz oluşturulmamış bir
