@@ -65,6 +65,7 @@ from server.guvenlik import (
     GECICI_PAROLA_BITIS_SQL,
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
+from server.guvenlik_basliklari import GuvenlikBasliklari
 from server.personel_kaydi import personel_kaydi_ata
 from server.vt_baglanti import vt_baglan
 from server.parola_politikasi import parola_ihlalleri
@@ -103,6 +104,7 @@ def fastapi_olustur(belgeler_acik: bool) -> FastAPI:
 app = fastapi_olustur(api_belgeleri_acik_mi())
 # Bozuk girdi (NUL karakter, taşan sayı) ve veritabanı kural hataları 500 yerine anlamlı hata döndürür.
 app.add_middleware(NulVeSayiKorumasi)
+app.add_middleware(GuvenlikBasliklari)
 merkezi_hata_yakalayicilari_kur(app)
 
 
@@ -347,8 +349,10 @@ def giris_yap(giris: GirisModeli, request: Request = None):
                    COALESCE(r.aktif_mi, TRUE), k.token_surumu
             FROM kullanicilar k
             LEFT JOIN roller r ON k.rol_id = r.rol_id
-            WHERE k.kullanici_adi = %s;
-            """, (giris.kullanici_adi,)
+            WHERE LOWER(k.kullanici_adi) = LOWER(%s)
+            ORDER BY (k.kullanici_adi = %s) DESC
+            LIMIT 1;
+            """, (giris.kullanici_adi, giris.kullanici_adi)
         )
         kullanici = cursor.fetchone()
 
@@ -487,7 +491,7 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT parola_hash, aktif_mi FROM kullanicilar WHERE kullanici_id = %s FOR UPDATE;",
+            "SELECT parola_hash, aktif_mi, kullanici_adi FROM kullanicilar WHERE kullanici_id = %s FOR UPDATE;",
             (kullanici_id,)
         )
         kullanici = cursor.fetchone()
@@ -509,6 +513,10 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
             )
             conn.commit()
             raise HTTPException(status_code=401, detail="Eski şifre hatalı.")
+
+        ihlaller = parola_ihlalleri(veri.yeni_parola, kullanici[2] if len(kullanici) > 2 else None)
+        if ihlaller:
+            raise HTTPException(status_code=422, detail=" ".join(ihlaller))
 
         yeni_hash = parola_hashle(veri.yeni_parola)
         cursor.execute(
@@ -552,7 +560,6 @@ def _siradaki_personel_kodu(cursor, rol_adi):
         "MUDUR": "MUD",
         "DANISMA_OGRENCISI": "OGR",
         "PROJE_ASISTANI": "AST",
-        "KLINIK SORUMLUSU": "KLS",
         "ADMIN": "ADM",
     }
 
@@ -605,7 +612,6 @@ def kullanici_olustur(
         "MUDUR": "MUD",
         "DANISMA_OGRENCISI": "OGR",
         "PROJE_ASISTANI": "AST",
-        "KLINIK SORUMLUSU": "KLS",
         "ADMIN": "ADM",
     }
 
@@ -679,6 +685,8 @@ def kullanici_olustur(
                 status_code=403,
                 detail="ADMIN kullanıcısı bu ekran üzerinden oluşturulamaz.",
             )
+        if hiyerarsi_ihlali_var_mi(yapan[0] if yapan else None, rol_adi):
+            raise HTTPException(status_code=403, detail=HIYERARSI_MESAJI)
 
         danisma_ogrencisi = rol_adi == "DANISMA_OGRENCISI"
 
@@ -741,8 +749,9 @@ def kullanici_olustur(
             INSERT INTO kullanicilar
                 (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis,
                  personel_id, personel_kodu, personel_kaydi_tarihi)
-            VALUES (%s, %s, %s, TRUE, TRUE, {GECICI_PAROLA_BITIS_SQL},
-                    nextval('personel_personel_id_seq'), %s, CURRENT_TIMESTAMP)
+            SELECT %s, %s, %s, TRUE, TRUE, {GECICI_PAROLA_BITIS_SQL},
+                   nextval('personel_personel_id_seq'), %s, CURRENT_TIMESTAMP
+            WHERE NOT EXISTS (SELECT 1 FROM kullanicilar WHERE LOWER(kullanici_adi) = LOWER(%s))
             RETURNING kullanici_id, personel_id;
             """,
             (
@@ -750,9 +759,13 @@ def kullanici_olustur(
                 parola_hash,
                 yeni_kullanici.rol_id,
                 personel_kodu,
+                yeni_kullanici.kullanici_adi,
             ),
         )
-        yeni_id, personel_id = cursor.fetchone()
+        satir = cursor.fetchone()
+        if satir is None:                                   # aynı ad (büyük/küçük harf farkıyla da olsa) zaten var
+            raise HTTPException(status_code=409, detail="Bu kullanıcı adı zaten kullanılıyor.")
+        yeni_id, personel_id = satir
 
         # Tek denetim kaydı: kullanıcı ve personel bilgisi aynı kayıttır.
         ayrintili_kayit_yaz(
@@ -949,6 +962,9 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                 status_code=403,
                 detail="ADMIN rolü atanamaz veya başka bir role dönüştürülemez."
             )
+
+        if hiyerarsi_ihlali_var_mi(islem_yapan_rol, mevcut_rol, yeni_rol_adi):
+            raise HTTPException(status_code=403, detail=HIYERARSI_MESAJI)
 
         if mevcut_rol == yeni_rol_adi:
             raise HTTPException(
@@ -1944,6 +1960,9 @@ def kullanici_durum_degistir(
                 status_code=403,
                 detail="ADMIN kullanıcısının aktiflik durumu değiştirilemez."
             )
+
+        if hiyerarsi_ihlali_var_mi(islem_yapan[0] if islem_yapan else None, hedef_rol):
+            raise HTTPException(status_code=403, detail=HIYERARSI_MESAJI)
 
         # YENİ MANTIK: Mevcut durum neyse tam tersini yap (Toggle)
         yeni_durum = not mevcut_durum
