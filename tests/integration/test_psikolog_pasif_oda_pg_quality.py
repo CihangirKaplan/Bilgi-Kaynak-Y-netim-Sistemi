@@ -538,3 +538,101 @@ def test_rol_hiyerarsisi_ust_ya_da_esit_rolleri_yonetmeyi_engeller_gercek_verita
         for k in (mudur, esit, memur):
             c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR (hedef_tablo IN ('kullanicilar','personel') AND hedef_kayit_id = %s)", (k, k))
             c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (k,))
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Güvenlik paketi 2: çıkışta token iptali, denetimde istemci adresi, görüntüleme kaydı (gerçek veritabanı)
+# ----------------------------------------------------------------------------------------------------------------------
+def _girisli_kullanici(c, rol="ADMIN"):
+    from server.guvenlik import parola_hashle
+    from server.personel_kaydi import personel_kaydi_ata
+    ad = f"gk_{uuid4().hex[:8]}"
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, ilk_giris_mi) VALUES (%s, %s, (SELECT rol_id FROM roller WHERE rol_adi = %s), FALSE) RETURNING kullanici_id", (ad, parola_hashle("Guzel-Parola-2026"), rol))
+    kimlik = c.fetchone()[0]
+    personel_kaydi_ata(c, kimlik, f"GK-{uuid4().hex[:6]}")
+    return ad, kimlik
+
+
+def _girisli_temizle(c, kimlik):
+    c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s OR (hedef_tablo = 'kullanicilar' AND hedef_kayit_id = %s)", (kimlik, kimlik))
+    c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (kimlik,))
+
+
+def _giris(istemci, ad):
+    yanit = istemci.post("/api/login", json={"kullanici_adi": ad, "parola": "Guzel-Parola-2026"})
+    assert yanit.status_code == 200, yanit.text
+    return {"Authorization": f"Bearer {yanit.json()['access_token']}"}
+
+
+def test_cikis_oturum_anahtarini_sunucuda_gecersiz_kilar_gercek_veritabaninda(ortam):
+    c = ortam[0]
+    ad, kimlik = _girisli_kullanici(c)
+    istemci = TestClient(app)
+    try:
+        eski = _giris(istemci, ad)
+        diger_cihaz = _giris(istemci, ad)
+        assert istemci.get("/api/audit-kayitlari", headers=eski).status_code == 200
+        yanit = istemci.post("/api/cikis", headers=eski)
+        assert yanit.status_code == 200, yanit.text
+        for baslik in (eski, diger_cihaz):                                                        # aynı hesabın tüm eski anahtarları kapanır
+            yanit = istemci.get("/api/audit-kayitlari", headers=baslik)
+            assert yanit.status_code == 401 and "Oturum geçersiz" in yanit.json()["detail"], yanit.text
+        assert istemci.post("/api/cikis", headers=eski).status_code == 401                         # eski anahtarla tekrar çıkış da olmaz
+        yeni = _giris(istemci, ad)                                                                 # yeniden giriş çalışır
+        assert istemci.get("/api/audit-kayitlari", headers=yeni).status_code == 200
+        c.execute("SELECT count(*) FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu = 'LOGOUT'", (kimlik,))
+        assert c.fetchone()[0] == 1
+    finally:
+        _girisli_temizle(c, kimlik)
+
+
+def test_surum_tasimayan_eski_anahtar_surum_0_icin_gecerlidir_gercek_veritabaninda(ortam):
+    from server.guvenlik import access_token_olustur
+    c = ortam[0]
+    ad, kimlik = _girisli_kullanici(c)
+    c.execute("SELECT parola_hash FROM kullanicilar WHERE kullanici_id = %s", (kimlik,))
+    eski_anahtar = access_token_olustur(kimlik, c.fetchone()[0])                                  # migration öncesi biçim: 'tsv' yok
+    istemci = TestClient(app)
+    try:
+        assert istemci.get("/api/audit-kayitlari", headers={"Authorization": f"Bearer {eski_anahtar}"}).status_code == 200
+        c.execute("UPDATE kullanicilar SET token_surumu = 1 WHERE kullanici_id = %s", (kimlik,))
+        assert istemci.get("/api/audit-kayitlari", headers={"Authorization": f"Bearer {eski_anahtar}"}).status_code == 401
+    finally:
+        _girisli_temizle(c, kimlik)
+
+
+def test_denetim_kaydi_istemci_adresini_tasir_gercek_veritabaninda(ortam):
+    c = ortam[0]
+    ad, kimlik = _girisli_kullanici(c)
+    istemci = TestClient(app, client=("203.0.113.7", 50000))
+    try:
+        baslik = _giris(istemci, ad)
+        istemci.get("/api/audit-kayitlari", headers=baslik)
+        istemci.post("/api/cikis", headers=baslik)
+        c.execute("SELECT olay_turu::text, istemci_adresi FROM denetim_kayitlari WHERE kullanici_id = %s ORDER BY denetim_id", (kimlik,))
+        satirlar = c.fetchall()
+        assert [o for o, _ in satirlar] == ["LOGIN", "VIEW", "LOGOUT"]
+        assert {a for _, a in satirlar} == {"203.0.113.7"}                                        # her yoldan yazılan kayıt adresi taşır
+        sahte = TestClient(app, client=("203.0.113.8", 1)).post("/api/login", json={"kullanici_adi": ad, "parola": "yanlis-parola-9"}, headers={"X-Forwarded-For": "10.9.9.9"})
+        assert sahte.status_code == 401
+        c.execute("SELECT istemci_adresi FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu = 'LOGIN_FAILED'", (kimlik,))
+        assert c.fetchone()[0] == "203.0.113.8"                                                   # X-Forwarded-For'a varsayılan olarak güvenilmez
+    finally:
+        _girisli_temizle(c, kimlik)
+
+
+def test_denetim_kayitlarini_goruntuleme_kayda_gecer_ve_sik_yenilemede_kalabalik_yapmaz_gercek_veritabaninda(ortam):
+    c = ortam[0]
+    ad, kimlik = _girisli_kullanici(c)
+    istemci = TestClient(app)
+    try:
+        baslik = _giris(istemci, ad)
+        for _ in range(3):
+            assert istemci.get("/api/audit-kayitlari", headers=baslik).status_code == 200
+        assert istemci.get("/api/audit-kayitlari", params={"olay_turu": ["VIEW", "LOGOUT"]}, headers=baslik).status_code == 200      # yeni olay türleri süzülebilir
+        c.execute("SELECT count(*) FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu = 'VIEW'", (kimlik,))
+        assert c.fetchone()[0] == 1                                                               # 10 dakikada tek kayıt
+        yanit = istemci.get("/api/audit-kayitlari", params={"olay_turu": "VIEW"}, headers=baslik)
+        assert yanit.json()["kayitlar"][0]["olay_turu"] == "VIEW" and "istemci_adresi" in yanit.json()["kayitlar"][0]
+    finally:
+        _girisli_temizle(c, kimlik)

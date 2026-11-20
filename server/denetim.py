@@ -1,6 +1,8 @@
 import json
 
 import psycopg2
+
+from server.vt_baglanti import vt_baglan
 from psycopg2 import sql
 from psycopg2.extras import Json
 
@@ -72,7 +74,7 @@ def denetim_kaydi_olustur(
     try:
         # Mevcut cursor verilmediyse yeni bağlantı aç.
         if cursor is None:
-            conn = psycopg2.connect(**vt_ayarlari)
+            conn = vt_baglan(vt_ayarlari)
             cursor = conn.cursor()
 
         if ayrinti is None:

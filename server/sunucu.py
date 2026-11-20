@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import psycopg2
 from psycopg2.errors import ExclusionViolation, DeadlockDetected
+from psycopg2.extras import Json
 from server.oda_etkinlikleri_kurallari import (
     oda_kilidini_al,
     oda_cakismasi_bul,
@@ -60,11 +61,13 @@ from server.guvenlik import (
     access_token_olustur,
     token_dogrula,
     token_parola_gecerli,
+    token_surumu_gecerli,
     GECICI_PAROLA_BITIS_SQL,
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
 from server.guvenlik_basliklari import GuvenlikBasliklari
 from server.personel_kaydi import personel_kaydi_ata
+from server.vt_baglanti import vt_baglan
 from server.parola_politikasi import parola_ihlalleri
 from server.rol_hiyerarsisi import HIYERARSI_MESAJI, hiyerarsi_ihlali_var_mi
 from server.denetim import (
@@ -173,11 +176,11 @@ def token_kullanici_id(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT k.parola_hash, k.aktif_mi, COALESCE(r.aktif_mi, TRUE) FROM kullanicilar k "
+            "SELECT k.parola_hash, k.aktif_mi, COALESCE(r.aktif_mi, TRUE), k.token_surumu FROM kullanicilar k "
             "LEFT JOIN roller r ON r.rol_id = k.rol_id "
             "WHERE k.kullanici_id = %s;",
             (kullanici_id,)
@@ -199,7 +202,7 @@ def token_kullanici_id(
         if len(kayit) > 2 and kayit[2] is False:
             raise HTTPException(status_code=403, detail=ROL_PASIF_GIRIS_MESAJI)
 
-        if not token_parola_gecerli(token, kayit[0]):
+        if not token_parola_gecerli(token, kayit[0]) or not token_surumu_gecerli(token, kayit[3] if len(kayit) > 3 else 0):
             raise HTTPException(
                 status_code=401,
                 detail="Oturum geçersiz. Yeniden giriş yapınız."
@@ -226,10 +229,10 @@ def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bear
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT k.aktif_mi, k.ilk_giris_mi, k.parola_hash, COALESCE(r.aktif_mi, TRUE) FROM kullanicilar k "
+            "SELECT k.aktif_mi, k.ilk_giris_mi, k.parola_hash, COALESCE(r.aktif_mi, TRUE), k.token_surumu FROM kullanicilar k "
             "LEFT JOIN roller r ON r.rol_id = k.rol_id WHERE k.kullanici_id = %s;",
             (kullanici_id,),
         )
@@ -241,7 +244,7 @@ def mevcut_kullanici_id(credentials: HTTPAuthorizationCredentials = Depends(bear
             raise HTTPException(status_code=403, detail="Kullanıcı hesabı aktif değil.")
         if len(kullanici) > 3 and kullanici[3] is False:
             raise HTTPException(status_code=403, detail=ROL_PASIF_GIRIS_MESAJI)
-        if not token_parola_gecerli(token, kullanici[2]):
+        if not token_parola_gecerli(token, kullanici[2]) or not token_surumu_gecerli(token, kullanici[4] if len(kullanici) > 4 else 0):
             raise HTTPException(
                 status_code=401,
                 detail="Oturum geçersiz. Yeniden giriş yapınız."
@@ -260,7 +263,7 @@ def izin_kontrol(izin_adi: str):
         conn = None
         cursor = None
         try:
-            conn = psycopg2.connect(**VT_AYARLARI)
+            conn = vt_baglan(VT_AYARLARI)
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -294,7 +297,7 @@ def yetkilerim(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -337,13 +340,13 @@ def giris_yap(giris: GirisModeli, request: Request = None):
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
             SELECT k.kullanici_id, k.kullanici_adi, k.parola_hash, k.rol_id, k.aktif_mi,
                    k.basarisiz_giris_sayisi, k.kilit_bitis_zamani, k.ilk_giris_mi, r.rol_adi, k.gecici_parola_bitis,
-                   COALESCE(r.aktif_mi, TRUE)
+                   COALESCE(r.aktif_mi, TRUE), k.token_surumu
             FROM kullanicilar k
             LEFT JOIN roller r ON k.rol_id = r.rol_id
             WHERE LOWER(k.kullanici_adi) = LOWER(%s)
@@ -430,7 +433,7 @@ def giris_yap(giris: GirisModeli, request: Request = None):
                 detail="Yöneticinizden sizi personel olarak tanımlamasını isteyiniz."
             )
         personel_id = pers[0]
-        access_token = access_token_olustur(kullanici[0], kullanici[2])
+        access_token = access_token_olustur(kullanici[0], kullanici[2], kullanici[11] if len(kullanici) > 11 else 0)
 
         denetim_kaydi_olustur(VT_AYARLARI, olay_turu="LOGIN", kullanici_id=kullanici[0], hedef_tablo="kullanicilar", hedef_kayit_id=kullanici[0])
         return {
@@ -449,6 +452,30 @@ def giris_yap(giris: GirisModeli, request: Request = None):
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+@app.post("/api/cikis")
+def cikis_yap(kullanici_id: int = Depends(token_kullanici_id)):
+    """Oturumu kapatır: kullanıcının oturum sürümü artar, bu kullanıcıya ait TÜM açık oturum anahtarları (token) geçersiz olur.
+
+    Çalınmış ya da unutulmuş bir oturum anahtarı süresi dolmayı beklemeden işe yaramaz hale gelir. Aynı hesapla başka bilgisayarda
+    açık olan oturumlar da kapanır (tek hesapta tek sürüm tutulur)."""
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE kullanicilar SET token_surumu = token_surumu + 1 WHERE kullanici_id = %s;", (kullanici_id,))
+        ayrintili_kayit_yaz(cursor, kullanici_id, "LOGOUT", "kullanicilar", kullanici_id)
+        conn.commit()
+        return {"durum": "basarili", "mesaj": "Oturum kapatıldı."}
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Oturum kapatılamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 @app.post("/api/sifre-degistir")
 def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_kullanici_id)):
     if veri.yeni_parola != veri.yeni_parola_tekrar:
@@ -461,7 +488,7 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT parola_hash, aktif_mi, kullanici_adi FROM kullanicilar WHERE kullanici_id = %s FOR UPDATE;",
@@ -589,7 +616,7 @@ def kullanici_olustur(
     }
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # İşlemi yapan kişinin rolünü öğren.
@@ -845,7 +872,7 @@ def musait_kullanici_adi(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT lower(kullanici_adi) FROM kullanicilar WHERE starts_with(lower(kullanici_adi), %s);",
@@ -870,7 +897,7 @@ def kullanici_ogrenci_kayit_durumu(
     kullanici_id: int,
     islem_yapan_id: int = Depends(izin_kontrol("ROL_ATAMA_DEGISTIRME")),
 ):
-    conn = psycopg2.connect(**VT_AYARLARI)
+    conn = vt_baglan(VT_AYARLARI)
     try:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -900,7 +927,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         )
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (islem_yapan_id,))
@@ -1197,7 +1224,7 @@ def rol_olustur(rol: RolModeli, kullanici_id: int = Depends(izin_kontrol("ROL_OL
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
  
         gorunen_ad = rol.rol_adi.strip()
@@ -1260,7 +1287,7 @@ def rol_guncelle(rol_id: int, veri: RolGorunenAdModeli, kullanici_id: int = Depe
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
  
         # 1. Rolün teknik adını (rol_adi) çekip satırı kilitliyoruz
@@ -1330,7 +1357,7 @@ def rol_sil(rol_id: int, kullanici_id: int = Depends(izin_kontrol("ROL_DUZENLE")
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
  
         cursor.execute("SELECT rol_adi FROM roller WHERE rol_id = %s FOR UPDATE;", (rol_id,))
@@ -1391,7 +1418,7 @@ def _atanabilir_rolleri_getir():
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT rol_id, rol_adi, gorunen_ad
@@ -1439,7 +1466,7 @@ def rolleri_listele(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YONET")))
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT r.rol_id, r.rol_adi, r.gorunen_ad, r.aktif_mi, "
@@ -1468,7 +1495,7 @@ def rol_yetki_ozeti(rol_id: int, kullanici_id: int = Depends(izin_kontrol("KULLA
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT rol_id, rol_adi, gorunen_ad FROM roller WHERE rol_id = %s;", (rol_id,))
         rol = cursor.fetchone()
@@ -1506,7 +1533,7 @@ def rol_izin_matrisi_getir(kullanici_id: int = Depends(izin_kontrol("ROL_IZIN_YO
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         
         # 1. Tüm Rolleri Çek
@@ -1569,7 +1596,7 @@ def kullanici_parola_sifirla(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Kullanıcı arayüzüne güvenmeden sunucuda ADMIN kontrolü
@@ -1719,7 +1746,7 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1810,7 +1837,7 @@ def parola_sifirlama_taleplerini_listele(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -1849,7 +1876,7 @@ def parola_sifirlama_talebini_kapat(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -1907,7 +1934,7 @@ def kullanici_durum_degistir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         if kullanici_id == islem_yapan_id:
@@ -2036,7 +2063,7 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
     cursor = None
     asama = "personel"
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT k.aktif_mi, r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (yeni_personel.kullanici_id,))
@@ -2107,7 +2134,7 @@ def personel_listele(islem_yapan_id: int = Depends(izin_kontrol("PERSONEL_TANIML
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT p.personel_id, p.kullanici_id, k.kullanici_adi, p.personel_kodu, r.rol_adi, p.aktif_mi, p.olusturulma_tarihi, r.gorunen_ad
@@ -2124,7 +2151,7 @@ def personel_olmayan_kullanicilari_listele(islem_yapan_id: int = Depends(izin_ko
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # Sadece henüz personel tablosunda kaydı OLMAYAN aktif kullanıcıları getirir
         cursor.execute("""
@@ -2152,7 +2179,7 @@ def personel_detay(personel_id: int, islem_yapan_id: int = Depends(izin_kontrol(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT p.personel_id, p.kullanici_id, k.kullanici_adi, p.personel_kodu, r.rol_adi, p.aktif_mi, p.olusturulma_tarihi
@@ -2177,7 +2204,7 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT personel_id, personel_kodu, aktif_mi, kullanici_id FROM kullanicilar WHERE personel_id = %s FOR UPDATE;", (personel_id,))
         mevcut = cursor.fetchone()
@@ -2216,7 +2243,7 @@ def siradaki_danisan_kodunu_ver(kullanici_id: int = Depends(izin_kontrol("RANDEV
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         siradaki_kod = otomatik_danisan_kodu_uret(cursor, kilitle=False)     # önizleme: kilit ve sayaç tüketimi yok
         return {"siradaki_kod": siradaki_kod}
@@ -2268,7 +2295,7 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 1. Psikolog yetki kontrolü
@@ -2414,7 +2441,7 @@ def randevulari_listele(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Rol adını net bir şekilde string olarak almak için tablodaki sütun adını garantiye alıyoruz
@@ -2575,7 +2602,7 @@ def randevu_doluluk(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(sorgu, parametreler)
         kayitlar = cursor.fetchall()
@@ -2603,7 +2630,7 @@ def randevu_guncelle(randevu_id: int, guncelleme: RandevuGuncelleModeli, kullani
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Satır kilidinden önce mevcut odayı belirle.
@@ -2755,7 +2782,7 @@ def randevu_iptal_et(randevu_id: int, iptal: RandevuIptalModeli, kullanici_id: i
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT psikolog_id, durum FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
@@ -2796,7 +2823,7 @@ def randevu_durumunu_isaretle(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT psikolog_id, durum, baslangic_zamani FROM randevular WHERE randevu_id = %s FOR UPDATE;", (randevu_id,))
@@ -2857,7 +2884,7 @@ def danisan_kodu_olustur(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 1. İşlemi yapanın rolünü ve (varsa) aktif personel kaydını öğreniyoruz
@@ -2935,7 +2962,7 @@ def izin_kontrol_tumu(*izin_adlari: str):
         conn = None
         cursor = None
         try:
-            conn = psycopg2.connect(**VT_AYARLARI)
+            conn = vt_baglan(VT_AYARLARI)
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -3123,7 +3150,7 @@ def psikolog_oda_yetkilerini_getir(hedef_kullanici_id: int, kullanici_id: int = 
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         _hedef_psikolog_kontrol(cursor, hedef_kullanici_id)
         cursor.execute("SELECT oda_id FROM psikolog_odalar WHERE kullanici_id = %s ORDER BY oda_id;", (hedef_kullanici_id,))
@@ -3145,7 +3172,7 @@ def psikolog_oda_yetkilerini_guncelle(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # KİLİT SIRASI (deadlock önleme): önce oda kilitleri, sonra kullanıcı satırı. Rezervasyon/randevu yolları oda kilidini alıp sonra
         # denetim kaydıyla kullanıcı satırını (FK) okur; burada tersi sıra (önce satır, sonra oda kilidi) karşılıklı beklemeye yol açıyordu.
@@ -3194,7 +3221,7 @@ def oda_psikolog_atamalari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EK
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -3220,7 +3247,7 @@ def oda_olustur(oda: OdaOlusturModeli, kullanici_id: int = Depends(izin_kontrol(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         oda_adi = oda.oda_adi.strip()
         cursor.execute("INSERT INTO odalar (oda_adi, kapasite, aktif_mi) VALUES (%s, %s, %s) RETURNING oda_id;", (oda_adi, oda.kapasite, oda.aktif_mi))
@@ -3243,7 +3270,7 @@ def psikolog_odalarini_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         
         # personel tablosunu araya koyarak personel_id üzerinden 
@@ -3270,7 +3297,7 @@ def odalari_listele(kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTU
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_id;")
         odalar = cursor.fetchall()
@@ -3297,7 +3324,7 @@ def cihaz_odalarini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(CIHAZ_ODALARI_SORGUSU + ";")
         return [{"oda_id": k[0], "oda_adi": k[1], "aktif_mi": True} for k in cursor.fetchall()]
@@ -3310,7 +3337,7 @@ def oda_detay(oda_id: int, kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar WHERE oda_id = %s;", (oda_id,))
         oda = cursor.fetchone()
@@ -3330,7 +3357,7 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT oda_id FROM odalar WHERE oda_id = %s FOR UPDATE;", (oda_id,))
         if cursor.fetchone() is None:
@@ -3407,7 +3434,7 @@ def danisan_kodlari_listele(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 1. Kullanıcının rolünü öğreniyoruz
@@ -3474,7 +3501,7 @@ def danisan_durumunu_degistir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -3544,7 +3571,7 @@ def danisan_bilgilerini_guncelle(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT olusturan_psikolog_id, yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s FOR UPDATE;", (danisan_kod_id,))
@@ -3594,7 +3621,7 @@ def aktif_psikologlari_listele(kullanici_id: int = Depends(izin_kontrol("TAKVIM_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         if pasifler_dahil:
             cursor.execute("""
@@ -3626,7 +3653,7 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM cihazlar WHERE envanter_kodu = %s OR seri_no = %s;", (cihaz.envanter_kodu, cihaz.seri_no))
         if cursor.fetchone():
@@ -3661,7 +3688,7 @@ def cihaz_guncelle(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         degisiklikler = guncelleme.model_dump(exclude_unset=True)
@@ -3742,7 +3769,7 @@ def cihazlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_G
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum, kayit_tarihi FROM cihazlar ORDER BY cihaz_id;")
         kayitlar = cursor.fetchall()
@@ -3756,7 +3783,7 @@ def cihaz_detayi_getir(cihaz_id: int, kullanici_id: int = Depends(izin_kontrol("
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum, kayit_tarihi FROM cihazlar WHERE cihaz_id = %s;", (cihaz_id,))
         kayit = cursor.fetchone()
@@ -3875,7 +3902,7 @@ def cihaz_uygunluk_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, durum::text FROM cihazlar ORDER BY envanter_kodu, cihaz_id;")
         cihazlar = cursor.fetchall()
@@ -3940,7 +3967,7 @@ def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = De
         conn = None
         cursor = None
         try:
-            conn = psycopg2.connect(**VT_AYARLARI)
+            conn = vt_baglan(VT_AYARLARI)
             cursor = conn.cursor()
             cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s;", (rez.cihaz_id,))
             cihaz = cursor.fetchone()
@@ -4086,7 +4113,7 @@ def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kont
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s AND iptal_edildi_mi = FALSE RETURNING rezervasyon_id;", (rezervasyon_id,))
         if cursor.fetchone() is None:
@@ -4131,7 +4158,7 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi, o.oda_adi, r.proje_turu, r.proje_adi_aciklamasi, r.bolum_id, b.bolum_adi FROM cihaz_rezervasyonlari r JOIN cihazlar c ON r.cihaz_id = c.cihaz_id LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id LEFT JOIN bolumler b ON r.bolum_id = b.bolum_id ORDER BY r.baslangic_zamani DESC;")
         kayitlar = cursor.fetchall()
@@ -4146,7 +4173,7 @@ def bolumleri_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYO
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT bolum_id, bolum_adi, sorumlu_ad_soyad FROM bolumler WHERE aktif_mi IS NOT FALSE ORDER BY bolum_adi;")
         return [{"bolum_id": k[0], "bolum_adi": k[1], "sorumlu_ad_soyad": k[2]} for k in cursor.fetchall()]
@@ -4159,7 +4186,7 @@ def bolum_olustur(bolum: BolumOlusturModeli, kullanici_id: int = Depends(izin_ko
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad, iletisim_bilgisi, aktif_mi) VALUES (%s, %s, %s, TRUE) RETURNING bolum_id;", (bolum.bolum_adi, bolum.sorumlu_ad_soyad, bolum.iletisim_bilgisi))
         bolum_id = cursor.fetchone()[0]
@@ -4184,7 +4211,7 @@ def proje_turlerini_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT proje_turu_id, ad FROM proje_turleri WHERE aktif_mi ORDER BY ad;")
         return [{"proje_turu_id": k[0], "ad": k[1]} for k in cursor.fetchall()]
@@ -4197,7 +4224,7 @@ def proje_turu_olustur(tur: ProjeTuruOlusturModeli, kullanici_id: int = Depends(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT ad FROM proje_turleri;")
         if proje_turu_anahtari(tur.ad) in {proje_turu_anahtari(k[0]) for k in cursor.fetchall()}:     # büyük/küçük harf (İ/ı dahil) farkı yok sayılır
@@ -4244,7 +4271,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -4277,7 +4304,7 @@ def ariza_bildir(ariza: ArizaBildirimModeli, kullanici_id: int = Depends(izin_ko
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 1. Cihaz var mı ve durumu uygun mu kontrolü
@@ -4350,7 +4377,7 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Cihaz IDsini bulalım
@@ -4497,7 +4524,7 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # EKSİK OLAN KISIM: SQL sorgusuna b.bakim_baslangic_tarihi ve b.bakim_bitis_tarihi EKLENDİ
@@ -4544,7 +4571,7 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cakisan_rezervasyonlari_denetle(
@@ -4605,7 +4632,7 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT 1 FROM cihaz_bakimlari WHERE bakim_id = %s FOR UPDATE;", (bakim_id,))
@@ -4661,7 +4688,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_bakimlari", bakim_id)
@@ -4694,7 +4721,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYO
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # SQL Sorgusuna yeni sütunlar eklendi
@@ -4739,7 +4766,7 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cakisan_rezervasyonlari_denetle(
@@ -4788,7 +4815,7 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT 1 FROM cihaz_kalibrasyonlari WHERE kalibrasyon_id = %s FOR UPDATE;", (kalibrasyon_id,))
@@ -4841,7 +4868,7 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         silinen = satiri_sil_ve_ayrintisini_al(cursor, "cihaz_kalibrasyonlari", kalibrasyon_id)
@@ -4925,7 +4952,7 @@ def bakim_planlarini_listele(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         izinler = _plan_yetkileri(cursor, kullanici_id)
         bakim = "BAKIM_KAYITLARI_YONET" in izinler
@@ -5037,7 +5064,7 @@ def bakim_plani_ekle(plan: BakimPlaniOlusturModeli, kullanici_id: int = Depends(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         izinler = _plan_yetkileri(cursor, kullanici_id)
         _plan_turu_yetkisini_dogrula(izinler, plan.gorev_turu)
@@ -5082,7 +5109,7 @@ def bakim_plani_guncelle(plan_id: int, guncelleme: BakimPlaniGuncelleModeli,
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -5130,7 +5157,7 @@ def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(mevcut_kullanici_i
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT gorev_turu FROM cihaz_bakim_planlari "
@@ -5168,7 +5195,7 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         ozet = {
@@ -5239,7 +5266,7 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVI
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT r.randevu_id, r.danisan_kod_id, k.kullanici_adi, o.oda_adi,
@@ -5272,7 +5299,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # Bugünle kesişen (bugün başlayan, biten veya bugünü kapsayan) aktif rezervasyonlar
         cursor.execute("""
@@ -5320,7 +5347,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         islemler = []
         bugun = datetime.date.today()
@@ -5415,7 +5442,7 @@ def faaliyetleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITL
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # Sadece aktif olan faaliyetleri listele
         cursor.execute("SELECT faaliyet_id, faaliyet_adi, puan FROM faaliyetler WHERE aktif_mi = true ORDER BY faaliyet_id;")
@@ -5439,7 +5466,7 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # Sadece aktif olan birimleri listele
         cursor.execute("SELECT birim_id, birim_adi FROM faaliyet_birimleri WHERE aktif_mi = true ORDER BY birim_id;")
@@ -5463,7 +5490,7 @@ def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLA
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         # Ad Soyad, Öğrenci Numarası ve türü çek. Tüm öğrenciler listelenir;
         # her öğrencinin yanında türü (gönüllü, danışma masası, asistan) belirtilir.
@@ -5519,7 +5546,7 @@ def ogrenciler_yonetim_listesi(
         izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
     )
 ):
-    conn = psycopg2.connect(**VT_AYARLARI)
+    conn = vt_baglan(VT_AYARLARI)
 
     try:
         with conn.cursor() as cursor:
@@ -5616,7 +5643,7 @@ def ogrenci_puan_detayi(
             detail="Başlangıç tarihi bitişten büyük olamaz."
         )
 
-    conn = psycopg2.connect(**VT_AYARLARI)
+    conn = vt_baglan(VT_AYARLARI)
 
     try:
         with conn.cursor() as cursor:
@@ -5698,7 +5725,7 @@ def randevu_raporu_secenekleri(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
@@ -5776,7 +5803,7 @@ def oda_kullanimi(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -5900,7 +5927,7 @@ def randevu_raporu(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
         rol = cursor.fetchone()
@@ -5973,7 +6000,7 @@ def puan_raporu(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         tarih_kosullari = []
@@ -6171,7 +6198,7 @@ def ogrenci_silme_ertele(
         izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
     )
 ):
-    conn = psycopg2.connect(**VT_AYARLARI)
+    conn = vt_baglan(VT_AYARLARI)
 
     try:
         with conn.cursor() as cursor:
@@ -6255,7 +6282,7 @@ def ogrenci_on_yil_sil(
             detail="Silme işlemi açık onay gerektirir."
         )
 
-    conn = psycopg2.connect(**VT_AYARLARI)
+    conn = vt_baglan(VT_AYARLARI)
 
     try:
         with conn.cursor() as cursor:
@@ -6418,7 +6445,7 @@ def ogrenci_aktiflik_duzenle(
     conn = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
 
         with conn.cursor() as cursor:
             cursor.execute(
@@ -6608,7 +6635,7 @@ def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(iz
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Doğrudan senin şemandaki "ogrenci_faaliyet_takip" tablosuna yazıyoruz.
@@ -6662,7 +6689,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -6712,7 +6739,7 @@ def faaliyet_kayitlarini_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 4 tabloyu birleştirip, puanı (adet * faaliyet_puanı) olarak hesaplayan efsane SQL
@@ -6764,7 +6791,7 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Kaydın var olup olmadığını kontrol edelim
@@ -6821,7 +6848,7 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Silinmeden önce kaydın var olup olmadığını kontrol edelim
@@ -6860,7 +6887,7 @@ def danisma_oturumu_baslat(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Öğrencinin kaydını kilitle.
@@ -6979,7 +7006,7 @@ def danisma_oturumu_bitir(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Giriş yapan öğrenciyi bul ve kilitle
@@ -7094,7 +7121,7 @@ def danisma_aktif_oturum(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Giriş yapan öğrenciyi bul
@@ -7181,7 +7208,7 @@ def danisma_oturum_gecmisi(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -7274,7 +7301,7 @@ def danisma_onay_bildirimleri(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -7331,7 +7358,7 @@ def danisma_yonetim_oturumlari(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -7417,7 +7444,7 @@ def danisma_yonetim_oturum_onayla(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -7503,7 +7530,7 @@ def danisma_yonetim_ogrencileri(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -7564,7 +7591,7 @@ def danisma_yonetim_oturum_olustur(
                 detail="Gelecekte biten görev kaydı oluşturulamaz."
             )
 
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Öğrenci kaydını kilitleyerek eşzamanlı
@@ -7698,7 +7725,7 @@ def danisma_yonetim_oturum_duzenle(
                 detail="Gelecekte biten görev kaydı oluşturulamaz."
             )
 
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Önce görevin hangi öğrenciye ait olduğunu belirle.
@@ -7876,7 +7903,7 @@ def danisma_raporlari(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         kosullar = []
@@ -8040,7 +8067,7 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # 'ad' olan yer 'birim_adi' olarak düzeltildi
@@ -8076,7 +8103,7 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT * FROM faaliyet_birimleri WHERE birim_id = %s", (birim_id,))
@@ -8109,7 +8136,7 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute("SELECT 1 FROM ogrenci_faaliyet_takip WHERE birim_id = %s LIMIT 1", (birim_id,))
@@ -8142,7 +8169,7 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         
         cursor.execute(
@@ -8190,7 +8217,7 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
  
         cursor.execute("SELECT izin_id, izin_adi, gorunen_ad FROM izinler WHERE izin_id = %s FOR UPDATE;", (izin_id,))
@@ -8294,7 +8321,7 @@ def audit_kayitlarini_getir(
         gecerli_olaylar = {
             "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
             "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE", "EXPORT",
-            "PASSWORD_RESET", "PASSWORD_CHANGE", "PASSWORD_CHANGE_FAILED"
+            "PASSWORD_RESET", "PASSWORD_CHANGE", "PASSWORD_CHANGE_FAILED", "LOGOUT", "VIEW"
         }
         if (
             len(olay_turu) > len(gecerli_olaylar)
@@ -8341,7 +8368,7 @@ def audit_kayitlarini_getir(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -8385,7 +8412,8 @@ def audit_kayitlarini_getir(
                     WHERE d.hedef_tablo = 'kullanicilar'
                       AND hedef.kullanici_id = d.hedef_kayit_id
                 ) AS hedef_kullanici_adi,
-                d.ayrinti
+                d.ayrinti,
+                d.istemci_adresi
             {from_sql}
             {where_sql}
             ORDER BY d.olusturulma_tarihi DESC, d.denetim_id DESC
@@ -8406,10 +8434,27 @@ def audit_kayitlarini_getir(
                 "hedef_kayit_id": satir[5],
                 "hedef_kullanici_adi": satir[7] if len(satir) > 7 else None,
                 "ayrinti": satir[8] if len(satir) > 8 else None,
+                "istemci_adresi": satir[9] if len(satir) > 9 else None,
                 "olusturulma_tarihi": (
                     satir[6].isoformat() if satir[6] else None
                 )
             })
+
+        if offset == 0:
+            # Denetim kayıtlarına kimin baktığı da kayıt altına alınır (ilk sayfa; aynı kullanıcı için 10 dakikada bir, sayfa yenilemeleri günlüğü doldurmasın).
+            cursor.execute(
+                """
+                INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, ayrinti)
+                SELECT %s, 'VIEW'::denetim_olay_turu, 'denetim_kayitlari', %s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM denetim_kayitlari
+                    WHERE kullanici_id = %s AND olay_turu = 'VIEW'::denetim_olay_turu AND hedef_tablo = 'denetim_kayitlari'
+                      AND olusturulma_tarihi > CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+                );
+                """,
+                (kullanici_id, Json({"ne": "denetim kayıtları görüntülendi"}), kullanici_id),
+            )
+            conn.commit()
 
         return {
             "ozet": {
@@ -8494,7 +8539,7 @@ def cihaz_raporlari(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         where, parametreler = kosul_olustur("t.bakim_tarihi")
@@ -8695,7 +8740,7 @@ def faaliyet_turu_ekle(
     conn = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
 
         with conn.cursor() as cursor:
             cursor.execute("""
@@ -8786,7 +8831,7 @@ def faaliyet_turu_duzenle(
     conn = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
 
         with conn.cursor() as cursor:
 
@@ -8979,7 +9024,7 @@ def yonetim_randevu_ozet(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         mevcut = donem_ozeti(cursor, baslangic, bitis)
@@ -9106,7 +9151,7 @@ def yonetim_cihaz_ozet(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         def ozet_hesapla(ilk, son):
@@ -9203,7 +9248,7 @@ def yonetim_ogrenci_ozet(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         # Öğrenci mevcudu tarihsel değil, güncel durumdur.
@@ -9369,7 +9414,7 @@ def yonetim_proje_etkinlik_ozet(
     cursor = None
 
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         def donem_hesapla(ilk, son):
@@ -9521,7 +9566,7 @@ def yonetim_kullanim_ozet(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
         odalar = rapor_kullanim.oda_kullanimi(cursor, baslangic, bitis)
@@ -9598,7 +9643,7 @@ def cihaz_rezervasyon_raporu(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         veri = rapor_kullanim.cihaz_rezervasyonlari(cursor, baslangic, bitis, cihaz_id, proje_turu)
         cihazlar = veri["cihazlar"]
@@ -9656,7 +9701,7 @@ def oda_kullanim_raporu(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         odalar = rapor_kullanim.oda_kullanimi(cursor, baslangic, bitis, oda_id)
         olaylar = rapor_kullanim.oda_kullanim_olaylari(cursor, baslangic, bitis, oda_id)
@@ -9715,7 +9760,7 @@ def yetki_raporu_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         return rapor_kullanim.yetki_raporu(cursor, rol_id, durum, matris=detay)
     except psycopg2.Error:
@@ -9740,7 +9785,7 @@ def ogrenci_raporu_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         return rapor_ogrenci_faaliyet.ogrenci_raporu(cursor, OGRENCI_TUR_ETIKETLERI, tur, durum)
     except psycopg2.Error:
@@ -9769,7 +9814,7 @@ def faaliyet_raporu_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         sonuc = rapor_ogrenci_faaliyet.faaliyet_raporu(
             cursor, OGRENCI_TUR_ETIKETLERI, baslangic, bitis, faaliyet_id, onay, detay,
@@ -9799,7 +9844,7 @@ def bakim_plani_raporu_getir(
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         return rapor_bakim_plani.bakim_plani_raporu(cursor, cihaz_id, tur, durum)
     except psycopg2.Error:
@@ -9839,7 +9884,7 @@ def yonetim_bugun_merkezde(
     imlec = None
 
     try:
-        baglanti = psycopg2.connect(**VT_AYARLARI)
+        baglanti = vt_baglan(VT_AYARLARI)
         imlec = baglanti.cursor()
 
         def say(sql):
@@ -10333,7 +10378,7 @@ def yonetim_gunluk_detay(
     baslik, sorgu, tarihli = sorgular[tur]
 
     try:
-        with psycopg2.connect(**VT_AYARLARI) as baglanti:
+        with vt_baglan(VT_AYARLARI) as baglanti:
             with baglanti.cursor() as imlec:
                 parametreler = (
                     (hedef_gun, hedef_gun) if tarihli else ()
@@ -10382,7 +10427,7 @@ def surum_bilgisi(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         return {"uygulama": _UYGULAMA_ADI, "surum": _SURUM, "sema_surumu": _sistem_durumu.sema_surumu(cursor)}
     finally:
@@ -10396,7 +10441,7 @@ def sistem_durumu_getir(kullanici_id: int = Depends(izin_kontrol("AUDIT_KAYITLAR
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         return _sistem_durumu.sistem_durumu(cursor, VT_AYARLARI["dbname"])
     except HTTPException:
@@ -10430,7 +10475,7 @@ def liste_aktarim_kaydi(veri: ListeAktarimModeli, kullanici_id: int = Depends(me
     conn = None
     cursor = None
     try:
-        conn = psycopg2.connect(**VT_AYARLARI)
+        conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         cursor.execute(
             """

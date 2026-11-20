@@ -4,6 +4,8 @@ from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 
 import psycopg2
+
+from server.vt_baglanti import vt_baglan
 from psycopg2.extras import RealDictCursor
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -46,7 +48,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
 
     @contextmanager
     def islem():
-        conn = psycopg2.connect(**vt_ayarlari)
+        conn = vt_baglan(vt_ayarlari)
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         try:
             yield cursor

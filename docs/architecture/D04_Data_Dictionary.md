@@ -8,7 +8,7 @@
 Aşağıdaki ENUM tipleri şemada tanımlıdır. Bir tipin tanımlı olması, benzer amaçlı `VARCHAR` sütunlarının o ENUM tipini kullandığı anlamına gelmez.
 
 - **`cihaz_durumu`:** `Kullanima_Hazir`, `Rezerve`, `Kullanimda`, `Arizali`, `Bakimda`, `Kalibrasyonda`, `Kullanim_Disi`
-- **`denetim_olay_turu`:** `LOGIN`, `LOGIN_FAILED`, `CREATE`, `UPDATE`, `CANCEL`, `ROLE_CHANGE`, `DEVICE_STATUS_CHANGE`, `DELETE`, `PASSWORD_RESET`, `PASSWORD_CHANGE`, `PASSWORD_CHANGE_FAILED`
+- **`denetim_olay_turu`:** `LOGIN`, `LOGIN_FAILED`, `CREATE`, `UPDATE`, `CANCEL`, `ROLE_CHANGE`, `DEVICE_STATUS_CHANGE`, `DELETE`, `PASSWORD_RESET`, `PASSWORD_CHANGE`, `PASSWORD_CHANGE_FAILED`, `EXPORT`, `LOGOUT`, `VIEW`
 - **`ogrenci_turu`:** `GONULLU`, `DANISMA_MASASI`, `ASISTAN`
 
 ## Notasyon
@@ -432,6 +432,7 @@ Kritik güvenlik ve veri değişikliği olaylarının kayıtları.
 | `hedef_tablo` | VARCHAR(100) | NULL | Veri değişikliğinden etkilenen tablo. |
 | `hedef_kayit_id` | INTEGER | NULL | Değiştirilen/Silinen kaydın PK değeri. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Olayın gerçekleştiği tam zaman. |
+| `istemci_adresi` | VARCHAR(45) | NULL | İsteği yapan istemcinin IP adresi. Sunucu her bağlantıya `tkys.istemci_adresi` oturum ayarını koyar; `denetim_istemci_adresi_tetikleyici` (BEFORE INSERT) sütuna yazar. Betik/bakım işlemlerinde NULL olabilir. |
 | `ayrinti` | JSONB | NULL | Kalıcı silmelerde silinen satırın içeriği (`silinen`); oda atamalarında önceki/yeni oda kimlikleri. Kişisel veri içeren `ogrenciler` silmesinde ad, telefon vb. yazılmaz (yalnızca kimliksiz alanlar ve `maskelenen_alanlar` listesi). Tablo değiştirilemez olduğundan kayıt sonradan düzenlenemez. |
 
 ## Teknik tablo: `alembic_version`
