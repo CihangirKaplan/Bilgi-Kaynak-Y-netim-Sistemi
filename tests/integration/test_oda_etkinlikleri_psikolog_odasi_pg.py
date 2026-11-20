@@ -33,8 +33,10 @@ def test_psikolog_odasi_post_patch_409():
                 FROM personel p
                 JOIN kullanicilar k
                   ON k.kullanici_id = p.kullanici_id
+                JOIN roller r ON r.rol_id = k.rol_id
                 WHERE p.aktif_mi IS TRUE
                   AND k.aktif_mi IS TRUE
+                AND UPPER(TRIM(r.rol_adi)) <> 'ADMIN'
                 ORDER BY p.personel_id LIMIT 1
             """)
             personel = cur.fetchone()
