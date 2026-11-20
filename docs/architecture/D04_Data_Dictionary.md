@@ -63,7 +63,7 @@ Cihaz Rezervasyonu formundaki "Proje türü" listesini besler; yeni tür aynı f
 | `rezervasyon_id` | SERIAL (INTEGER) | PK; NOT NULL | Rezervasyonun benzersiz kimliği. |
 | `cihaz_id` | INTEGER | FK → `cihazlar(cihaz_id)`; NOT NULL | Rezerve edilen cihaz. |
 | `bolum_id` | INTEGER | FK → `bolumler(bolum_id)`; NULL | Rezervasyonu yapan bölüm (formda seçilir; eski kayıtlarda boş olabilir). |
-| `rezervasyonu_yapan_personel_id` | INTEGER | FK → `personel(personel_id)`; NULL | İşlemi gerçekleştiren personel. |
+| `rezervasyonu_yapan_personel_id` | INTEGER | FK → `kullanicilar(personel_id)`; NULL | İşlemi gerçekleştiren personel. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Rezervasyon başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Rezervasyon bitişi. |
 | `iptal_edildi_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | İptal durumu. |
@@ -157,7 +157,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `istisna_turu` | VARCHAR(50) | NULL; DEFAULT `'YOK'::character varying` | Ücretsiz olma gerekçesi (Örn: Şehit/Gazi yakını). |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Kodun geçerlilik durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kodun sisteme eklendiği tarih. |
-| `olusturan_psikolog_id` | INTEGER | FK → `personel(personel_id)`; NULL | Danışan kodunu oluşturan psikoloğun personel kimliği. |
+| `olusturan_psikolog_id` | INTEGER | FK → `kullanicilar(personel_id)`; NULL | Danışan kodunu oluşturan psikoloğun personel kimliği. |
 | `yas_grubu` | VARCHAR(20) | NULL | Danışanın yaş grubu; COCUK veya YETISKIN olabilir. |
 | `psikolog_pasifligi_nedeniyle_pasif` | BOOLEAN | NOT NULL; DEFAULT `false` | Kod, oluşturan psikolog pasife alındığı için pasife alındıysa `true`; psikolog yeniden aktif edilince yalnızca bu kodlar geri açılır. Elle yapılan durum değişikliği işareti temizler. |
 
@@ -180,7 +180,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | :--- | :--- | :--- | :--- |
 | `randevu_id` | SERIAL (INTEGER) | PK; NOT NULL | Randevunun kimliği. |
 | `danisan_kod_id` | VARCHAR(50) | FK → `danisan_kodlari(danisan_kod_id)`; NOT NULL | Randevu alınan danışan kodu. |
-| `psikolog_id` | INTEGER | FK → `personel(personel_id)`; NOT NULL | Görüşmeyi yapacak uzman. |
+| `psikolog_id` | INTEGER | FK → `kullanicilar(personel_id)`; NOT NULL | Görüşmeyi yapacak uzman. |
 | `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Görüşmenin yapılacağı oda. |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Randevu başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Randevu bitişi. |
@@ -211,7 +211,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | :--- | :--- | :--- | :--- |
 | `etkinlik_id` | SERIAL (INTEGER) | PK; NOT NULL | İdari toplantı/eğitim kimliği. |
 | `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Etkinliğin yapılacağı oda. |
-| `organize_eden_personel_id` | INTEGER | FK → `personel(personel_id)`; NOT NULL | Düzenleyen yetkili. |
+| `organize_eden_personel_id` | INTEGER | FK → `kullanicilar(personel_id)`; NOT NULL | Düzenleyen yetkili. |
 | `etkinlik_adi` | VARCHAR(150) | NOT NULL | Toplantı veya eğitim adı. |
 | `katilimci_sayisi` | INTEGER | NULL | Beklenen kişi sayısı (Kapasite kontrolü için). |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Etkinlik başlangıcı. |
@@ -287,16 +287,23 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `kilit_bitis_zamani` | TIMESTAMP | NULL | Hesap kilidinin sona ereceği zaman; kilit yoksa boş olabilir. |
 | `ilk_giris_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Hesabın ilk giriş durumunu belirten işaret. |
 | `gecici_parola_bitis` | TIMESTAMP | NULL | Geçici parolanın geçerli olduğu son zaman (yönetici/kurtarma aracı sıfırlaması ve yeni kullanıcı için; varsayılan 48 saat). Süre dolunca giriş reddedilir; parola değiştirilince boşaltılır. Boşsa süresizdir. |
+| `personel_id` | INTEGER | UNIQUE; NULL | Personel kaydının kimliği (eski `personel.personel_id` değerleri aynen korunur; randevu, danışan, rezervasyon ve etkinlik tabloları buna bağlanır). Boşsa kullanıcının personel kaydı yoktur. |
+| `personel_kodu` | VARCHAR(50) | UNIQUE; NULL | Kurum sicil/personel numarası. `personel_id` ile birlikte dolu ya da boştur (`kullanicilar_personel_alanlari_birlikte`). |
+| `personel_kaydi_tarihi` | TIMESTAMP | NULL | Personel kaydının oluşturulma zamanı. |
 
-### Tablo: `personel`
+### Görünüm: `personel`
 
-| Kolon Adı | Veri Tipi | Kısıtlamalar (Constraints) | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `personel_id` | SERIAL (INTEGER) | PK; NOT NULL | Personel kaydının kimliği. |
-| `kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; UNIQUE; NOT NULL | Bağlı olduğu giriş hesabı. |
-| `personel_kodu` | VARCHAR(50) | UNIQUE; NOT NULL | Kurum sicil/personel numarası. |
-| `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Kurumda çalışma durumu. |
-| `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Kaydın oluşturulma zamanı. |
+`personel` artık ayrı bir tablo değil, `kullanicilar` üzerinde (personel kaydı olan satırlar için) bir **görünümdür**. Eski sorgular ve betikler değişmeden çalışsın diye yazılabilir (INSTEAD OF tetikleyicili) bırakılmıştır; yeni kod doğrudan `kullanicilar`'ı kullanmalıdır. Personel ve kullanıcı birebir aynı kişi olduğu, tek aktiflik bayrağı bulunduğu için iki kaydın birbirinden kopması mümkün değildir.
+
+| Kolon Adı | Kaynak | Açıklama |
+| :--- | :--- | :--- |
+| `personel_id` | `kullanicilar.personel_id` | Personel kaydının kimliği (eski kimlikler korunmuştur). |
+| `kullanici_id` | `kullanicilar.kullanici_id` | Bağlı olduğu giriş hesabı. |
+| `personel_kodu` | `kullanicilar.personel_kodu` | Kurum sicil/personel numarası. |
+| `aktif_mi` | `kullanicilar.aktif_mi` | Tek aktiflik bayrağı: personel pasifse hesap da pasiftir. |
+| `olusturulma_tarihi` | `kullanicilar.personel_kaydi_tarihi` | Personel kaydının oluşturulma zamanı. |
+
+**Davranış:** `INSERT INTO personel` ilgili kullanıcıya personel kimliği/kodu verir (kullanıcı yoksa yabancı anahtar, zaten personeli varsa benzersizlik hatası); `UPDATE` kod ve aktiflik değerini `kullanicilar`'a yazar; `DELETE` kullanıcının personel alanlarını boşaltır (başvuran kayıt varsa yabancı anahtar engeller; danışan kodlarının oluşturan psikologu boşalır). Geçiş migration'ı: `b9d4f7a2c613`.
 
 ### Tablo: `giris_istek_limitleri`
 

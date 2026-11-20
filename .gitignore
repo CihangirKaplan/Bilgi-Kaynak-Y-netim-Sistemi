@@ -19,3 +19,5 @@ backups/
 .coverage.*
 htmlcov/
 coverage.xml
+# Personel/kullanıcı geçiş kontrolü: geçiş öncesi sağlama özeti (yerel dosya)
+gecis_oncesi.json
