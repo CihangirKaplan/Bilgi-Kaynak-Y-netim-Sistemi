@@ -9,7 +9,7 @@ uç bazında yetki listesi için [API/Uc_Listesi.md](../API/Uc_Listesi.md).
 | Önlem | Ayrıntı | Kod / test |
 |---|---|---|
 | Parola saklama | Parolalar **bcrypt** ile özetlenip saklanır; düz parola hiçbir yerde tutulmaz. 72 baytı aşan parola reddedilir | `server/guvenlik.py`, `test_guvenlik_jwt_kalite.py` |
-| Oturum anahtarı | **JWT (HS256)**; süre varsayılan **45 dakika** (`JWT_EXPIRE_MINUTES`). `JWT_SECRET` **en az 32 karakter** olmalıdır, değilse sunucu **açılmaz** | `server/guvenlik.py`, `test_sec_t07_t08_auth.py` |
+| Oturum anahtarı | **JWT (HS256)**; süre varsayılan **45 dakika** (`JWT_EXPIRE_MINUTES`). `JWT_SECRET` **en az 32 karakter** olmalıdır, değilse sunucu **açılmaz**. **Çıkış** (`POST /api/cikis`) kullanıcının oturum sürümünü artırır: o hesabın tüm açık anahtarları süresi dolmasını beklemeden geçersiz olur | `server/guvenlik.py`, `test_sec_t07_t08_auth.py` |
 | Parola kuralları | En az **10** karakter, harf **ve** rakam içermeli, kullanıcı adını içeremez, yaygın/tahmini kolay parolalar (ör. `password123`) reddedilir; en fazla 72 bayt, eskisiyle aynı olamaz; ilk giriş/geçici parolada **zorunlu değiştirme**. Kurallar **sunucuda** uygulanır, ekran yalnızca yol gösterir | `server/parola_politikasi.py`, `client/parola_kurallari.py`, `test_guvenlik_paketi_c1.py` |
 | Geçici parola | Yönetici sıfırlaması **tek seferlik** gösterilir; süresi sınırlı (varsayılan **48 saat**, `GECICI_PAROLA_GECERLILIK_SAAT`); süresi dolunca giriş reddedilir | `test_gecici_parola_suresi_pg_quality.py` |
 | Hesap kilidi | **5** art arda hatalı girişte **60 sn**, **10**'da **15 dk** kilit; başarılı girişte sayaç sıfırlanır; sayaç atomik artırılır | `server/sunucu.py` (`giris_yap`) |
@@ -31,6 +31,8 @@ uç bazında yetki listesi için [API/Uc_Listesi.md](../API/Uc_Listesi.md).
 
 ## 3. Denetim (audit)
 
+- Her kayıt, isteği yapan **istemci adresini** (`istemci_adresi`) taşır; sunucu adresi her veritabanı bağlantısına iliştirir, tetikleyici sütuna yazar (hangi uçtan yazıldığına bakılmaz). `X-Forwarded-For` varsayılan olarak **güvenilmez**; yalnızca `TKYS_GUVENILIR_VEKIL=1` iken vekilin eklediği son giriş kullanılır.
+- **Çıkış** (`LOGOUT`) ve denetim kayıtlarının **görüntülenmesi** (`VIEW`; aynı kullanıcı için 10 dakikada bir, ilk sayfa) de kayda geçer.
 - Giriş, başarısız giriş, oluşturma, güncelleme, silme, iptal, rol değişikliği, cihaz durum değişikliği, parola sıfırlama/değiştirme ve **liste Excel aktarımı** (`EXPORT`) **denetim kaydına** yazılır.
 - Denetim tablosu **değiştirilemez ve boşaltılamaz** (veritabanı tetikleyicileri; migration `f3a9c2e47b18`).
 - Silme işlemlerinde silinen verinin **kopyası** kayda yazılır; **kişisel veri alanları maskelenir** ve "kaydedilmeyen alanlar" olarak belirtilir.
@@ -61,8 +63,8 @@ Yöneticiler **Sistem Durumu** sayfasından son yedeğin tarihini izler (36 saat
 
 ## 7. Bilinen sınırlar (dürüst liste)
 
-- Oturum anahtarları **durumsuzdur**: çıkış yapılsa ya da hesap pasife alınsa bile anahtar süresi dolana kadar teknik olarak geçerli kalır; sunucu pasif kullanıcı/rolü her istekte yeniden denetler, bu yüzden pratikte işlem yapamaz.
-- Sistem **tek sunuculu** ve **yerel ağ içindir**; sunucu internete doğrudan açılmamalıdır. Uygulama kendi içinde **TLS (şifreli bağlantı)** sağlamaz; dışarıdan erişim gerekirse bir ters vekil (reverse proxy) ile TLS ve ağ güvenlik duvarı kurulmalıdır. Yerel ağa açma adımları: [Sunucu Kurulum Kılavuzu §7](../deployment/Sunucu_Kurulum_Kilavuzu.md).
+- Çıkış, hesabın **tüm** açık oturumlarını kapatır (başka bilgisayarda açık oturum da düşer). Hesap pasife alınınca anahtar teknik olarak geçerli kalır, ama sunucu pasif kullanıcı/rolü her istekte yeniden denetler; pratikte işlem yapılamaz.
+- Sistem **tek sunuculu** ve **yerel ağ içindir**; sunucu internete doğrudan açılmamalıdır. TLS (HTTPS) desteği vardır ama **isteğe bağlıdır**: [TLS Kurulum Rehberi](../deployment/TLS_Kurulum_Rehberi.md). Sunucu internete doğrudan açılmamalı; dışarıdan erişim gerekirse ters vekil ve ağ güvenlik duvarı kurulmalıdır. Yerel ağa açma adımları: [Sunucu Kurulum Kılavuzu §7](../deployment/Sunucu_Kurulum_Kilavuzu.md).
 - İki aşamalı doğrulama (2FA) yoktur.
 - Kayıtlı parola özetleri `bcrypt` ile korunur; ancak **zayıf parola seçimi** kullanıcıya bırakılmıştır (kurallar yalnızca uzunluk ve tekrar denetler, güç göstergesi yol göstericidir).
 

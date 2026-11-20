@@ -33,6 +33,7 @@ ISTISNALAR = {
     ("POST", "/api/login"): "Giriş öncesi çağrılır; kimlik istenemez.",
     ("POST", "/api/parola-sifirlama-talebi"): "Parolasını unutan kullanıcı giriş yapamaz; yalnızca kullanıcı adı alınır, "
                                                "yanıt kullanıcının var olup olmadığını belli etmez, kullanıcı başına tek açık talep tutulur.",
+    ("POST", "/api/cikis"): "Her oturum açık kullanıcı kendi oturumunu kapatabilmeli (ilk girişte şifre değiştirme bekleyen dahil); yalnızca kendi hesabının oturum sürümünü artırır, izin gerektirmez.",
     ("POST", "/api/sifre-degistir"): "İlk girişte şifre değiştirmek için yalnızca token yeterli olmalı.",
     ("GET", "/api/korumali-test"): "Token doğrulama deneme ucu; veri döndürmez.",
     ("GET", "/api/saglik"): "Sunucunun ayakta olduğunu gösterir; veri döndürmez, veritabanına bağlanmaz.",

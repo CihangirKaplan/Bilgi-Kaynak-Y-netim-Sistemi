@@ -22,6 +22,7 @@ Yeni şifre kuralları (ekranda anlık kontrol listesi olarak görünür; hepsi 
 - İki yeni şifre alanı **birbiriyle aynı** olmalı
 
 Şifrenizin gücü bir göstergeyle gösterilir; büyük/küçük harf, rakam ve sembol karıştırmak gücü artırır.
+**Çıkış Yap** düğmesi oturumunuzu sunucuda da kapatır; aynı hesapla başka bilgisayarda açık oturum varsa o da kapanır.
 Şifrenizi kimseyle paylaşmayın; sistem yöneticisi bile şifrenizi **bilemez**, yalnızca yenisini verebilir.
 
 ### Şifremi unuttum

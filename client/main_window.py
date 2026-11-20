@@ -1339,6 +1339,7 @@ QLabel {
 
         def cikis_yap():
             popup.close()
+            self._sunucuda_oturumu_kapat()
             self.oturum_kapat()
 
         cikis_btn.clicked.connect(cikis_yap)
@@ -1707,6 +1708,13 @@ QLabel {
                     )
 
         self.oturum_kapat()
+
+    def _sunucuda_oturumu_kapat(self):
+        """Kullanıcı çıkış yapınca oturum anahtarını sunucuda da geçersiz kıl (başarısız olursa çıkış yine de yapılır)."""
+        try:
+            requests.post(f"{self.api_url}/api/cikis", headers={"Authorization": f"Bearer {self.token}"}, timeout=3)
+        except requests.RequestException:
+            pass
 
     def oturum_kapat(self):
         self._oturum_kapatiliyor = True

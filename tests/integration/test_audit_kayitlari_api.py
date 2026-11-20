@@ -34,6 +34,9 @@ class SahteBaglanti:
     def cursor(self):
         return SahteCursor(self.yetkili)
 
+    def commit(self):
+        pass
+
     def close(self):
         pass
 
