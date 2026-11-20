@@ -309,3 +309,69 @@ def test_personel_aktifligi_api_ile_degistirilemez_gercek_veritabaninda(ortam):
     assert yanit.status_code == 422                                                              # alan artık kabul edilmiyor
     c.execute("SELECT aktif_mi FROM personel WHERE personel_id = %s", (personel,))
     assert c.fetchone()[0] is True
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Denetim kayıtlarında "önceki → yeni" ayrıntısı (gerçek veritabanı)
+# ----------------------------------------------------------------------------------------------------------------------
+def test_rol_degistirme_ve_durum_degistirme_onceki_yeni_degeri_denetime_yazar_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    c.execute("SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR'")
+    memur = c.fetchone()[0]
+
+    yanit = istemci.patch(f"/api/kullanicilar/{psikolog}/rol", json={"rol_id": memur})
+    assert yanit.status_code == 200
+    c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE olay_turu = 'ROLE_CHANGE' AND hedef_kayit_id = %s AND kullanici_id = %s ORDER BY denetim_id DESC LIMIT 1", (psikolog, admin))
+    ayrinti = c.fetchone()[0]
+    assert ayrinti["onceki"]["rol"] == "PSIKOLOG" and ayrinti["yeni"]["rol"] == "MEMUR"
+    assert ayrinti["onceki"]["personel_kodu"].startswith("PO-") and ayrinti["yeni"]["personel_kodu"] != ayrinti["onceki"]["personel_kodu"]
+    assert ayrinti["pasife_alinan_danisan"] == 1
+    c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE hedef_tablo = 'danisan_kodlari' AND kullanici_id = %s AND ayrinti->>'psikolog_kullanici_id' = %s", (admin, str(psikolog)))
+    assert c.fetchone()[0]["etkilenen_danisan"] == 1                                         # danışanların toplu pasife alınması da kim/neden/kaç ile kayıtlı
+
+    yanit = istemci.patch(f"/api/kullanicilar/{psikolog}/durum-degistir")                     # memur artık: pasife al
+    assert yanit.status_code == 200
+    c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE olay_turu = 'UPDATE' AND hedef_tablo = 'kullanicilar' AND hedef_kayit_id = %s AND kullanici_id = %s "
+              "ORDER BY denetim_id DESC LIMIT 1", (psikolog, admin))
+    ayrinti = c.fetchone()[0]
+    assert ayrinti["onceki"] == {"aktif_mi": True} and ayrinti["yeni"] == {"aktif_mi": False} and ayrinti["rol"] == "MEMUR"
+
+
+def test_izin_olusturma_ve_duzenleme_denetime_yazilir_yinelenen_ad_409_gercek_veritabaninda(ortam):
+    c, admin = ortam[0], ortam[1]
+    etiket = uuid4().hex[:8].upper()
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    c.execute("SELECT rol_id, rol_adi FROM roller WHERE rol_adi IN ('ADMIN', 'MEMUR')")
+    roller = {ad: rid for rid, ad in c.fetchall()}
+    izin_id = None
+    try:
+        yanit = istemci.post("/api/izinler", json={"izin_adi": f"TEST_IZIN_{etiket}"})
+        assert yanit.status_code == 201
+        izin_id = yanit.json()["izin_id"]
+        assert istemci.post("/api/izinler", json={"izin_adi": f"TEST_IZIN_{etiket}"}).status_code == 409           # aynı ad: 500 değil 409
+
+        yanit = istemci.put(f"/api/izinler/{izin_id}", json={"gorunen_ad": "Deneme izni", "verilen_rol_idleri": [roller["ADMIN"], roller["MEMUR"]]})
+        assert yanit.status_code == 200
+        c.execute("SELECT olay_turu::text, ayrinti FROM denetim_kayitlari WHERE hedef_tablo = 'izinler' AND hedef_kayit_id = %s AND kullanici_id = %s ORDER BY denetim_id", (izin_id, admin))
+        (olay1, olusturma), (olay2, duzenleme) = c.fetchall()
+        assert olay1 == "CREATE" and olusturma["yeni"] == {"izin_adi": f"TEST_IZIN_{etiket}", "verilen_roller": ["ADMIN"]}
+        assert olay2 == "UPDATE" and duzenleme["izin"] == f"TEST_IZIN_{etiket}"
+        assert duzenleme["onceki"]["verilen_roller"] == ["ADMIN"] and duzenleme["yeni"]["verilen_roller"] == ["ADMIN", "MEMUR"]
+        assert duzenleme["eklenen_roller"] == ["MEMUR"] and duzenleme["kaldirilan_roller"] == []
+        assert duzenleme["yeni"]["gorunen_ad"] == "Deneme izni"
+    finally:
+        if izin_id is not None:
+            c.execute("DELETE FROM denetim_kayitlari WHERE hedef_tablo = 'izinler' AND hedef_kayit_id = %s", (izin_id,))
+            c.execute("DELETE FROM rol_izinleri WHERE izin_id = %s", (izin_id,))
+            c.execute("DELETE FROM izinler WHERE izin_id = %s", (izin_id,))
+
+
+def test_audit_suzgeci_parola_olaylarini_kabul_eder_gercek_veritabaninda(ortam):
+    admin = ortam[1]
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    for olay in ("PASSWORD_RESET", "PASSWORD_CHANGE", "PASSWORD_CHANGE_FAILED", "EXPORT"):
+        assert istemci.get("/api/audit-kayitlari", params={"olay_turu": olay}).status_code == 200, olay

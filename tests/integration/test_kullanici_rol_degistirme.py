@@ -130,12 +130,15 @@ def test_mudur_psikolog_rolunu_memur_yapabilir():
     assert audit_cagrilari[0].args[1][:4] == (10, "UPDATE", "psikolog_odalar", 5)
     audit_cagrilari = audit_cagrilari[1:]
 
-    assert audit_cagrilari[0].args[1] == (
+    assert audit_cagrilari[0].args[1][:4] == (
         10,             # İşlemi yapan müdürün kullanıcı ID'si
         "ROLE_CHANGE",  # Audit olay türü
         "kullanicilar", # Hedef tablo
         5               # Rolü değiştirilen kullanıcının ID'si
     )
+    # Hangi rolden hangisine geçildiği de kayıtlı
+    ayrinti = audit_cagrilari[0].args[1][4].adapted
+    assert ayrinti["onceki"]["rol"] != ayrinti["yeni"]["rol"] and ayrinti["yeni"]["personel_kodu"] == "PER-MEM-003"
     assert audit_cagrilari[1].args[1] == (
         10, "UPDATE", "personel", 20
     )

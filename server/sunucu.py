@@ -64,6 +64,7 @@ from server.guvenlik import (
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
 from server.denetim import (
+    ayrintili_kayit_yaz,
     denetim_kaydi_olustur,
     durum_degisikligi_yaz,
     psikolog_oda_degisikligini_yaz,
@@ -1139,7 +1140,8 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         if psikolog_idi != psikolog_olacak:
             danisan_sayisi = cursor.rowcount if isinstance(cursor.rowcount, int) else 0
             if danisan_sayisi:
-                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (islem_yapan_id, "UPDATE", "danisan_kodlari"))
+                ayrintili_kayit_yaz(cursor, islem_yapan_id, "UPDATE", "danisan_kodlari", None, neden="psikolog rolünden çıkıldı" if psikolog_idi else "psikolog rolüne geri dönüldü",
+                                    etkilenen_danisan=danisan_sayisi, aktif_mi="pasif" if psikolog_idi else "aktif", psikolog_kullanici_id=kullanici_id)
 
         # Oda yetkileri yalnızca psikologlar içindir: psikolog olurken verilen odalar yazılır,
         # psikologluktan çıkarken silinir (yeniden psikolog olursa odalar yeniden seçilir).
@@ -1153,7 +1155,10 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                 )
             psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id))
+        rol_ayrintisi = {"onceki": {"rol": mevcut_rol, "personel_kodu": personel[1]}, "yeni": {"rol": yeni_rol_adi, "personel_kodu": yeni_personel_kodu}}
+        if danisan_sayisi:
+            rol_ayrintisi["pasife_alinan_danisan" if psikolog_idi else "aktif_edilen_danisan"] = danisan_sayisi
+        ayrintili_kayit_yaz(cursor, islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id, **rol_ayrintisi)
         cursor.execute(
             "INSERT INTO denetim_kayitlari "
             "(kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) "
@@ -1225,6 +1230,7 @@ def rol_olustur(rol: RolModeli, kullanici_id: int = Depends(izin_kontrol("ROL_OL
             hedef_tablo="roller",
             hedef_kayit_id=yeni_id,
             mevcut_cursor=cursor,
+            ayrinti={"yeni": {"rol_adi": rol_adi_upper, "gorunen_ad": gorunen_ad}},
         )
         conn.commit()
         return {
@@ -1993,7 +1999,8 @@ def kullanici_durum_degistir(
                 )
             danisan_sayisi = cursor.rowcount
             if danisan_sayisi:
-                cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (islem_yapan_id, "UPDATE", "danisan_kodlari"))
+                ayrintili_kayit_yaz(cursor, islem_yapan_id, "UPDATE", "danisan_kodlari", None, neden="psikolog pasife alındı" if psikolog_pasiflesiyor else "psikolog aktif edildi",
+                                    etkilenen_danisan=danisan_sayisi, aktif_mi="pasif" if psikolog_pasiflesiyor else "aktif", psikolog_kullanici_id=kullanici_id)
 
             # Pasifte oda ataması kalkar; aktifleşirken seçilen odalar yazılır (eski artık kayıtlar varsa değiştirilir).
             onceki_odalar = psikolog_odalarini_oku(cursor, kullanici_id)
@@ -2002,7 +2009,10 @@ def kullanici_durum_degistir(
                 cursor.execute("INSERT INTO psikolog_odalar (kullanici_id, oda_id) VALUES (%s, %s);", (kullanici_id, oda_id))
             psikolog_oda_degisikligini_yaz(cursor, islem_yapan_id, kullanici_id, onceki_odalar)
 
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id))
+        durum_ayrintisi = {"rol": hedef_rol}
+        if psikolog_mu and danisan_sayisi:
+            durum_ayrintisi["etkilenen_danisan"] = danisan_sayisi
+        durum_degisikligi_yaz(cursor, islem_yapan_id, "UPDATE", "kullanicilar", kullanici_id, onceki={"aktif_mi": mevcut_durum}, yeni={"aktif_mi": yeni_durum}, **durum_ayrintisi)
         conn.commit()
 
         yanit = {"mesaj": "Durum başarıyla güncellendi.", "kullanici_id": kullanici_id, "yeni_durum": yeni_durum}
@@ -3540,7 +3550,7 @@ def danisan_bilgilerini_guncelle(
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s FOR UPDATE;", (danisan_kod_id,))
+        cursor.execute("SELECT olusturan_psikolog_id, yas_grubu FROM danisan_kodlari WHERE danisan_kod_id = %s FOR UPDATE;", (danisan_kod_id,))
         danisan = cursor.fetchone()
         if danisan is None:
             raise HTTPException(status_code=404, detail="Danışan bulunamadı.")
@@ -3557,7 +3567,8 @@ def danisan_bilgilerini_guncelle(
             "UPDATE danisan_kodlari SET yas_grubu = %s WHERE danisan_kod_id = %s;",
             (bilgi.yas_grubu, danisan_kod_id),
         )
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo) VALUES (%s, %s, %s);", (kullanici_id, "UPDATE", "danisan_kodlari"))
+        durum_degisikligi_yaz(cursor, kullanici_id, "UPDATE", "danisan_kodlari", None, onceki={"yas_grubu": danisan[1] if len(danisan) > 1 else None},
+                              yeni={"yas_grubu": bilgi.yas_grubu}, danisan_kod_id=danisan_kod_id)
         guncellenen = 0
         if bilgi.yas_grubu == "YETISKIN":
             # Yetişkinde oyun terapisi yoktur: GELECEKTEKİ planlı randevular bireysel terapiye çevrilir.
@@ -8158,8 +8169,13 @@ def izin_ekle(izin_verisi: dict, kullanici_id: int = Depends(izin_kontrol("ROL_D
             """,
             (yeni_id,),
         )
+        ayrintili_kayit_yaz(cursor, kullanici_id, "CREATE", "izinler", yeni_id, yeni={"izin_adi": izin_adi, "verilen_roller": ["ADMIN"]})
         conn.commit()
         return {"mesaj": "İzin başarıyla eklendi", "izin_id": yeni_id}
+    except psycopg2.errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=409, detail="Bu izin adı zaten tanımlı.")
     except Exception:
         if conn:
             conn.rollback()
@@ -8186,12 +8202,15 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
  
-        cursor.execute("SELECT izin_id FROM izinler WHERE izin_id = %s FOR UPDATE;", (izin_id,))
-        if cursor.fetchone() is None:
+        cursor.execute("SELECT izin_id, izin_adi, gorunen_ad FROM izinler WHERE izin_id = %s FOR UPDATE;", (izin_id,))
+        izin_kaydi = cursor.fetchone()
+        if izin_kaydi is None:
             raise HTTPException(status_code=404, detail="İzin bulunamadı.")
  
         cursor.execute("SELECT rol_id, rol_adi FROM roller;")
         roller = {r[0]: r[1] for r in cursor.fetchall()}
+        cursor.execute("SELECT rol_id FROM rol_izinleri WHERE izin_id = %s AND izin_var = 1;", (izin_id,))
+        onceki_roller = {r[0] for r in cursor.fetchall()}
  
         secilenler = set(veri.verilen_rol_idleri)
         if not secilenler.issubset(roller.keys()):
@@ -8219,6 +8238,8 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
                     (rid, izin_id, deger),
                 )
  
+        # Kim, hangi izni, hangi rollere verdi/aldı: önceki ve yeni değer (rol adlarıyla) denetim kaydına yazılır.
+        adlar = lambda kimlikler: sorted(roller[r] for r in kimlikler)
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="UPDATE",
@@ -8226,6 +8247,13 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
             hedef_tablo="izinler",
             hedef_kayit_id=izin_id,
             mevcut_cursor=cursor,
+            ayrinti={
+                "izin": izin_kaydi[1] if len(izin_kaydi) > 1 else None,
+                "onceki": {"gorunen_ad": izin_kaydi[2] if len(izin_kaydi) > 2 else None, "verilen_roller": adlar(onceki_roller & set(roller))},
+                "yeni": {"gorunen_ad": veri.gorunen_ad.strip(), "verilen_roller": adlar(secilenler)},
+                "eklenen_roller": adlar(secilenler - onceki_roller),
+                "kaldirilan_roller": adlar((onceki_roller & set(roller)) - secilenler),
+            },
         )
         conn.commit()
         return {"durum": "basarili", "mesaj": "İzin güncellendi."}
@@ -8274,7 +8302,8 @@ def audit_kayitlarini_getir(
     if olay_turu:
         gecerli_olaylar = {
             "LOGIN", "LOGIN_FAILED", "CREATE", "UPDATE",
-            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE", "EXPORT"
+            "CANCEL", "ROLE_CHANGE", "DEVICE_STATUS_CHANGE", "DELETE", "EXPORT",
+            "PASSWORD_RESET", "PASSWORD_CHANGE", "PASSWORD_CHANGE_FAILED"
         }
         if (
             len(olay_turu) > len(gecerli_olaylar)
