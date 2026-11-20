@@ -55,22 +55,16 @@ try:
     ('DAN-2026-0001', TRUE, TRUE) ON CONFLICT DO NOTHING;
 
     -- TEST PSİKOLOĞU (Burada Python'un anlık oluşturduğu Hash'i kullanıyoruz)
-    INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, aktif_mi, basarisiz_giris_sayisi)
+    INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, aktif_mi, basarisiz_giris_sayisi,
+                              personel_id, personel_kodu, personel_kaydi_tarihi)
     VALUES (
         'doktor_cihangir',
         '{gercek_hash}',
         (SELECT rol_id FROM roller WHERE rol_adi = 'PSIKOLOG' LIMIT 1),
         TRUE,
-        0
+        0,
+        nextval('personel_personel_id_seq'), 'PER-001', CURRENT_TIMESTAMP
     ) ON CONFLICT (kullanici_adi) DO UPDATE SET parola_hash = '{gercek_hash}', aktif_mi = TRUE, basarisiz_giris_sayisi = 0;
-
-    -- Personel Kaydı
-    INSERT INTO personel (kullanici_id, personel_kodu, aktif_mi)
-    VALUES (
-        (SELECT kullanici_id FROM kullanicilar WHERE kullanici_adi = 'doktor_cihangir'),
-        'PER-001',
-        TRUE
-    ) ON CONFLICT (kullanici_id) DO NOTHING;
     """
 
     # Sorguyu çalıştır ve yerel veritabanına kaydet

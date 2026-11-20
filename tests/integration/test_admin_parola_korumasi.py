@@ -149,7 +149,7 @@ def test_parola_degistirilince_sure_bilgisi_temizlenir():
 
 def test_yeni_kullanici_gecici_parolasi_da_sureli_ve_yanitta_sure_vardir():
     kaynak = open(sunucu.__file__, encoding="utf-8").read()
-    assert "(kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis)" in kaynak
+    assert "(kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis,\n                 personel_id, personel_kodu, personel_kaydi_tarihi)" in kaynak
     assert '"gecici_parola_gecerlilik_saat": GECICI_PAROLA_GECERLILIK_SAAT' in kaynak
 
 

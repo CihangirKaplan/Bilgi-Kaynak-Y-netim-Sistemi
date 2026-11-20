@@ -28,12 +28,12 @@ def test_mudur_psikolog_kullanicisini_pasiflestirebilir():
     ]
 
     # Kullanıcı pasifleştirilmeli
-    for tablo in ("KULLANICILAR", "PERSONEL"):
-        assert any(
-            c.args[0].strip().upper().startswith(f"UPDATE {tablo}")
-            and c.args[1] == (False, 5)
-            for c in mock_cursor.execute.call_args_list
-        )
+    assert any(
+        c.args[0].strip().upper().startswith("UPDATE KULLANICILAR")
+        and c.args[1] == (False, 5)
+        for c in mock_cursor.execute.call_args_list
+    )
+    assert not any(c.args[0].strip().upper().startswith("UPDATE PERSONEL") for c in mock_cursor.execute.call_args_list)
 
     # Audit kaydı oluşturulmalı
     assert any(
@@ -123,12 +123,11 @@ def test_pasif_kullanici_yeniden_aktiflestirilebilir():
 
     assert sonuc["yeni_durum"] is True
 
-    for tablo in ("KULLANICILAR", "PERSONEL"):
-        assert any(
-            c.args[0].strip().upper().startswith(f"UPDATE {tablo}")
-            and c.args[1] == (True, 5)
-            for c in mock_cursor.execute.call_args_list
-        )
+    assert any(
+        c.args[0].strip().upper().startswith("UPDATE KULLANICILAR")
+        and c.args[1] == (True, 5)
+        for c in mock_cursor.execute.call_args_list
+    )
 
     mock_conn.commit.assert_called_once()
     mock_conn.rollback.assert_not_called()

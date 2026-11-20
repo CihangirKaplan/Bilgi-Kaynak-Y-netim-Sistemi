@@ -63,6 +63,7 @@ from server.guvenlik import (
     GECICI_PAROLA_BITIS_SQL,
     GECICI_PAROLA_GECERLILIK_SAAT,
 )
+from server.personel_kaydi import personel_kaydi_ata
 from server.denetim import (
     ayrintili_kayit_yaz,
     denetim_kaydi_olustur,
@@ -536,7 +537,7 @@ def _siradaki_personel_kodu(cursor, rol_adi):
     )
 
     cursor.execute(
-        "SELECT personel_kodu FROM personel "
+        "SELECT personel_kodu FROM kullanicilar "
         "WHERE personel_kodu LIKE %s;",
         (onek + "%",),
     )
@@ -704,49 +705,31 @@ def kullanici_olustur(
 
         gecici_parola = gecici_parola_uret()
         parola_hash = parola_hashle(gecici_parola)
+        personel_kodu = _siradaki_personel_kodu(cursor, rol_adi)
 
         cursor.execute(
             f"""
             INSERT INTO kullanicilar
-                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis)
-            VALUES (%s, %s, %s, TRUE, TRUE, {GECICI_PAROLA_BITIS_SQL})
-            RETURNING kullanici_id;
+                (kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis,
+                 personel_id, personel_kodu, personel_kaydi_tarihi)
+            VALUES (%s, %s, %s, TRUE, TRUE, {GECICI_PAROLA_BITIS_SQL},
+                    nextval('personel_personel_id_seq'), %s, CURRENT_TIMESTAMP)
+            RETURNING kullanici_id, personel_id;
             """,
             (
                 yeni_kullanici.kullanici_adi,
                 parola_hash,
                 yeni_kullanici.rol_id,
+                personel_kodu,
             ),
         )
-        yeni_id = cursor.fetchone()[0]
+        yeni_id, personel_id = cursor.fetchone()
 
-        personel_kodu = _siradaki_personel_kodu(cursor, rol_adi)
-
-        # Personel kaydı.
-        asama = "personel"
-        cursor.execute(
-            """
-            INSERT INTO personel (kullanici_id, personel_kodu)
-            VALUES (%s, %s)
-            RETURNING personel_id;
-            """,
-            (yeni_id, personel_kodu),
+        # Tek denetim kaydı: kullanıcı ve personel bilgisi aynı kayıttır.
+        ayrintili_kayit_yaz(
+            cursor, kullanici_id, "CREATE", "kullanicilar", yeni_id,
+            rol=rol_adi, personel_kodu=personel_kodu, oda_sayisi=len(istenen_odalar),
         )
-        personel_id = cursor.fetchone()[0]
-
-        # Kullanıcı ve personel Audit kayıtları.
-        for tablo, kayit_id in (
-            ("kullanicilar", yeni_id),
-            ("personel", personel_id),
-        ):
-            cursor.execute(
-                """
-                INSERT INTO denetim_kayitlari
-                    (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
-                VALUES (%s, %s, %s, %s);
-                """,
-                (kullanici_id, "CREATE", tablo, kayit_id),
-            )
 
         if danisma_ogrencisi:
             asama = "ogrenci"
@@ -796,13 +779,14 @@ def kullanici_olustur(
             "ogrenci_id": ogrenci_id,
         }
 
-    except psycopg2.errors.UniqueViolation:
+    except psycopg2.errors.UniqueViolation as hata:
         if conn is not None:
             conn.rollback()
 
+        kisit = getattr(getattr(hata, "diag", None), "constraint_name", None) or ""
         if asama == "ogrenci":
             mesaj = "Bu öğrenci numarası zaten kullanılıyor."
-        elif asama == "personel":
+        elif kisit.startswith("kullanicilar_personel_"):
             mesaj = "Personel kodu veya personel kaydı zaten mevcut."
         else:
             mesaj = "Bu kullanıcı adı zaten kullanılıyor."
@@ -1033,10 +1017,10 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
                         ),
                     )
 
-        # Personel kaydını kilitle; mevcut personel_id korunacak.
+        # Personel bilgisi kullanıcı satırındadır; mevcut personel_id korunacak.
         cursor.execute(
-            "SELECT personel_id, personel_kodu FROM personel "
-            "WHERE kullanici_id = %s FOR UPDATE;",
+            "SELECT personel_id, personel_kodu FROM kullanicilar "
+            "WHERE kullanici_id = %s AND personel_id IS NOT NULL FOR UPDATE;",
             (kullanici_id,),
         )
         personel = cursor.fetchone()
@@ -1051,11 +1035,9 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
             cursor, yeni_rol_adi
         )
 
-        cursor.execute("UPDATE kullanicilar SET rol_id = %s WHERE kullanici_id = %s;", (veri.rol_id, kullanici_id))
         cursor.execute(
-            "UPDATE personel SET personel_kodu = %s "
-            "WHERE personel_id = %s;",
-            (yeni_personel_kodu, personel[0]),
+            "UPDATE kullanicilar SET rol_id = %s, personel_kodu = %s WHERE kullanici_id = %s;",
+            (veri.rol_id, yeni_personel_kodu, kullanici_id),
         )
         if yeni_rol_adi == "DANISMA_OGRENCISI":
             if ogrenci_kaydi is None:
@@ -1159,12 +1141,6 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         if danisan_sayisi:
             rol_ayrintisi["pasife_alinan_danisan" if psikolog_idi else "aktif_edilen_danisan"] = danisan_sayisi
         ayrintili_kayit_yaz(cursor, islem_yapan_id, "ROLE_CHANGE", "kullanicilar", kullanici_id, **rol_ayrintisi)
-        cursor.execute(
-            "INSERT INTO denetim_kayitlari "
-            "(kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) "
-            "VALUES (%s, %s, %s, %s);",
-            (islem_yapan_id, "UPDATE", "personel", personel[0]),
-        )
         conn.commit()
 
         yanit = {"mesaj": "Kullanıcı rolü ve personel kodu başarıyla değiştirildi.", "kullanici_id": kullanici_id, "yeni_rol_id": veri.rol_id, "yeni_rol_adi": yeni_rol_adi, "yeni_personel_kodu": yeni_personel_kodu}
@@ -1977,9 +1953,8 @@ def kullanici_durum_degistir(
                     detail=f"Bu psikologun bugün ve sonrası için {planli} planlı randevusu var. Pasife almadan önce {PLANLI_RANDEVU_COZUMU}",
                 )
 
-        # Her iki tabloyu da eşzamanlı güncelle
+        # Tek aktiflik bilgisi kullanıcı satırındadır (personel görünümü bunu okur).
         cursor.execute("UPDATE kullanicilar SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
-        cursor.execute("UPDATE personel SET aktif_mi = %s WHERE kullanici_id = %s;", (yeni_durum, kullanici_id))
 
         danisan_sayisi = 0
         if psikolog_mu:
@@ -2060,10 +2035,11 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         elif ogrenci_bilgisi_var:
             raise HTTPException(status_code=422, detail="Öğrenci bilgileri yalnızca danışma öğrencisi rolü için girilebilir.")
 
-        cursor.execute("INSERT INTO personel (kullanici_id, personel_kodu) VALUES (%s, %s) RETURNING personel_id;", (yeni_personel.kullanici_id, yeni_personel.personel_kodu.strip()))
-        personel_id = cursor.fetchone()[0]
+        personel_id = personel_kaydi_ata(cursor, yeni_personel.kullanici_id, yeni_personel.personel_kodu.strip())
+        if personel_id is None:
+            raise psycopg2.errors.UniqueViolation("Kullanıcının personel kaydı zaten mevcut.")
 
-        cursor.execute("INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id) VALUES (%s, %s, %s, %s);", (islem_yapan_id, "CREATE", "personel", personel_id))
+        ayrintili_kayit_yaz(cursor, islem_yapan_id, "UPDATE", "kullanicilar", yeni_personel.kullanici_id, neden="personel kaydı verildi", personel_kodu=yeni_personel.personel_kodu.strip())
 
         ogrenci_id = None
         if danisma_ogrencisi:
@@ -2182,7 +2158,7 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
     try:
         conn = psycopg2.connect(**VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT personel_id, personel_kodu, aktif_mi FROM personel WHERE personel_id = %s FOR UPDATE;", (personel_id,))
+        cursor.execute("SELECT personel_id, personel_kodu, aktif_mi, kullanici_id FROM kullanicilar WHERE personel_id = %s FOR UPDATE;", (personel_id,))
         mevcut = cursor.fetchone()
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Personel bulunamadı.")
@@ -2190,8 +2166,8 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
         # Yalnızca personel kodu değişir; aktiflik kullanıcı durum ucundan yönetilir (kurallar atlanmasın).
         yeni_kod = degisiklikler.get("personel_kodu", mevcut[1])
 
-        cursor.execute("UPDATE personel SET personel_kodu = %s WHERE personel_id = %s;", (yeni_kod, personel_id))
-        durum_degisikligi_yaz(cursor, islem_yapan_id, "UPDATE", "personel", personel_id, onceki={"personel_kodu": mevcut[1]}, yeni={"personel_kodu": yeni_kod})
+        cursor.execute("UPDATE kullanicilar SET personel_kodu = %s WHERE personel_id = %s;", (yeni_kod, personel_id))
+        durum_degisikligi_yaz(cursor, islem_yapan_id, "UPDATE", "kullanicilar", mevcut[3], onceki={"personel_kodu": mevcut[1]}, yeni={"personel_kodu": yeni_kod})
         conn.commit()
         return {"mesaj": "Personel başarıyla güncellendi.", "personel_id": personel_id, "personel_kodu": yeni_kod, "aktif_mi": mevcut[2]}
     except psycopg2.errors.UniqueViolation:
@@ -6547,12 +6523,6 @@ def ogrenci_aktiflik_duzenle(
                     "UPDATE kullanicilar SET aktif_mi = %s "
                     "WHERE kullanici_id = %s;",
                     (veri.aktif_mi, kullanici_id)
-                )
-
-                cursor.execute(
-                    "UPDATE personel SET aktif_mi = %s "
-                    "WHERE personel_id = %s;",
-                    (veri.aktif_mi, personel_id)
                 )
 
             if eski_durum != veri.aktif_mi:

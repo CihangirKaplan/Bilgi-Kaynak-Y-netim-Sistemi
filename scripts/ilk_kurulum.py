@@ -1,5 +1,6 @@
 import psycopg2
 from server.guvenlik import parola_hashle
+from server.personel_kaydi import personel_kaydi_ata
 import os
 from dotenv import load_dotenv
 
@@ -67,14 +68,11 @@ def ilk_kurulumu_yap():
                 print(f"⚠️ Kullanıcı Zaten Mevcut: {k['k_adi']}")
 
             # 3. KULLANICIYI PERSONEL TABLOSUNA BAĞLA (Mimarine Uygun Olarak)
-            cursor.execute("SELECT * FROM personel WHERE kullanici_id = %s;", (kullanici_id,))
-            personel = cursor.fetchone()
+            cursor.execute("SELECT personel_id FROM kullanicilar WHERE kullanici_id = %s;", (kullanici_id,))
+            personel = cursor.fetchone()[0]
             
             if not personel:
-                cursor.execute("""
-                    INSERT INTO personel (kullanici_id, personel_kodu, aktif_mi) 
-                    VALUES (%s, %s, TRUE);
-                """, (kullanici_id, k["p_kodu"]))
+                personel_kaydi_ata(cursor, kullanici_id, k["p_kodu"])
                 print(f"   └─ ✅ Personel Kaydı Oluşturuldu: {k['p_kodu']}")
             else:
                 print(f"   └─ ⚠️ Personel Kaydı Zaten Var")

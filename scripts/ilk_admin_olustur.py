@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 
 from server.denetim import denetim_kaydi_olustur
 from server.guvenlik import gecici_parola_uret, parola_hashle
+from server.personel_kaydi import PERSONEL_KAYDI_ATA_SQL
 
 load_dotenv()
 
@@ -92,10 +93,7 @@ def admin_olustur(cursor, kullanici_adi, ek_yonetici=False):
 
     cursor.execute("SELECT COUNT(*) FROM personel WHERE personel_kodu LIKE 'PER-ADM-%';")
     personel_kodu = f"PER-ADM-{cursor.fetchone()[0] + 1:03d}"
-    cursor.execute(
-        "INSERT INTO personel (kullanici_id, personel_kodu, aktif_mi) VALUES (%s, %s, TRUE);",
-        (kullanici_id, personel_kodu),
-    )
+    cursor.execute(PERSONEL_KAYDI_ATA_SQL, (personel_kodu, kullanici_id))
     if ek_yonetici:
         denetim_kaydi_olustur(
             None, olay_turu="CREATE", kullanici_id=kullanici_id,

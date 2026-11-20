@@ -275,7 +275,7 @@ from server.sunucu import personel_guncelle
 def test_personel_basariyla_guncellenir():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
-    mock_cursor.fetchone.return_value = (15, "PSK-025", True)
+    mock_cursor.fetchone.return_value = (15, "PSK-025", True, 7)
 
     guncelleme = PersonelGuncelleModeli(personel_kodu="PSK-NEW")
 
@@ -295,8 +295,8 @@ def test_personel_basariyla_guncellenir():
         for cagri in mock_cursor.execute.call_args_list
     ]
 
-    assert any("UPDATE personel" in sorgu for sorgu in sorgular)
-    assert not any("aktif_mi" in sorgu for sorgu in sorgular if sorgu.startswith("UPDATE personel"))
+    assert any("UPDATE kullanicilar SET personel_kodu" in sorgu for sorgu in sorgular)
+    assert not any("aktif_mi" in sorgu for sorgu in sorgular if sorgu.startswith("UPDATE"))
     assert any("INSERT INTO denetim_kayitlari" in sorgu for sorgu in sorgular)
 
 
