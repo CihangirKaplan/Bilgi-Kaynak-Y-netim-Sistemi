@@ -20,7 +20,7 @@ def sahte_veritabani(rol="PSIKOLOG", hatali_tablo=None):
     durum = {"son_sorgu": "", "parametreler": None}
 
     def execute(sorgu, parametreler=None):
-        durum["son_sorgu"] = sorgu.upper()
+        durum["son_sorgu"] = " ".join(sorgu.upper().split())          # satır sonu/boşluk farkı önemsiz
         durum["parametreler"] = parametreler
 
         if hatali_tablo:

@@ -114,6 +114,6 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
 
     assert "ilk_giris_mi" in sorgu
     assert "TRUE, TRUE" in sorgu
-    assert parametreler == ("test_psikolog", "ornek_hash", 1, "PER-PSK-001")
+    assert parametreler == ("test_psikolog", "ornek_hash", 1, "PER-PSK-001", "test_psikolog")
 
     mock_conn.commit.assert_called_once()

@@ -163,7 +163,7 @@ class PersonelOlusturModeli(BaseModel):
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
     eski_parola: str = Field(max_length=256)
-    yeni_parola: str = Field(min_length=8, max_length=72)
+    yeni_parola: str = Field(min_length=1, max_length=72)       # asıl kurallar server/parola_politikasi.py'de
     yeni_parola_tekrar: str = Field(max_length=256)
 
     @field_validator("yeni_parola")

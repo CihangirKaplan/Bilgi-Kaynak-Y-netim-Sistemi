@@ -15,7 +15,8 @@ Hesabınız yeni açıldıysa ya da şifreniz yönetici tarafından sıfırland�
 süre dolmadan giriş yapıp yeni şifrenizi belirleyin, aksi halde yöneticiden yenisini isteyin.
 
 Yeni şifre kuralları (ekranda anlık kontrol listesi olarak görünür; hepsi sağlanmadan düğme açılmaz):
-- En az **8 karakter**
+- En az **10 karakter**; en az bir **harf** ve bir **rakam** içermeli
+- Kullanıcı adınızı içermemeli ve `password123` gibi çok yaygın bir şifre olmamalı (sunucu reddeder)
 - En fazla 72 bayt (çok uzun olmasın)
 - Eski şifrenizle **aynı olmamalı**
 - İki yeni şifre alanı **birbiriyle aynı** olmalı

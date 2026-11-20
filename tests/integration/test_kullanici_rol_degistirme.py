@@ -328,20 +328,20 @@ def test_danisma_ogrencisine_kayitsiz_rol_atanamaz():
     baglanti.rollback.assert_called_once()
 
 
-def test_klinik_sorumlusu_personel_kodu():
+def test_proje_asistani_personel_kodu():
     from server.sunucu import _siradaki_personel_kodu
 
     cursor = MagicMock()
     cursor.fetchall.return_value = [
-        ("PER-KLS-001",),
-        ("PER-KLS-002",),
+        ("PER-AST-001",),
+        ("PER-AST-002",),
     ]
 
     kod = _siradaki_personel_kodu(
-        cursor, "KLINIK SORUMLUSU"
+        cursor, "PROJE_ASISTANI"
     )
 
-    assert kod == "PER-KLS-003"
+    assert kod == "PER-AST-003"
 
 
 @pytest.mark.parametrize(

@@ -4,14 +4,15 @@ Zorunlu kurallar sunucunun reddettiği durumlardır; ekran bunlar sağlanmadan d
 yol göstericidir, kaydı engellemez.
 """
 
-EN_AZ_UZUNLUK = 8
+EN_AZ_UZUNLUK = 10                      # sunucudaki server/parola_politikasi.py ile aynı olmalı
 EN_FAZLA_BAYT = 72
 
 
 def kural_durumlari(yeni, tekrar, eski):
     """[(metin, sağlandı_mı)] — ekrandaki kontrol listesi sırasıyla."""
     return [
-        (f"En az {EN_AZ_UZUNLUK} karakter", len(yeni) >= EN_AZ_UZUNLUK),
+        (f"En az {EN_AZ_UZUNLUK} karakter; harf ve rakam içermeli",
+         len(yeni) >= EN_AZ_UZUNLUK and any(c.isalpha() for c in yeni) and any(c.isdigit() for c in yeni)),
         (f"En fazla {EN_FAZLA_BAYT} bayt (çok uzun olmasın)", 0 < len(yeni.encode("utf-8")) <= EN_FAZLA_BAYT),
         ("Eski şifreyle aynı değil", bool(yeni) and yeni != eski),
         ("İki yeni şifre alanı aynı", bool(yeni) and yeni == tekrar),
