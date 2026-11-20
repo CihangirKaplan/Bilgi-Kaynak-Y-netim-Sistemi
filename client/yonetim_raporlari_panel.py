@@ -546,6 +546,27 @@ class YonetimRaporlariEkrani(QWidget):
 
         filtre.addStretch(1)
 
+        self.donem_bilgi_btn = QPushButton("ⓘ Dönemler Hakkında")
+        self.donem_bilgi_btn.setToolTip(
+            "Seçilen ve önceki dönemin ne anlama geldiğini gösterir."
+        )
+        self.donem_bilgi_btn.setStyleSheet("""
+            QPushButton {
+                color: #245586;
+                background: #E7F0FB;
+                border: 1px solid #CBDEF4;
+                border-radius: 7px;
+                padding: 9px 10px;
+            }
+            QPushButton:hover {
+                background: #D8E9FA;
+            }
+        """)
+        filtre.addWidget(self.donem_bilgi_btn)
+        self.donem_bilgi_btn.clicked.connect(
+            self.donem_bilgisi_goster
+        )
+
         self.yenile_btn = QPushButton("Yenile")
         self.yenile_btn.setObjectName("YonetimYenile")
         self.yenile_btn.setFixedWidth(78)
@@ -572,6 +593,78 @@ class YonetimRaporlariEkrani(QWidget):
 
         self.tarih_alanlarini_guncelle(
             self.donem.currentText()
+        )
+
+    def donem_bilgisi_goster(self):
+        """Raporun karşılaştırdığı tarih aralıklarını açıklar."""
+        secili = self.yuklenen_donem
+        veriler = self.veriler
+
+        if not secili or not veriler:
+            QMessageBox.information(
+                self,
+                "Dönemler Hakkında",
+                "Seçilen Dönem: Tarih filtresinde belirlediğiniz aralıktır.\n\n"
+                "Önceki Dönem: Seçilen dönemden hemen önceki, "
+                "aynı uzunluktaki tarih aralığıdır.\n\n"
+                "Gerçek tarihleri görmek için raporu yükleyin."
+            )
+            return
+
+        try:
+            guncel_filtre = self.tarih_parametreleri()
+        except ValueError:
+            QMessageBox.information(
+                self,
+                "Dönemler Hakkında",
+                "Geçerli bir tarih aralığı seçin."
+            )
+            return
+
+        if guncel_filtre != secili:
+            QMessageBox.information(
+                self,
+                "Dönemler Hakkında",
+                "Tarih filtresi değişti. Güncel dönemlerin tarihlerini "
+                "görmek için raporu yenileyin."
+            )
+            return
+
+        try:
+            onceki = veriler["randevu"]["onceki_donem"]
+            from datetime import date
+
+            def tarih_yaz(deger):
+                return date.fromisoformat(deger).strftime("%d.%m.%Y")
+
+            secilen_tarih = (
+                f"{tarih_yaz(secili['baslangic'])} – "
+                f"{tarih_yaz(secili['bitis'])}"
+            )
+            onceki_tarih = (
+                f"{tarih_yaz(onceki['baslangic'])} – "
+                f"{tarih_yaz(onceki['bitis'])}"
+            )
+        except (KeyError, TypeError):
+            QMessageBox.information(
+                self,
+                "Dönemler Hakkında",
+                "Tarih bilgileri alınamadı. Raporu yenileyin."
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Dönem Karşılaştırması",
+            "SEÇİLEN DÖNEM\n"
+            f"{secilen_tarih}\n"
+            "Filtrede belirlediğiniz tarih aralığıdır.\n\n"
+            "ÖNCEKİ DÖNEM\n"
+            f"{onceki_tarih}\n"
+            "Seçilen dönemden hemen önce gelen, "
+            "aynı uzunluktaki tarih aralığıdır.\n\n"
+            "Grafikler ve karşılaştırma tabloları bu "
+            "iki dönemin verilerini gösterir."
         )
 
     def kartlari_olustur(self, panel_lay):
@@ -854,6 +947,7 @@ class YonetimRaporlariEkrani(QWidget):
         self.bugun_panel.setVisible(gunluk)
         self.analiz_alani.setVisible(not gunluk)
         self.durum.setVisible(not gunluk)
+        self.donem_bilgi_btn.setVisible(not gunluk)
 
         self.donem.setEnabled(not gunluk)
         self.baslangic.setEnabled(
