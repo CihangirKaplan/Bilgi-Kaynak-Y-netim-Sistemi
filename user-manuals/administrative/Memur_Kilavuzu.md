@@ -1,0 +1,134 @@
+# Memur Kılavuzu
+
+Bu kılavuz **Memur** rolü içindir (cihaz, öğrenci, faaliyet ve danışma masası işleri). Giriş, şifre, arama, sıralama, Excel ve kısayollar için önce
+[Ortak Kullanım Kılavuzu](../Ortak_Kullanim.md)'na bakın.
+
+## Menünüzde neler var?
+
+| Bölüm | Sayfalar |
+|---|---|
+| **Genel** | Ana Kontrol Paneli |
+| **Klinik Operasyon** | Randevu Yönetimi (yalnızca görüntüleme), Oda Kullanımı, Oda Etkinlikleri, Randevu Raporları |
+| **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Yönetimi, Danışma Masası Raporları |
+| **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Cihaz Rezervasyonu, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları, Cihaz Rezervasyon Raporu, Geciken Bakım Planı Raporu |
+| **Yönetim & Denetim** | Oda Yönetimi |
+
+Randevu oluşturma/düzenleme sizin yetkinizde **değildir**; randevu sayfasını yalnızca izlersiniz.
+
+---
+
+# 1. Cihaz işleri
+
+Cihazların bir **yaşam döngüsü** vardır: envantere girer → rezerve edilir ve kullanılır → bakım ve kalibrasyon görür → arızalanabilir → kullanım dışı kalır.
+Bir cihazın **durumu** şunlardan biridir: *Kullanıma Hazır, Rezerve, Kullanımda, Bakımda, Kalibrasyonda, Arızalı, Kullanım Dışı.*
+
+## 1.1 Cihaz Envanteri
+Kayıtlı tüm cihazlar ve anlık durumları. Üstteki **sayaç çipleri** toplam cihaz, kullanıma hazır, bakım/kalibrasyondaki ve arızalı cihaz sayısını gösterir.
+
+- **Aramak:** Arama kutusuna envanter kodu, cihaz adı, marka ya da seri no yazın.
+- **Sıralamak:** Sütun başlığına tıklayın (Durum sütununda rozet metnine göre sıralanır).
+- **＋ Cihaz Ekle:** Formda **Envanter Kodu \*** ve **Cihaz Adı \*** zorunludur; **Marka / Model**, **Seri No** isteğe bağlıdır; **Durum \*** seçilir. Envanter kodu **benzersiz** olmalıdır.
+- **✎ Envanteri Düzenle** (ya da listede çift tıklama): Cihaz bilgilerini ve durumunu güncellersiniz. Bir cihazı kullanımdan kaldırmak için durumunu **Kullanım Dışı** yapın; cihaz silinmez, geçmişi korunur.
+- **⬇ Excel'e Aktar:** Ekranda görünen cihazları **demirbaş sayımı** için Excel'e yazar (Envanter Kodu, Cihaz Adı, Marka/Model, Seri No, Durum, Kayıt Tarihi). Ana panelden bir durum kartına tıklayıp geldiyseniz yalnızca o durumdaki cihazlar listelenir ve aktarılır; hepsini istiyorsanız önce **Filtreyi kaldır, tümünü göster**'e basın. Aktarım denetim kaydına yazılır.
+
+## 1.2 Cihaz Uygunluğu
+Cihazların hangi gün/saatlerde **uygun olmadığını** (bakım, kalibrasyon, arıza, rezervasyon) gösterir; yalnızca izlersiniz. Rezervasyon yapmadan önce buraya bakmak çakışmayı önler.
+
+## 1.3 Cihaz Rezervasyonu
+1. **＋ Yeni Rezervasyon**'a basın.
+2. **Cihaz \*** seçin. **Bölüm \*** seçin (listede yoksa yanındaki düğmeyle yeni bölüm ekleyin: *Bölüm adı, Sorumlu kişi, İletişim*).
+3. **Kullanılacak oda \***, **Başlangıç \*** ve **Bitiş \*** seçin.
+4. İsterseniz **Proje türü** (yoksa yenisini ekleyebilirsiniz) ve **Açıklama** girin.
+5. Kaydedin.
+
+Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra değilse, başlangıç geçmişteyse, cihaz şu anda bakımda/arızalı gibi uygun olmayan bir durumdaysa,
+aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla çakıştığını söyler) ya da oda bu iş için uygun değilse.
+**İptal** için listeden rezervasyonu seçin, iptal düğmesine basın ve **iptal nedenini** belirtin; kayıt silinmez, iptal edildi olarak kalır.
+
+## 1.4 Bakım Kayıtları
+Cihaza yapılan bakımın kaydı.
+- **＋ Bakım Kaydı:** **Cihaz \***, **Bakım Yapan Kişi \***, **Yapılan İşlem \***, **Maliyet (₺)**, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir. Bitiş tarihi başlangıçtan önce olamaz.
+- Mevcut bir kaydı düzenlerken **cihaz değiştirilemez**; diğer alanlar düzeltilebilir.
+- Bakım kaydı cihazın Envanter'deki durumunu **kendiliğinden değiştirmez**; ancak kaydın tarih aralığında cihaz **Cihaz Uygunluğu**'nda uygun değil görünür ve **Ana Kontrol Paneli**'nde "bakımda" sayılır.
+
+## 1.5 Kalibrasyon
+- **＋ Kalibrasyon Kaydı:** **Cihaz \***, **Yapan Kurum \***, **Sertifika No \***, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir.
+- Bakım kaydı gibi, kalibrasyon aralığı boyunca cihaz uygunluk takviminde "kalibrasyonda" görünür.
+
+## 1.6 Arıza Kayıtları
+- **＋ Arıza Kaydı:** **Arızalı Cihaz \***, **Aciliyet Seviyesi \*** (*Düşük, Orta, Yüksek, Kritik*), **Sorun Başlığı \*** ve **Açıklama \*** girilir.
+  Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur.
+- Arızayı düzeltirken **Mevcut Durum** alanında **Açık (devam ediyor)** ya da **Çözüldü (cihaz kullanıma açılır)** seçersiniz; *Çözüldü* cihazı yeniden kullanıma açar.
+
+## 1.7 Bakım Planları
+Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tarihe yaklaşınca ve tarih geçince sizi uyarır.
+- **＋ Yeni Plan:** **Cihaz \***, **Plan türü \*** (örneğin *Periyodik bakım, Yıllık bakım, 6 aylık bakım, Kalibrasyon, Temizlik ve kontrol* ya da kendi adınız),
+  **Tekrar aralığı \*** (*Haftalık 7 gün, Aylık 30 gün, 3 aylık 90 gün, 6 aylık 180 gün, Yıllık 365 gün ya da Özel*), **Uyarı süresi** (kaç gün önceden uyarılsın), **Sonraki tarih** ve **Aktif** kutusu.
+- Liste sütunları: **Cihaz, Plan, Tekrar, Uyarı, Sonraki Tarih, Durum, İşlem.** **Durum** rozeti: *Planlı, Yaklaşıyor, Gecikmiş* ve pasif planlar için *Pasif*; yanında "5 gün kaldı" ya da "5 gün gecikti" yazar.
+- Satıra çift tıklayarak planı düzenleyebilir, satır sonundaki düğmelerle düzenleyip silebilirsiniz.
+- Filtre: *Aktif planlar, Tüm planlar, Pasif planlar.*
+
+## 1.8 Cihaz raporları
+**Cihaz Raporları**, **Cihaz Rezervasyon Raporu** (cihaz, proje türü ve bölüm bazlı kullanım) ve **Geciken Bakım Planı Raporu** (geciken/yaklaşan planlar ve planı olmayan cihazlar) dönem seçerek çalışır ve **⬇ Excel'e Aktar** içerir. Ayrıntılar: [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).
+
+---
+
+# 2. Öğrenci işleri
+
+## 2.1 Öğrenciler
+Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Kayıt Tarihi, Durum.** Üstteki kartlar toplam, aktif, pasif ve **süresi dolan** öğrenci sayısını gösterir.
+- **Aramak ve süzmek:** Ad, numara ya da telefon yazın; **öğrenci grubunu** (*Tüm Öğrenciler, Gönüllü Öğrenci, Danışma Masası Öğrencisi, Asistan Öğrenci*) ve **durumu** (*Her Durum, Aktif, Pasif*) seçin. **Filtreleri Temizle** hepsini sıfırlar.
+- **＋ Öğrenci Ekle:** **Ad Soyad \***, **Öğrenci No \***, **Öğrenci Türü \*** (*Gönüllü Öğrenci* ya da *Asistan Öğrenci*), **Telefon** (11 haneli, `05XX...` biçiminde), **Bölüm** ve **Sınıf**.
+  **Danışma Masası öğrencileri bu pencereden eklenmez**: onlar giriş hesabı gerektirdiği için **Kullanıcı & Personel** üzerinden oluşturulur (pencere sizi yönlendirir).
+- **Aktiflik Düzenle:** Seçili öğrenciyi aktif ya da pasif yapar.
+- **Detay / Puanlar:** Seçili öğrencinin faaliyetlerini ve puanlarını gösterir.
+- **⬇ Excel'e Aktar:** Ekranda görünen öğrencileri (telefon dahil) yazar; aktarım denetim kaydına yazılır. Dosyayı paylaşırken dikkatli olun.
+
+### 10 yıllık kayıt süresi
+**Gönüllü öğrencilerin** kaydı **10 yıl** saklanır. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi sayıyı gösterir.
+- Düğmeye basınca süresi dolan gönüllü öğrencilerin listesi açılır (**Ad Soyad, Öğrenci No, Kayıt Tarihi, Erteleme Tarihi, Durum**). Durum **İşlem Bekliyor** ya da **Ertelendi** olur.
+- Bir öğrenciyi seçince iki düğme açılır:
+  - **Seçili Öğrenciyi Ertele:** Kayıt uyarısı için **yeni bir tarih** seçersiniz ve **Ertelemeyi Kaydet**'e basarsınız.
+  - **Seçili Kaydı Sil:** Kaydı siler. **Erteleme tarihi gelmeden kayıt silinemez**; sistem silmeyi reddeder. Silme **geri alınamaz** ve denetim kaydına yazılır; emin olmadan basmayın.
+
+## 2.2 Faaliyet Kayıtları
+Öğrencilerin yaptığı faaliyetlerin kaydı; **puanı** buradan hesaplanır.
+- **＋ Yeni Faaliyet Ekle:** **Öğrenci Seç**, **Faaliyet Türü**, **Birim** (*Kişi, Saat* gibi) ve **Miktar**. Kaydın puanı = **Miktar × kaydın girildiği andaki faaliyet puanı**; faaliyet puanı sonradan değişse de eski kayıtlar değişmez.
+- **✎ Faaliyet Düzenle** ve **🗑️ Faaliyet Sil**: Listeden kaydı seçip kullanın. İşlemler denetim kaydına yazılır.
+- **📋 Faaliyet Türleri:** Yeni faaliyet türü tanımlar, puanını belirler, düzenler.
+- Liste **en yeni 1000** kaydı gösterir; altındaki not toplam sayıyı söyler. Tümü için **Faaliyet Raporu**'nu kullanın.
+- Birimleri yönetmek (**🏢 Faaliyet Birimleri**) yalnızca **Sistem Admin**'e açıktır.
+
+## 2.3 Öğrenci ve faaliyet raporları
+**Puan Raporu** (öğrenci başına toplam puan), **Öğrenci Raporu** (mevcut, tür/bölüm dağılımı, kayıt saklama süresi) ve **Faaliyet Raporu** (tür, birim, onay durumuna göre). Hepsinde dönem seçilir ve **⬇ Excel'e Aktar** vardır.
+
+---
+
+# 3. Danışma masası işleri
+
+## 3.1 Danışma Masası Yönetimi
+Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her görevin öğrencisini, başlangıç/bitişini, çalışma süresini ve **onay durumunu** gösterir; üstte onay bekleyen görev sayıları vardır.
+- **✓ Seçilen Görevi Onayla:** Biten bir görevi onaylar. **Devam eden** görev onaylanamaz; **zaten onaylanmış** görev tekrar onaylanamaz.
+- **＋ Yeni Görev Ekle:** Öğrencinin görevini elle girersiniz (**Öğrenci**, **Başlangıç**, **Bitiş**). Öğrenci görevi başlatmayı/bitirmeyi unuttuysa bu yolla düzeltirsiniz. Aktif öğrenci yoksa sistem bunu söyler.
+- **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir.
+- Onay bekleyen görevler **🔔 bildirim** olarak da size gelir; bildirime tıklayınca ilgili sayfa açılır.
+
+## 3.2 Danışma Masası Raporları
+Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz; **⬇ Excel'e Aktar** vardır.
+
+---
+
+# 4. Odalar
+
+- **Oda Kullanımı:** Odaların saatlik doluluğu (randevu ve etkinlikler birlikte).
+- **Oda Etkinlikleri:** Odalardaki etkinlikler; **Durum** ve **Dönem** süzgeçleri vardır. Yetkiniz varsa **＋ Yeni Etkinlik**, **Düzenle**, **İptal Et** ve **Oturumları Gör** düğmeleri görünür (çok günlü etkinliklerin her günü ayrı "oturum"dur).
+- **Oda Yönetimi:** **＋ Yeni Oda Ekle**, **✎ Odayı Düzenle**, **✕ Odayı Pasife Al**. Pasife alınan oda yeni randevu ve rezervasyonlarda seçilemez; geçmiş kayıtlar korunur.
+
+---
+
+# 5. İpuçları
+
+- Cihaz arızası bildirirken **Aciliyet**'i doğru seçin; **Kritik** arıza hemen takip edilmelidir.
+- Günün sonunda **Bakım Planları**'ndaki **Gecikmiş** satırlara bakın.
+- Bir cihazı rezerve etmeden önce **Cihaz Uygunluğu**'na bakın.
+- Excel dosyalarında **öğrenci adı ve telefonu** bulunur; dosyayı yalnızca gerekli kişilerle paylaşın.

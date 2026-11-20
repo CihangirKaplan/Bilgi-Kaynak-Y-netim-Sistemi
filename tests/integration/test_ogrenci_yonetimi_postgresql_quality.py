@@ -1,6 +1,7 @@
 
 """TKYS Öğrenci Yönetimi - PostgreSQL salt okunur entegrasyon testleri."""
 
+import uuid
 from datetime import date
 
 import psycopg2
@@ -55,21 +56,48 @@ def test_ogrenci_listesi_pg_ile_uyumlu(pg_conn):
     assert gercek == beklenen
 
 
-def test_ogrenci_puanlari_pg_ile_uyumlu(pg_conn):
-    with pg_conn.cursor() as cur:
+@pytest.fixture
+def puanli_ogrenci():
+    """Faaliyeti olan geçici bir öğrenci oluşturur (veritabanı boş olsa da test atlanmaz) ve işi bitince siler."""
+    assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    cur = conn.cursor()
+    etiket = uuid.uuid4().hex[:8]
+    olusan = {}
+    try:
         cur.execute("""
-            SELECT ogrenci_id
-            FROM ogrenciler
-            ORDER BY ogrenci_id
-            LIMIT 1
-        """)
-        kayit = cur.fetchone()
+            INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, tur)
+            VALUES (%s, %s, 'GONULLU') RETURNING ogrenci_id
+        """, (f"QA Puan {etiket}", f"QP{etiket}"))
+        olusan["ogrenci"] = cur.fetchone()[0]
+        cur.execute("INSERT INTO faaliyetler (faaliyet_adi, puan, aktif_mi) VALUES (%s, 7, TRUE) RETURNING faaliyet_id", (f"QA_PUAN_{etiket}",))
+        olusan["faaliyet"] = cur.fetchone()[0]
+        cur.execute("SELECT birim_id FROM faaliyet_birimleri ORDER BY birim_id LIMIT 1")
+        birim = cur.fetchone()
+        if birim is None:
+            cur.execute("INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id", (f"QA_BIRIM_{etiket}",))
+            birim = cur.fetchone()
+            olusan["birim"] = birim[0]
+        cur.execute("""
+            INSERT INTO ogrenci_faaliyet_takip (ogrenci_id, faaliyet_id, birim_id, adet, faaliyet_tarihi, kayit_puani)
+            VALUES (%s, %s, %s, 3, CURRENT_DATE, 7)
+        """, (olusan["ogrenci"], olusan["faaliyet"], birim[0]))
+        yield olusan["ogrenci"]
+    finally:
+        if "ogrenci" in olusan:
+            cur.execute("DELETE FROM ogrenci_faaliyet_takip WHERE ogrenci_id = %s", (olusan["ogrenci"],))
+            cur.execute("DELETE FROM ogrenciler WHERE ogrenci_id = %s", (olusan["ogrenci"],))
+        if "faaliyet" in olusan:
+            cur.execute("DELETE FROM faaliyetler WHERE faaliyet_id = %s", (olusan["faaliyet"],))
+        if "birim" in olusan:
+            cur.execute("DELETE FROM faaliyet_birimleri WHERE birim_id = %s", (olusan["birim"],))
+        conn.close()
 
-        if kayit is None:
-            pytest.skip("Test veritabanında öğrenci bulunmuyor.")
 
-        ogrenci_id = kayit[0]
-
+def test_ogrenci_puanlari_pg_ile_uyumlu(pg_conn, puanli_ogrenci):
+    ogrenci_id = puanli_ogrenci
+    with pg_conn.cursor() as cur:
         cur.execute("""
             SELECT COALESCE(SUM(t.adet * t.kayit_puani), 0)
             FROM ogrenci_faaliyet_takip t
@@ -92,6 +120,7 @@ def test_ogrenci_puanlari_pg_ile_uyumlu(pg_conn):
         yetkili_id=1,
     )
 
+    assert beklenen_puan == 21.0                      # 3 adet x 7 puan: gerçekten puanı olan veriyle sınanır
     assert sonuc["toplam_puan"] == beklenen_puan
 
 

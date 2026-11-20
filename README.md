@@ -20,6 +20,7 @@ PySide6 masaüstü istemci  ──REST──►  FastAPI sunucu  ──►  Post
 | Yedekleme | `scripts/` |
 | Testler | `tests/` |
 | Dokümanlar | `docs/` |
+| Kullanıcı kılavuzları | `user-manuals/` (rol bazlı: psikolog, danışma öğrencisi/proje asistanı, memur, müdür, sistem yöneticisi) |
 
 ## Gereksinimler
 
@@ -119,6 +120,9 @@ PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadı
 
 - `docs/D01_Process_Analysis.md`, `docs/requirements/D02_Requirements_v1.md`: süreç ve gereksinim analizi
 - `docs/architecture/`: mimari (D05), veri sözlüğü (D04), tehdit modeli (D06)
+- `user-manuals/README.md`: **kullanıcı kılavuzları** (hangi rol hangi kılavuzu okumalı, varsayılan yetki tablosu)
+- `docs/API/Uc_Listesi.md`: API uç ve izin listesi (`python scripts/api_uc_listesi_uret.py` ile yeniden üretilir)
+- `docs/security/README.md`: uygulanan güvenlik önlemleri özeti
 - `docs/test-reports/QA-001_Kalite_Test_Raporu.md` ve `docs/test-reports/`: kalite ve performans test raporları
 
 ## Katkı kuralları

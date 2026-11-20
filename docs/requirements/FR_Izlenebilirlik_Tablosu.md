@@ -22,8 +22,14 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 ## Açık işler
 
-1. **FR-012 Günlük takvim:** Randevu Takvimi'ndeki "Hafta / Gün / Ay" seçicisinde "Gün" ve "Ay" seçilince
-   bir şey olmuyor (seçici ekranda var, işlevi bağlı değil). Randevu takvimi arkadaşın alanı.
+1. **FR-012 Günlük takvim / FR-013 Haftalık takvim:** `client/haftalik_takvim.py` **uygulama menüsüne bağlı değildir**; yalnızca
+   kendi dosyasında (`python client/haftalik_takvim.py`) çalıştırılabilen bir **prototiptir**. Kullanıcılar bu ekrana ulaşamaz; randevular
+   **Randevu Yönetimi** listesinden, oda doluluğu **Oda Kullanımı** ızgarasından izlenir. Prototipteki "Hafta / Gün / Ay" seçicisinin
+   işlevi de bağlı değildir. Karar bekliyor: prototip silinecek mi, yoksa gerçek bir takvim ekranı mı yapılacak? (Randevu takvimi arkadaşın alanıdır.)
+2. **FR-052 … FR-067 (⚠️ Kısmen):** İlgili testler 20 Kasım 2026'da çalıştırıldı ve geçti (336 geçti). Gerçek veritabanı testlerinden
+   dördü, test veritabanında hazır öğrenci olmadığında **atlanıyordu** (`test_ogrenci_yonetimi_postgresql_quality.py`,
+   `test_faaliyet_turleri_postgresql_quality.py`); bu testler artık kendi verisini oluşturup temizlediği için CI'da da çalışır.
+   Maddelerin durumu ürün sahibiyle gözden geçirilip ✅'e alınabilir.
 
 ## Tablo
 
@@ -52,8 +58,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-009 | Randevu oluşturma | ✅ | `POST /api/randevular`, `randevu_ekranlari.py` | `test_randevu_branch_quality.py`, `test_randevu_yetkilendirme.py`, `test_randevu_girdi_dogrulama.py` Ek: randevu formunda dolu saatler soluk ve seçilemez (`test_randevu_doluluk_arayuz.py`, `test_randevu_doluluk_sunucu.py`); oda ve psikolog seçimi kuralları `test_randevu_oda_atama_kontrolu.py`. |
 | FR-010 | Randevu düzenleme | ✅ | `PATCH /api/randevular/{id}` | `test_randevu_guncelleme_quality.py` |
 | FR-011 | Randevu iptali | ✅ | `PATCH /api/randevular/{id}/iptal` | `test_randevu_branch_quality.py`, `test_randevu_yetkilendirme.py` |
-| FR-012 | Günlük takvim | ❌ | `haftalik_takvim.py` içinde "Hafta / Gün / Ay" seçicisi var ama `cmb_gorunum` hiçbir işleve bağlı değil | Gün görünümü yok |
-| FR-013 | Haftalık takvim | ⚠️ | `haftalik_takvim.py` | Ekran var; arayüz için doğrudan test yok, Randevu Takvimi'ndeki bilinen sorun arkadaşın takibinde |
+| FR-012 | Günlük takvim | ❌ | `haftalik_takvim.py` menüye bağlı olmayan bir prototiptir; içindeki "Hafta / Gün / Ay" seçicisi (`cmb_gorunum`) hiçbir işleve bağlı değil | Kullanıcının erişebildiği bir gün görünümü yok (bkz. Açık işler 1) |
+| FR-013 | Haftalık takvim | ⚠️ | `haftalik_takvim.py` (menüye bağlı değil, prototip) | Uygulamada haftalık takvim ekranı yok; haftalık görünüm yalnızca bu prototipte (bkz. Açık işler 1) |
 | FR-014 | Psikolog çakışma kontrolü | ✅ | Migration `d39bab18d6fe` (`psikolog_randevu_cakisma` EXCLUDE kısıtı), sunucuda 409 yanıtı | `test_randevu_branch_quality.py`, `test_randevu_deadlock_quality.py`; gerçek PostgreSQL ile `test_randevu_eszamanlilik_quality.py` (PG) |
 | FR-015 | Oda çakışma kontrolü | ✅ | Migration `d39bab18d6fe` (`oda_randevu_cakisma` EXCLUDE kısıtı), sunucuda 409 yanıtı | FR-014 ile aynı testler |
 | FR-016 | Cihaz çakışma kontrolü (cihaz rezervasyonunda) | ✅ | Cihaz rezervasyonu EXCLUDE kısıtı, `POST /api/rezervasyonlar` | `test_cihaz_rezervasyon_eszamanlilik.py`; gerçek PostgreSQL için aynı dosyada bir (PG) testi. Gereksinim metni PR #252 ile "cihaz rezervasyonu" olarak düzeltildi |

@@ -2732,14 +2732,10 @@ QLabel {
             self.faaliyet_tablosunu_guncelle()
 
     def faaliyet_duzenle_tetikle(self):
-        # 1. Buton bağlandıysa terminale bunu yazdıracak:
-        print("--- DÜZENLE BUTONUNA BASILDI! ---")
-
-        # 2. Tabloyu bulamazsa sessizce kapanmayacak, bize bağıracak:
+        # Tablo henüz kurulmadıysa sessizce kapanmak yerine kullanıcıya söyler.
         if not hasattr(self, 'tablo_faaliyetler'):
-            print("HATA: 'tablo_faaliyetler' adında bir tablo yok! Acaba tablonun adı başka bir şey mi?")
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Hata", "Tablo bulunamadı! Terminale bak.")
+            QMessageBox.critical(self, "Hata", "Faaliyet tablosu bulunamadı. Sayfayı yenileyip tekrar deneyin.")
             return
 
         secili_satirlar = self.tablo_faaliyetler.selectionModel().selectedRows()
@@ -2761,7 +2757,6 @@ QLabel {
 
         satir = secili_satirlar[0].row()
         takip_id = self.tablo_faaliyetler.item(satir, 0).text()
-        print(f"Seçilen satırın ID'si: {takip_id}") # ID'yi yakaladık mı görelim
 
         # Miktar sütununda hem rakam hem birim var, onları parçalıyoruz
         miktar_oge = self.tablo_faaliyetler.item(satir, 4)

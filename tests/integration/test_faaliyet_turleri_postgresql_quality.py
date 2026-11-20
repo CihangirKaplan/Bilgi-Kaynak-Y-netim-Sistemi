@@ -66,10 +66,27 @@ def ortam():
             """)
             kullanici = cur.fetchone()
 
-            if not all((ogrenci, birim, kullanici)):
-                pytest.skip(
-                    "Test DB'de öğrenci, birim veya kullanıcı yok."
-                )
+            # Eksik önkoşullar bu işlemin içinde oluşturulur ve sonda geri alınır (test veritabanı boşsa atlanmaz).
+            etiket = uuid.uuid4().hex[:8]
+            if not ogrenci:
+                cur.execute("""
+                    INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, tur)
+                    VALUES (%s, %s, 'GONULLU') RETURNING ogrenci_id
+                """, (f"QA Ogr {etiket}", f"QA{etiket}"))
+                ogrenci = cur.fetchone()
+            if not birim:
+                cur.execute("""
+                    INSERT INTO faaliyet_birimleri (birim_adi)
+                    VALUES (%s) RETURNING birim_id
+                """, (f"QA_BIRIM_{etiket}",))
+                birim = cur.fetchone()
+            if not kullanici:
+                cur.execute("""
+                    INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id)
+                    VALUES (%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = 'ADMIN'))
+                    RETURNING kullanici_id
+                """, (f"qa_{etiket}",))
+                kullanici = cur.fetchone()
 
             ad = "QA_PUAN_" + uuid.uuid4().hex[:12]
 
