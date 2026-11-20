@@ -7,6 +7,7 @@ from client.api_yoneticisi import (
 
 # Yeni oluşturduğumuz öğrenci formunu buraya çağırıyoruz
 from PySide6.QtCore import QTimer
+from client.bildirim_toast import basari_bildirimi
 
 class FaaliyetEkleDialog(QDialog):
     KISAYOL_GENISLIGI = 170       # "Yeni ... Ekle" düğmelerinin ortak genişliği (px)
@@ -289,7 +290,7 @@ class FaaliyetEkleDialog(QDialog):
                     return
             
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
+                basari_bildirimi(self, res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
                 self.accept()
             else:
                 try:

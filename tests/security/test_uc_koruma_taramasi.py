@@ -37,6 +37,9 @@ ISTISNALAR = {
     ("GET", "/api/korumali-test"): "Token doğrulama deneme ucu; veri döndürmez.",
     ("GET", "/api/saglik"): "Sunucunun ayakta olduğunu gösterir; veri döndürmez, veritabanına bağlanmaz.",
     ("GET", "/api/yetkilerim"): "Kullanıcı yalnızca kendi rolünün izinlerini görür; ayrıca izin gerektirmez.",
+    ("GET", "/api/surum"): "Hakkında penceresi için sürüm bilgisi; giriş yapmış herkes görebilir, kişisel veri ve ayar döndürmez.",
+    ("POST", "/api/liste-aktarim-kaydi"): "JWT ile kimlik doğrulanır; kaydı yazmadan önce listenin kendi görüntüleme izni "
+                                           "(LISTE_AKTARIM_HEDEFLERI) sunucuda denetlenir, izin yoksa 403 döner.",
 }
 
 

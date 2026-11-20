@@ -14,7 +14,8 @@ import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QMenu, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem,
+    QLineEdit
 )
 from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent
@@ -32,6 +33,7 @@ from client.faaliyet_dialog import FaaliyetEkleDialog
 from client.sayfalar_rol_izin import RolIzinSayfasi
 from client.rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
 from client.tablo_siralama import siralanabilir_yap
+from client.tablo_tasarimi import ortak_liste_stili_uygula
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -359,6 +361,8 @@ MENU = [
              aciklama="Sistem denetim izleri", aksiyon=[]),
         dict(ikon="🛂", ad="Yetki Raporu", izin="Audit kayıtlarını inceleme",
              aciklama="Kullanıcılar, roller, son girişler, kilitli hesaplar ve rol-izin matrisi", aksiyon=[]),
+        dict(ikon="🩺", ad="Sistem Durumu", izin="Audit kayıtlarını inceleme",
+             aciklama="Sürüm, veritabanı şeması, son yedek ve son girişler", aksiyon=[]),
         dict(ikon="🏢", ad="Oda Yönetimi", izin="Oda yönetimi",
              aciklama="Sistemdeki fiziksel odaların tanımlanması ve düzenlenmesi",
              aksiyon=[("＋  Yeni Oda Ekle", "Oda yönetimi"),
@@ -643,6 +647,14 @@ class AnaPencere(QMainWindow):
         """)
         self.btn_bildirim.clicked.connect(self._bildirim_menusunu_ac)
         self.gezinme_cubugu.addWidget(self.btn_bildirim)
+
+        self.btn_yardim = QPushButton("?")
+        self.btn_yardim.setCursor(Qt.PointingHandCursor)
+        self.btn_yardim.setToolTip("Hakkında / Yardım (F1)")
+        self.btn_yardim.setFixedWidth(40)
+        self.btn_yardim.setStyleSheet(self.btn_bildirim.styleSheet())
+        self.btn_yardim.clicked.connect(lambda *_: self.yardim_ac())
+        self.gezinme_cubugu.addWidget(self.btn_yardim)
 
         self.btn_ana_sayfa = QPushButton("🏠  Ana Sayfa")
         self.btn_ana_sayfa.setCursor(Qt.PointingHandCursor)
@@ -1454,6 +1466,7 @@ QLabel {
         if ilk_btn:
             ilk_btn.setChecked(True)
             self.sayfa_ac(0)
+        self.kisayollari_kur()
 
         aktif = sum(1 for a in IZIN if izin_var(rol, a))
         self.statusBar().hide()
@@ -1841,6 +1854,7 @@ QLabel {
         "Oda Kullanım Raporu": ("oda_kullanim_raporu_ekrani", "yenile"),
         "Cihaz Rezervasyon Raporu": ("cihaz_rezervasyon_raporu_ekrani", "yenile"),
         "Yetki Raporu": ("yetki_raporu_ekrani", "yenile"),
+        "Sistem Durumu": ("sistem_durumu_ekrani", "yenile"),
         "Öğrenci Raporu": ("ogrenci_raporu_ekrani", "yenile"),
         "Faaliyet Raporu": ("faaliyet_raporu_ekrani", "yenile"),
         "Geciken Bakım Planı Raporu": ("bakim_plani_raporu_ekrani", "yenile"),
@@ -1850,7 +1864,7 @@ QLabel {
     KOMPAKT_SAYFALAR = {"Oda Kullanımı": (28, 6, 28, 6)}
     SAYFA_YENILEME_ARALIGI = 2.0     # saniye; art arda tıklamada gereksiz istek atılmaz
 
-    def _sayfayi_yenile(self, ad):
+    def _sayfayi_yenile(self, ad, zorla=False):
         hedef = self.SAYFA_YENILEME.get(ad)
         if not hedef:
             return
@@ -1860,13 +1874,67 @@ QLabel {
             return
         simdi = time.monotonic()
         son = self.__dict__.setdefault("_sayfa_son_yenileme", {})
-        if simdi - son.get(ad, -1e9) < self.SAYFA_YENILEME_ARALIGI:
+        if not zorla and simdi - son.get(ad, -1e9) < self.SAYFA_YENILEME_ARALIGI:
             return
         son[ad] = simdi
         try:
             yontem()
         except Exception as e:
             print(f"Sayfa yenileme hatası ({ad}):", e)
+
+    # ------------------------------------------------------------------ klavye kısayolları
+    def kisayollari_kur(self):
+        """Ctrl+N (yeni kayıt), Ctrl+F (arama), F5 (yenile), F1 (yardım). Pencere genelinde çalışır; tekrar çağrılırsa yeniden kurmaz."""
+        if getattr(self, "_kisayollar", None):
+            return
+        from PySide6.QtGui import QKeySequence, QShortcut
+        self._kisayollar = [
+            QShortcut(QKeySequence(tus), self, activated=islev, context=Qt.WindowShortcut)
+            for tus, islev in (("Ctrl+N", self.kisayol_yeni), ("Ctrl+F", self.kisayol_ara),
+                               ("F5", self.kisayol_yenile), ("F1", self.yardim_ac))
+        ]
+
+    def _aktif_sayfa(self):
+        idx = self.stack.currentIndex()
+        if idx < 0 or idx >= len(self.sayfa_bilgi):
+            return None, None
+        return self.sayfa_bilgi[idx][0], self.stack.currentWidget()
+
+    def kisayol_yeni(self):
+        """Açık sayfadaki ilk görünür \"＋ Yeni ...\" düğmesine basar (Yeni Randevu, Öğrenci Ekle, Cihaz Ekle...)."""
+        _, sayfa = self._aktif_sayfa()
+        if sayfa is None:
+            return False
+        for dugme in sayfa.findChildren(QPushButton):
+            metin = dugme.text().strip()
+            if metin[:1] in ("＋", "+") and dugme.isVisibleTo(sayfa) and dugme.isEnabled():
+                dugme.click()
+                return True
+        return False
+
+    def kisayol_ara(self):
+        """Açık sayfadaki arama kutusuna gider ve içeriğini seçer."""
+        _, sayfa = self._aktif_sayfa()
+        if sayfa is None:
+            return False
+        for kutu in sayfa.findChildren(QLineEdit):
+            if "ara" in kutu.placeholderText().lower() and kutu.isVisibleTo(sayfa) and kutu.isEnabled():
+                kutu.setFocus()
+                kutu.selectAll()
+                return True
+        return False
+
+    def kisayol_yenile(self):
+        """Açık sayfayı hemen yeniler (art arda basma sınırı yok sayılır)."""
+        ad, _ = self._aktif_sayfa()
+        if ad is None:
+            return False
+        self._sayfayi_yenile(ad, zorla=True)
+        return True
+
+    def yardim_ac(self):
+        from client.hakkinda_dialog import HakkindaDialog
+        HakkindaDialog(self.api_url, self.token, self.kullanici_adi, self.aktif_rol, self).exec()
 
     def _sayfayi_olustur(self, idx):
         """Henüz kurulmamış sayfayı (yer tutucu) gerçek ekranla değiştirir; kuruluysa hiçbir şey yapmaz."""
@@ -2215,6 +2283,12 @@ QLabel {
             )
             lay.addWidget(self.audit_ekrani, 1)
 
+        elif oge["ad"] == "Sistem Durumu":
+            from client.sistem_durumu_ekrani import SistemDurumuEkrani
+
+            self.sistem_durumu_ekrani = SistemDurumuEkrani(self.api_url, self.token)
+            lay.addWidget(self.sistem_durumu_ekrani, 1)
+
         elif oge["ad"] == "Yetki Raporu":
             from client.yetki_raporu_ekrani import YetkiRaporuEkrani
 
@@ -2370,21 +2444,7 @@ QLabel {
             self.oda_tablosu.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.oda_tablosu.setSelectionBehavior(QAbstractItemView.SelectRows)
 
-            self.oda_tablosu.setStyleSheet("""
-                QTableWidget {
-                    background-color: white;
-                    border: 1px solid #D0D7E5;
-                    border-radius: 8px;
-                    gridline-color: #E2E8F0;
-                }
-                QHeaderView::section {
-                    background-color: #0A1F5C;
-                    color: white;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                }
-            """)
+            ortak_liste_stili_uygula(self.oda_tablosu)
             il.addWidget(self.oda_tablosu)
             self.odalari_getir()
             lay.addWidget(ik, 1)
@@ -2480,29 +2540,7 @@ QLabel {
             self.tablo_faaliyetler.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.tablo_faaliyetler.setSelectionBehavior(QAbstractItemView.SelectRows)
 
-            self.tablo_faaliyetler.setStyleSheet("""
-                QTableWidget {
-                    background-color: white;
-                    color: #2C3E50; /* YAZI RENGİNİ ZORLA KOYU LACİVERT/SİYAH YAPTIK */
-                    border: 1px solid #D0D7E5;
-                    border-radius: 8px;
-                    gridline-color: #E2E8F0;
-                }
-                QTableWidget::item {
-                    color: #2C3E50; /* Hücre içindeki yazılar kesinlikle görünür olacak */
-                }
-                QTableWidget::item:selected {
-                    background-color: #3498DB; /* Satıra tıklanınca arka plan mavi */
-                    color: white; /* Satıra tıklanınca yazı beyaz */
-                }
-                QHeaderView::section {
-                    background-color: #0A1F5C;
-                    color: white;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                }
-            """)
+            ortak_liste_stili_uygula(self.tablo_faaliyetler)
             il.addWidget(self.tablo_faaliyetler)
             self.lbl_faaliyet_sinir = QLabel("")
             self.lbl_faaliyet_sinir.setStyleSheet("color: #64748B; font-size: 12px;")

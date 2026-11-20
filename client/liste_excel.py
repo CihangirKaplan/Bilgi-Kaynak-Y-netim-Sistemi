@@ -9,6 +9,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QPushButton
 
+from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.rapor_excel_genel import excel_olustur
 
 EXCEL_DUGME_STILI = (
@@ -32,10 +33,11 @@ def dosya_adi_olustur(onek, simdi=None):
     return f"{onek}_{(simdi or datetime.now()).strftime('%Y%m%d_%H%M')}.xlsx"
 
 
-def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti=(), sayfa_adi="Liste", aciklama=""):
+def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti=(), sayfa_adi="Liste", aciklama="", kayit=None):
     """Görünen satırları kullanıcının seçtiği .xlsx dosyasına yazar. Başarılıysa dosya yolunu, aksi halde None döndürür.
 
     kolonlar: [(başlık, sayı/tarih biçimi veya None)]; satirlar: değer listeleri; filtre_ozeti: [(ad, değer)].
+    kayit: {"api_url", "token", "liste"}; verilirse aktarım denetim kaydına yazılır (kim, ne zaman, hangi liste, kaç satır).
     """
     satirlar = [list(s) for s in satirlar]
     if not satirlar:
@@ -63,5 +65,29 @@ def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti
             f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
         )
         return None
+    if kayit is not None:
+        _aktarimi_denetime_yaz(pencere, kayit, len(satirlar))
     QMessageBox.information(pencere, "Excel'e Aktar", f"{len(satirlar)} kayıt kaydedildi:\n{dosya_yolu}")
     return dosya_yolu
+
+
+def _aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):
+    """Aktarımı denetim kaydına yazar. Yazılamazsa kullanıcıya açıkça söylenir (aktarım gizlice kayıtsız kalmaz)."""
+    uyari = None
+    try:
+        cevap = oturum_kontrollu_istek(
+            "POST", f"{kayit['api_url'].rstrip('/')}/api/liste-aktarim-kaydi",
+            headers={"Authorization": f"Bearer {kayit['token']}"},
+            json={"liste": kayit["liste"], "satir_sayisi": satir_sayisi}, timeout=10,
+        )
+        if oturum_hatasi_mi(cevap):
+            return
+        if cevap.status_code != 200:
+            uyari = f"Sunucu kaydı kabul etmedi ({cevap.status_code})."
+    except Exception as hata:
+        uyari = f"Sunucuya ulaşılamadı: {hata}"
+    if uyari:
+        QMessageBox.warning(
+            pencere, "Denetim kaydı yazılamadı",
+            f"Dosya kaydedildi ancak aktarım denetim kaydına yazılamadı.\n{uyari}\nBu durumu yöneticiye bildirin.",
+        )

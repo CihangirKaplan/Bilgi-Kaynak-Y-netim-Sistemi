@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QAbstractItemView, QInputDialog, QLineEdit
 )
 from PySide6.QtCore import Qt
+from client.bildirim_toast import basari_bildirimi
 
 class BirimYonetimDialog(QDialog):
     def __init__(self, api_url, token, parent=None):
@@ -124,7 +125,7 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Yeni birim başarıyla eklendi!")
+                    basari_bildirimi(self, "Yeni birim başarıyla eklendi!")
                     self.verileri_yukle()
                 else:
                     QMessageBox.warning(self, "Hata", res.json().get("detail", "Eklenemedi."))
@@ -152,7 +153,7 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Birim başarıyla güncellendi!")
+                    basari_bildirimi(self, "Birim başarıyla güncellendi!")
                     self.verileri_yukle()
                 else:
                     QMessageBox.warning(self, "Hata", res.json().get("detail", "Güncellenemedi."))
@@ -194,7 +195,7 @@ class BirimYonetimDialog(QDialog):
                 if oturum_hatasi_mi(res):
                     return
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Birim başarıyla silindi.")
+                    basari_bildirimi(self, "Birim başarıyla silindi.")
                     self.verileri_yukle()
                 else:
                     QMessageBox.warning(self, "Kritik Uyarı", res.json().get("detail", "Silinemedi."))

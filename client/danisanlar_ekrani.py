@@ -29,6 +29,7 @@ from client.randevu_ekranlari import (
     ara_normalle, randevu_zamani, tarih_saat_metinleri,
 )
 from client.tablo_siralama import siralanabilir_yap
+from client.tablo_tasarimi import ortak_liste_stili_uygula
 
 ISTISNA_ETIKETLERI = {"YOK": "Yok", "KANSER": "Kanser hastası", "SEHIT_GAZI": "Şehit / gazi yakını"}
 DANISAN_TABLO_BASLIKLARI = ["Danışan Kodu", "Psikolog", "Yaş Grubu", "Ücret", "Randevu", "Durum"]
@@ -229,10 +230,7 @@ class DanisanlarEkrani(QWidget):
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tablo.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.tablo.setStyleSheet("""
-            QTableWidget { background-color: white; border: 1px solid #D0D7E5; border-radius: 8px; gridline-color: #E2E8F0; }
-            QHeaderView::section { background-color: #0A1F5C; color: white; font-weight: bold; padding: 10px; border: none; }
-        """)
+        ortak_liste_stili_uygula(self.tablo)
         self.tablo.itemSelectionChanged.connect(self._secim_degisti)
         self.tablo.setMinimumWidth(360)
         return self.tablo
@@ -378,10 +376,7 @@ class DanisanlarEkrani(QWidget):
         self.gecmis_tablosu.verticalHeader().setVisible(False)
         self.gecmis_tablosu.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.gecmis_tablosu.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.gecmis_tablosu.setStyleSheet("""
-            QTableWidget { background-color: white; border: 1px solid #D0D7E5; border-radius: 6px; gridline-color: #E2E8F0; }
-            QHeaderView::section { background-color: #0A1F5C; color: white; font-weight: bold; padding: 6px; border: none; }
-        """)
+        ortak_liste_stili_uygula(self.gecmis_tablosu)
         return self.gecmis_tablosu
 
     # ------------------------------------------------------------------ veri
@@ -583,6 +578,7 @@ class DanisanlarEkrani(QWidget):
              ("Randevu", "0"), ("Durum", None)],
             satirlar, filtre, sayfa_adi="Danışanlar",
             aciklama="Danışanlar sayfasında ekranda görünen danışan kodları. Kişisel bilgi (ad, telefon) içermez.",
+            kayit={"api_url": self.api_url, "token": self.token, "liste": "DANISAN"},
         )
 
     # ------------------------------------------------------------------ işlemler

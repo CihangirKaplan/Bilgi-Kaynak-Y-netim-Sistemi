@@ -656,7 +656,7 @@ kullanıcı ve
 
 sistem işlemleri kayıt altına alınmalıdır.
 
-**FR-043 — Audit İşlem Türleri:** Audit mekanizması en az LOGIN, LOGIN_FAILED, CREATE, UPDATE, DELETE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE ve PASSWORD_RESET işlem türlerini desteklemelidir.
+**FR-043 — Audit İşlem Türleri:** Audit mekanizması en az LOGIN, LOGIN_FAILED, CREATE, UPDATE, DELETE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE, PASSWORD_RESET ve EXPORT (liste Excel aktarımı: kim, ne zaman, hangi liste, kaç satır) işlem türlerini desteklemelidir.
 
 **FR-044 --- Audit Görüntüleme:** Müdür audit kayıtlarını
 

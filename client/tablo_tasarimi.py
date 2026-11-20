@@ -17,6 +17,14 @@ TABLO_STIL = """
                            font-size: 11px; font-weight: 800; border: none; }
 """
 
+def ortak_liste_stili_uygula(tablo):
+    """Liste sayfalarının ortak tablo görünümü (açık başlıklı, ızgarasız; cihaz sayfalarındakiyle aynı). Satır numarası gizlenir:
+    kayıt kimliği gerekiyorsa ayrı bir ID sütunu vardır."""
+    tablo.setStyleSheet(TABLO_STIL)
+    tablo.setShowGrid(False)
+    tablo.verticalHeader().setVisible(False)
+
+
 # Cihaz yaşam döngüsü tabloları: hücre metni ortalı, sütunlar arası daha geniş boşluk
 ORTALI_TABLO_STIL = (TABLO_STIL.replace("padding: 6px 10px", "padding: 6px 22px")
                                .replace("padding: 12px 10px", "padding: 12px 22px"))

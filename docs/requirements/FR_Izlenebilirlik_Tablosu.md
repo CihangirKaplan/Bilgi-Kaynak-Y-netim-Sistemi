@@ -113,7 +113,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
 | FR-042 | Audit kaydı oluşturma | ✅ | `denetim.py`, uçlarda `denetim_kaydi_olustur` | `test_audit_zorunlulugu_quality.py`, `test_audit_transaction_calls_quality.py`, `test_audit_security.py` |
-| FR-043 | Audit işlem türleri | ✅ | `denetim_olay_turu` enum: LOGIN, LOGIN_FAILED, CREATE, UPDATE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE (+ DELETE, PASSWORD_RESET) | `test_audit_security.py`, `test_audit_zorunlulugu_update_delete_quality.py` Not: `PASSWORD_RESET` olayı hem yönetici sıfırlamasında hem kurtarma aracında yazılır (`test_parola_sifirlama_audit_ui.py`, `test_admin_parola_kurtar.py`). |
+| FR-043 | Audit işlem türleri | ✅ | `denetim_olay_turu` enum: LOGIN, LOGIN_FAILED, CREATE, UPDATE, CANCEL, ROLE_CHANGE, DEVICE_STATUS_CHANGE (+ DELETE, PASSWORD_RESET, EXPORT) | `test_audit_security.py`, `test_audit_zorunlulugu_update_delete_quality.py` Not: `PASSWORD_RESET` olayı hem yönetici sıfırlamasında hem kurtarma aracında yazılır (`test_parola_sifirlama_audit_ui.py`, `test_admin_parola_kurtar.py`). |
 | FR-044 | Audit görüntüleme | ✅ | `GET /api/audit-kayitlari` (`AUDIT_KAYITLARI_INCELE`), `audit_kayitlari_ekrani.py` | `test_audit_kayitlari_api.py` |
 | FR-045 | Audit bütünlüğü | ✅ | API'de audit'i değiştiren veya silen uç yok (yalnızca `GET`); veritabanında `denetim_kayitlari` için UPDATE, DELETE ve TRUNCATE tetikleyiciyle engellenir (migration `f3a9c2e47b18`) | `test_audit_degistirilemez.py`; gerçek PostgreSQL'de elle doğrulandı. Not: Yalnızca `crkys_alembic_test` test veritabanı kilitten muaftır; veritabanı yöneticisi kilidi bilerek kaldırabilir |
 

@@ -713,6 +713,7 @@ class OgrenciYonetimEkrani(QWidget):
               "Aktif" if o.get("aktif_mi") else "Pasif"]
              for o in kayitlar],
             filtre, sayfa_adi="Öğrenciler", aciklama="Öğrenci Yönetimi sayfasında ekranda görünen öğrenciler.",
+            kayit={"api_url": self.api_url, "token": self.token, "liste": "OGRENCI"},
         )
 
     def filtreleri_temizle(self):
