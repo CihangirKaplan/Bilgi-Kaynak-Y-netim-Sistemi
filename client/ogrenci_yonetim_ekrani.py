@@ -35,6 +35,7 @@ from client.api_yoneticisi import (
 )
 
 from client.gorunum_bicimleri import telefon_goster
+from client.liste_excel import listeyi_excele_aktar
 from client.ogrenci_dialog import OgrenciEkleDialog
 
 
@@ -542,6 +543,13 @@ class OgrenciYonetimEkrani(QWidget):
             "uyari"
         )
 
+        self.excel_btn = buton_olustur(
+            "Excel'e Aktar",
+            self.excele_aktar,
+            "ikincil"
+        )
+
+        ust.addWidget(self.excel_btn)
         ust.addWidget(self.ekle_btn)
         ust.addWidget(self.aktiflik_btn)
         ust.addWidget(self.detay_btn)
@@ -684,6 +692,27 @@ class OgrenciYonetimEkrani(QWidget):
                 "butonunu kullanın."
             )
 
+    def excele_aktar(self):
+        """Ekranda görünen öğrencileri (arama ve süzgeçlere uyanları) Excel'e aktarır."""
+        kayitlar = getattr(self, "gorunen_kayitlar", None)
+        if kayitlar is None:
+            kayitlar = self.kayitlar
+        filtre = [
+            ("Arama", self.arama.text().strip() or "Yok"),
+            ("Öğrenci grubu", self.grup.currentText()),
+            ("Durum", self.durum_filtresi.currentText()),
+        ]
+        listeyi_excele_aktar(
+            self, "Öğrenci Listesi", "ogrenci_listesi",
+            [("Ad Soyad", None), ("Öğrenci No", None), ("Telefon", None), ("Öğrenci Grubu", None),
+             ("Bağlı Hesap", None), ("Kayıt Tarihi", None), ("Durum", None)],
+            [[o.get("ad_soyad") or "", str(o.get("ogrenci_numarasi") or ""), telefon_goster(o.get("telefon"), ""),
+              o.get("tur_etiketi") or "", o.get("kullanici_adi") or "", tarih_goster(o.get("olusturulma_tarihi")),
+              "Aktif" if o.get("aktif_mi") else "Pasif"]
+             for o in kayitlar],
+            filtre, sayfa_adi="Öğrenciler", aciklama="Öğrenci Yönetimi sayfasında ekranda görünen öğrenciler.",
+        )
+
     def filtreleri_temizle(self):
         self.arama.clear()
         self.grup.setCurrentIndex(0)
@@ -721,6 +750,8 @@ class OgrenciYonetimEkrani(QWidget):
                 continue
 
             kayitlar.append(ogrenci)
+
+        self.gorunen_kayitlar = list(kayitlar)   # Excel'e aktarılan, ekranda görünen öğrenciler
 
         self.tablo.setRowCount(0)
         self.tablo.setRowCount(len(kayitlar))
