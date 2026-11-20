@@ -14,6 +14,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
+from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
@@ -417,6 +418,7 @@ class BakimYonetimEkrani(QWidget):
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} gecikmiş")
         self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
+        hap_sutununu_sigdir(self.tablo, 5, en_az=120)            # "Planlanmadı" / "tarih · N gün gecikti" rozeti kesilmesin
         self.bos_mesaj.setVisible(not bakimlar)
         self.tablo.setVisible(bool(bakimlar))
         self.filtrele(self.arama.text())

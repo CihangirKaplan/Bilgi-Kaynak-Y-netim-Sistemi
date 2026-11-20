@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
 
 from client.api_yoneticisi import api_hata_mesaji
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.tablo_tasarimi import hap_sutununu_sigdir
+from client.tablo_tasarimi import cihaz_hucresi_uygula
+from client.tablo_siralama import SIRALAMA_ROLU
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, hap, islem_butonlari, metin_item, sayfa_basligi, sayi_cipi,
@@ -385,9 +388,9 @@ class BakimPlanlariEkrani(QWidget):
         baslik.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         baslik.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         baslik.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        baslik.setSectionResizeMode(5, QHeaderView.ResizeToContents)   # "Gecikmiş · 120 gün gecikti" gibi uzun metinler kesilmesin
+        cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
+        baslik.setSectionResizeMode(5, QHeaderView.Fixed)              # genişlik rozetlere göre doldurmadan sonra verilir (hap_sutununu_sigdir)
         baslik.setSectionResizeMode(6, QHeaderView.Fixed)
-        baslik.setMinimumSectionSize(190)
         self.tablo.setColumnWidth(6, 110)
 
         cift_tikla_ac(self.tablo, self.plan_duzenle)                           # satıra çift tıklayınca düzenleme açılır
@@ -445,6 +448,8 @@ class BakimPlanlariEkrani(QWidget):
         for i, p in enumerate(kayitlar):
             self.planlar[p["plan_id"]] = p
             cihaz = metin_item(f"{p['envanter_kodu']} - {p['cihaz_adi']}", kalin=True)
+            cihaz.setToolTip(f"{p['cihaz_adi']}\nEnvanter kodu: {p['envanter_kodu']}")
+            cihaz.setData(SIRALAMA_ROLU, p["cihaz_adi"])                    # sıralama cihaz adına göre
             cihaz.setData(Qt.UserRole, p["plan_id"])
             self.tablo.setItem(i, 0, cihaz)
             self.tablo.setItem(i, 1, metin_item(p["gorev_turu"]))
@@ -469,6 +474,7 @@ class BakimPlanlariEkrani(QWidget):
         self.bos_mesaj.setText(
             "Henüz bakım/kalibrasyon planı yok. Üstteki “Yeni Plan” butonuyla ekleyebilirsiniz."
             if aktiflik is not False else "Pasif plan yok.")
+        hap_sutununu_sigdir(self.tablo, 5, en_az=150)            # "Gecikmiş · 120 gün gecikti" rozeti kesilmesin
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())

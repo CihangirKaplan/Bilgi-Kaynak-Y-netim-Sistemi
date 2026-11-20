@@ -1,10 +1,11 @@
 """Bakım / kalibrasyon gibi liste ekranlarının ortak görünümü ve yardımcı bileşenleri."""
 import datetime
+import re
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame,
                                QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy,
-                               QMessageBox)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+                               QMessageBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QApplication)
+from PySide6.QtCore import Qt, QRect, QSize
+from PySide6.QtGui import QColor, QFont, QFontMetrics
 from client.tablo_siralama import siralanabilir_yap
 
 SATIR_YUKSEKLIK = 54
@@ -23,6 +24,98 @@ def ortak_liste_stili_uygula(tablo):
     tablo.setStyleSheet(TABLO_STIL)
     tablo.setShowGrid(False)
     tablo.verticalHeader().setVisible(False)
+
+
+class CihazHucresiDelegate(QStyledItemDelegate):
+    """"KOD · Ad" biçimindeki hücreyi iki satırda çizer: üstte cihaz adı (kalın), altında envanter kodu (küçük, gri).
+
+    Hücrenin metni değişmez (arama, sıralama ve testler eskisi gibi çalışır); yalnızca çizim değişir. Uzun ad ya da kod hücreye
+    sığmazsa sonu "…" ile kısaltılır; tam metin hücrenin ipucunda (üzerine gelince) görünür. Ayırıcı yoksa hücre normal çizilir.
+    """
+    AYIRICI = re.compile(r"\s+[·\-]\s+")
+    KOD_RENGI = QColor("#64748B")
+
+    @classmethod
+    def parcala(cls, metin):
+        """(ad, kod). Ayırıcı yoksa (metin, "")."""
+        parca = cls.AYIRICI.split(str(metin or ""), maxsplit=1)
+        return (parca[1].strip(), parca[0].strip()) if len(parca) == 2 and parca[0] and parca[1] else (str(metin or ""), "")
+
+    @staticmethod
+    def _yazilar(temel):
+        ad = QFont(temel)
+        ad.setBold(True)
+        ad.setPixelSize(13)
+        kod = QFont(temel)
+        kod.setBold(False)
+        kod.setPixelSize(11)
+        return ad, kod
+
+    def sizeHint(self, option, index):
+        ad, kod = self.parcala(index.data(Qt.DisplayRole))
+        if not kod:
+            return super().sizeHint(option, index)
+        f_ad, f_kod = self._yazilar(option.font)
+        genislik = max(QFontMetrics(f_ad).horizontalAdvance(ad), QFontMetrics(f_kod).horizontalAdvance(kod)) + 28
+        return QSize(genislik, QFontMetrics(f_ad).height() + QFontMetrics(f_kod).height() + 14)
+
+    def paint(self, painter, option, index):
+        ad, kod = self.parcala(index.data(Qt.DisplayRole))
+        if not kod:
+            super().paint(painter, option, index)
+            return
+        secenek = QStyleOptionViewItem(option)
+        self.initStyleOption(secenek, index)
+        secenek.text = ""                                                    # arka plan ve seçim rengi stile çizdirilir, metni biz çizeriz
+        stil = secenek.widget.style() if secenek.widget else QApplication.style()
+        stil.drawControl(QStyle.CE_ItemViewItem, secenek, painter, secenek.widget)
+
+        secili = bool(option.state & QStyle.State_Selected)
+        f_ad, f_kod = self._yazilar(option.font)
+        olcu_ad, olcu_kod = QFontMetrics(f_ad), QFontMetrics(f_kod)
+        alan = option.rect.adjusted(12, 0, -12, 0)
+        toplam = olcu_ad.height() + olcu_kod.height()
+        ust = option.rect.top() + max((option.rect.height() - toplam) // 2, 0)
+        hiza = index.data(Qt.TextAlignmentRole)
+        hiza = Qt.AlignCenter if hiza is not None and int(hiza) & int(Qt.AlignHCenter) else Qt.AlignLeft | Qt.AlignVCenter
+
+        fircalar = index.data(Qt.ForegroundRole)
+        ad_rengi = option.palette.highlightedText().color() if secili else (
+            fircalar.color() if fircalar is not None and hasattr(fircalar, "color") else QColor("#0F2552"))
+        kod_rengi = option.palette.highlightedText().color() if secili else self.KOD_RENGI
+
+        painter.save()
+        painter.setFont(f_ad)
+        painter.setPen(ad_rengi)
+        painter.drawText(QRect(alan.left(), ust, alan.width(), olcu_ad.height()), hiza,
+                         olcu_ad.elidedText(ad, Qt.ElideRight, alan.width()))
+        painter.setFont(f_kod)
+        painter.setPen(kod_rengi)
+        painter.drawText(QRect(alan.left(), ust + olcu_ad.height(), alan.width(), olcu_kod.height()), hiza,
+                         olcu_kod.elidedText(kod, Qt.ElideRight, alan.width()))
+        painter.restore()
+
+
+def _yatay_dolgu(tablo):
+    """Tablonun `::item { padding: ... }` kuralındaki sağ+sol dolgu toplamı (px). Hücre bileşenleri bu kadar daraltılmış alana yerleşir."""
+    eslesme = re.search(r"::item\s*\{[^}]*?padding:\s*\d+px\s+(\d+)px", tablo.styleSheet() or "")
+    return 2 * int(eslesme.group(1)) if eslesme else 0
+
+
+def hap_sutununu_sigdir(tablo, sutun, en_az=96):
+    """Durum rozetleri (hap) taşıyan sütunun genişliğini, en geniş rozet + hücre dolgusu kadar yapar.
+
+    Qt, tablo stilindeki `padding` kadar daralttığı alana hücre bileşenini koyar; sütun yalnızca rozet kadar geniş olursa rozet iki
+    yandan kesiliyordu ("Tamamlandı" -> "amamlanc"). Genişlik açıkça verilince bileşenler de yeniden yerleştirilir.
+    Satırlar doldurulduktan sonra çağrılır; sütun Fixed kipte olmalıdır.
+    """
+    genislikler = [tablo.cellWidget(s, sutun).sizeHint().width() for s in range(tablo.rowCount()) if tablo.cellWidget(s, sutun)]
+    tablo.setColumnWidth(sutun, max(genislikler + [en_az]) + _yatay_dolgu(tablo) + 6)
+
+
+def cihaz_hucresi_uygula(tablo, sutun=0):
+    """Tablonun bu sütununda "KOD · Ad" hücrelerini iki satırlı (ad üstte, kod altta) çizer."""
+    tablo.setItemDelegateForColumn(sutun, CihazHucresiDelegate(tablo))
 
 
 # Cihaz yaşam döngüsü tabloları: hücre metni ortalı, sütunlar arası daha geniş boşluk
@@ -104,6 +197,12 @@ def hap(metin, renk, arka, ipucu=None):
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setStyleSheet(f"background: {arka}; color: {renk}; border-radius: 12px; "
                       f"font-size: 11px; font-weight: 800; padding: 5px 12px;")
+    # Qt, etiketin boyutunu yazı tipi stil sayfasından uygulanmadan hesaplayabildiği için bazı bilgisayarlarda metin kenarlardan
+    # kırpılıyordu ("Tamamlandı" -> "amamlanc"). Gerçek (kalın, 11 px) yazı tipiyle ölçülen genişlik en az genişlik olarak verilir.
+    yazi = QFont(lbl.font())
+    yazi.setPixelSize(11)
+    yazi.setWeight(QFont.ExtraBold)
+    lbl.setMinimumWidth(QFontMetrics(yazi).horizontalAdvance(metin) + 24 + 10)
     if ipucu:
         lbl.setToolTip(ipucu)
     kap = QWidget()

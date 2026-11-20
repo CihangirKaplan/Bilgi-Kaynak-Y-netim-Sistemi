@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
@@ -243,6 +244,8 @@ class ArizaYonetimEkrani(QWidget):
         self.cip_acik.setText(f"{acik} açık")
         self.cip_cozulen.setText(f"{cozulen} çözüldü")
         self.bos_mesaj.setText("Henüz arıza kaydı yok.")
+        hap_sutununu_sigdir(self.tablo, 3)                       # Aciliyet rozeti
+        hap_sutununu_sigdir(self.tablo, 4)                       # Durum rozeti ("Çözüldü" / "Açık"): kesilmesin
         self.bos_mesaj.setVisible(not arizalar)
         self.tablo.setVisible(bool(arizalar))
         self.filtrele(self.arama.text())

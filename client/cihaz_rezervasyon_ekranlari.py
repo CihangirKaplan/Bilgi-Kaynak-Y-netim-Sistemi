@@ -14,6 +14,8 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
+from client.tablo_tasarimi import cihaz_hucresi_uygula, hap_sutununu_sigdir
+from client.tablo_siralama import SIRALAMA_ROLU
 from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, cift_tikla_ac, hap, metin_item, satira_kimlik_ata, sayfa_basligi, sayi_cipi,
     tablo_olustur, tehlike_dugmesi, tek_islem_butonu, yenile_butonu_olustur,
@@ -671,10 +673,11 @@ class RezervasyonYonetimEkrani(QWidget):
         kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(3, QHeaderView.Stretch)
         kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        kb.setSectionResizeMode(SUTUN_DURUM, QHeaderView.Fixed)       # etiket (hap) sütunları sabit genişlik
+        kb.setSectionResizeMode(SUTUN_DURUM, QHeaderView.Fixed)               # genişlik rozetlere göre doldurmadan sonra ayarlanır
         kb.setSectionResizeMode(SUTUN_ISLEM, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(SUTUN_DURUM, 130)
         self.tablo.setColumnWidth(SUTUN_ISLEM, 90)
+        kb.setMinimumSectionSize(96)                                           # "Tamamlandı" / "İptal Edildi" rozeti sığsın
+        cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
 
         cift_tikla_ac(self.tablo, self.rezervasyon_detay_ac)                   # satıra çift tıklayınca ayrıntı (ve iptal) açılır
         self.bos_mesaj = bos_mesaj_olustur("Henüz rezervasyon yok.")
@@ -730,7 +733,10 @@ class RezervasyonYonetimEkrani(QWidget):
         self.tablo.setRowCount(0)
         self.tablo.setRowCount(len(gorunen))
         for satir, rez in enumerate(gorunen):
-            self.tablo.setItem(satir, 0, metin_item(self._cihaz_metni(rez), kalin=True))
+            cihaz_item = metin_item(self._cihaz_metni(rez), kalin=True)
+            cihaz_item.setToolTip(f"{rez.get('cihaz_adi') or ''}\nEnvanter kodu: {rez.get('envanter_kodu') or ''}".strip())
+            cihaz_item.setData(SIRALAMA_ROLU, rez.get("cihaz_adi") or "")           # sıralama cihaz adına göre
+            self.tablo.setItem(satir, 0, cihaz_item)
             satira_kimlik_ata(self.tablo, satir, rez.get("rezervasyon_id"))
             self.tablo.setItem(satir, 1, metin_item(str(rez.get("bolum_adi") or "—")))
             self.tablo.setItem(satir, 2, metin_item(str(rez.get("oda_adi") or "—")))
@@ -751,6 +757,7 @@ class RezervasyonYonetimEkrani(QWidget):
                     lambda r_id=r_id: self.rezervasyon_iptal_et(r_id), "✕", "Rezervasyonu iptal et",
                     "#B91C1C", "#FEE2E2", "#FECACA"))
 
+        hap_sutununu_sigdir(self.tablo, SUTUN_DURUM)                           # "Tamamlandı" / "İptal Edildi" rozeti kesilmesin
         bos = not gorunen
         self.bos_mesaj.setText("Aramaya uyan rezervasyon yok." if self.rezervasyonlar else "Henüz rezervasyon yok.")
         self.bos_mesaj.setVisible(bos)

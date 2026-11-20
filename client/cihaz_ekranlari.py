@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from client.liste_excel import excel_dugmesi_olustur, listeyi_excele_aktar
 from client.rapor_excel import TARIH_BICIMI, _tarih_degeri
+from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
@@ -219,12 +220,18 @@ class CihazYonetimEkrani(QWidget):
 
         self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"], ortali=True)
         kb = self.tablo.horizontalHeader()
-        kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        # Uzun kod/marka/seri no sütunları şişirip diğerlerini ezmesin: sabit genişlik (sığmayan metin alt satıra sarar), ad sütunu esner.
+        kb.setSectionResizeMode(0, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(0, 170)
         kb.setSectionResizeMode(1, QHeaderView.Stretch)
-        kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(2, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(2, 190)
+        kb.setSectionResizeMode(3, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(3, 150)
         kb.setSectionResizeMode(4, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(4, 160)
+        self.tablo.setColumnWidth(4, 170)
+        # Cihaz adı ekranda ilk sütun, envanter kodu ikinci olur (mantıksal sütun sırası ve kayıt kimliği değişmez; yalnızca görünüm).
+        kb.moveSection(1, 0)
 
         cift_tikla_ac(self.tablo, self.cihaz_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır (yetkililer)
         self.bos_mesaj = bos_mesaj_olustur("Henüz cihaz kaydı yok.")
@@ -263,11 +270,13 @@ class CihazYonetimEkrani(QWidget):
             bakimda += durum in ("Bakimda", "Kalibrasyonda")
             arizali += durum == "Arizali"
 
-            kod_item = metin_item(str(cihaz.get("envanter_kodu") or ""), kalin=True)
+            kod_item = metin_item(str(cihaz.get("envanter_kodu") or ""), renk="#64748B")
             kod_item.setData(Qt.UserRole, cihaz.get("cihaz_id"))
             kod_item.setData(DURUM_ROLU, durum)
             self.tablo.setItem(satir, 0, kod_item)
-            self.tablo.setItem(satir, 1, metin_item(str(cihaz.get("cihaz_adi") or "")))
+            ad_item = metin_item(str(cihaz.get("cihaz_adi") or ""), kalin=True)
+            ad_item.setToolTip(str(cihaz.get("cihaz_adi") or ""))
+            self.tablo.setItem(satir, 1, ad_item)
             self.tablo.setItem(satir, 2, metin_item(cihaz.get("marka_model") or "-"))
             self.tablo.setItem(satir, 3, metin_item(cihaz.get("seri_no") or "-"))
             self.tablo.setCellWidget(satir, 4, durum_hapi(durum))
@@ -278,6 +287,7 @@ class CihazYonetimEkrani(QWidget):
         self.cip_bakimda.setText(f"{bakimda} bakım/kalibrasyon")
         self.cip_arizali.setText(f"{arizali} arızalı")
         self.bos_mesaj.setText("Henüz cihaz kaydı yok.")
+        hap_sutununu_sigdir(self.tablo, 4, en_az=120)            # "Kullanıma Hazır" rozeti kesilmesin
         self.bos_mesaj.setVisible(not cihazlar)
         self.tablo.setVisible(bool(cihazlar))
         self.filtrele(self.arama.text())
