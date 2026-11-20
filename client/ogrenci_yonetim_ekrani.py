@@ -37,6 +37,7 @@ from client.api_yoneticisi import (
 from client.gorunum_bicimleri import telefon_goster
 from client.liste_excel import listeyi_excele_aktar
 from client.ogrenci_dialog import OgrenciEkleDialog
+from client.tablo_siralama import siralanabilir_yap
 
 
 STIL = """
@@ -559,6 +560,7 @@ class OgrenciYonetimEkrani(QWidget):
 
         # ÖĞRENCİ TABLOSU
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
 
         tablo_hazirla(self.tablo, [
             "Ad Soyad",

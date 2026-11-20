@@ -16,6 +16,7 @@ from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
+from client.tablo_siralama import siralanabilir_yap
 
 
 def kayit_tarihi_bicimle(deger):
@@ -70,6 +71,7 @@ class KullaniciPersonelEkrani(QWidget):
         il = QVBoxLayout(ik)
 
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setColumnCount(6)
         self.tablo.setHorizontalHeaderLabels([
             "Personel ID", "Kullanıcı Adı", "Personel Kodu", "Rolü", "Durum", "Kayıt Tarihi"

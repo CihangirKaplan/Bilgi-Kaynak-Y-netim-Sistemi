@@ -15,6 +15,7 @@ from client.istemci_modelleri import IstemciRandevu
 from client.siniflandirma import (GORUSME_TIPLERI, gorusme_etiketi, terapi_etiketi, terapi_kutusunu_doldur)
 from client.iptal_nedeni_diyalog import IPTAL_NEDENLERI, IptalNedeniDialog
 from client.ui_components import StandartButon
+from client.tablo_siralama import siralanabilir_yap
 
 # ======================================================================
 #  APT-002: YENİ RANDEVU OLUŞTURMA FORMU
@@ -1087,6 +1088,7 @@ class RandevuAnaEkrani(QWidget):
         layout.addWidget(self.lbl_bos)
 
         self.tablo = QTableWidget()
+        siralanabilir_yap(self.tablo)
         self.tablo.setColumnCount(len(RANDEVU_TABLO_BASLIKLARI))
         self.tablo.setHorizontalHeaderLabels(RANDEVU_TABLO_BASLIKLARI)
         self.tablo.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
