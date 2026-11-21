@@ -42,3 +42,37 @@ def test_degisim_metni(simdi, once, oran, beklenen):
 ])
 def test_rozet_rengi_gostergenin_yonune_gore_secilir(ok, yon, beklenen):
     assert h.rozet_turu(ok, yon) == beklenen
+
+
+# ================================================================ rapor ekranı: tarih satırı ve eski sunucu
+from client.yonetim_raporlari_panel import donem_satiri, onceki_donem_kurali, randevu_durum_satirlari
+
+
+@pytest.mark.parametrize("secilen, onceki, beklenen", [
+    (("2026-11-01", "2026-11-21"), ("2026-10-01", "2026-10-21"), "geçen ayın aynı günleri"),
+    (("2026-10-01", "2026-10-31"), ("2026-09-01", "2026-09-30"), "önceki ayın tamamı"),
+    (("2026-11-16", "2026-11-21"), ("2026-11-09", "2026-11-14"), "geçen haftanın aynı günleri"),
+    (("2026-11-05", "2026-11-14"), ("2026-10-26", "2026-11-04"), "hemen önceki, aynı uzunluktaki dönem"),
+])
+def test_onceki_donem_kurali_acikca_yazilir(secilen, onceki, beklenen):
+    s = {"baslangic": secilen[0], "bitis": secilen[1]}
+    o = {"baslangic": onceki[0], "bitis": onceki[1]}
+    assert onceki_donem_kurali(s, o) == beklenen
+
+
+def test_tarih_satiri_okunakli_ve_eski_sunucuyu_uyarir():
+    s = {"baslangic": "2026-11-01", "bitis": "2026-11-21"}
+    o = {"baslangic": "2026-10-01", "bitis": "2026-10-21"}
+    satir = donem_satiri(s, o, OZET)
+    assert "01.11.2026 – 21.11.2026" in satir and "01.10.2026 – 21.10.2026" in satir and "Sunucu" not in satir
+    eski = {k: v for k, v in OZET.items() if k != "sonucu_girilmemis"}
+    assert "yeniden başlatın" in donem_satiri(s, o, eski)
+
+
+def test_eski_sunucuda_sonucu_girilmemis_sifir_gosterilmez():
+    eski = {k: v for k, v in OZET.items() if k != "sonucu_girilmemis"}
+    satirlar = dict((ad.strip(), (a, b)) for ad, a, b in randevu_durum_satirlari(eski, eski))
+    assert satirlar["Sonucu girilmemiş"] == (None, None)            # ekranda "—"
+    assert satirlar["İleri tarihli (planlı)"] == (None, None)
+    yeni = dict((ad.strip(), (a, b)) for ad, a, b in randevu_durum_satirlari(OZET, OZET))
+    assert yeni["Sonucu girilmemiş"] == (4, 4) and yeni["İleri tarihli (planlı)"] == (28, 28)

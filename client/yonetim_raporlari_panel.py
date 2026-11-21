@@ -105,14 +105,59 @@ def gun_metni(iso_tarih):
     return f"{gun:%d.%m.%Y} {GUN_KISALTMALARI[gun.weekday()]}"
 
 
+ESKI_SUNUCU_NOTU = "Sunucuyu yeniden başlatın (eski sürüm)"
+
+
+def _tarih_metni(iso):
+    from datetime import date
+
+    return date.fromisoformat(str(iso)).strftime("%d.%m.%Y")
+
+
+def onceki_donem_kurali(secilen, onceki):
+    """Önceki dönemin hangi kurala göre seçildiğini kullanıcının anlayacağı dille söyler."""
+    from datetime import date
+
+    s1, s2 = date.fromisoformat(secilen["baslangic"]), date.fromisoformat(secilen["bitis"])
+    o1, o2 = date.fromisoformat(onceki["baslangic"]), date.fromisoformat(onceki["bitis"])
+    if s1.day == 1 and o1.day == 1 and (s1.year, s1.month) == (s2.year, s2.month):
+        import calendar
+
+        ay_sonu = calendar.monthrange(s2.year, s2.month)[1]
+        return "önceki ayın tamamı" if s2.day == ay_sonu else "geçen ayın aynı günleri"
+    if (s1 - o1).days == 7 and (s2 - o2).days == 7:
+        return "geçen haftanın aynı günleri"
+    return "hemen önceki, aynı uzunluktaki dönem"
+
+
+def donem_satiri(secilen, onceki, randevu_ozeti):
+    """Rapor altındaki tarih satırı: 01.11.2026 – 21.11.2026 | Önceki: 01.10.2026 – 21.10.2026 (geçen ayın aynı günleri)."""
+    metin_ = (
+        f"Seçilen dönem: {_tarih_metni(secilen['baslangic'])} – {_tarih_metni(secilen['bitis'])}   |   "
+        f"Önceki dönem: {_tarih_metni(onceki['baslangic'])} – {_tarih_metni(onceki['bitis'])}"
+        f"  ({onceki_donem_kurali(secilen, onceki)})"
+    )
+    if "sonucu_girilmemis" not in randevu_ozeti:
+        metin_ += "   |   ⚠ Sunucu eski sürümle çalışıyor: yeniden başlatın"
+    return metin_
+
+
 def randevu_durum_satirlari(secilen, onceki):
-    """Randevu durumları: önce gerçekleşen (iptal hariç), sonra ayrıntısı, en sonda iptal."""
+    """Randevu durumları: önce gerçekleşen (iptal hariç), sonra ayrıntısı, en sonda iptal.
+
+    Sunucu "sonucu girilmemiş" sayısını göndermiyorsa (eski sürüm) o satırlar "—" gösterilir, 0 yazılmaz."""
+    if "sonucu_girilmemis" in secilen:
+        sonucsuz = (secilen["sonucu_girilmemis"], onceki.get("sonucu_girilmemis", 0))
+        ileri = (ileri_tarihli_planli(secilen), ileri_tarihli_planli(onceki))
+    else:
+        sonucsuz = (None, None)
+        ileri = (None, None)
     return [
         ("Gerçekleşen (iptal hariç)", gerceklesen_randevu(secilen), gerceklesen_randevu(onceki)),
         ("   Tamamlandı", secilen["tamamlandi"], onceki["tamamlandi"]),
         ("   Gelmedi", secilen["gelmedi"], onceki["gelmedi"]),
-        ("   Sonucu girilmemiş", secilen.get("sonucu_girilmemis", 0), onceki.get("sonucu_girilmemis", 0)),
-        ("   İleri tarihli (planlı)", ileri_tarihli_planli(secilen), ileri_tarihli_planli(onceki)),
+        ("   Sonucu girilmemiş", *sonucsuz),
+        ("   İleri tarihli (planlı)", *ileri),
         ("İptal edildi", secilen["iptal_edildi"], onceki["iptal_edildi"]),
     ]
 
@@ -846,6 +891,9 @@ class YonetimRaporlariEkrani(QWidget):
         )
         tablo.setEditTriggers(QTableWidget.NoEditTriggers)
         tablo.setSelectionMode(QTableWidget.NoSelection)
+        tablo.setFocusPolicy(Qt.NoFocus)                 # tıklanınca hücre çevresinde çerçeve çıkmasın
+        tablo.setWordWrap(True)                          # uzun açıklamalar "…" ile kesilmez, alt satıra geçer
+        tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         lay.addWidget(tablo)
 
         return bolum, baslik, tablo
@@ -995,12 +1043,7 @@ class YonetimRaporlariEkrani(QWidget):
             self.yuklenen_donem = params.copy()
             onceki = veriler["randevu"]["onceki_donem"]
 
-            self.durum.setText(
-                "Seçilen dönem: "
-                f"{params['baslangic']} – {params['bitis']}   |   "
-                "Önceki dönem: "
-                f"{onceki['baslangic']} – {onceki['bitis']}"
-            )
+            self.durum.setText(donem_satiri(params, onceki, veriler["randevu"]["ozet"]))
         except (requests.RequestException, RuntimeError) as hata:
             if isinstance(hata, requests.RequestException):
                 self.durum.setText(api_hata_mesaji(hata=hata))
@@ -1036,6 +1079,7 @@ class YonetimRaporlariEkrani(QWidget):
         for i, satir in enumerate(satirlar):
             for j, deger in enumerate(satir):
                 oge = QTableWidgetItem(metin(deger))
+                oge.setToolTip(metin(deger).strip())
                 widget.setItem(i, j, oge)
 
         widget.horizontalHeader().setSectionResizeMode(
@@ -1153,7 +1197,9 @@ class YonetimRaporlariEkrani(QWidget):
         # Ortak kural: "yapılan iş" sayılarında iptal edilenler hariçtir, iptaller ayrıca gösterilir.
         ro_gercek, rr_gercek = gerceklesen_randevu(ro), gerceklesen_randevu(rr)
         ro_gelmeme, rr_gelmeme = gelmeme_orani(ro), gelmeme_orani(rr)
-        sonucsuz = int(ro.get("sonucu_girilmemis", 0))
+        # Sunucu eski sürümle çalışıyorsa bu alan gelmez: "0" (hepsi girilmiş) sanılmasın, uyarılsın.
+        eski_sunucu = "sonucu_girilmemis" not in ro
+        sonucsuz = None if eski_sunucu else int(ro["sonucu_girilmemis"])
         sonucsuz_notu = (
             f"⚠ {sonucsuz} randevunun sonucu girilmemiş" if sonucsuz else ""
         )
@@ -1254,8 +1300,9 @@ class YonetimRaporlariEkrani(QWidget):
                  f"{ro['gelmedi']} danışan gelmedi",
                  {"simdi": ro_gelmeme, "once": rr_gelmeme, "yon": -1, "oran": True}),
                 ("Sonucu Girilmemiş", sonucsuz,
-                 "Tarihi geçti, hâlâ “Planlandı”" if sonucsuz else "Tüm geçmiş randevuların sonucu girilmiş",
-                 {"uyari": bool(sonucsuz)}),
+                 ESKI_SUNUCU_NOTU if eski_sunucu else (
+                     "Tarihi geçti, hâlâ “Planlandı”" if sonucsuz else "Tüm geçmiş randevuların sonucu girilmiş"),
+                 {"uyari": eski_sunucu or bool(sonucsuz)}),
             ]
             tablolar = [
                 ("Randevu Durumları",
@@ -1274,6 +1321,9 @@ class YonetimRaporlariEkrani(QWidget):
                 ]),
                 ("Yapılması Gerekenler", ["Bilgi"], (
                     [
+                        ("Sunucu eski sürümle çalışıyor: sonucu girilmemiş randevular sayılamadı.",),
+                        ("Sunucuyu yeniden başlatın, sonra Yenile'ye basın.",),
+                    ] if eski_sunucu else [
                         (f"{sonucsuz} randevunun tarihi geçti ama sonucu girilmedi.",),
                         ("Randevu Yönetimi'nden sonuçlarını girin.",),
                         ("Sonuç girilmeden oranlar eksik hesaplanır.",),
