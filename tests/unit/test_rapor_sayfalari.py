@@ -157,11 +157,13 @@ def test_gecersiz_tarih_araligi_istek_atmaz():
 
 def test_yeni_sayfalar_menude_ve_izinleri_tanimli():
     adlar = {o["ad"]: o for _, grup in ana.MENU for o in grup}
-    beklenen = {"Cihaz Rezervasyon Raporu": "Cihaz raporlarını görüntüleme", "Oda Kullanım Raporu": "Yönetim raporlarını görüntüleme",
+    assert "Cihaz Rezervasyon Raporu" not in adlar            # ayrı menü maddesi yok: Cihaz Raporları sayfasında sekme
+    beklenen = {"Cihaz Raporları": "Cihaz raporlarını görüntüleme", "Oda Kullanım Raporu": "Yönetim raporlarını görüntüleme",
                 "Yetki Raporu": "Audit kayıtlarını inceleme"}
     for ad, izin in beklenen.items():
         assert adlar[ad]["izin"] == izin and izin in ana.IZIN_KODLARI
-        assert ad in ana.AnaPencere.SAYFA_YENILEME
+        if ad != "Cihaz Raporları":                          # sekmeli sayfa kendi sekmelerini yeniler
+            assert ad in ana.AnaPencere.SAYFA_YENILEME
 
 
 def test_audit_excel_silinen_veriyi_yazar_ve_formul_enjeksiyonunu_onler(tmp_path):

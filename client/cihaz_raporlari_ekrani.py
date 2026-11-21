@@ -1,4 +1,4 @@
-"""TKYS - Cihaz Raporları (Salt Okunur): bakım, kalibrasyon ve arıza kayıtları."""
+"""TKYS - Cihaz Raporları (Salt Okunur): bakım, kalibrasyon ve arıza kayıtları; Cihaz Rezervasyon ve Geciken Bakım Planı raporları ek sekmelerdir."""
 
 from datetime import datetime
 
@@ -24,12 +24,30 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
+
+
+def _rezervasyon_raporu(api_url, token):
+    from client.cihaz_rezervasyon_raporu_ekrani import CihazRezervasyonRaporuEkrani
+    return CihazRezervasyonRaporuEkrani(api_url, token)
+
+
+def _bakim_plani_raporu(api_url, token):
+    from client.bakim_plani_raporu_ekrani import BakimPlaniRaporuEkrani
+    return BakimPlaniRaporuEkrani(api_url, token)
+
+
+# (sekme başlığı, ekranı üreten fonksiyon)
+EK_SEKMELER = [
+    ("Cihaz Rezervasyonu", _rezervasyon_raporu),
+    ("Geciken Bakım Planları", _bakim_plani_raporu),
+]
 
 
 class CihazRaporlariEkrani(QWidget):
@@ -116,7 +134,12 @@ class CihazRaporlariEkrani(QWidget):
         ana.setContentsMargins(20, 16, 20, 20)
         ana.setSpacing(13)
 
-        # Filtreler
+        # Filtreler ve özet kartları yalnızca ilk üç sekmeye (bakım/kalibrasyon/arıza) aittir; diğer sekmelerin kendi süzgeçleri vardır
+        self.ust_alan = QWidget()
+        ust_duzen = QVBoxLayout(self.ust_alan)
+        ust_duzen.setContentsMargins(0, 0, 0, 0)
+        ust_duzen.setSpacing(13)
+
         filtre_satiri = QHBoxLayout()
 
         filtre_satiri.addWidget(QLabel("Dönem:"))
@@ -160,7 +183,7 @@ class CihazRaporlariEkrani(QWidget):
         self.excel_btn.clicked.connect(self.excel_aktar)
         filtre_satiri.addWidget(self.excel_btn)
 
-        ana.addLayout(filtre_satiri)
+        ust_duzen.addLayout(filtre_satiri)
 
         # Özet kartları
         kart_satiri = QHBoxLayout()
@@ -198,7 +221,8 @@ class CihazRaporlariEkrani(QWidget):
             self.kartlar[anahtar] = deger
             kart_satiri.addWidget(kart, 1)
 
-        ana.addLayout(kart_satiri)
+        ust_duzen.addLayout(kart_satiri)
+        ana.addWidget(self.ust_alan)
 
         # Sekmeler
         self.rapor_sekmeleri = QTabWidget()
@@ -237,7 +261,41 @@ class CihazRaporlariEkrani(QWidget):
             "Cihaz", "Bildirim Tarihi", "Bildiren", "Açıklama", "Durum", "Çözüm Tarihi"
         ])
 
+        # Ek sekmeler: kendi süzgeç çubuğu ve Excel düğmesi olan hazır rapor sayfaları. İlk açılışta (tembel) oluşturulur,
+        # her seçildiğinde güncel veriyle yenilenir.
+        self._ek_sekmeler = {}
+        for baslik, uretici in EK_SEKMELER:
+            self._ek_sekme_yer_tutucu(baslik, uretici)
+        self.rapor_sekmeleri.currentChanged.connect(self._sekme_degisti)
+
         ana.addWidget(self.rapor_sekmeleri, 1)
+
+    def _ek_sekme_yer_tutucu(self, baslik, uretici):
+        kap = QScrollArea()
+        kap.setWidgetResizable(True)
+        kap.setFrameShape(QFrame.NoFrame)
+        kap.setStyleSheet("QScrollArea { background: transparent; }")
+        sira = self.rapor_sekmeleri.addTab(kap, baslik)
+        self._ek_sekmeler[sira] = {"kap": kap, "uretici": uretici, "ekran": None}
+
+    def _sekme_degisti(self, sira):
+        """İlk üç sekmede üstteki süzgeç/kartlar görünür; ek rapor sekmelerinde kendi süzgeçleri kullanılır."""
+        ek = self._ek_sekmeler.get(sira)
+        self.ust_alan.setVisible(ek is None)
+        if ek is None:
+            return
+        if ek["ekran"] is None:
+            ek["ekran"] = ek["uretici"](self.api_url, self.token)
+            ek["kap"].setWidget(ek["ekran"])
+        else:
+            ek["ekran"].yenile()
+
+    def ek_sekme_ekrani(self, baslik):
+        """Test ve dış çağrılar için: başlığa göre ek rapor ekranı (henüz açılmadıysa None)."""
+        for sira, ek in self._ek_sekmeler.items():
+            if self.rapor_sekmeleri.tabText(sira) == baslik:
+                return ek["ekran"]
+        return None
 
     def _sekme_ekle(self, baslik, kolonlar):
         sayfa = QWidget()

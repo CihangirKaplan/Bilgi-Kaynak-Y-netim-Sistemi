@@ -72,8 +72,8 @@ def test_geciken_plan_yokken_bos_durum_yazilir():
 
 def test_menude_ve_panelde_tanimli():
     adlar = {o["ad"]: o for _, grup in ana.MENU for o in grup}
-    assert adlar["Geciken Bakım Planı Raporu"]["izin"] == "Cihaz raporlarını görüntüleme"
-    assert "Geciken Bakım Planı Raporu" in ana.AnaPencere.SAYFA_YENILEME
+    assert "Geciken Bakım Planı Raporu" not in adlar          # ayrı menü maddesi yok: Cihaz Raporları sayfasında sekme
+    assert adlar["Cihaz Raporları"]["izin"] == "Cihaz raporlarını görüntüleme"
     assert "Bakım Gecikmeleri" in RAPOR_TURLERI and EK_KAYNAKLAR["bakim_plani"] == ("bakim-plani-raporu", False)
 
 

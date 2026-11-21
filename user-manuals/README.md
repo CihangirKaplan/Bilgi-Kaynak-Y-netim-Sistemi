@@ -43,7 +43,7 @@ yetkileri değiştirebilir; bu durumda menünüz farklı olabilir. Menüde göre
 | Cihaz Envanteri | – | – | – | ✔ | ✔ | ✔ |
 | Cihaz Rezervasyonu | – | – | ✔ | ✔ | – | ✔ |
 | Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları | – | – | – | ✔ | ✔ | ✔ |
-| Cihaz Raporları, Cihaz Rezervasyon Raporu, Geciken Bakım Planı Raporu | – | – | – | ✔ | ✔ | ✔ |
+| Cihaz Raporları (beş sekme: Bakım Geçmişi, Kalibrasyon, Arızalar, Cihaz Rezervasyonu, Geciken Bakım Planları) | – | – | – | ✔ | ✔ | ✔ |
 | Yönetim Raporları ve İstatistikler | – | – | – | – | ✔ | ✔ |
 | Kullanıcı & Personel | – | – | – | – | ✔ | ✔ |
 | Audit Kayıtları, Yetki Raporu, Sistem Durumu | – | – | – | – | ✔ | ✔ |

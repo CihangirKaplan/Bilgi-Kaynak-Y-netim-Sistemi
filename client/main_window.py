@@ -339,11 +339,7 @@ MENU = [
              aciklama="Arıza bildirimi ve takibi",
              aksiyon=[("＋  Arıza Kaydı", "Arıza kayıtlarını yönetme")]),
         dict(ikon="📈", ad="Cihaz Raporları", izin="Cihaz raporlarını görüntüleme",
-             aciklama="Bakım, kalibrasyon ve arıza raporları", aksiyon=[]),
-        dict(ikon="📊", ad="Cihaz Rezervasyon Raporu", izin="Cihaz raporlarını görüntüleme",
-             aciklama="Cihaz, proje türü ve bölüm bazlı rezervasyon kullanımı ve Excel raporu", aksiyon=[]),
-        dict(ikon="⏰", ad="Geciken Bakım Planı Raporu", izin="Cihaz raporlarını görüntüleme",
-             aciklama="Geciken ve yaklaşan bakım/kalibrasyon planları, cihaz bazlı özet ve Excel raporu", aksiyon=[]),
+             aciklama="Bakım, kalibrasyon, arıza, cihaz rezervasyonu ve geciken bakım planı raporları", aksiyon=[]),
 
     ]),
     ("YÖNETİM & DENETİM", [
@@ -1861,12 +1857,10 @@ QLabel {
         "Randevu Yönetimi": ("randevu_ana_ekrani", "verileri_cek"),
         "Randevu Raporları": ("randevu_raporu_ekrani", "yenile"),
         "Oda Kullanım Raporu": ("oda_kullanim_raporu_ekrani", "yenile"),
-        "Cihaz Rezervasyon Raporu": ("cihaz_rezervasyon_raporu_ekrani", "yenile"),
         "Yetki Raporu": ("yetki_raporu_ekrani", "yenile"),
         "Sistem Durumu": ("sistem_durumu_ekrani", "yenile"),
         "Öğrenci Raporu": ("ogrenci_raporu_ekrani", "yenile"),
         "Faaliyet Raporu": ("faaliyet_raporu_ekrani", "yenile"),
-        "Geciken Bakım Planı Raporu": ("bakim_plani_raporu_ekrani", "yenile"),
     }
     # Sağ panelin sayfa çevresindeki boşlukları (sol, üst, sağ, alt). Tablo/takvim gibi dikey alan isteyen sayfalar daha dar boşlukla açılır.
     SAYFA_KENAR_BOSLUKLARI = (28, 24, 28, 18)
@@ -2309,18 +2303,6 @@ QLabel {
 
             self.oda_kullanim_raporu_ekrani = OdaKullanimRaporuEkrani(self.api_url, self.token)
             lay.addWidget(self.oda_kullanim_raporu_ekrani, 1)
-
-        elif oge["ad"] == "Geciken Bakım Planı Raporu":
-            from client.bakim_plani_raporu_ekrani import BakimPlaniRaporuEkrani
-
-            self.bakim_plani_raporu_ekrani = BakimPlaniRaporuEkrani(self.api_url, self.token)
-            lay.addWidget(self.bakim_plani_raporu_ekrani, 1)
-
-        elif oge["ad"] == "Cihaz Rezervasyon Raporu":
-            from client.cihaz_rezervasyon_raporu_ekrani import CihazRezervasyonRaporuEkrani
-
-            self.cihaz_rezervasyon_raporu_ekrani = CihazRezervasyonRaporuEkrani(self.api_url, self.token)
-            lay.addWidget(self.cihaz_rezervasyon_raporu_ekrani, 1)
 
         elif oge["ad"] == "Danışma Masası Yönetimi":
             from client.danisma_masasi_yonetimi import DanismaMasasiYonetimi

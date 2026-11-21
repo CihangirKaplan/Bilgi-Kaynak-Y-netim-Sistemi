@@ -13,7 +13,7 @@ Randevuyu **siz oluşturmazsınız** (randevu sayfasını izlersiniz); psikolog 
 | **Genel** | Ana Kontrol Paneli |
 | **Klinik Operasyon** | Randevu Yönetimi (görüntüleme), Oda Kullanımı, Oda Etkinlikleri, Randevu Raporları, **Oda Kullanım Raporu** |
 | **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Raporları |
-| **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları, Cihaz Rezervasyon Raporu, Geciken Bakım Planı Raporu |
+| **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları |
 | **Yönetim & Denetim** | **Yönetim Raporları ve İstatistikler**, **Kullanıcı & Personel**, **Audit Kayıtları**, **Yetki Raporu**, **Sistem Durumu**, Oda Yönetimi |
 
 Rol ve izinleri değiştirmek (**Rol & İzin Yönetimi**), kullanıcıya **parola sıfırlamak** ve danışma masası görev **onayı/yönetimi** varsayılan olarak **Sistem Admin** ve **Memur**'a aittir.
@@ -56,7 +56,7 @@ Yönetim panelindeki özetin ayrıntısı için ilgili sayfayı açın; her biri
 |---|---|
 | **Randevu Raporları** | Durum sayıları, psikolog bazlı döküm, iptal nedenleri, görüşme tipi/terapi türü/yaş grubu dağılımı |
 | **Oda Kullanım Raporu** | Oda bazlı saat, mesai doluluk oranı, hiç kullanılmayan odalar, gün dağılımı |
-| **Cihaz Raporları / Cihaz Rezervasyon Raporu / Geciken Bakım Planı Raporu** | Bakım-kalibrasyon-arıza; cihaz/proje/bölüm bazlı kullanım; geciken ve yaklaşan planlar |
+| **Cihaz Raporları** (5 sekme) | Bakım-kalibrasyon-arıza; Cihaz Rezervasyonu sekmesinde cihaz/proje/bölüm bazlı kullanım; Geciken Bakım Planları sekmesinde geciken ve yaklaşan planlar |
 | **Puan / Öğrenci / Faaliyet Raporu** | Öğrenci puanları, mevcut ve dağılım, faaliyet ve onay durumları |
 | **Danışma Masası Raporları** | Görev sayıları ve çalışma süreleri, öğrenci bazlı özet |
 
@@ -147,7 +147,7 @@ Aşağıdaki sayfalar için adım adım anlatım [Memur Kılavuzu](../administra
 - Yönetim Raporları → **Bugün Merkezde**.
 
 **Her hafta**
-- **Geciken Bakım Planı Raporu** ve **Bakım Planları**'ndaki *Gecikmiş* satırlar.
+- **Cihaz Raporları → Geciken Bakım Planları** sekmesi ve **Bakım Planları**'ndaki *Gecikmiş* satırlar.
 - **Faaliyet Raporu** → onay bekleyen puanlar; **Danışma Masası Raporları** → onay bekleyen görevler (onayı Memur/Admin verir).
 - **Sistem Durumu** → son yedek yeşil mi?
 
