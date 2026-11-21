@@ -75,6 +75,7 @@ def test_f5_sayfayi_throttle_sinirina_takilmadan_yeniler(pencere_ac):
 def test_f1_ve_soru_isareti_hakkinda_penceresini_acar(pencere_ac):
     ana = pencere_ac(["TAKVIM_GORUNTULE"])
     assert ana.btn_yardim.toolTip().endswith("(F1)")
+    assert ana.btn_yardim.text() == "ⓘ  Yardım"                       # soru işareti yerine açık etiket
     with patch.object(mw, "QMessageBox"), patch("client.hakkinda_dialog.HakkindaDialog.exec") as exec_:
         ana.yardim_ac()
     exec_.assert_called_once()
@@ -117,6 +118,30 @@ def test_kisayol_listesi_yardimda_gosterilir(qt_app):
     assert d.kisayol_tablosu.rowCount() == len(KISAYOLLAR)
     tuslar = {d.kisayol_tablosu.item(s, 0).text() for s in range(d.kisayol_tablosu.rowCount())}
     assert {"Ctrl + N", "Ctrl + F", "F5", "F1"} <= tuslar
+
+
+def test_hakkinda_dogru_uygulama_adini_gosterir_ve_eski_yanlis_adi_icermez(qt_app):
+    from PySide6.QtWidgets import QLabel
+    d = _dialog()
+    metin = " ".join(e.text() for e in d.findChildren(QLabel))
+    assert "Travma Kaynak Yönetim Sistemi" in metin and "Terapi Kaynak" not in metin
+
+
+def test_hakkinda_acik_koyu_temadan_bagimsiz_renk_belirtir_ve_surum_durumu_gosterir(qt_app):
+    d = _dialog()
+    assert "background: #F3F6FC" in d.styleSheet() and "color: #243653" in d.styleSheet()       # işletim sistemi teması okunabilirliği bozmaz
+    assert not d.surum_durumu.isHidden() and "uyumlu" in d.surum_durumu.text() and d.surum_uyarisi.isHidden()
+    farkli = _dialog(surum="9.9.9")
+    assert farkli.surum_durumu.isHidden() and not farkli.surum_uyarisi.isHidden()
+
+
+def test_yardim_sekmesi_baslikli_bolumler_icerir(qt_app):
+    from PySide6.QtWidgets import QLabel
+    d = _dialog()
+    yardim = d.sekmeler.widget(2)
+    metin = " ".join(e.text() for e in yardim.findChildren(QLabel))
+    for baslik in ("Başlarken", "Listeler ve arama", "Excel'e aktarma", "Kişisel veriler", "Sorun bildirme"):
+        assert baslik in metin, baslik
 
 
 # ------------------------------------------------------------------ Sistem Durumu
