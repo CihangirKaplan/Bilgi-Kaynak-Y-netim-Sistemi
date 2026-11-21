@@ -94,6 +94,10 @@ def test_gecici_parola_suresi_ve_yonetici_korumasi_gercek_veritabaninda():
         assert memur_talebi.status_code == 200
         kullanicilar = {t["kullanici_id"] for t in istemci.get("/api/parola-sifirlama-talepleri", headers=baslik).json()}
         assert hesaplar["memur"]["id"] in kullanicilar and hesaplar["yonetici2"]["id"] not in kullanicilar
+
+        # 6) Kullanıcı adı girişteki gibi harf duyarsız: büyük harfle yazılan ad aynı hesabı bulur (404 değil, zaten var).
+        buyuk_harf = istemci.post("/api/parola-sifirlama-talebi", json={"kullanici_adi": hesaplar["memur"]["ad"].upper()})
+        assert buyuk_harf.status_code == 200 and buyuk_harf.json()["durum"] == "zaten_var"
     finally:
         c.execute("DELETE FROM parola_sifirlama_talepleri WHERE kullanici_id = ANY(%s)", (idler,))
         c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s) OR hedef_kayit_id = ANY(%s)", (idler, idler))

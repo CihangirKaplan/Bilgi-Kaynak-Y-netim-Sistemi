@@ -17,10 +17,16 @@ TEST_DB = "crkys_alembic_test"
 
 
 @pytest.fixture
-def qa_ortami():
+def qa_ortami(monkeypatch):
     assert VT_AYARLARI["dbname"] == TEST_DB
 
     etiket = uuid4().hex[:10]
+    # Rol hiyerarşisi (server/rol_hiyerarsisi.py) listede olmayan rolleri en alt seviyede sayar; testin geçici
+    # yönetici rolü, PSIKOLOG/MEMUR/DANISMA_OGRENCISI atayabilmesi için MUDUR seviyesinde tanımlanır.
+    from server import rol_hiyerarsisi
+    monkeypatch.setitem(
+        rol_hiyerarsisi.ROL_SEVIYELERI, f"QA ATOM {etiket}".upper(), rol_hiyerarsisi.ROL_SEVIYELERI["MUDUR"]
+    )
     yapan_adi = f"qa_atom_{etiket}_yapan"
 
     with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
@@ -195,9 +201,8 @@ def test_postgresql_kullanici_personel_ve_audit_kaydedilir(qa_ortami):
                 sonuc["kullanici_id"],
                 sonuc["personel_id"],
             ))
-            assert set(satir[0] for satir in cur.fetchall()) == {
-                "kullanicilar", "personel"
-            }
+            # Personel/kullanıcı birleşiminden sonra oluşturma tek denetim kaydıyla (kullanicilar) izlenir.
+            assert set(satir[0] for satir in cur.fetchall()) == {"kullanicilar"}
 
 
 def test_postgresql_ogrenci_hatasinda_kullanici_rollback(qa_ortami):
@@ -348,7 +353,7 @@ def test_http_eksik_yetki_kullanici_olusturmayi_engeller(
 
 
 def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
-    """Ilk Audit yazildiktan sonra hata olursa tum kayitlar geri alinmali."""
+    """Kullanici ve personel yazildiktan sonra Audit yazimi hata verirse tum kayitlar geri alinmali."""
     from unittest.mock import patch
 
     ortam = qa_ortami
@@ -356,7 +361,7 @@ def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
     ortam["kullanici_adlari"].append(ad)
 
     gercek_connect = psycopg2.connect
-    durum = {"audit_yazildi": 0}
+    durum = {"audit_denemesi": 0}
 
     class KontrolluCursor:
         def __init__(self, cursor):
@@ -366,15 +371,11 @@ def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
             duz_sorgu = " ".join(sorgu.lower().split())
             audit = "insert into denetim_kayitlari" in duz_sorgu
 
-            if audit and durum["audit_yazildi"] == 1:
+            if audit:
+                durum["audit_denemesi"] += 1
                 raise RuntimeError("QA001_KONTROLLU_AUDIT_HATASI")
 
-            sonuc = self._cursor.execute(sorgu, parametreler)
-
-            if audit:
-                durum["audit_yazildi"] += 1
-
-            return sonuc
+            return self._cursor.execute(sorgu, parametreler)
 
         def __getattr__(self, isim):
             return getattr(self._cursor, isim)
@@ -413,8 +414,8 @@ def test_postgresql_audit_hatasinda_tum_kayitlar_rollback(qa_ortami):
         hata.value.detail
     )
 
-    # En az bir Audit kaydi gercek PostgreSQL'e yazilmis olmali.
-    assert durum["audit_yazildi"] == 1
+    # Audit yazimi denenmis (kullanici ve personel INSERT'leri ondan once calismis) olmali.
+    assert durum["audit_denemesi"] == 1
 
     # Rollback sonrasinda ayri baglantidan kontrol et.
     with closing(psycopg2.connect(**VT_AYARLARI)) as conn:
@@ -526,10 +527,8 @@ def test_postgresql_rol_degisiminde_personel_kodu_da_degisisir(qa_ortami):
 
             audit_kayitlari = cur.fetchall()
 
-    assert sorted(audit_kayitlari) == sorted([
-        ("ROLE_CHANGE", "kullanicilar"),
-        ("UPDATE", "personel"),
-    ])
+    # Personel kodu değişikliği ayrı bir personel kaydı yerine tek ROLE_CHANGE kaydının ayrıntısında tutulur.
+    assert audit_kayitlari == [("ROLE_CHANGE", "kullanicilar")]
 
     # Aynı rol yeniden seçilirse veriler değişmemeli.
     with pytest.raises(HTTPException) as hata:
@@ -572,7 +571,8 @@ def test_postgresql_rol_degisiminde_personel_kodu_da_degisisir(qa_ortami):
                 personel_id,
             ))
 
-            assert len(cur.fetchall()) == 2
+            # Aynı rol reddedildi: yeni denetim kaydı eklenmemeli (yalnızca ilk ROLE_CHANGE durur).
+            assert len(cur.fetchall()) == 1
 
 
 @pytest.mark.parametrize("mevcut_ogrenci", [False, True])

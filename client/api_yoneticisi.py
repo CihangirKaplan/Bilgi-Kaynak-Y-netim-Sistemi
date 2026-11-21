@@ -89,6 +89,8 @@ def oturum_kontrollu_istek(method, url, **kwargs):
         "Token süresi dolmuş.",
         "Geçersiz token.",
         "Kullanıcı bulunamadı.",
+        # Başka bilgisayardan çıkış yapıldığında (oturum sürümü arttı) ya da parola değiştiğinde/sıfırlandığında sunucu bunu döner.
+        "Oturum geçersiz. Yeniden giriş yapınız.",
     }
 
     if isinstance(detay, str) and detay in token_hatalari:

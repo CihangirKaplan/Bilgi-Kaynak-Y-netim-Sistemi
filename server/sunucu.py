@@ -1754,9 +1754,11 @@ def parola_sifirlama_talebi_olustur(talep: ParolaSifirlamaTalebiModeli):
             SELECT k.kullanici_id, k.aktif_mi, r.rol_adi
             FROM kullanicilar k
             LEFT JOIN roller r ON r.rol_id = k.rol_id
-            WHERE k.kullanici_adi = %s;
+            WHERE LOWER(k.kullanici_adi) = LOWER(%s)
+            ORDER BY (k.kullanici_adi = %s) DESC
+            LIMIT 1;
             """,
-            (talep.kullanici_adi,)
+            (talep.kullanici_adi, talep.kullanici_adi)      # girişle aynı kural: kullanıcı adı harf duyarsız
         )
         kullanici = cursor.fetchone()
         alindi = {"durum": "alindi", "mesaj": PAROLA_TALEBI_ALINDI_MESAJI}
