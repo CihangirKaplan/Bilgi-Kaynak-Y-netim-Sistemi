@@ -684,10 +684,9 @@ class AnaPencere(QMainWindow):
         self.btn_bildirim.clicked.connect(self._bildirim_menusunu_ac)
         self.gezinme_cubugu.addWidget(self.btn_bildirim)
 
-        self.btn_yardim = QPushButton("?")
+        self.btn_yardim = QPushButton("ⓘ  Yardım")
         self.btn_yardim.setCursor(Qt.PointingHandCursor)
-        self.btn_yardim.setToolTip("Hakkında / Yardım (F1)")
-        self.btn_yardim.setFixedWidth(40)
+        self.btn_yardim.setToolTip("Hakkında, kısayollar ve yardım (F1)")
         self.btn_yardim.setStyleSheet(self.btn_bildirim.styleSheet())
         self.btn_yardim.clicked.connect(lambda *_: self.yardim_ac())
         self.gezinme_cubugu.addWidget(self.btn_yardim)
