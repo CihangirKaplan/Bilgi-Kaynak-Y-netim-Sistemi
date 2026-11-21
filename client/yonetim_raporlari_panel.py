@@ -414,17 +414,17 @@ class YonetimRaporlariEkrani(QWidget):
         self.kartlari_olustur(self.analiz_layout)
 
         self.karsilastirma_grafigi = YonetimKarsilastirmaGrafigi(
-            baslik_metni="Operasyonel Faaliyetler",
-            aciklama_metni="İşlem sayıları · Seçilen ve önceki dönem"
+            baslik_metni="Dönem Karşılaştırması",
+            aciklama_metni="İşlem sayıları · Seçilen dönem (mavi) ile önceki dönem (turuncu)"
         )
         self.analiz_layout.addWidget(
             self.karsilastirma_grafigi
         )
 
         self.ogrenci_donem_grafigi = YonetimKarsilastirmaGrafigi(
-            baslik_metni="Öğrenci Faaliyet Puanları",
+            baslik_metni="Öğrenci Faaliyet Puanı",
             aciklama_metni=(
-                "Toplam puan · Onaysız kayıtlar dahil"
+                "Toplam puan · Seçilen dönem ile önceki dönem · Onay bekleyen kayıtlar dahil"
             )
         )
         self.analiz_layout.addWidget(
@@ -940,8 +940,8 @@ class YonetimRaporlariEkrani(QWidget):
         widget.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
-        if "Kullanım" in baslik and len(sutunlar) > 1:
-            # Ad sütunu esnek kalır (oda/cihaz adı kırpılmasın); sayı sütunları içeriğe göre daralır.
+        if len(sutunlar) > 1:
+            # Ad sütunu esnek kalır (oda/cihaz/faaliyet adı kırpılmasın); sayı sütunları içeriğe göre daralır.
             for sutun in range(1, len(sutunlar)):
                 widget.horizontalHeader().setSectionResizeMode(
                     sutun, QHeaderView.ResizeToContents
