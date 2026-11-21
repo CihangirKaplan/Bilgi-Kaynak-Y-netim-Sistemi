@@ -64,7 +64,7 @@ def test_gui_gecerli_ogrenci_kaydi(dialog):
 
     with (
         patch('client.ogrenci_dialog.oturum_kontrollu_istek') as post,
-        patch('client.ogrenci_dialog.QMessageBox.information') as bilgi,
+        patch('client.ogrenci_dialog.basari_bildirimi') as bilgi,
     ):
         post.return_value = Response()
         post.return_value.status_code = 200

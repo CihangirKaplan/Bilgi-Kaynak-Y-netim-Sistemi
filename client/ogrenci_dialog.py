@@ -6,6 +6,7 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
+from client.bildirim_toast import basari_bildirimi
 
 DANISMA_OGRENCISI_BILGISI = (
     "ℹ  Danışma Masası öğrencileri bu pencereden eklenemez. Danışma Masası görevleri için öğrencinin giriş hesabı "
@@ -146,7 +147,7 @@ class OgrenciEkleDialog(QDialog):
                 return
 
             if res.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Öğrenci sisteme başarıyla eklendi!")
+                basari_bildirimi(self, "Öğrenci sisteme başarıyla eklendi!")
                 self.accept()
             elif res.status_code == 400:
                 QMessageBox.warning(self, "Hata", res.json().get("detail", "Bu öğrenci numarası sistemde zaten var."))

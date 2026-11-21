@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QColor
+from client.bildirim_toast import basari_bildirimi
 from client.randevu_ekranlari import RandevuOlusturFormu
 from client.cihaz_ekranlari import CihazYonetimEkrani
 from client.cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
@@ -1822,7 +1823,7 @@ QLabel {
                     return
 
                 if res.status_code == 200:
-                    QMessageBox.information(self, "Başarılı", "Oda başarıyla pasife alındı.")
+                    basari_bildirimi(self, "Oda başarıyla pasife alındı.")
                     self.odalari_getir()
                 else:
                     if res.status_code == 409:

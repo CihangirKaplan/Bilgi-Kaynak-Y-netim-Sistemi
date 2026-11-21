@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
 )
 from client.tablo_siralama import siralanabilir_yap
+from client.bildirim_toast import basari_bildirimi
 
 
 
@@ -566,11 +567,7 @@ class DanismaMasasiYonetimi(QWidget):
             )
             yanit.raise_for_status()
 
-            QMessageBox.information(
-                self,
-                "Başarılı",
-                "Görev başarıyla onaylandı."
-            )
+            basari_bildirimi(self, "Görev başarıyla onaylandı.")
             self.yenile()
 
         except requests.RequestException as hata:
@@ -722,10 +719,7 @@ class DanismaMasasiYonetimi(QWidget):
 
             pencere.accept()
             self.yenile()
-            QMessageBox.information(
-                self, "Başarılı",
-                "Yeni danışma masası görevi oluşturuldu."
-            )
+            basari_bildirimi(self, "Yeni danışma masası görevi oluşturuldu.")
 
         butonlar.accepted.connect(kaydet)
         butonlar.rejected.connect(pencere.reject)
@@ -886,11 +880,7 @@ class DanismaMasasiYonetimi(QWidget):
             pencere.accept()
             self.yenile()
 
-            QMessageBox.information(
-                self,
-                "Başarılı",
-                "Görev başarıyla güncellendi."
-            )
+            basari_bildirimi(self, "Görev başarıyla güncellendi.")
 
         butonlar.accepted.connect(kaydet)
         butonlar.rejected.connect(pencere.reject)

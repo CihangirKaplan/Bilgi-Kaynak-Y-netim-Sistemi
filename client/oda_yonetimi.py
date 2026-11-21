@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QApplication, QCheckBox, QLabel, QFrame
 )
 from PySide6.QtCore import Qt
+from client.bildirim_toast import basari_bildirimi
 from client.ui_components import StandartButon, StandartGirdi
 
 # ======================================================================
@@ -204,7 +205,7 @@ class OdaFormu(QWidget):
                     return
 
             if cevap.status_code in [200, 201]:
-                QMessageBox.information(self, "Başarılı", "Oda bilgileri başarıyla kaydedildi!")
+                basari_bildirimi(self, "Oda bilgileri başarıyla kaydedildi!")
                 self.close()
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", _409_mesaji(cevap))
