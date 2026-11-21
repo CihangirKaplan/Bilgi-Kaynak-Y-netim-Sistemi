@@ -537,6 +537,45 @@ def _tkys_dashboard_kompakt(sayfa):
 FAALIYET_LISTE_SINIRI = 1000
 
 
+class HizliErisimIzgarasi(QWidget):
+    """Ana sayfadaki Hızlı Erişim düğmeleri: geniş pencerede 4, daraldıkça 2 ve 1 sütun.
+
+    Düğme yazısı sayfanın en az genişliğini belirlemez; aksi halde dar pencerede ana sayfa sağdan taşar."""
+
+    def __init__(self, dugmeler):
+        super().__init__()
+        self.dugmeler = list(dugmeler)
+        self.izgara = QGridLayout(self)
+        self.izgara.setContentsMargins(0, 0, 0, 0)
+        self.izgara.setSpacing(18)
+        for dugme in self.dugmeler:
+            dugme.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            dugme.setToolTip(dugme.text().strip())
+        self._kolon = None
+        self._diz(self.kolon_sayisi(0))
+
+    def kolon_sayisi(self, genislik):
+        """Yazısı kesilmeden sığan en fazla sütun (en çok 4); düğme yazısı en uzun olana göre ölçülür."""
+        if not self.dugmeler:
+            return 1
+        bosluk = self.izgara.spacing()
+        gereken = max(d.sizeHint().width() for d in self.dugmeler) + 24
+        return max(1, min(4, len(self.dugmeler), (genislik + bosluk) // (gereken + bosluk)))
+
+    def _diz(self, kolon):
+        if kolon == self._kolon:
+            return
+        self._kolon = kolon
+        for c in range(4):
+            self.izgara.setColumnStretch(c, 1 if c < kolon else 0)
+        for n, dugme in enumerate(self.dugmeler):
+            self.izgara.addWidget(dugme, n // kolon, n % kolon)
+
+    def resizeEvent(self, olay):
+        super().resizeEvent(olay)
+        self._diz(self.kolon_sayisi(self.width()))
+
+
 class AnaPencere(QMainWindow):
     oturum_kapatildi = Signal()
 
@@ -2143,17 +2182,17 @@ QLabel {
         baslik.setStyleSheet("font-size:17px; font-weight:800; color:#0A1F5C;")
         lay.addWidget(baslik)
 
-        hg = QGridLayout()
-        hg.setSpacing(18)
-        for n, oge in enumerate(erisilebilir):
+        hizli_dugmeler = []
+        for oge in erisilebilir:
             btn = QPushButton(f"{oge['ikon']}   {oge['ad']}")
             btn.setObjectName("hizli")
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumHeight(78)
             golge(btn, 22, 24, 4)
             btn.clicked.connect(lambda _=False, ad=oge["ad"]: self.nav_btnler[ad].click())
-            hg.addWidget(btn, n // 4, n % 4)
-        lay.addLayout(hg)
+            hizli_dugmeler.append(btn)
+        self.hizli_erisim = HizliErisimIzgarasi(hizli_dugmeler)
+        lay.addWidget(self.hizli_erisim)
 
 
         # Bu satırlar if bloğunun DIŞINDA olmalı.

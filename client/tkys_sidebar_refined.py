@@ -129,7 +129,6 @@ class ElegantSidebar(QObject):
                 header = QPushButton()
                 header.setObjectName("tkysKategoriBaslik")
                 header.setCursor(Qt.PointingHandCursor)
-                header.setToolTip(name)
 
                 header.clicked.connect(
                     lambda checked=False, n=name:
@@ -366,6 +365,9 @@ class ElegantSidebar(QObject):
                 header.setFixedHeight(
                     43 if collapsed else 38
                 )
+
+                # İpucu yalnızca dar menüde: geniş menüde başlık zaten yazılı, aynı adı ayrıca kutu içinde göstermek gereksiz.
+                header.setToolTip(name if collapsed else "")
 
                 if collapsed:
                     header.setText("")
