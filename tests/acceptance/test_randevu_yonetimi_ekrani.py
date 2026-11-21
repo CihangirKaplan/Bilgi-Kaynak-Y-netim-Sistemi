@@ -406,7 +406,7 @@ def test_planli_randevu_onayla_iptal_edilir_ve_liste_yenilenir():
     sec(ekran, 3)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), \
             iptal_penceresi_yamasi(), \
-            patch.object(QMessageBox, "information") as bilgi:
+            patch.object(modul, "basari_bildirimi") as bilgi:
         ekran.iptal_et_secilen()
     assert ("PATCH", "http://testserver/api/randevular/3/iptal") in sunucu.istekler
     bilgi.assert_called_once()

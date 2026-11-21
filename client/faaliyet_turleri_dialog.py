@@ -10,6 +10,7 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi
 )
+from client.bildirim_toast import basari_bildirimi
 
 
 STIL = """
@@ -273,11 +274,7 @@ class FaaliyetTurleriDialog(QDialog):
                 return
 
             if cevap.status_code == 201:
-                QMessageBox.information(
-                    self,
-                    "Başarılı",
-                    "Yeni faaliyet türü eklendi."
-                )
+                basari_bildirimi(self, "Yeni faaliyet türü eklendi.")
 
                 self.ad.clear()
                 self.puan.setValue(0)
@@ -450,11 +447,7 @@ class FaaliyetTurleriDialog(QDialog):
                     pencere.accept()
                     self.verileri_yukle()
 
-                    QMessageBox.information(
-                        self,
-                        "Başarılı",
-                        "Faaliyet türü başarıyla güncellendi."
-                    )
+                    basari_bildirimi(self, "Faaliyet türü başarıyla güncellendi.")
                 else:
                     try:
                         mesaj = cevap.json().get(

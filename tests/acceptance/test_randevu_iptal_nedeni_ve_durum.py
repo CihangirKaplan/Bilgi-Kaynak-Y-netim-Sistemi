@@ -342,7 +342,7 @@ def test_iptal_pencereden_gelen_nedenle_gonderilir(ekran_ac):
     sunucu = Sunucu([randevu(3)])
     ekran = ekran_ac(sunucu)
     sec(ekran, 3)
-    with sahte_pencere(neden="DIGER", notu="kurum içi görev"), patch.object(QMessageBox, "information") as bilgi:
+    with sahte_pencere(neden="DIGER", notu="kurum içi görev"), patch("client.randevu_ekranlari.basari_bildirimi") as bilgi:
         ekran.iptal_et_secilen()
     assert ("PATCH", "http://testserver/api/randevular/3/iptal") in sunucu.istekler
     assert sunucu.govdeler == [{"iptal_nedeni": "DIGER", "iptal_notu": "kurum içi görev"}]

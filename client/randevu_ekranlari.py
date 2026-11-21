@@ -9,6 +9,7 @@ from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer, QPoint
 from PySide6.QtGui import QColor, QTextCharFormat, QPixmap, QPainter, QIcon
 from PySide6.QtWidgets import QStyledItemDelegate, QMenu
 from PySide6.QtWidgets import QCheckBox
+from client.bildirim_toast import basari_bildirimi
 from datetime import datetime, timedelta
 
 from client.istemci_modelleri import IstemciRandevu
@@ -576,7 +577,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                 return
 
             if cevap.status_code in (200, 201):
-                QMessageBox.information(self, "Başarılı", "Randevu başarıyla oluşturuldu!")
+                basari_bildirimi(self, "Randevu başarıyla oluşturuldu!")
                 self.veriler_degisti.emit()
                 self.close()
             elif cevap.status_code == 409:
@@ -840,7 +841,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             if oturum_hatasi_mi(cevap): return
 
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Randevu başarıyla güncellendi!")
+                basari_bildirimi(self, "Randevu başarıyla güncellendi!")
                 self.veriler_degisti.emit()
                 self.close()
             elif cevap.status_code == 409:
@@ -1495,7 +1496,7 @@ class RandevuAnaEkrani(QWidget):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Randevu iptal edildi.")
+                basari_bildirimi(self, "Randevu iptal edildi.")
                 self.verileri_cek()
             else:
                 try:

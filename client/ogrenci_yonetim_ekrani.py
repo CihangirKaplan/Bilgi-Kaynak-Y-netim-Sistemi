@@ -38,6 +38,7 @@ from client.gorunum_bicimleri import telefon_goster
 from client.liste_excel import listeyi_excele_aktar
 from client.ogrenci_dialog import OgrenciEkleDialog
 from client.tablo_siralama import siralanabilir_yap
+from client.bildirim_toast import basari_bildirimi
 
 
 STIL = """
@@ -1381,11 +1382,7 @@ class OgrenciYonetimEkrani(QWidget):
                 )
                 return
 
-            QMessageBox.information(
-                pencere,
-                "Başarılı",
-                "Öğrenci kaydı silindi."
-            )
+            basari_bildirimi(pencere, "Öğrenci kaydı silindi.")
 
             listeyi_yenile()
 

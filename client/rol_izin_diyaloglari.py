@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
 from PySide6.QtGui import QColor, QPainter
+from client.bildirim_toast import basari_bildirimi
 
 import client.izin_bagimliliklari as izin_bagimliliklari
 
@@ -142,7 +143,7 @@ class RolOlusturDialog(QDialog):
         try:
             res = requests.post(hedef_url, json=payload, headers=headers, timeout=15)
             if res.status_code in (200, 201):
-                QMessageBox.information(self, "Başarılı", f"'{rol_adi}' rolü başarıyla oluşturuldu.")
+                basari_bildirimi(self, f"'{rol_adi}' rolü başarıyla oluşturuldu.")
                 self.accept()
             else:
                 QMessageBox.critical(self, "Sunucu Hatası", f"Kayıt başarısız:\n{res.text}")
@@ -685,7 +686,7 @@ class IzinDuzenleDialog(QDialog):
             yanit = requests.put(f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers, timeout=15)
             
             if yanit.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "İzin yetkileri başarıyla güncellendi.")
+                basari_bildirimi(self, "İzin yetkileri başarıyla güncellendi.")
                 self.accept()
             else:
                 # Sunucudan gelen hata mesajını detaylı gösterelim

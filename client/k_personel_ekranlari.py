@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
 from client.tablo_siralama import siralanabilir_yap
 from client.tablo_tasarimi import ortak_liste_stili_uygula
+from client.bildirim_toast import basari_bildirimi
 
 
 def kayit_tarihi_bicimle(deger):
@@ -208,7 +209,7 @@ class KullaniciPersonelEkrani(QWidget):
                         mesaj += f"\n{sonuc['pasife_alinan_danisan']} danışan da pasife alındı."
                     elif sonuc.get("aktif_edilen_danisan"):
                         mesaj += f"\n{sonuc['aktif_edilen_danisan']} danışan yeniden aktif edildi."
-                    QMessageBox.information(self, "Başarılı", mesaj)
+                    basari_bildirimi(self, mesaj)
                     self.verileri_cek() 
                 elif res.status_code == 403:
                     QMessageBox.warning(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))
@@ -1453,7 +1454,7 @@ class OdaYetkileriFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Oda yetkileri güncellendi.")
+                basari_bildirimi(self, "Oda yetkileri güncellendi.")
                 self.accept()
             else:
                 QMessageBox.warning(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
@@ -1773,7 +1774,7 @@ class RolDegistirFormu(QDialog):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code == 200:
-                QMessageBox.information(self, "Başarılı", "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
+                basari_bildirimi(self, "Kullanıcının rolü ve personel kodu başarıyla güncellendi.")
                 self.accept()
             elif cevap.status_code == 422:
                 QMessageBox.warning(
