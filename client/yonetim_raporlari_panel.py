@@ -20,7 +20,19 @@ from client.yonetim_genel_bakis import KAYNAKLAR
 from client.rapor_sayfasi_taban import sayi_metni, yuzde_metni
 from client.yonetim_bugun_merkezde import BugunMerkezdeWidget
 from client.yonetim_raporlari_pdf import pdf_olustur
+from client.yonetim_rapor_hesaplari import (
+    ROZET_RENKLERI, degisim, degisim_metni, gelmeme_orani, gerceklesen_randevu, iptal_orani,
+    ileri_tarihli_planli, rozet_turu, tamamlanma_orani,
+)
 
+
+DONEM_KURALI_METNI = (
+    "Önceki Dönem, takvime göre seçilir:\n"
+    "•  Bu Ay: geçen ayın aynı günleri (1–21 Kasım ↔ 1–21 Ekim)\n"
+    "•  Geçen Ay: bir önceki ayın tamamı\n"
+    "•  Bugün ve Bu Hafta: geçen haftanın aynı günleri\n"
+    "•  Diğer tarih aralıkları: hemen önceki, aynı uzunluktaki aralık"
+)
 
 RAPOR_TURLERI = (
     "Genel Bakış", "Randevular", "Cihazlar",
@@ -77,6 +89,101 @@ def cihaz_kullanim_tablosu(kullanim, en_cok=8):
         for c in kullanim["cihazlar"][:en_cok]
     ]
     return (baslik, sutunlar, satirlar or [("Kayıtlı cihaz yok.", "", "", "")])
+
+
+GUN_KISALTMALARI = ("Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz")
+
+
+def gun_metni(iso_tarih):
+    """2026-11-16 -> "16.11.2026 Pzt" (tabloda haftanın günü de görünsün)."""
+    from datetime import date
+
+    try:
+        gun = date.fromisoformat(str(iso_tarih))
+    except ValueError:
+        return str(iso_tarih)
+    return f"{gun:%d.%m.%Y} {GUN_KISALTMALARI[gun.weekday()]}"
+
+
+ESKI_SUNUCU_NOTU = "Sunucuyu yeniden başlatın (eski sürüm)"
+
+
+def _tarih_metni(iso):
+    from datetime import date
+
+    return date.fromisoformat(str(iso)).strftime("%d.%m.%Y")
+
+
+def onceki_donem_kurali(secilen, onceki):
+    """Önceki dönemin hangi kurala göre seçildiğini kullanıcının anlayacağı dille söyler."""
+    from datetime import date
+
+    s1, s2 = date.fromisoformat(secilen["baslangic"]), date.fromisoformat(secilen["bitis"])
+    o1, o2 = date.fromisoformat(onceki["baslangic"]), date.fromisoformat(onceki["bitis"])
+    if s1.day == 1 and o1.day == 1 and (s1.year, s1.month) == (s2.year, s2.month):
+        import calendar
+
+        ay_sonu = calendar.monthrange(s2.year, s2.month)[1]
+        return "önceki ayın tamamı" if s2.day == ay_sonu else "geçen ayın aynı günleri"
+    if (s1 - o1).days == 7 and (s2 - o2).days == 7:
+        return "geçen haftanın aynı günleri"
+    return "hemen önceki, aynı uzunluktaki dönem"
+
+
+def donem_satiri(secilen, onceki, randevu_ozeti):
+    """Rapor altındaki tarih satırı: 01.11.2026 – 21.11.2026 | Önceki: 01.10.2026 – 21.10.2026 (geçen ayın aynı günleri)."""
+    metin_ = (
+        f"Seçilen dönem: {_tarih_metni(secilen['baslangic'])} – {_tarih_metni(secilen['bitis'])}   |   "
+        f"Önceki dönem: {_tarih_metni(onceki['baslangic'])} – {_tarih_metni(onceki['bitis'])}"
+        f"  ({onceki_donem_kurali(secilen, onceki)})"
+    )
+    if "sonucu_girilmemis" not in randevu_ozeti:
+        metin_ += "   |   ⚠ Sunucu eski sürümle çalışıyor: yeniden başlatın"
+    return metin_
+
+
+def randevu_durum_satirlari(secilen, onceki):
+    """Randevu durumları: önce gerçekleşen (iptal hariç), sonra ayrıntısı, en sonda iptal.
+
+    Sunucu "sonucu girilmemiş" sayısını göndermiyorsa (eski sürüm) o satırlar "—" gösterilir, 0 yazılmaz."""
+    if "sonucu_girilmemis" in secilen:
+        sonucsuz = (secilen["sonucu_girilmemis"], onceki.get("sonucu_girilmemis", 0))
+        ileri = (ileri_tarihli_planli(secilen), ileri_tarihli_planli(onceki))
+    else:
+        sonucsuz = (None, None)
+        ileri = (None, None)
+    return [
+        ("Gerçekleşen (iptal hariç)", gerceklesen_randevu(secilen), gerceklesen_randevu(onceki)),
+        ("   Tamamlandı", secilen["tamamlandi"], onceki["tamamlandi"]),
+        ("   Gelmedi", secilen["gelmedi"], onceki["gelmedi"]),
+        ("   Sonucu girilmemiş", *sonucsuz),
+        ("   İleri tarihli (planlı)", *ileri),
+        ("İptal edildi", secilen["iptal_edildi"], onceki["iptal_edildi"]),
+    ]
+
+
+def bakim_uyari_tablosu(veri):
+    """Cihazlar görünümü: bakım/kalibrasyon planlarının bugünkü durumu (Bakım Gecikmeleri raporuyla aynı veri)."""
+    baslik = "Bakım Planı Uyarıları (bugün)"
+    if veri is None:
+        return (baslik, ["Bilgi"], [(YETKI_YOK,)])
+    ozet = veri["ozet"]
+    return (baslik, ["Gösterge", "Sayı"], [
+        ("Geciken plan", ozet["geciken_plan"]),
+        ("Yaklaşan plan (uyarı süresinde)", ozet["yaklasan_plan"]),
+        ("Planı olmayan cihaz", ozet["plani_olmayan_cihaz"]),
+    ])
+
+
+def kullanilmayan_cihaz_tablosu(veri, en_cok=8):
+    baslik = "Dönemde Hiç Kullanılmayan Cihazlar"
+    if veri is None:
+        return (baslik, ["Bilgi"], [(YETKI_YOK,)])
+    satirlar = [
+        (f"{c['envanter_kodu']} - {c['cihaz_adi']}",)
+        for c in veri["cihazlar"] if c["rezervasyon_sayisi"] == 0
+    ][:en_cok]
+    return (baslik, ["Cihaz"], satirlar or [("Dönemde boş kalan cihaz yok.",)])
 
 
 YETKI_YOK = "Bu rapor alınamadı (yetkiniz olmayabilir)."
@@ -415,7 +522,7 @@ class YonetimRaporlariEkrani(QWidget):
 
         self.karsilastirma_grafigi = YonetimKarsilastirmaGrafigi(
             baslik_metni="Dönem Karşılaştırması",
-            aciklama_metni="İşlem sayıları · Seçilen dönem (mavi) ile önceki dönem (turuncu)"
+            aciklama_metni="İşlem sayıları (iptaller hariç) · Seçilen dönem (mavi) ile önceki dönem (turuncu)"
         )
         self.analiz_layout.addWidget(
             self.karsilastirma_grafigi
@@ -606,9 +713,8 @@ class YonetimRaporlariEkrani(QWidget):
                 self,
                 "Dönemler Hakkında",
                 "Seçilen Dönem: Tarih filtresinde belirlediğiniz aralıktır.\n\n"
-                "Önceki Dönem: Seçilen dönemden hemen önceki, "
-                "aynı uzunluktaki tarih aralığıdır.\n\n"
-                "Gerçek tarihleri görmek için raporu yükleyin."
+                + DONEM_KURALI_METNI +
+                "\n\nGerçek tarihleri görmek için raporu yükleyin."
             )
             return
 
@@ -661,11 +767,10 @@ class YonetimRaporlariEkrani(QWidget):
             f"{secilen_tarih}\n"
             "Filtrede belirlediğiniz tarih aralığıdır.\n\n"
             "ÖNCEKİ DÖNEM\n"
-            f"{onceki_tarih}\n"
-            "Seçilen dönemden hemen önce gelen, "
-            "aynı uzunluktaki tarih aralığıdır.\n\n"
-            "Grafikler ve karşılaştırma tabloları bu "
-            "iki dönemin verilerini gösterir."
+            f"{onceki_tarih}\n\n"
+            + DONEM_KURALI_METNI +
+            "\n\nGrafikler, kartlardaki ▲▼ değişimler ve karşılaştırma tabloları bu "
+            "iki dönemin verilerini gösterir. Sayılarda iptal edilenler hariçtir."
         )
 
     def kartlari_olustur(self, panel_lay):
@@ -697,14 +802,55 @@ class YonetimRaporlariEkrani(QWidget):
                 "color: #8A98B0; font-size: 11px;"
             )
 
+            # Önceki döneme göre değişim rozeti (▲ %12 / ▼ 2 puan); renk iyi/kötü yönünü, ok ve yazı değeri söyler.
+            rozet = QLabel("")
+            rozet.setToolTip("Önceki döneme göre değişim")
+            rozet.hide()
+
+            deger_satiri = QHBoxLayout()
+            deger_satiri.setSpacing(8)
+            deger_satiri.addWidget(deger)
+            deger_satiri.addWidget(rozet, 0, Qt.AlignVCenter)
+            deger_satiri.addStretch(1)
+
             kl.addWidget(baslik)
-            kl.addWidget(deger)
+            kl.addLayout(deger_satiri)
             kl.addWidget(alt)
 
             satir.addWidget(kart, 1)
-            self.kartlar.append((baslik, deger, alt))
+            self.kartlar.append((baslik, deger, alt, rozet))
 
         panel_lay.addLayout(satir)
+
+    def karti_doldur(self, widgetlar, ad, deger, alt, ek):
+        """Kartı doldurur. ek: {"once", "simdi", "yon", "oran"} değişim rozeti için;
+        {"uyari": True} kartın kendisi dikkat istiyorsa (değer ve not turuncu), {"uyari_notu": True} yalnızca not turuncu."""
+        baslik_lbl, deger_lbl, alt_lbl, rozet = widgetlar
+        baslik_lbl.setText(ad)
+        deger_lbl.setText(metin(deger))
+        alt_lbl.setText(alt)
+        uyari = bool(ek.get("uyari"))
+        uyari_notu = uyari or bool(ek.get("uyari_notu"))
+        deger_lbl.setStyleSheet(
+            f"color: {'#B45309' if uyari else '#203B61'}; font-size: 25px; font-weight: bold;"
+        )
+        alt_lbl.setStyleSheet(f"color: {'#B45309' if uyari_notu else '#8A98B0'}; font-size: 11px;")
+
+        if "once" not in ek:
+            rozet.hide()
+            return
+        simdi = ek.get("simdi", deger)
+        ok, yazi = degisim(simdi, ek["once"], oran=ek.get("oran", False))
+        if ok is None and yazi == "—":
+            rozet.hide()
+            return
+        renk, zemin = ROZET_RENKLERI[rozet_turu(ok, ek.get("yon", 0))]
+        rozet.setText(f"{ok} {yazi}" if ok else yazi)
+        rozet.setStyleSheet(
+            f"color: {renk}; background: {zemin}; border-radius: 9px; padding: 2px 8px;"
+            "font-size: 11px; font-weight: 700;"
+        )
+        rozet.show()
 
     def tablo_olustur(self, yukseklik):
         bolum = QWidget()
@@ -745,6 +891,9 @@ class YonetimRaporlariEkrani(QWidget):
         )
         tablo.setEditTriggers(QTableWidget.NoEditTriggers)
         tablo.setSelectionMode(QTableWidget.NoSelection)
+        tablo.setFocusPolicy(Qt.NoFocus)                 # tıklanınca hücre çevresinde çerçeve çıkmasın
+        tablo.setWordWrap(True)                          # uzun açıklamalar "…" ile kesilmez, alt satıra geçer
+        tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         lay.addWidget(tablo)
 
         return bolum, baslik, tablo
@@ -756,7 +905,7 @@ class YonetimRaporlariEkrani(QWidget):
         ust.setSpacing(14)
 
         for i in range(2):
-            bolum, baslik, tablo = self.tablo_olustur(200)
+            bolum, baslik, tablo = self.tablo_olustur(238)      # 6 satır kaydırmadan görünsün
             ust.addWidget(bolum, 3 if i == 0 else 2)
             self.tablolar.append((baslik, tablo))
 
@@ -766,7 +915,7 @@ class YonetimRaporlariEkrani(QWidget):
         alt.setSpacing(14)
 
         for _ in range(3):
-            bolum, baslik, tablo = self.tablo_olustur(180)
+            bolum, baslik, tablo = self.tablo_olustur(208)      # 5 satır kaydırmadan görünsün
             alt.addWidget(bolum, 1)
             self.tablolar.append((baslik, tablo))
 
@@ -894,12 +1043,7 @@ class YonetimRaporlariEkrani(QWidget):
             self.yuklenen_donem = params.copy()
             onceki = veriler["randevu"]["onceki_donem"]
 
-            self.durum.setText(
-                "Seçilen dönem: "
-                f"{params['baslangic']} – {params['bitis']}   |   "
-                "Önceki dönem: "
-                f"{onceki['baslangic']} – {onceki['bitis']}"
-            )
+            self.durum.setText(donem_satiri(params, onceki, veriler["randevu"]["ozet"]))
         except (requests.RequestException, RuntimeError) as hata:
             if isinstance(hata, requests.RequestException):
                 self.durum.setText(api_hata_mesaji(hata=hata))
@@ -935,6 +1079,7 @@ class YonetimRaporlariEkrani(QWidget):
         for i, satir in enumerate(satirlar):
             for j, deger in enumerate(satir):
                 oge = QTableWidgetItem(metin(deger))
+                oge.setToolTip(metin(deger).strip())
                 widget.setItem(i, j, oge)
 
         widget.horizontalHeader().setSectionResizeMode(
@@ -1021,10 +1166,11 @@ class YonetimRaporlariEkrani(QWidget):
         )
 
         if self.veriler is None:
-            for baslik, deger, alt in self.kartlar:
+            for baslik, deger, alt, rozet in self.kartlar:
                 baslik.setText("—")
                 deger.setText("—")
                 alt.setText("")
+                rozet.hide()
 
             for tablo in self.tablolar:
                 self.tabloyu_doldur(
@@ -1048,30 +1194,30 @@ class YonetimRaporlariEkrani(QWidget):
 
         tur = self.rapor_turu.currentText()
 
+        # Ortak kural: "yapılan iş" sayılarında iptal edilenler hariçtir, iptaller ayrıca gösterilir.
+        ro_gercek, rr_gercek = gerceklesen_randevu(ro), gerceklesen_randevu(rr)
+        ro_gelmeme, rr_gelmeme = gelmeme_orani(ro), gelmeme_orani(rr)
+        # Sunucu eski sürümle çalışıyorsa bu alan gelmez: "0" (hepsi girilmiş) sanılmasın, uyarılsın.
+        eski_sunucu = "sonucu_girilmemis" not in ro
+        sonucsuz = None if eski_sunucu else int(ro["sonucu_girilmemis"])
+        sonucsuz_notu = (
+            f"⚠ {sonucsuz} randevunun sonucu girilmemiş" if sonucsuz else ""
+        )
+
         if tur == "Genel Bakış":
             self.operasyon_ozeti.tarihleri_guncelle(
                 r["donem"],
                 r["onceki_donem"],
             )
-
-            self.operasyon_ozeti.guncelle(
-                [
-                    ro["toplam"],
-                    co["bakim"],
-                    co["kalibrasyon"],
-                    co["ariza"],
-                    co["rezervasyon"],
-                    po["etkinlik_toplam"],
-                ],
-                [
-                    rr["toplam"],
-                    cr["bakim"],
-                    cr["kalibrasyon"],
-                    cr["ariza"],
-                    cr["rezervasyon"],
-                    pr["etkinlik_toplam"],
-                ],
-            )
+            secilen = [
+                ro_gercek, co["bakim"], co["kalibrasyon"], co["ariza"],
+                co["rezervasyon"], po["etkinlik_iptal_edilmemis"],
+            ]
+            onceki = [
+                rr_gercek, cr["bakim"], cr["kalibrasyon"], cr["ariza"],
+                cr["rezervasyon"], pr["etkinlik_iptal_edilmemis"],
+            ]
+            self.operasyon_ozeti.guncelle(secilen, onceki)
 
             self.ogrenci_ozeti.guncelle(
                 o["guncel_ogrenci"]["toplam"],
@@ -1085,16 +1231,8 @@ class YonetimRaporlariEkrani(QWidget):
                     "Arıza", "Cihaz rezervasyonu",
                     "Oda etkinliği",
                 ],
-                [
-                    ro["toplam"], co["bakim"],
-                    co["kalibrasyon"], co["ariza"],
-                    co["rezervasyon"], po["etkinlik_toplam"],
-                ],
-                [
-                    rr["toplam"], cr["bakim"],
-                    cr["kalibrasyon"], cr["ariza"],
-                    cr["rezervasyon"], pr["etkinlik_toplam"],
-                ],
+                secilen,
+                onceki,
             )
 
             self.ogrenci_donem_grafigi.guncelle(
@@ -1103,128 +1241,129 @@ class YonetimRaporlariEkrani(QWidget):
                 [ore["toplam_puan"]],
             )
             kartlar = [
-                ("Toplam Randevu", ro["toplam"], "Seçilen dönem"),
-                ("Aktif Öğrenci", o["guncel_ogrenci"]["aktif"],
-                 "Güncel durum"),
+                ("Randevu", ro_gercek,
+                 f"İptal hariç · {ro['iptal_edildi']} iptal ayrıca",
+                 {"once": rr_gercek, "yon": 0}),
+                ("Gelmeme Oranı", yuzde_metni(ro_gelmeme),
+                 sonucsuz_notu or f"{ro['gelmedi']} danışan gelmedi",
+                 {"simdi": ro_gelmeme, "once": rr_gelmeme, "yon": -1, "oran": True, "uyari_notu": bool(sonucsuz)}),
+                ("Arıza Bildirimi", co["ariza"], "Seçilen dönem",
+                 {"once": cr["ariza"], "yon": -1}),
                 ("Faaliyet Puanı", oo["toplam_puan"],
-                 f"{oo['kayit_sayisi']} faaliyet kaydı"),
-                ("Kalibrasyon Kaydı", co["kalibrasyon"],
-                 "Seçilen dönem"),
+                 f"{oo['kayit_sayisi']} faaliyet kaydı",
+                 {"once": ore["toplam_puan"], "yon": 1}),
             ]
             tablolar = [
                 ("Randevu Durumu", ["Durum", "Seçilen Dönem", "Önceki Dönem"],
-                 [
-                     ("Toplam", ro["toplam"], rr["toplam"]),
-                     ("Planlandı", ro["planlandi"], rr["planlandi"]),
-                     ("Tamamlandı", ro["tamamlandi"], rr["tamamlandi"]),
-                     ("Gelmedi", ro["gelmedi"], rr["gelmedi"]),
-                     ("İptal", ro["iptal_edildi"], rr["iptal_edildi"]),
-                 ]),
+                 randevu_durum_satirlari(ro, rr)),
                 ("Öğrenci Faaliyetleri", ["Faaliyet", "Kayıt", "Puan"],
                  [
                      (f["faaliyet"], f["kayit_sayisi"], f["toplam_puan"])
                      for f in o["faaliyet_dagilimi"]
-                 ]),
+                 ] or [("Dönemde faaliyet kaydı yok.", "", "")]),
                 ("Cihaz İşlemleri", ["İşlem", "Sayı"], [
                     ("Bakım", co["bakim"]),
                     ("Kalibrasyon", co["kalibrasyon"]),
                     ("Arıza", co["ariza"]),
-                    ("Rezervasyon", co["rezervasyon"]),
+                    ("Rezervasyon (iptal hariç)", co["rezervasyon"]),
                 ]),
                 ("Proje / Etkinlik", ["Gösterge", "Sayı"], [
-                    ("Rezervasyon", po["rezervasyon_toplam"]),
-                    ("Oda etkinliği", po["etkinlik_toplam"]),
-                    ("Kayıtlı katılımcı",
-                     po["kayitli_katilimci_toplami"]),
+                    ("Cihaz rezervasyonu (iptal hariç)", po["rezervasyon_iptal_edilmemis"]),
+                    ("İptal edilen rezervasyon", po["rezervasyon_iptal"]),
+                    ("Oda etkinliği (iptal hariç)", po["etkinlik_iptal_edilmemis"]),
+                    ("Kayıtlı katılımcı", po["kayitli_katilimci_toplami"]),
                 ]),
                 ("Dönem Karşılaştırması",
-                 ["Gösterge", "Seçilen Dönem", "Önceki Dönem"], [
-                     ("Randevu", ro["toplam"], rr["toplam"]),
-                     ("Faaliyet puanı",
-                      oo["toplam_puan"], ore["toplam_puan"]),
-                     ("Kalibrasyon",
-                      co["kalibrasyon"], cr["kalibrasyon"]),
-                     ("Oda etkinliği",
-                      po["etkinlik_toplam"], pr["etkinlik_toplam"]),
+                 ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
+                     ("Randevu", ro_gercek, rr_gercek, degisim_metni(ro_gercek, rr_gercek)),
+                     ("Gelmeme oranı", yuzde_metni(ro_gelmeme), yuzde_metni(rr_gelmeme),
+                      degisim_metni(ro_gelmeme, rr_gelmeme, oran=True)),
+                     ("Faaliyet puanı", oo["toplam_puan"], ore["toplam_puan"],
+                      degisim_metni(oo["toplam_puan"], ore["toplam_puan"])),
+                     ("Arıza", co["ariza"], cr["ariza"], degisim_metni(co["ariza"], cr["ariza"])),
+                     ("Oda etkinliği", po["etkinlik_iptal_edilmemis"], pr["etkinlik_iptal_edilmemis"],
+                      degisim_metni(po["etkinlik_iptal_edilmemis"], pr["etkinlik_iptal_edilmemis"])),
                  ]),
             ]
 
         elif tur == "Randevular":
             self.randevu_grafigi.guncelle(r["gunluk"])
+            ro_tamam, rr_tamam = tamamlanma_orani(ro), tamamlanma_orani(rr)
             kartlar = [
-                ("Toplam Randevu", ro["toplam"], "Seçilen dönem"),
-                ("Planlanan", ro["planlandi"], "Seçilen dönem"),
-                ("Tamamlanan", ro["tamamlandi"], "Seçilen dönem"),
-                ("İptal Edilen", ro["iptal_edildi"], "Seçilen dönem"),
+                ("Gerçekleşen Randevu", ro_gercek,
+                 f"İptal hariç · {ro['iptal_edildi']} iptal edildi",
+                 {"once": rr_gercek, "yon": 0}),
+                ("Tamamlanma Oranı", yuzde_metni(ro_tamam),
+                 f"{ro['tamamlandi']} randevu tamamlandı",
+                 {"simdi": ro_tamam, "once": rr_tamam, "yon": 1, "oran": True}),
+                ("Gelmeme Oranı", yuzde_metni(ro_gelmeme),
+                 f"{ro['gelmedi']} danışan gelmedi",
+                 {"simdi": ro_gelmeme, "once": rr_gelmeme, "yon": -1, "oran": True}),
+                ("Sonucu Girilmemiş", sonucsuz,
+                 ESKI_SUNUCU_NOTU if eski_sunucu else (
+                     "Tarihi geçti, hâlâ “Planlandı”" if sonucsuz else "Tüm geçmiş randevuların sonucu girilmiş"),
+                 {"uyari": eski_sunucu or bool(sonucsuz)}),
             ]
             tablolar = [
                 ("Randevu Durumları",
-                 ["Durum", "Seçilen Dönem", "Önceki Dönem"], [
-                     (ad, ro[kod], rr[kod])
-                     for ad, kod in [
-                         ("Planlandı", "planlandi"),
-                         ("Tamamlandı", "tamamlandi"),
-                         ("Gelmedi", "gelmedi"),
-                         ("İptal", "iptal_edildi"),
-                     ]
-                 ]),
-                ("Günlük Randevu Sayıları", ["Tarih", "Sayı"], [
-                    (g["tarih"], g["sayi"]) for g in r["gunluk"]
+                 ["Durum", "Seçilen Dönem", "Önceki Dönem"],
+                 randevu_durum_satirlari(ro, rr)),
+                ("Günlük Randevu Sayıları", ["Tarih", "Randevu"], [
+                    (gun_metni(g["tarih"]), g["sayi"]) for g in r["gunluk"]
                 ]),
-                ("Toplam Karşılaştırma", ["Dönem", "Randevu"], [
-                    ("Seçilen", ro["toplam"]),
-                    ("Önceki", rr["toplam"]),
+                ("Oranlar", ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
+                    ("Tamamlanma", yuzde_metni(ro_tamam), yuzde_metni(rr_tamam),
+                     degisim_metni(ro_tamam, rr_tamam, oran=True)),
+                    ("Gelmeme", yuzde_metni(ro_gelmeme), yuzde_metni(rr_gelmeme),
+                     degisim_metni(ro_gelmeme, rr_gelmeme, oran=True)),
+                    ("İptal", yuzde_metni(iptal_orani(ro)), yuzde_metni(iptal_orani(rr)),
+                     degisim_metni(iptal_orani(ro), iptal_orani(rr), oran=True)),
                 ]),
-                ("Durum Özeti", ["Gösterge", "Sayı"], [
-                    ("Tamamlanan", ro["tamamlandi"]),
-                    ("Gelmedi", ro["gelmedi"]),
-                    ("İptal", ro["iptal_edildi"]),
-                ]),
+                ("Yapılması Gerekenler", ["Bilgi"], (
+                    [
+                        ("Sunucu eski sürümle çalışıyor: sonucu girilmemiş randevular sayılamadı.",),
+                        ("Sunucuyu yeniden başlatın, sonra Yenile'ye basın.",),
+                    ] if eski_sunucu else [
+                        (f"{sonucsuz} randevunun tarihi geçti ama sonucu girilmedi.",),
+                        ("Randevu Yönetimi'nden sonuçlarını girin.",),
+                        ("Sonuç girilmeden oranlar eksik hesaplanır.",),
+                    ] if sonucsuz else [
+                        ("Tüm geçmiş randevuların sonucu girilmiş.",),
+                        ("Oranlar sonuçlanan randevulara (tamamlanan + gelmeyen) göre hesaplanır.",),
+                    ]
+                )),
                 oda_kullanim_tablosu(self.veriler.get("oda")),
             ]
 
         elif tur == "Cihazlar":
             self.cihaz_grafigi.guncelle(
                 ["Bakım", "Kalibrasyon", "Arıza", "Rezervasyon"],
-                [
-                    co["bakim"],
-                    co["kalibrasyon"],
-                    co["ariza"],
-                    co["rezervasyon"],
-                ],
-                [
-                    cr["bakim"],
-                    cr["kalibrasyon"],
-                    cr["ariza"],
-                    cr["rezervasyon"],
-                ],
+                [co["bakim"], co["kalibrasyon"], co["ariza"], co["rezervasyon"]],
+                [cr["bakim"], cr["kalibrasyon"], cr["ariza"], cr["rezervasyon"]],
             )
             kodlar = [
-                ("Bakım", "bakim"),
-                ("Kalibrasyon", "kalibrasyon"),
-                ("Arıza", "ariza"),
-                ("Rezervasyon", "rezervasyon"),
+                ("Bakım", "bakim", 0),
+                ("Kalibrasyon", "kalibrasyon", 0),
+                ("Arıza", "ariza", -1),
+                ("Rezervasyon", "rezervasyon", 0),
             ]
             kartlar = [
-                (ad + " Kaydı", co[kod], "Seçilen dönem")
-                for ad, kod in kodlar
+                (ad + (" (iptal hariç)" if kod == "rezervasyon" else " Kaydı"), co[kod], "Seçilen dönem",
+                 {"once": cr[kod], "yon": yon})
+                for ad, kod, yon in kodlar
             ]
             tablolar = [
                 ("Cihaz İşlem Karşılaştırması",
-                 ["İşlem", "Seçilen Dönem", "Önceki Dönem"], [
-                     (ad, co[kod], cr[kod]) for ad, kod in kodlar
+                 ["İşlem", "Seçilen", "Önceki", "Değişim"], [
+                     (ad, co[kod], cr[kod], degisim_metni(co[kod], cr[kod])) for ad, kod, _ in kodlar
                  ]),
                 cihaz_kullanim_tablosu(self.veriler.get("cihaz_rez")),
-                ("Bu Dönem", ["İşlem", "Kayıt"], [
-                    (ad, co[kod]) for ad, kod in kodlar
-                ]),
-                ("Önceki Dönem", ["İşlem", "Kayıt"], [
-                    (ad, cr[kod]) for ad, kod in kodlar
-                ]),
+                bakim_uyari_tablosu(self.veriler.get("bakim_plani")),
+                kullanilmayan_cihaz_tablosu(self.veriler.get("cihaz_rez")),
                 ("Veri Açıklaması", ["Bilgi"], [
                     ("Bunlar işlem kayıtlarının sayılarıdır.",),
-                    ("Anlık cihaz durumu değildir.",),
-                    ("Kullanım saatleri planlanan süredir.",),
+                    ("İptal edilen rezervasyonlar sayılmaz.",),
+                    ("Bakım planı uyarıları bugünkü durumdur.",),
                 ]),
             ]
 
@@ -1232,15 +1371,22 @@ class YonetimRaporlariEkrani(QWidget):
             self.ogrenci_puan_grafigi.guncelle(
                 o["faaliyet_dagilimi"]
             )
+            aktif = o["guncel_ogrenci"]["aktif"]
+            bekleyen_kayit = max(0, oo["kayit_sayisi"] - oo["onayli_kayit"])
+            bekleyen_puan = max(0, oo["toplam_puan"] - oo["onayli_puan"])
+            katilim = (oo["faaliyet_yapan_ogrenci"] / aktif) if aktif else None
             kartlar = [
-                ("Toplam Öğrenci", o["guncel_ogrenci"]["toplam"],
-                 "Güncel durum"),
-                ("Aktif Öğrenci", o["guncel_ogrenci"]["aktif"],
-                 "Güncel durum"),
+                ("Aktif Öğrenci", aktif,
+                 f"Toplam {o['guncel_ogrenci']['toplam']} öğrenci · güncel durum"),
+                ("Faaliyet Yapan Öğrenci", oo["faaliyet_yapan_ogrenci"],
+                 f"Aktiflerin {yuzde_metni(katilim)}'i" if katilim is not None else "Seçilen dönem",
+                 {"once": ore["faaliyet_yapan_ogrenci"], "yon": 1}),
                 ("Toplam Puan", oo["toplam_puan"],
-                 "Onaysız kayıtlar dahil"),
-                ("Onaylı Puan", oo["onayli_puan"],
-                 "Yalnızca onaylanan kayıtlar"),
+                 "Onay bekleyenler dahil",
+                 {"once": ore["toplam_puan"], "yon": 1}),
+                ("Onay Bekleyen Puan", bekleyen_puan,
+                 f"{bekleyen_kayit} kayıt onay bekliyor" if bekleyen_kayit else "Bekleyen kayıt yok",
+                 {"uyari": bool(bekleyen_kayit)}),
             ]
             alanlar = [
                 ("Faaliyet kaydı", "kayit_sayisi"),
@@ -1255,25 +1401,24 @@ class YonetimRaporlariEkrani(QWidget):
                  ["Faaliyet", "Kayıt", "Puan"], [
                      (f["faaliyet"], f["kayit_sayisi"], f["toplam_puan"])
                      for f in o["faaliyet_dagilimi"]
-                 ]),
+                 ] or [("Dönemde faaliyet kaydı yok.", "", "")]),
                 ("Önceki Dönem Karşılaştırması",
-                 ["Gösterge", "Seçilen Dönem", "Önceki Dönem"], [
-                     (ad, oo[kod], ore[kod]) for ad, kod in alanlar
+                 ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
+                     (ad, oo[kod], ore[kod], degisim_metni(oo[kod], ore[kod])) for ad, kod in alanlar
                  ]),
-                ("Faaliyet Özeti", ["Gösterge", "Değer"], [
-                    ("Kayıt sayısı", oo["kayit_sayisi"]),
-                    ("Faaliyet miktarı", oo["faaliyet_miktari"]),
-                    ("Faaliyet yapan", oo["faaliyet_yapan_ogrenci"]),
+                ("Onay Durumu", ["Gösterge", "Kayıt", "Puan"], [
+                    ("Onaylanan", oo["onayli_kayit"], oo["onayli_puan"]),
+                    ("Onay bekleyen", bekleyen_kayit, bekleyen_puan),
                 ]),
-                ("Onay Durumu", ["Gösterge", "Değer"], [
-                    ("Onaylanan kayıt", oo["onayli_kayit"]),
-                    ("Onaylanan puan", oo["onayli_puan"]),
+                ("Katılım", ["Gösterge", "Değer"], [
+                    ("Aktif öğrenci (güncel)", aktif),
+                    ("Faaliyet yapan öğrenci", oo["faaliyet_yapan_ogrenci"]),
+                    ("Katılım oranı", yuzde_metni(katilim)),
                 ]),
                 ("Öğrenci Mevcudu", ["Durum", "Sayı"], [
-                    ("Toplam (güncel)",
-                     o["guncel_ogrenci"]["toplam"]),
-                    ("Aktif (güncel)",
-                     o["guncel_ogrenci"]["aktif"]),
+                    ("Toplam (güncel)", o["guncel_ogrenci"]["toplam"]),
+                    ("Aktif (güncel)", aktif),
+                    ("Pasif (güncel)", max(0, o["guncel_ogrenci"]["toplam"] - aktif)),
                 ]),
             ]
 
@@ -1299,47 +1444,50 @@ class YonetimRaporlariEkrani(QWidget):
             self.proje_grafigi.guncelle(
                 p["proje_turu_dagilimi"]
             )
+            etkinlik_iptal = max(0, po["etkinlik_toplam"] - po["etkinlik_iptal_edilmemis"])
+            etkinlik_iptal_once = max(0, pr["etkinlik_toplam"] - pr["etkinlik_iptal_edilmemis"])
+            rez_iptal_orani = iptal_orani({"iptal_edildi": po["rezervasyon_iptal"], "toplam": po["rezervasyon_toplam"]})
             kartlar = [
-                ("Rezervasyon", po["rezervasyon_toplam"],
-                 "Cihaz rezervasyonu"),
-                ("İptal Edilmeyen",
-                 po["rezervasyon_iptal_edilmemis"],
-                 "Cihaz rezervasyonu"),
-                ("Oda Etkinliği", po["etkinlik_toplam"],
-                 "Kayıtlı etkinlik"),
-                ("Katılımcı Toplamı",
-                 po["kayitli_katilimci_toplami"],
-                 "Girilen sayıların toplamı"),
+                ("Cihaz Rezervasyonu", po["rezervasyon_iptal_edilmemis"],
+                 "İptal hariç",
+                 {"once": pr["rezervasyon_iptal_edilmemis"], "yon": 0}),
+                ("İptal Edilen Rezervasyon", po["rezervasyon_iptal"],
+                 f"Tüm rezervasyonların {yuzde_metni(rez_iptal_orani)}'i" if rez_iptal_orani is not None else "Seçilen dönem",
+                 {"once": pr["rezervasyon_iptal"], "yon": -1}),
+                ("Oda Etkinliği", po["etkinlik_iptal_edilmemis"],
+                 f"İptal hariç · {etkinlik_iptal} iptal edildi" if etkinlik_iptal else "İptal hariç",
+                 {"once": pr["etkinlik_iptal_edilmemis"], "yon": 0}),
+                ("Kayıtlı Katılımcı", po["kayitli_katilimci_toplami"],
+                 "Girilen sayıların toplamı",
+                 {"once": pr["kayitli_katilimci_toplami"], "yon": 1}),
             ]
             alanlar = [
-                ("Rezervasyon", "rezervasyon_toplam"),
-                ("İptal edilmeyen",
-                 "rezervasyon_iptal_edilmemis"),
-                ("Oda etkinliği", "etkinlik_toplam"),
-                ("Kayıtlı katılımcı",
-                 "kayitli_katilimci_toplami"),
+                ("Cihaz rezervasyonu (iptal hariç)", "rezervasyon_iptal_edilmemis"),
+                ("İptal edilen rezervasyon", "rezervasyon_iptal"),
+                ("Oda etkinliği (iptal hariç)", "etkinlik_iptal_edilmemis"),
+                ("Kayıtlı katılımcı", "kayitli_katilimci_toplami"),
             ]
             tablolar = [
-                ("Proje Türleri", ["Tür", "Rezervasyon"], [
+                ("Proje Türleri (iptal hariç)", ["Tür", "Rezervasyon"], [
                     (f["tur"], f["rezervasyon_sayisi"])
                     for f in p["proje_turu_dagilimi"]
-                ]),
+                ] or [("Dönemde rezervasyon yok.", "")]),
                 ("Dönem Karşılaştırması",
-                 ["Gösterge", "Seçilen Dönem", "Önceki Dönem"], [
-                     (ad, po[kod], pr[kod]) for ad, kod in alanlar
+                 ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
+                     (ad, po[kod], pr[kod], degisim_metni(po[kod], pr[kod])) for ad, kod in alanlar
                  ]),
                 ("Rezervasyon Durumu", ["Durum", "Sayı"], [
-                    ("Toplam", po["rezervasyon_toplam"]),
-                    ("İptal edilmeyen",
-                     po["rezervasyon_iptal_edilmemis"]),
-                    ("İptal", po["rezervasyon_iptal"]),
+                    ("Gerçekleşen (iptal hariç)", po["rezervasyon_iptal_edilmemis"]),
+                    ("İptal edilen", po["rezervasyon_iptal"]),
+                    ("Toplam kayıt", po["rezervasyon_toplam"]),
                 ]),
-                ("Oda Etkinlikleri", ["Gösterge", "Sayı"], [
-                    ("Toplam", po["etkinlik_toplam"]),
-                    ("İptal edilmeyen",
-                     po["etkinlik_iptal_edilmemis"]),
+                ("Oda Etkinlikleri", ["Durum", "Sayı"], [
+                    ("Gerçekleşen (iptal hariç)", po["etkinlik_iptal_edilmemis"]),
+                    ("İptal edilen", etkinlik_iptal),
+                    ("Toplam kayıt", po["etkinlik_toplam"]),
                 ]),
                 ("Önemli Açıklamalar", ["Bilgi"], [
+                    ("Sayılarda iptal edilenler hariçtir; iptaller ayrıca gösterilir.",),
                     ("Rezervasyon tamamlanmış deney değildir.",),
                     ("Katılımcı toplamı benzersiz kişi sayısı değildir.",),
                 ]),
@@ -1352,13 +1500,10 @@ class YonetimRaporlariEkrani(QWidget):
         ):
             self.ek_rapor_grafigi.guncelle(tur, self.veriler)
 
-        for widgetlar, (ad, deger, alt) in zip(
-            self.kartlar, kartlar
-        ):
-            baslik_lbl, deger_lbl, alt_lbl = widgetlar
-            baslik_lbl.setText(ad)
-            deger_lbl.setText(metin(deger))
-            alt_lbl.setText(alt)
+        for widgetlar, kart in zip(self.kartlar, kartlar):
+            ad, deger, alt = kart[:3]
+            ek = kart[3] if len(kart) > 3 else {}
+            self.karti_doldur(widgetlar, ad, deger, alt, ek)
 
         for widgetlar, (ad, sutunlar, satirlar) in zip(
             self.tablolar, tablolar

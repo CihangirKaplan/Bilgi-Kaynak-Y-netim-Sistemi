@@ -4,6 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from client.rapor_sayfasi_taban import yuzde_metni
+from client.yonetim_rapor_hesaplari import gelmeme_orani, gerceklesen_randevu, tamamlanma_orani
 from PySide6.QtCore import Qt, QRect, QDateTime
 from PySide6.QtGui import (
     QPdfWriter, QPainter, QPageSize, QFont,
@@ -206,36 +208,42 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
             c = RaporCizici(painter, writer)
 
             r = veriler["randevu"]["ozet"]
+            r_once = veriler["randevu"]["onceki_ozet"]
             d = veriler["cihaz"]["ozet"]
             o = veriler["ogrenci"]
             p = veriler["proje"]["ozet"]
 
+            # Ekrandaki kural: yapılan iş sayılarında iptal edilenler hariçtir, iptaller ayrıca yazılır.
             # 1. Genel Bakış
             c.yeni_sayfa("Genel Bakış", baslangic, bitis)
             c.satirlar([
-                ("Toplam randevu", r["toplam"]),
-                ("Tamamlanan randevu", r["tamamlandi"]),
-                ("Kalibrasyon kaydı", d["kalibrasyon"]),
+                ("Randevu (iptal hariç)", gerceklesen_randevu(r)),
+                ("Gelmeme oranı", yuzde_metni(gelmeme_orani(r))),
+                ("Sonucu girilmemiş randevu", r.get("sonucu_girilmemis", 0)),
                 ("Arıza bildirimi", d["ariza"]),
+                ("Kalibrasyon kaydı", d["kalibrasyon"]),
                 ("Aktif öğrenci (güncel)", o["guncel_ogrenci"]["aktif"]),
                 ("Faaliyet puanı", o["ozet"]["toplam_puan"]),
-                ("Cihaz rezervasyonu", p["rezervasyon_toplam"]),
-                ("Oda etkinliği", p["etkinlik_toplam"]),
+                ("Cihaz rezervasyonu (iptal hariç)", p["rezervasyon_iptal_edilmemis"]),
+                ("Oda etkinliği (iptal hariç)", p["etkinlik_iptal_edilmemis"]),
             ])
             c.not_ekle(
                 "Öğrenci mevcudu günceldir. Diğer sayılar seçilen "
                 "döneme aittir. Faaliyet puanı onaylanmamış "
-                "kayıtları da içerir."
+                "kayıtları da içerir. İptal edilenler sayılara dahil değildir."
             )
 
             # 2. Randevular
             c.yeni_sayfa("Randevu İstatistikleri", baslangic, bitis)
             y = c.satirlar([
-                ("Toplam randevu", r["toplam"]),
-                ("Önceki dönem", veriler["randevu"]["onceki_ozet"]["toplam"]),
+                ("Gerçekleşen randevu (iptal hariç)", gerceklesen_randevu(r)),
+                ("Önceki dönem (iptal hariç)", gerceklesen_randevu(r_once)),
                 ("Tamamlanan", r["tamamlandi"]),
-                ("İptal edilen", r["iptal_edildi"]),
                 ("Gelmedi", r["gelmedi"]),
+                ("Tamamlanma oranı", yuzde_metni(tamamlanma_orani(r))),
+                ("Gelmeme oranı", yuzde_metni(gelmeme_orani(r))),
+                ("Sonucu girilmemiş", r.get("sonucu_girilmemis", 0)),
+                ("İptal edilen", r["iptal_edildi"]),
             ])
             c.bar_grafik(
                 "Randevu Durumları",
@@ -254,7 +262,7 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
                 ("bakim", "Bakım"),
                 ("kalibrasyon", "Kalibrasyon"),
                 ("ariza", "Arıza"),
-                ("rezervasyon", "Rezervasyon"),
+                ("rezervasyon", "Rezervasyon (iptal hariç)"),
             ]
             y = c.satirlar([
                 (ad, d[kod]) for kod, ad in alanlar
@@ -311,19 +319,18 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
             # 5. Proje / Etkinlik
             c.yeni_sayfa("Proje ve Etkinlik Kayıtları", baslangic, bitis)
             y = c.satirlar([
-                ("Cihaz rezervasyonu", p["rezervasyon_toplam"]),
-                ("İptal edilmeyen rezervasyon", p["rezervasyon_iptal_edilmemis"]),
+                ("Cihaz rezervasyonu (iptal hariç)", p["rezervasyon_iptal_edilmemis"]),
                 ("İptal edilen rezervasyon", p["rezervasyon_iptal"]),
-                ("Oda etkinliği", p["etkinlik_toplam"]),
-                ("İptal edilmeyen etkinlik", p["etkinlik_iptal_edilmemis"]),
+                ("Oda etkinliği (iptal hariç)", p["etkinlik_iptal_edilmemis"]),
+                ("İptal edilen etkinlik", max(0, p["etkinlik_toplam"] - p["etkinlik_iptal_edilmemis"])),
                 ("Kayıtlı katılımcı toplamı", p["kayitli_katilimci_toplami"]),
                 (
-                    "Önceki dönem rezervasyonu",
-                    veriler["proje"]["onceki_ozet"]["rezervasyon_toplam"],
+                    "Önceki dönem rezervasyonu (iptal hariç)",
+                    veriler["proje"]["onceki_ozet"]["rezervasyon_iptal_edilmemis"],
                 ),
                 (
-                    "Önceki dönem etkinliği",
-                    veriler["proje"]["onceki_ozet"]["etkinlik_toplam"],
+                    "Önceki dönem etkinliği (iptal hariç)",
+                    veriler["proje"]["onceki_ozet"]["etkinlik_iptal_edilmemis"],
                 ),
                 (
                     "Önceki dönem katılımcı toplamı",
