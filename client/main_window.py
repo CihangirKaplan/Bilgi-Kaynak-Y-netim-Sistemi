@@ -2588,6 +2588,9 @@ QLabel {
 
         elif oge["ad"] == "Rol & İzin Yönetimi":
             self.rol_izin_sayfasi = RolIzinSayfasi(token=self.token, api_url=self.api_url)
+            if izin_var(rol, "İzin düzenleme"):
+                # Satıra çift tıklamak, satırı seçip "İzin Düzenle"ye basmakla aynıdır.
+                self.rol_izin_sayfasi.tablo.cellDoubleClicked.connect(lambda *_: self.izin_duzenle_tetikle())
             lay.addWidget(self.rol_izin_sayfasi, 1)
 
         else:
