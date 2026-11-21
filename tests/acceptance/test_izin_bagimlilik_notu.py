@@ -410,3 +410,44 @@ def test_izin_kaldirmak_ya_da_degistirmeden_kaydetmek_engellenmez(qt_app):
     d = dialog3(2)
     isaretle(d)                                                                    # hiçbir role verilmiyor
     assert d.onkosul_engeli() is None
+
+
+# ================================================================ ön koşul izni kaldırılırken uyarı
+MATRIS_KALDIRMA = {**MATRIS3, "rol_izin_map": {"1": [1], "2": [1, 2, 3], "6": [1, 2, 3]}}    # Memur: Rol atama + Kullanıcı oluşturma
+
+
+def test_onkosul_izni_kaldirilirsa_etkilenen_izinler_listelenir(qt_app):
+    d = dialog3(3, MATRIS_KALDIRMA)                                                # Kullanıcı oluşturma
+    isaretle(d)                                                                    # Memur'dan kaldırılıyor
+    mesaj = d.kaldirma_etkisi()
+    assert "•  Memur" in mesaj and "'Rol atama veya değiştirme'" in mesaj and "kullanılamaz" in mesaj
+
+
+def test_etkilenen_izin_yoksa_ya_da_degisiklik_yoksa_kaldirma_uyarisi_cikmaz(qt_app):
+    assert dialog3(3, MATRIS3).kaldirma_etkisi() is None                           # değişiklik yok
+    d = dialog3(3, MATRIS3)
+    isaretle(d)                                                                    # Memur'da bağlı izin yok
+    assert d.kaldirma_etkisi() is None
+
+
+def test_kaldirma_uyarisinda_hayir_denirse_sunucuya_hicbir_sey_gitmez(qt_app):
+    d = dialog3(3, MATRIS_KALDIRMA)
+    isaretle(d)
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru, patch.object(rid.requests, "put") as put:
+        d.kaydet()
+    assert soru.call_count == 1 and not put.called and d.result() == 0
+
+
+# ================================================================ Enter tuşu Kaydet'e basar (İptal'e değil)
+def test_diyaloglarda_varsayilan_dugme_kaydettir(qt_app):
+    pencereler = [
+        rid.RolOlusturDialog("http://s", "t"),
+        rid.RolDuzenleDialog("http://s", "t", ROLLER3, MATRIS3["rol_izin_map"]),
+        dialog3(1),
+    ]
+    from PySide6.QtWidgets import QPushButton
+    for pencere in pencereler:
+        varsayilan = [b for b in pencere.findChildren(QPushButton) if b.isDefault()]
+        assert [b.text() for b in varsayilan] in (["Kaydet"], ["Değişiklikleri Kaydet"])
+        iptal = next(b for b in pencere.findChildren(QPushButton) if b.text() == "İptal")
+        assert not iptal.autoDefault()

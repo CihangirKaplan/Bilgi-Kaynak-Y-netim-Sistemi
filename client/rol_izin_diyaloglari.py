@@ -4,7 +4,8 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
                                QGroupBox, QWidget)
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QPainter, QPen
+from client.api_yoneticisi import hata_detayi_metni
 from client.bildirim_toast import basari_bildirimi
 
 import client.izin_bagimliliklari as izin_bagimliliklari
@@ -16,6 +17,32 @@ def golge_ekle(widget, blur=20, alpha=30, dy=5):
     eff.setOffset(0, dy)
     eff.setColor(QColor(10, 31, 92, alpha))
     widget.setGraphicsEffect(eff)
+
+def enter_ile_kaydet(btn_kaydet, btn_iptal):
+    """Pencerede Enter tuşu Kaydet'e basar. (Varsayılan düğme belirtilmezse Qt ilk düğmeye, yani İptal'e basar
+    ve yazılan bilgi kaybolur.)"""
+    btn_iptal.setAutoDefault(False)
+    btn_iptal.setDefault(False)
+    btn_kaydet.setAutoDefault(True)
+    btn_kaydet.setDefault(True)
+
+
+class OkluAcilirKutu(QComboBox):
+    """Sağında aşağı ok çizilen açılır kutu: stil sayfası oku gizlediği için kutu düz metin alanı gibi görünüyordu."""
+
+    def paintEvent(self, olay):
+        super().paintEvent(olay)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        kalem = QPen(QColor("#64748B"))
+        kalem.setWidthF(2.0)
+        p.setPen(kalem)
+        x = self.width() - 22
+        y = self.height() / 2 - 2
+        p.drawLine(x - 5, y, x, y + 5)
+        p.drawLine(x, y + 5, x + 5, y)
+        p.end()
+
 
 class RolOlusturDialog(QDialog):
     def __init__(self, api_url, token, ebeveyn=None):
@@ -125,6 +152,7 @@ class RolOlusturDialog(QDialog):
         
         btn_iptal.clicked.connect(self.reject)
         btn_kaydet.clicked.connect(self.kaydet_tetikle)
+        enter_ile_kaydet(btn_kaydet, btn_iptal)
         
         btn_layout.addWidget(btn_iptal, 1)
         btn_layout.addWidget(btn_kaydet, 2) 
@@ -146,7 +174,7 @@ class RolOlusturDialog(QDialog):
                 basari_bildirimi(self, f"'{rol_adi}' rolü başarıyla oluşturuldu.")
                 self.accept()
             else:
-                QMessageBox.critical(self, "Sunucu Hatası", f"Kayıt başarısız:\n{res.text}")
+                QMessageBox.warning(self, "Rol Oluşturulamadı", hata_detayi_metni(res, "Rol oluşturulamadı."))
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{str(e)}")
 
@@ -257,7 +285,7 @@ class RolDuzenleDialog(QDialog):
         lbl_secim = QLabel("DÜZENLENECEK ROL")
         lbl_secim.setStyleSheet("font-size: 11px; font-weight: 800; color: #8A9BC0; letter-spacing: 1px;")
         
-        self.combo_roller = QComboBox()
+        self.combo_roller = OkluAcilirKutu()
         for rol in self.roller:
             if rol["rol_adi"].upper() == "ADMIN":
                 continue
@@ -345,6 +373,7 @@ class RolDuzenleDialog(QDialog):
         """)
         self.btn_kaydet.clicked.connect(self.rol_kaydet)
         golge_ekle(self.btn_kaydet)
+        enter_ile_kaydet(self.btn_kaydet, btn_iptal)
         
         btn_layout.addWidget(btn_iptal, 1)
         btn_layout.addWidget(self.btn_kaydet, 2)
@@ -579,7 +608,8 @@ class IzinDuzenleDialog(QDialog):
             QPushButton:hover { background-color: #1D4ED8; }
         """)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        
+        enter_ile_kaydet(self.btn_kaydet, btn_iptal)
+
         btn_layout.addWidget(btn_iptal, 1)
         btn_layout.addWidget(self.btn_kaydet, 2)
         layout.addLayout(btn_layout)
@@ -635,6 +665,45 @@ class IzinDuzenleDialog(QDialog):
             f"Önce ilgili rollere {gerekli} iznini verin, sonra bu izni verebilirsiniz."
         )
 
+    def kaldirma_etkisi(self):
+        """Bu izin bir rolden kaldırılınca o rolde işe yaramaz hale gelecek diğer izinler; sorun yoksa None.
+
+        Örnek: 'Kullanıcı Oluştur' kaldırılırsa 'Kullanıcı & Personel' sayfası açılmaz; o sayfadaki 'Rol Atama',
+        'Kullanıcı Pasifleştir' gibi izinler rolde kalsa da kullanılamaz."""
+        if not self.secilen_izin:
+            return None
+        kod = self.secilen_izin["izin_adi"]
+        tablo = izin_bagimliliklari.onkosullari_getir()
+        etiketler = izin_bagimliliklari.etiketler_matristen(self.matris_verisi)
+        harita = self.matris_verisi.get("rol_izin_map", {})
+
+        satirlar = []
+        for rol in self.roller:
+            rol_id = rol["rol_id"]
+            kutu = self.rol_checkboxlar.get(rol_id)
+            if kutu is None or kutu.isChecked() or not self.izin_bu_rolde_var_mi(rol_id, harita):
+                continue                                           # yalnızca bu kayıtta kaldırılan roller
+            sahip = self._rolun_izin_kodlari(rol_id)
+            kalan = sahip - {kod}
+            etkilenen = [
+                etiketler.get(diger, diger) for diger in sorted(sahip)
+                if diger != kod
+                and not izin_bagimliliklari.eksik_onkosullar(diger, sahip, tablo)
+                and izin_bagimliliklari.eksik_onkosullar(diger, kalan, tablo)
+            ]
+            if etkilenen:
+                ad = rol.get("gorunen_ad") or rol["rol_adi"]
+                satirlar.append(f"  •  {ad}: " + ", ".join(f"'{e}'" for e in etkilenen))
+
+        if not satirlar:
+            return None
+        izin_adi = etiketler.get(kod, kod)
+        return (
+            f"'{izin_adi}' izni kaldırılırsa aşağıdaki izinler rolde kalsa da kullanılamaz hale gelir "
+            f"(bulundukları sayfa açılmaz):\n\n" + "\n".join(satirlar) +
+            "\n\nYine de kaldırmak istiyor musunuz?"
+        )
+
     def verileri_doldur(self):
         if self.secilen_izin:
             ad = self.secilen_izin.get("gorunen_ad") or self.secilen_izin["izin_adi"]
@@ -645,6 +714,13 @@ class IzinDuzenleDialog(QDialog):
         engel = self.onkosul_engeli()
         if engel:
             QMessageBox.warning(self, "Önce bağlı izin gerekli", engel)
+            return
+
+        # 0b. Kaldırılan izin, rolün başka izinlerinin ön koşuluysa onları etkiler: kaydetmeden önce sor
+        etki = self.kaldirma_etkisi()
+        if etki and QMessageBox.question(
+            self, "Bağlı izinler etkilenecek", etki, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) != QMessageBox.Yes:
             return
 
         # 1. Hangi rollerin tikli olduğunu bulalım
