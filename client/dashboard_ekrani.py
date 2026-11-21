@@ -281,10 +281,18 @@ class DashboardEkrani(QWidget):
         self.zamanlayici.start(60_000)
     # ------------------------------------------------------------------
     def _kolon_sayisi(self, genislik):
-        """Geniş pencerede kartların hepsi tek sırada, dar pencerede 3 sütunda durur."""
+        """Geniş pencerede kartların hepsi tek sırada; daraldıkça 3, 2 ve 1 sütuna iner (sayfa sağdan taşmaz)."""
         kart_sayisi = len(self.kart_widgetleri)
         genis_esik = 1450 if kart_sayisi <= 5 else 1750
-        return min(kart_sayisi, 6) if genislik >= genis_esik else 3
+        if genislik >= genis_esik:
+            kolon = 6
+        elif genislik >= 820:
+            kolon = 3
+        elif genislik >= 520:
+            kolon = 2
+        else:
+            kolon = 1
+        return max(1, min(kart_sayisi, kolon))
 
     def _kartlari_diz(self, kolon):
         for i, kart in enumerate(self.kart_widgetleri):
