@@ -5,8 +5,11 @@ from PySide6.QtWidgets import (
     QGridLayout
 )
 
-ANA = "#6352B5"
-ONCEKI = "#8A72C5"
+# Sayılar metin rengindedir; dönemi, yanındaki renkli nokta söyler (grafikteki gibi: seçilen mavi, önceki turuncu).
+ANA = "#0F2552"
+ONCEKI = "#52627A"
+SECILEN_NOKTA = "#2A78D6"
+ONCEKI_NOKTA = "#EB6834"
 
 
 def yazi(metin, boyut=12, renk="#243653", kalin=False):
@@ -94,13 +97,13 @@ class OperasyonelOzet(OzetPanel):
 
             sol = QVBoxLayout()
             sol.addWidget(
-                yazi("Bu Dönem", 10, "#7788A2")
+                yazi(f"<span style='color:{SECILEN_NOKTA}'>●</span>&nbsp;Bu Dönem", 10, "#7788A2")
             )
             sol.addWidget(bu)
 
             sag = QVBoxLayout()
             sag.addWidget(
-                yazi("Önceki Dönem", 10, "#7788A2")
+                yazi(f"<span style='color:{ONCEKI_NOKTA}'>●</span>&nbsp;Önceki Dönem", 10, "#7788A2")
             )
             sag.addWidget(gecmis)
 

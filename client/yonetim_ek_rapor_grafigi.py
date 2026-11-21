@@ -1,16 +1,12 @@
 """Tablo ağırlıklı yönetim raporları için grafik bileşeni."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCharts import QChartView
 
 from client.yonetim_grafik_turleri import (
-    grafik_olustur, GRAFIK_TURLERI,
-    uygun_grafik_turleri,
-    grafik_yuksekligi,
+    GrafikTuruSecici, bos_etiketi_olustur, grafik_karti_baslik_satiri, grafik_kartini_bicimlendir,
+    grafik_olustur, grafik_yuksekligi,
 )
-from PySide6.QtWidgets import QComboBox
 
 
 def grafik_verisi(rapor, veriler):
@@ -62,105 +58,56 @@ def grafik_verisi(rapor, veriler):
     return kategoriler, sayilar
 
 
+# Rapor -> (grafik başlığı, açıklama, ölçünün adı)
+GRAFIK_METINLERI = {
+    "Oda Kullanımı": ("Odalara Göre Kullanım", "Planlanan kullanım süresi (saat) · en çok kullanılan 10 oda", "Planlanan Süre (Saat)"),
+    "Cihaz Kullanımı": ("Cihazlara Göre Rezervasyon", "Rezervasyon sayısı · en çok kullanılan 10 cihaz", "Rezervasyon Sayısı"),
+    "Yetkiler": ("Rollere Göre Kullanıcı Sayısı", "Güncel durum · dönemden bağımsız", "Toplam Kullanıcı"),
+    "Öğrenci Mevcudu": ("Öğrenci Türlerine Göre Mevcut", "Güncel durum · dönemden bağımsız", "Öğrenci Sayısı"),
+    "Faaliyet Onayları": ("Faaliyet Türlerine Göre Kayıt", "Seçilen dönemdeki faaliyet kayıtları", "Faaliyet Kayıt Sayısı"),
+    "Bakım Gecikmeleri": ("Cihazlara Göre Geciken Planlar", "Bugünkü durum · dönemden bağımsız", "Geciken Plan Sayısı"),
+}
+
+
 class EkRaporGrafigi(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        self.setStyleSheet("""
-            EkRaporGrafigi {
-                background: white;
-                border: 1px solid #DCE6F3;
-                border-radius: 10px;
-            }
-            EkRaporGrafigi QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
+        self.setObjectName("EkRaporGrafigi")
 
         duzen = QVBoxLayout(self)
-        duzen.setContentsMargins(16, 13, 16, 12)
-        duzen.setSpacing(8)
-
         self.baslik = QLabel("Rapor Grafiği")
-        self.baslik.setStyleSheet(
-            "font-weight: bold; font-size: 15px; color: #16294B;"
-        )
         duzen.addWidget(self.baslik)
-
-        self.grafik_turu = QComboBox()
-        self.grafik_turu.addItems(GRAFIK_TURLERI)
-        self.grafik_turu.setCurrentText("Sütun")
-        self.grafik_turu.setMaximumWidth(190)
-        duzen.addWidget(self.grafik_turu)
-
-        self.bos = QLabel("Bu rapor için görüntülenecek veri yok.")
-        self.bos.setAlignment(Qt.AlignCenter)
-        self.bos.setMinimumHeight(90)
-        duzen.addWidget(self.bos)
+        self.aciklama = QLabel("")
+        duzen.addWidget(self.aciklama)
 
         self.gorunum = QChartView()
-        self.gorunum.setRenderHint(QPainter.Antialiasing)
-        self.gorunum.setMinimumHeight(280)
+        self.gorunum.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         duzen.addWidget(self.gorunum)
 
+        grafik_kartini_bicimlendir(self)
+        self.grafik_turu = GrafikTuruSecici(self, varsayilan="Sütun")
+        grafik_karti_baslik_satiri(self, self.grafik_turu)
+        self.bos = bos_etiketi_olustur(self)
+        duzen.insertWidget(1, self.bos)
+
+        self._rapor = None
         self._kategoriler = []
         self._sayilar = []
 
-        self.grafik_turu.currentTextChanged.connect(
-            self.grafigi_ciz
-        )
+        self.grafik_turu.currentTextChanged.connect(self.grafigi_ciz)
         self.gorunum.hide()
 
     def guncelle(self, rapor, veriler):
         self._rapor = rapor
-        self.baslik.setText(rapor + " Grafiği")
-
-        secenekler = uygun_grafik_turleri(rapor)
-
-        self.grafik_turu.blockSignals(True)
-        try:
-            mevcut = self.grafik_turu.currentText()
-            self.grafik_turu.clear()
-            self.grafik_turu.addItems(secenekler)
-            self.grafik_turu.setCurrentText(
-                mevcut if mevcut in secenekler
-                else secenekler[0]
-            )
-        finally:
-            self.grafik_turu.blockSignals(False)
-        self._kategoriler, self._sayilar = grafik_verisi(
-            rapor, veriler
-        )
-
-        secenekler = uygun_grafik_turleri(rapor)
-        if sum(v > 0 for v in self._sayilar) <= 1:
-            secenekler = tuple(
-                tur for tur in secenekler if tur != "Pasta"
-            )
-
-        mevcut = self.grafik_turu.currentText()
-        self.grafik_turu.blockSignals(True)
-        try:
-            self.grafik_turu.clear()
-            self.grafik_turu.addItems(secenekler)
-            self.grafik_turu.setCurrentText(
-                mevcut if mevcut in secenekler
-                else (
-                    "Yatay Çubuk"
-                    if "Yatay Çubuk" in secenekler
-                    else secenekler[0]
-                )
-            )
-        finally:
-            self.grafik_turu.blockSignals(False)
-
+        baslik, aciklama, _ = GRAFIK_METINLERI.get(rapor, (rapor + " Grafiği", "", "Sayı"))
+        self.baslik.setText(baslik)
+        self.aciklama.setText(aciklama)
+        self.aciklama.setVisible(bool(aciklama))
+        self._kategoriler, self._sayilar = grafik_verisi(rapor, veriler)
         self.grafigi_ciz()
 
     def grafigi_ciz(self, *_):
-        var_mi = bool(self._kategoriler) and any(
-            v > 0 for v in self._sayilar
-        )
+        var_mi = bool(self._kategoriler) and any(v > 0 for v in self._sayilar)
 
         self.bos.setText(
             "Seçilen dönemde tüm değerler sıfır."
@@ -169,29 +116,10 @@ class EkRaporGrafigi(QFrame):
         )
         self.bos.setVisible(not var_mi)
         self.gorunum.setVisible(var_mi)
-
         if not var_mi:
             return
 
-        olculer = {
-            "Oda Kullanımı": "Planlanan Süre (Saat)",
-            "Cihaz Kullanımı": "Rezervasyon Sayısı",
-            "Yetkiler": "Toplam Kullanıcı",
-            "Öğrenci Mevcudu": "Öğrenci Sayısı",
-            "Faaliyet Onayları": "Faaliyet Kayıt Sayısı",
-            "Bakım Gecikmeleri": "Geciken Plan Sayısı",
-        }
-
-        self.gorunum.setFixedHeight(
-            grafik_yuksekligi(
-                self.grafik_turu.currentText(),
-                len(self._kategoriler),
-            )
-        )
-
-        chart = grafik_olustur(
-            self._kategoriler,
-            [(olculer.get(self._rapor, "Sayı"), self._sayilar)],
-            self.grafik_turu.currentText(),
-        )
-        self.gorunum.setChart(chart)
+        tur = self.grafik_turu.currentText()
+        olcu = GRAFIK_METINLERI.get(self._rapor, ("", "", "Sayı"))[2]
+        self.gorunum.setFixedHeight(grafik_yuksekligi(tur, len(self._kategoriler), self._kategoriler))
+        self.gorunum.setChart(grafik_olustur(self._kategoriler, [(olcu, self._sayilar)], tur))
