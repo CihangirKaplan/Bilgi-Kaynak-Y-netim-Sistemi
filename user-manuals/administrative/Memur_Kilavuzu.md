@@ -10,7 +10,7 @@ Bu kılavuz **Memur** rolü içindir (cihaz, öğrenci, faaliyet ve danışma ma
 | **Genel** | Ana Kontrol Paneli |
 | **Klinik Operasyon** | Randevu Yönetimi (yalnızca görüntüleme), Oda Kullanımı, Oda Etkinlikleri, Randevu Raporları |
 | **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Yönetimi, Danışma Masası Raporları |
-| **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Cihaz Rezervasyonu, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları, Cihaz Rezervasyon Raporu, Geciken Bakım Planı Raporu |
+| **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Cihaz Rezervasyonu, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları |
 | **Yönetim & Denetim** | Oda Yönetimi |
 
 Randevu oluşturma/düzenleme sizin yetkinizde **değildir**; randevu sayfasını yalnızca izlersiniz.
@@ -69,7 +69,7 @@ Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tari
 - Filtre: *Aktif planlar, Tüm planlar, Pasif planlar.*
 
 ## 1.8 Cihaz raporları
-**Cihaz Raporları**, **Cihaz Rezervasyon Raporu** (cihaz, proje türü ve bölüm bazlı kullanım) ve **Geciken Bakım Planı Raporu** (geciken/yaklaşan planlar ve planı olmayan cihazlar) dönem seçerek çalışır ve **⬇ Excel'e Aktar** içerir. Ayrıntılar: [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).
+**Cihaz Raporları** sayfasında beş sekme vardır: **Bakım Geçmişi**, **Kalibrasyon**, **Arızalar**, **Cihaz Rezervasyonu** (cihaz, proje türü ve bölüm bazlı kullanım) ve **Geciken Bakım Planları** (geciken/yaklaşan planlar ve planı olmayan cihazlar). Her sekmenin kendi süzgeçleri vardır ve **⬇ Excel'e Aktar** içerir. Ayrıntılar: [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).
 
 ---
 

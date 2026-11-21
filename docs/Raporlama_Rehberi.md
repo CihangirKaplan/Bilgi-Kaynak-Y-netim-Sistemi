@@ -19,9 +19,9 @@ sayıların nasıl hesaplandığını, hangi verinin raporlara girmediğini ve r
 | 4 | Öğrenci Raporu | Öğrenci & Faaliyet | Admin, Müdür, Memur, Proje Asistanı | Hayır (güncel durum) | Ekran + Excel |
 | 5 | Faaliyet Raporu | Öğrenci & Faaliyet | Admin, Müdür, Memur, Proje Asistanı | Evet | Ekran + Excel |
 | 6 | Danışma Masası Raporları | Öğrenci & Faaliyet | Admin, Müdür, Memur | Evet | Ekran + Excel |
-| 7 | Cihaz Raporları | Cihaz | Admin, Müdür, Memur | Evet | Ekran + Excel |
-| 8 | Cihaz Rezervasyon Raporu | Cihaz | Admin, Müdür, Memur | Evet | Ekran + Excel |
-| 9 | Geciken Bakım Planı Raporu | Cihaz | Admin, Müdür, Memur | Hayır (bugünkü durum) | Ekran + Excel |
+| 7 | Cihaz Raporları (sekmeler: Bakım Geçmişi, Kalibrasyon, Arızalar) | Cihaz | Admin, Müdür, Memur | Evet | Ekran + Excel |
+| 8 | Cihaz Rezervasyon Raporu (Cihaz Raporları sayfasında sekme) | Cihaz | Admin, Müdür, Memur | Evet | Ekran + Excel |
+| 9 | Geciken Bakım Planı Raporu (Cihaz Raporları sayfasında "Geciken Bakım Planları" sekmesi) | Cihaz | Admin, Müdür, Memur | Hayır (bugünkü durum) | Ekran + Excel |
 | 10 | Yetki Raporu | Yönetim & Denetim | Admin, Müdür | Hayır (güncel durum) | Ekran + Excel |
 | 11 | Audit Kayıtları | Yönetim & Denetim | Admin, Müdür | Evet | Ekran + Excel |
 | 12 | Yönetim Raporları ve İstatistikler | Yönetim & Denetim | Admin, Müdür | Evet | Ekran + PDF |
@@ -232,7 +232,7 @@ Raporu görmek için gereken izin ve bu izne varsayılan olarak sahip roller:
 | Randevu Raporları | Randevu takvimini görüntüleme | ✔ | ✔ | ✔ | ✔ (yalnızca kendi) | ✔ | ✔ |
 | Puan / Öğrenci / Faaliyet Raporu | Faaliyet kayıtlarını düzenleme | ✔ | ✔ | ✔ | – | ✔ | – |
 | Danışma Masası Raporları | Danışma masası raporlarını görüntüleme | ✔ | ✔ | ✔ | – | – | – |
-| Cihaz Raporları, Cihaz Rezervasyon Raporu, Geciken Bakım Planı Raporu | Cihaz raporlarını görüntüleme | ✔ | ✔ | ✔ | – | – | – |
+| Cihaz Raporları (Cihaz Rezervasyonu ve Geciken Bakım Planları sekmeleri dahil) | Cihaz raporlarını görüntüleme | ✔ | ✔ | ✔ | – | – | – |
 | Oda Kullanım Raporu, Yönetim Raporları ve İstatistikler | Yönetim raporlarını görüntüleme | ✔ | ✔ | – | – | – | – |
 | Yetki Raporu, Audit Kayıtları | Audit kayıtlarını inceleme | ✔ | ✔ | – | – | – | – |
 
