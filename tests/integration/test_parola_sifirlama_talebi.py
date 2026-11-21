@@ -161,7 +161,8 @@ def test_sorgular_parametreli_ve_kullanici_adi_sorguya_yapistirilmaz():
     imlec = SahteImlec(kullanici=None)
     talep_hata(imlec, "x'; DROP TABLE kullanicilar;--")                    # var olmayan ad: 404
     sorgu, parametre = imlec.sorgular[0]
-    assert "DROP" not in sorgu and parametre == ("x'; DROP TABLE kullanicilar;--",)
+    ad = "x'; DROP TABLE kullanicilar;--"
+    assert "DROP" not in sorgu and parametre == (ad, ad)      # harf duyarsız arama + tam eşleşmeye öncelik
 
 
 def test_beklenmeyen_hata_icerigi_sizdirmadan_500_verir():

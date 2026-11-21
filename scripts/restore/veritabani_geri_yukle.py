@@ -26,7 +26,8 @@ from server.sema_kimligi import SemaKimligiHatasi, sema_kimligi  # noqa: E402
 
 load_dotenv()
 
-YEDEK_KLASORU = Path(__file__).resolve().parents[2] / "backups"
+# Yedekleme aracıyla aynı klasör: TKYS_BACKUP_DIR tanımlıysa (örn. C:\TKYS_Backups) en son yedek orada aranır.
+YEDEK_KLASORU = Path(os.getenv("TKYS_BACKUP_DIR") or (Path(__file__).resolve().parents[2] / "backups")).resolve()
 GECERLI_AD = re.compile(r"^[A-Za-z0-9_]{1,63}$")
 KORUNAN_ADLAR = {"postgres", "template0", "template1"}
 # Geri yükleme sonrası kayıt sayıları gösterilen tablolar (bulunmayanlar atlanır).

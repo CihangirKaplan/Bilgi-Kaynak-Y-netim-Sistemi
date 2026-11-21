@@ -257,4 +257,12 @@ jobs:
             tests/integration/test_son_paket_pg_quality.py \
             tests/integration/test_liste_pencereleme_pg_quality.py \
             tests/integration/test_oda_etkinlikleri_rbac.py \
+            tests/integration/test_transaction_quality.py \
+            tests/integration/test_randevu_transaction_quality.py \
+            tests/integration/test_randevu_eszamanlilik_quality.py \
+            tests/integration/test_audit_postgresql_quality.py \
+            tests/integration/test_api_audit_rollback_quality.py \
+            tests/integration/test_kullanici_personel_postgresql_quality.py \
+            tests/integration/test_parola_sifirlama_pg_quality.py \
+            tests/integration/test_cihaz_rezervasyon_eszamanlilik.py \
             tests/integration/test_rezervasyon_psikolog_yaris_pg.py

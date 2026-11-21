@@ -1374,6 +1374,10 @@ QLabel {
         self.sifre_penceresi.show()
 
     def _kisisel_sifre_degisti(self):
+        # Parola değişince eski oturum anahtarı sunucuda geçersizdir; bilgi kutusu açıkken arka plandaki bir istek
+        # ikinci bir "oturum sona erdi" uyarısı göstermesin.
+        self._oturum_kapatiliyor = True
+        self._oturum_zamanlayici.stop()
         self.sifre_penceresi.close()
 
         QMessageBox.information(
