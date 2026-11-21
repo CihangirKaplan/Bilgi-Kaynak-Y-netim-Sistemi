@@ -8965,6 +8965,32 @@ from datetime import date as _yr_date
 from datetime import timedelta as _yr_timedelta
 
 
+def _yonetim_onceki_donem(baslangic, bitis):
+    """Karşılaştırılacak önceki dönem (takvime göre; yöneticinin beklediği gibi):
+
+    - Ayın 1'inden başlayıp aynı ay içinde biten dönem ("Bu Ay", "Geçen Ay"): geçen ayın aynı günleri;
+      dönem ayın tamamıysa önceki ayın tamamı (31 Ekim'in karşılığı 30 Eylül'dür).
+    - Tek gün ("Bugün") ya da pazartesi başlayan en fazla 7 günlük dönem ("Bu Hafta"): geçen haftanın aynı günleri
+      (pazar ile cumartesi karşılaştırılmaz).
+    - Diğer aralıklar: hemen önceki, aynı uzunluktaki aralık.
+    """
+    import calendar
+
+    gun_sayisi = (bitis - baslangic).days + 1
+
+    if baslangic.day == 1 and (bitis.year, bitis.month) == (baslangic.year, baslangic.month):
+        onceki_ay_sonu = baslangic - _yr_timedelta(days=1)
+        onceki_ay_basi = onceki_ay_sonu.replace(day=1)
+        if bitis.day == calendar.monthrange(bitis.year, bitis.month)[1]:
+            return onceki_ay_basi, onceki_ay_sonu
+        return onceki_ay_basi, onceki_ay_basi.replace(day=min(bitis.day, onceki_ay_sonu.day))
+
+    if gun_sayisi == 1 or (baslangic.weekday() == 0 and gun_sayisi <= 7):
+        return baslangic - _yr_timedelta(days=7), bitis - _yr_timedelta(days=7)
+
+    return baslangic - _yr_timedelta(days=gun_sayisi), baslangic - _yr_timedelta(days=1)
+
+
 @app.get("/api/yonetim-raporlari/randevu-ozet")
 def yonetim_randevu_ozet(
     baslangic: _yr_date,
@@ -8989,8 +9015,7 @@ def yonetim_randevu_ozet(
             detail="Tarih aralığı en fazla 366 gün olabilir."
         )
 
-    onceki_bitis = baslangic - _yr_timedelta(days=1)
-    onceki_baslangic = baslangic - _yr_timedelta(days=gun_sayisi)
+    onceki_baslangic, onceki_bitis = _yonetim_onceki_donem(baslangic, bitis)
 
     def donem_ozeti(cursor, ilk, son):
         cursor.execute("""
@@ -9007,7 +9032,10 @@ def yonetim_randevu_ozet(
                 ) AS gelmedi,
                 COUNT(*) FILTER (
                     WHERE durum = 'IPTAL_EDILDI'
-                ) AS iptal_edildi
+                ) AS iptal_edildi,
+                COUNT(*) FILTER (
+                    WHERE durum = 'PLANLANDI' AND baslangic_zamani < NOW()
+                ) AS sonucu_girilmemis
             FROM randevular
             WHERE baslangic_zamani >= %s::date
               AND baslangic_zamani < (%s::date + INTERVAL '1 day')
@@ -9018,7 +9046,7 @@ def yonetim_randevu_ozet(
         return dict(zip(
             (
                 "toplam", "planlandi", "tamamlandi",
-                "gelmedi", "iptal_edildi"
+                "gelmedi", "iptal_edildi", "sonucu_girilmemis"
             ),
             (int(deger) for deger in sonuc)
         ))
@@ -9127,8 +9155,7 @@ def yonetim_cihaz_ozet(
             detail="Tarih aralığı en fazla 366 gün olabilir."
         )
 
-    onceki_baslangic = baslangic - _yr_timedelta(days=gun_sayisi)
-    onceki_bitis = baslangic - _yr_timedelta(days=1)
+    onceki_baslangic, onceki_bitis = _yonetim_onceki_donem(baslangic, bitis)
 
     # Sabit tablo/sütun eşleştirmeleri:
     # Kullanıcı girdisi SQL tablo veya sütun adına eklenmez.
@@ -9244,8 +9271,7 @@ def yonetim_ogrenci_ozet(
             detail="Tarih aralığı en fazla 366 gün olabilir."
         )
 
-    onceki_baslangic = baslangic - _yr_timedelta(days=gun_sayisi)
-    onceki_bitis = baslangic - _yr_timedelta(days=1)
+    onceki_baslangic, onceki_bitis = _yonetim_onceki_donem(baslangic, bitis)
 
     conn = None
     cursor = None
@@ -9410,8 +9436,7 @@ def yonetim_proje_etkinlik_ozet(
             detail="Tarih aralığı en fazla 366 gün olabilir."
         )
 
-    onceki_baslangic = baslangic - _yr_timedelta(days=gun_sayisi)
-    onceki_bitis = baslangic - _yr_timedelta(days=1)
+    onceki_baslangic, onceki_bitis = _yonetim_onceki_donem(baslangic, bitis)
 
     conn = None
     cursor = None

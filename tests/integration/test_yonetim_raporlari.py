@@ -29,12 +29,12 @@ def rapor_istemcisi(monkeypatch):
             ilk = str(durum["parametreler"][0])
 
             if ilk == "2026-11-01":
-                return (12, 3, 6, 1, 2)
+                return (12, 3, 6, 1, 2, 1)
 
-            if ilk == "2026-10-29":
-                return (8, 2, 4, 1, 1)
+            if ilk == "2026-10-01":
+                return (8, 2, 4, 1, 1, 0)
 
-            return (0, 0, 0, 0, 0)
+            return (0, 0, 0, 0, 0, 0)
 
         raise AssertionError("Beklenmeyen SQL sorgusu")
 
@@ -92,6 +92,8 @@ def test_yetkili_raporu_gorebilir(rapor_istemcisi):
     assert veri["ozet"]["tamamlandi"] == 6
     assert veri["ozet"]["iptal_edildi"] == 2
     assert veri["onceki_ozet"]["toplam"] == 8
+    assert veri["ozet"]["sonucu_girilmemis"] == 1          # tarihi geçmiş, hâlâ "Planlandı"
+    assert veri["onceki_donem"] == {"baslangic": "2026-10-01", "bitis": "2026-10-03"}   # geçen ayın aynı günleri
     assert veri["toplam_degisim_yuzde"] == 50.0
     assert len(veri["gunluk"]) == 3
     assert sum(g["sayi"] for g in veri["gunluk"]) == 12

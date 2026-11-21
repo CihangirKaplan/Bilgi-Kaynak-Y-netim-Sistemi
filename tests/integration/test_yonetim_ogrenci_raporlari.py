@@ -41,7 +41,7 @@ def istemci_ve_durum(monkeypatch):
             if ilk == "2026-11-01":
                 return (10, 25, 150, 7, 110, 5)
 
-            if ilk == "2026-10-29":
+            if ilk == "2026-10-01":
                 return (5, 12, 100, 4, 80, 3)
 
         raise AssertionError("Beklenmeyen SQL sorgusu")

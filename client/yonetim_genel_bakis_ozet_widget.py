@@ -51,7 +51,7 @@ class OperasyonelOzet(OzetPanel):
     def __init__(self):
         super().__init__(
             "Operasyonel Faaliyetler",
-            "İşlem sayıları · Dönem karşılaştırması"
+            "İşlem sayıları · Dönem karşılaştırması · İptal edilenler hariç"
         )
 
         self.donem_tarihleri = yazi(
