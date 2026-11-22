@@ -224,7 +224,7 @@ class CihazYonetimEkrani(QWidget):
         self.filtre_seridi.hide()
         layout.addWidget(self.filtre_seridi)
 
-        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM"], ortali=True)
+        self.tablo = tablo_olustur(["ENVANTER KODU", "CİHAZ ADI", "MARKA / MODEL", "SERİ NO", "DURUM", "GEÇMİŞ"], ortali=True)
         kb = self.tablo.horizontalHeader()
         # Uzun kod/marka/seri no sütunları şişirip diğerlerini ezmesin: sabit genişlik (sığmayan metin alt satıra sarar), ad sütunu esner.
         kb.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -236,6 +236,9 @@ class CihazYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(3, 150)
         kb.setSectionResizeMode(4, QHeaderView.Fixed)
         self.tablo.setColumnWidth(4, 170)
+        kb.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(5, 90)
+        self.tablo.setColumnHidden(5, not self.yetkili_mi)                     # geçmiş (maliyet, arıza notları) yalnızca cihaz yöneticilerine
         # Cihaz adı ekranda ilk sütun, envanter kodu ikinci olur (mantıksal sütun sırası ve kayıt kimliği değişmez; yalnızca görünüm).
         kb.moveSection(1, 0)
 
@@ -286,6 +289,10 @@ class CihazYonetimEkrani(QWidget):
             self.tablo.setItem(satir, 2, metin_item(cihaz.get("marka_model") or "-"))
             self.tablo.setItem(satir, 3, metin_item(cihaz.get("seri_no") or "-"))
             self.tablo.setCellWidget(satir, 4, durum_hapi(durum))
+            if self.yetkili_mi:
+                self.tablo.setCellWidget(satir, 5, tek_islem_butonu(
+                    lambda _=False, c_id=cihaz.get("cihaz_id"): self.gecmis_ac(c_id), "🕘", "Cihaz geçmişi: bakım, kalibrasyon, arıza, rezervasyon",
+                    renk="#1D4ED8", arka="#DBEAFE", hover="#BFDBFE"))
             satira_kimlik_ata(self.tablo, satir, cihaz.get("cihaz_id"))
 
         self.cip_toplam.setText(f"{len(cihazlar)} cihaz")
@@ -297,6 +304,11 @@ class CihazYonetimEkrani(QWidget):
         self.bos_mesaj.setVisible(not cihazlar)
         self.tablo.setVisible(bool(cihazlar))
         self.filtrele(self.arama.text())
+
+    def gecmis_ac(self, cihaz_id):
+        """Cihazın bakım, kalibrasyon, arıza ve rezervasyon geçmişini tek zaman çizgisinde açar."""
+        from client.cihaz_gecmisi_penceresi import CihazGecmisiPenceresi
+        CihazGecmisiPenceresi(self.api_url, self.token, cihaz_id, self).exec()
 
     def gorunen_cihazlar(self):
         """Arama ve durum filtresine uyan (tabloda görünen) cihazlar, tablo sırasıyla."""

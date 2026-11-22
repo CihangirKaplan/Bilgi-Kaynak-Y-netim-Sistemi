@@ -167,3 +167,61 @@ def test_rezervasyon_sahiplik_duzenleme_ve_iptal_gercek_veritabaninda():
         c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", (odalar,))
         c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
         conn.close()
+
+
+def test_cihaz_gecmisi_tum_kayit_turlerini_zaman_cizgisinde_dondurur_ve_yonetici_izni_ister():
+    """GET /api/cihazlar/{id}/gecmis: bakım, kalibrasyon, arıza, rezervasyon en yeni önce; özet sayılar; yetkisiz 403, olmayan cihaz 404."""
+    etiket = uuid4().hex[:8]
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    _dogru_veritabani(c)
+
+    def kul(ad, rol):
+        c.execute(
+            "INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, personel_id, personel_kodu) VALUES "
+            "(%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = %s), (SELECT COALESCE(MAX(personel_id), 0) + 1 FROM kullanicilar), %s) RETURNING kullanici_id",
+            (f"{ad}_{etiket}", rol, f"P-{ad}-{etiket}"))
+        return c.fetchone()[0]
+
+    yonetici, asistan = kul("cg1", "ADMIN"), kul("cg2", "PROJE_ASISTANI")
+    c.execute("INSERT INTO odalar (oda_adi, kapasite) VALUES (%s, 1) RETURNING oda_id", (f"cg_oda_{etiket}",))
+    oda = c.fetchone()[0]
+    c.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad) VALUES (%s, 'x') RETURNING bolum_id", (f"cg_b_{etiket}",))
+    bolum = c.fetchone()[0]
+    c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi) VALUES (%s, 'CG') RETURNING cihaz_id", (f"CG-{etiket}",))
+    cihaz = c.fetchone()[0]
+    bugun = datetime.now().date()
+    c.execute("INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, yapilan_islem, maliyet, bakim_tarihi, bakim_baslangic_tarihi, bakim_bitis_tarihi) "
+              "VALUES (%s, 'Ece', 'Filtre', 1200.5, %s, %s, %s)", (cihaz, bugun - timedelta(days=60), bugun - timedelta(days=60), bugun - timedelta(days=60)))
+    c.execute("INSERT INTO cihaz_kalibrasyonlari (cihaz_id, kalibrasyon_yapan_kurum, gecerlilik_tarihi, sertifika_no, kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi) "
+              "VALUES (%s, 'Kurum', %s, 'S-9', %s, %s)", (cihaz, bugun + timedelta(days=200), bugun - timedelta(days=30), bugun - timedelta(days=30)))
+    c.execute("INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_baslik, ariza_aciklamasi, aciliyet, bildirim_tarihi, cozuldu_mu) "
+              "VALUES (%s, 'ali', 'Ses', 'yok', 'Düşük', now() - interval '2 days', FALSE)", (cihaz,))
+    g = datetime.now() + timedelta(days=3)
+    c.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, bolum_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani) VALUES (%s, %s, %s, %s, %s)",
+              (cihaz, bolum, oda, g, g + timedelta(hours=2)))
+    istemci = TestClient(app)
+    try:
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: yonetici
+        yanit = istemci.get(f"/api/cihazlar/{cihaz}/gecmis")
+        assert yanit.status_code == 200
+        veri = yanit.json()
+        assert [o["tur"] for o in veri["olaylar"]] == ["Rezervasyon", "Arıza", "Kalibrasyon", "Bakım"]          # en yeni önce
+        assert veri["cihaz"]["envanter_kodu"] == f"CG-{etiket}" and veri["cihaz"]["etkin_durum"]
+        assert veri["ozet"]["bakim_sayisi"] == 1 and veri["ozet"]["toplam_bakim_maliyeti"] == 1200.5 and veri["ozet"]["acik_ariza_sayisi"] == 1
+        assert veri["ozet"]["rezervasyon_sayisi"] == 1 and veri["ozet"]["rezervasyon_saati"] == 2.0 and veri["ozet"]["kalibrasyon_sayisi"] == 1
+        assert veri["olaylar"][1]["durum"] == "Açık" and "Maliyet: 1.200,50" in veri["olaylar"][3]["ayrinti"]
+        assert istemci.get("/api/cihazlar/999999999/gecmis").status_code == 404
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: asistan
+        assert istemci.get(f"/api/cihazlar/{cihaz}/gecmis").status_code == 403
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        for tablo in ("cihaz_rezervasyonlari", "cihaz_arizalari", "cihaz_bakimlari", "cihaz_kalibrasyonlari"):
+            c.execute(f"DELETE FROM {tablo} WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s)", ([yonetici, asistan],))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = ANY(%s)", ([yonetici, asistan],))
+        c.execute("DELETE FROM odalar WHERE oda_id = %s", (oda,))
+        c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
+        conn.close()

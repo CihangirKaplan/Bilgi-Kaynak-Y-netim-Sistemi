@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **132** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **135** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -85,6 +85,13 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | POST | `/api/cihazlar` | CIHAZ_EKLE | cihaz_ekle |
 | GET | `/api/cihazlar/{cihaz_id}` | CIHAZ_UYGUNLUK_GORUNTULE | cihaz_detayi_getir |
 | PATCH | `/api/cihazlar/{cihaz_id}` | CIHAZ_ENVANTER_YONET | cihaz_guncelle |
+| GET | `/api/cihazlar/{cihaz_id}/gecmis` | CIHAZ_ENVANTER_YONET | Bir cihazın yaşam döngüsü: bakım, kalibrasyon, arıza ve rezervasyon kayıtları tek zaman çizgisinde (en yeni ön |
+
+## /api/cikis
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| POST | `/api/cikis` | — | Oturumu kapatır: kullanıcının oturum sürümü artar, bu kullanıcıya ait TÜM açık oturum anahtarları (token) geçe |
 
 ## /api/danisan-kodlari
 
@@ -327,6 +334,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 |---|---|---|---|
 | GET | `/api/rezervasyonlar` | CIHAZ_REZERVASYON | rezervasyonlari_listele |
 | POST | `/api/rezervasyonlar` | CIHAZ_REZERVASYON | cihaz_rezervasyonu_yap |
+| PUT | `/api/rezervasyonlar/{rezervasyon_id}` | CIHAZ_REZERVASYON | Rezervasyonu düzenler (cihaz değişmez). Yalnızca oluşturan kişi ya da cihaz yöneticisi; iptal edilmiş/bitmiş r |
 | PATCH | `/api/rezervasyonlar/{rezervasyon_id}/iptal` | CIHAZ_REZERVASYON | rezervasyon_iptal |
 
 ## /api/rol-izin-matrisi
