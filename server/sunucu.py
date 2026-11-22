@@ -82,6 +82,7 @@ from server import giris_siniri, rapor_bakim_plani, rapor_kullanim, rapor_ogrenc
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
+from server.modeller import bakim_tarihi_sorunu
 import psycopg2.errors
 from server.modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
@@ -4689,21 +4690,28 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         if not degisiklikler:
             raise HTTPException(status_code=422, detail="Güncellenecek veri bulunamadı.")
 
+        # Bakım tarihi ayrı bir alan değildir: her zaman bakım başlangıç tarihine eşit tutulur.
+        degisiklikler.pop("bakim_tarihi", None)
+        if degisiklikler.get("bakim_baslangic_tarihi") is not None:
+            degisiklikler["bakim_tarihi"] = degisiklikler["bakim_baslangic_tarihi"]
+
         # Tarih aralığı değiştiyse, yeni aralıkla kesişen rezervasyonlar kullanıcıya gösterilir.
-        if "bakim_baslangic_tarihi" in degisiklikler or "bakim_bitis_tarihi" in degisiklikler:
+        if "bakim_baslangic_tarihi" in degisiklikler or "bakim_bitis_tarihi" in degisiklikler or "sonraki_bakim_tarihi" in degisiklikler:
             cursor.execute(
                 """
                 SELECT cihaz_id, COALESCE(bakim_baslangic_tarihi, bakim_tarihi::date),
-                       COALESCE(bakim_bitis_tarihi, bakim_tarihi::date)
+                       COALESCE(bakim_bitis_tarihi, bakim_tarihi::date), sonraki_bakim_tarihi
                 FROM cihaz_bakimlari WHERE bakim_id = %s;
                 """,
                 (bakim_id,),
             )
-            cihaz_id, mevcut_bas, mevcut_bit = cursor.fetchone()
+            cihaz_id, mevcut_bas, mevcut_bit, mevcut_sonraki = cursor.fetchone()
             baslangic = degisiklikler.get("bakim_baslangic_tarihi") or mevcut_bas
             bitis = degisiklikler.get("bakim_bitis_tarihi") or mevcut_bit
-            if baslangic is not None and bitis is not None and bitis < baslangic:
-                raise HTTPException(status_code=422, detail="Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+            sonraki = degisiklikler["sonraki_bakim_tarihi"] if "sonraki_bakim_tarihi" in degisiklikler else mevcut_sonraki
+            sorun = bakim_tarihi_sorunu(baslangic, bitis, sonraki)            # eksik gönderilen alan için kayıtlı değerle birlikte denetlenir
+            if sorun:
+                raise HTTPException(status_code=422, detail=sorun)
             # Yalnızca tarih aralığı gerçekten değiştiyse kontrol edilir (not/maliyet düzenlemesinde değil).
             if baslangic is not None and bitis is not None and (baslangic, bitis) != (mevcut_bas, mevcut_bit):
                 cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis)

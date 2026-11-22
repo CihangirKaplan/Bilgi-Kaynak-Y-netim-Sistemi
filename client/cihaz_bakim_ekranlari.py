@@ -30,6 +30,21 @@ BAKIM_CAKISMA_METINLERI = (
     "Bakımı kaydet",
 )
 
+
+def tarihleri_denetle(ust, baslangic, bitis, sonraki):
+    """Formdaki bakım tarihlerini sunucuya göndermeden önce denetler; sorun varsa nedenini söyler ve False döner."""
+    if bitis < baslangic:
+        QMessageBox.warning(ust, "Tarih", "Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        return False
+    if baslangic.daysTo(bitis) > 366:
+        QMessageBox.warning(ust, "Tarih", "Bakım süresi bir yılı geçemez. Başlangıç ve bitiş tarihlerini kontrol edin.")
+        return False
+    if sonraki <= bitis:
+        QMessageBox.warning(ust, "Tarih", "Sonraki bakım tarihi, bakım bitiş tarihinden sonra olmalıdır.")
+        return False
+    return True
+
+
 class YeniBakimFormu(QDialog):
     def __init__(self, api_url, token, parent=None):
         super().__init__(parent)
@@ -158,10 +173,8 @@ class YeniBakimFormu(QDialog):
         except ValueError:
             maliyet = 0.0
 
-        # GÜVENLİK YAMASI: Eski model "bakim_tarihi" bekliyorsa diye onu da pakete ekliyoruz
         veri = {
             "cihaz_id": self.cmb_cihaz.currentData(),
-            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"), # EKLENDİ
             "bakim_yapan_kisi": self.txt_kisi.text().strip(),
             "yapilan_islem": self.txt_islem.toPlainText().strip(),
             "maliyet": maliyet,
@@ -175,6 +188,8 @@ class YeniBakimFormu(QDialog):
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
             QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            return
+        if not tarihleri_denetle(self, self.dt_baslangic.date(), self.dt_bitis.date(), self.dt_sonraki_bakim.date()):
             return
 
         try:
@@ -278,7 +293,6 @@ class BakimDuzenleFormu(QDialog):
             maliyet = 0.0
 
         veri = {
-            "bakim_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "bakim_yapan_kisi": self.txt_kisi.text().strip(),
             "yapilan_islem": self.txt_islem.toPlainText().strip(),
             "maliyet": maliyet,
@@ -290,6 +304,8 @@ class BakimDuzenleFormu(QDialog):
 
         if not veri["bakim_yapan_kisi"] or not veri["yapilan_islem"]:
             QMessageBox.warning(self, "Uyarı", "Kişi ve Yapılan İşlem alanları zorunludur.")
+            return
+        if not tarihleri_denetle(self, self.dt_baslangic.date(), self.dt_bitis.date(), self.dt_sonraki_bakim.date()):
             return
 
         try:
