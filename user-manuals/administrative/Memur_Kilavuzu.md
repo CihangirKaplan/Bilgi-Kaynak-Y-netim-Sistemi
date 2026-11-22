@@ -30,6 +30,8 @@ Kayıtlı tüm cihazlar ve anlık durumları. Üstteki **sayaç çipleri** topla
 - **＋ Cihaz Ekle:** Formda **Envanter Kodu \*** ve **Cihaz Adı \*** zorunludur; **Marka / Model**, **Seri No** isteğe bağlıdır; **Durum \*** seçilir. Envanter kodu **benzersiz** olmalıdır.
 - **✎ Envanteri Düzenle** (ya da listede çift tıklama): Cihaz bilgilerini ve durumunu güncellersiniz. Bir cihazı kullanımdan kaldırmak için durumunu **Kullanım Dışı** yapın; cihaz silinmez, geçmişi korunur.
 - **⬇ Excel'e Aktar:** Ekranda görünen cihazları **demirbaş sayımı** için Excel'e yazar (Envanter Kodu, Cihaz Adı, Marka/Model, Seri No, Durum, Kayıt Tarihi). Ana panelden bir durum kartına tıklayıp geldiyseniz yalnızca o durumdaki cihazlar listelenir ve aktarılır; hepsini istiyorsanız önce **Filtreyi kaldır, tümünü göster**'e basın. Aktarım denetim kaydına yazılır.
+- **🕘 Cihaz geçmişi** (satır sonundaki düğme): Cihazın **bakım, kalibrasyon, arıza ve rezervasyon** kayıtlarını tek bir zaman çizgisinde (en yeni önce) gösterir. Üstte cihazın **bugünkü durumu** ve özet sayılar (toplam bakım maliyeti, kalibrasyon geçerliliği, açık arıza, rezervasyon saati) bulunur; **Bakım / Kalibrasyon / Arıza / Rezervasyon** düğmeleriyle tek türü süzebilirsiniz. Her türden en yeni 300 kayıt gösterilir.
+- Listedeki **Durum**, bugünkü etkin durumu gösterir: bugün bakım ya da kalibrasyon tarih aralığında olan cihaz, kayıtlı durumu *Kullanıma Hazır* olsa da **Bakımda / Kalibrasyonda** görünür (Ana Kontrol Paneli ile aynı).
 
 ## 1.2 Cihaz Uygunluğu
 Cihazların hangi gün/saatlerde **uygun olmadığını** (bakım, kalibrasyon, arıza, rezervasyon) gösterir; yalnızca izlersiniz. Rezervasyon yapmadan önce buraya bakmak çakışmayı önler.
@@ -43,11 +45,13 @@ Cihazların hangi gün/saatlerde **uygun olmadığını** (bakım, kalibrasyon, 
 
 Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra değilse, başlangıç geçmişteyse, cihaz şu anda bakımda/arızalı gibi uygun olmayan bir durumdaysa,
 aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla çakıştığını söyler) ya da oda bu iş için uygun değilse.
-**İptal** için listeden rezervasyonu seçin, iptal düğmesine basın ve **iptal nedenini** belirtin; kayıt silinmez, iptal edildi olarak kalır.
+**Düzenleme ve iptal:** Rezervasyonun ayrıntısını çift tıklayarak açın. **✎ Rezervasyonu düzenle** ile saat, oda, bölüm ve proje bilgisini değiştirebilirsiniz (**cihaz değişmez**; başka cihaz için yeni rezervasyon açın). Saat ya da oda değişirse çakışmalar yeniden denetlenir; rezervasyonun kendisi çakışma sayılmaz. **Başlamış** rezervasyonda başlangıç saati ve oda değiştirilemez; yalnızca bitiş saati, bölüm ve proje bilgileri düzenlenir. Biten ve iptal edilmiş rezervasyonlar düzenlenemez.
+**İptal** için ayrıntı penceresinde iptal düğmesine basın; kayıt silinmez, iptal edildi olarak kalır. Bir rezervasyonu **yalnızca oluşturan kişi ya da cihaz yöneticisi** (Memur, Müdür, Admin) düzenleyebilir ya da iptal edebilir; başkasının rezervasyonunda düğmeler görünmez. Biten (süresi dolmuş) rezervasyon iptal edilemez.
+**⬇ Excel'e Aktar:** Ekranda görünen rezervasyonları aktarır (Envanter Kodu, Cihaz Adı, Bölüm, Oda, Proje, Tarih ve Saat, Durum); aktarım denetim kaydına yazılır. Aynı düğme **Bakım Kayıtları, Kalibrasyon, Arıza Kayıtları ve Bakım Planları** sayfalarında da vardır.
 
 ## 1.4 Bakım Kayıtları
 Cihaza yapılan bakımın kaydı.
-- **＋ Bakım Kaydı:** **Cihaz \***, **Bakım Yapan Kişi \***, **Yapılan İşlem \***, **Maliyet (₺)**, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir. Bitiş tarihi başlangıçtan önce olamaz.
+- **＋ Bakım Kaydı:** **Cihaz \***, **Bakım Yapan Kişi \***, **Yapılan İşlem \***, **Maliyet (₺)**, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir. Bitiş tarihi başlangıçtan önce olamaz ve bir bakım **en fazla bir yıl** sürebilir. **Sonraki bakım tarihi bitiş tarihinden sonra** olmalıdır. Ayrı bir "bakım tarihi" girilmez; her zaman başlangıç tarihidir.
 - Mevcut bir kaydı düzenlerken **cihaz değiştirilemez**; diğer alanlar düzeltilebilir.
 - Bakım kaydı cihazın Envanter'deki durumunu **kendiliğinden değiştirmez**; ancak kaydın tarih aralığında cihaz **Cihaz Uygunluğu**'nda uygun değil görünür ve **Ana Kontrol Paneli**'nde "bakımda" sayılır.
 
@@ -59,6 +63,7 @@ Cihaza yapılan bakımın kaydı.
 - **＋ Arıza Kaydı:** **Arızalı Cihaz \***, **Aciliyet Seviyesi \*** (*Düşük, Orta, Yüksek, Kritik*), **Sorun Başlığı \*** ve **Açıklama \*** girilir.
   Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur.
 - Arızayı düzeltirken **Mevcut Durum** alanında **Açık (devam ediyor)** ya da **Çözüldü (cihaz kullanıma açılır)** seçersiniz; *Çözüldü* cihazı yeniden kullanıma açar.
+- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, listede sorun başlığının üzerine gelince ve **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Arıza yeniden açılırsa not temizlenir.
 
 ## 1.7 Bakım Planları
 Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tarihe yaklaşınca ve tarih geçince sizi uyarır.
