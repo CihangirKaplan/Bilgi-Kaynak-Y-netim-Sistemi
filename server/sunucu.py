@@ -4316,7 +4316,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
 
         cursor.execute("""
             SELECT a.ariza_id, c.cihaz_adi, a.ariza_baslik, a.ariza_aciklamasi, a.aciliyet,
-                   a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu
+                   a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu, a.cozum_tarihi, a.cozum_notu
             FROM cihaz_arizalari a
             JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
             ORDER BY a.bildirim_tarihi DESC;
@@ -4331,6 +4331,8 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
                 "durum": "Çözüldü" if k[5] else "Açık",
                 "bildirim_tarihi": k[6].isoformat() if hasattr(k[6], 'isoformat') else str(k[6]),
                 "envanter_kodu": k[7] if len(k) > 7 else None,
+                "cozum_tarihi": (k[8].isoformat() if hasattr(k[8], "isoformat") else k[8]) if len(k) > 8 else None,
+                "cozum_notu": k[9] if len(k) > 9 else None,
             }
             for k in cursor.fetchall()
         ]
@@ -4428,16 +4430,19 @@ def ariza_guncelle(ariza_id: int, ariza: ArizaGuncelleModeli, kullanici_id: int 
             raise HTTPException(status_code=404, detail="Arıza kaydı bulunamadı.")
         cihaz_id = kayit[0]
 
-        # Çözüldüyse çözüm tarihini anlık at, çözülmediyse NULL (Boş) yap
+        # Çözüldüyse çözüm tarihini anlık at, çözülmediyse NULL (Boş) yap. Çözüm notu: çözüldüyse yazılan not (gönderilmediyse eskisi
+        # korunur), yeniden açıldıysa temizlenir.
         cozum_sql = "CURRENT_TIMESTAMP" if ariza.cozuldu_mu else "NULL"
+        not_sql = "COALESCE(%s, cozum_notu)" if ariza.cozuldu_mu else "NULL"
+        not_parametresi = (ariza.cozum_notu,) if ariza.cozuldu_mu else ()
 
         # Arıza Tablosunu Güncelle
         cursor.execute(f"""
             UPDATE cihaz_arizalari
             SET ariza_baslik = %s, ariza_aciklamasi = %s, aciliyet = %s,
-                cozuldu_mu = %s, cozum_tarihi = {cozum_sql}
+                cozuldu_mu = %s, cozum_tarihi = {cozum_sql}, cozum_notu = {not_sql}
             WHERE ariza_id = %s;
-        """, (ariza.ariza_baslik.strip(), ariza.ariza_aciklama.strip(), ariza.aciliyet, ariza.cozuldu_mu, ariza_id))
+        """, (ariza.ariza_baslik.strip(), ariza.ariza_aciklama.strip(), ariza.aciliyet, ariza.cozuldu_mu, *not_parametresi, ariza_id))
 
         # Cihazın mevcut durumunu oku, satırı kilitle ve cihazın BAŞKA açık arızası var mı bak.
         cursor.execute(

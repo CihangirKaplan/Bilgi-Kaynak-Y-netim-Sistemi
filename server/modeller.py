@@ -593,6 +593,14 @@ class ArizaGuncelleModeli(BaseModel):
     ariza_aciklama: str = Field(min_length=2)
     aciliyet: AciliyetTuru
     cozuldu_mu: bool # True ise çözüldü, False ise devam ediyor
+    cozum_notu: Optional[str] = Field(default=None, max_length=500)    # çözüldüyse: ne yapılarak çözüldü (eski istemciler göndermeyebilir)
+
+    @field_validator("cozum_notu", mode="before")
+    @classmethod
+    def cozum_notunu_temizle(cls, deger):
+        if isinstance(deger, str):
+            return deger.strip() or None
+        return deger
 
 # ADM-API-004: Personel Güncelleme İstek Modeli
 class PersonelGuncelleModeli(BaseModel):

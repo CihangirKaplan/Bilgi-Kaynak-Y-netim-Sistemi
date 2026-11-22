@@ -111,11 +111,13 @@ def test_ariza_duzenle_cozuldu_isareti_gonderilir(qt_app):
     f = ariza.ArizaDuzenleFormu("http://x", "T", ARIZALAR[0])
     assert f.cmb_durum.currentIndex() == 0 and f.cmb_aciliyet.currentText() == "Kritik"
     f.cmb_durum.setCurrentIndex(1)
+    f.txt_cozum_notu.setPlainText("Güç kablosu değiştirildi")            # çözüldü işaretlenirken çözüm notu zorunlu
     with patch.object(ariza, "oturum_kontrollu_istek", return_value=cevap(200, {})) as istek, \
          patch.object(ariza.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("PUT", "http://x/api/arizalar/1")
     assert istek.call_args.kwargs["json"]["cozuldu_mu"] is True
+    assert istek.call_args.kwargs["json"]["cozum_notu"] == "Güç kablosu değiştirildi"
     f.close()
 
 

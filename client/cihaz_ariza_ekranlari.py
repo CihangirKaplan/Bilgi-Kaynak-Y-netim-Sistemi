@@ -140,6 +140,17 @@ class ArizaBildirimFormu(QDialog):
             QMessageBox.critical(self, "Bağlantı Hatası", "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.")
 
 
+def ariza_ipucu(ar):
+    """Arıza satırının ipucu: açıklama; çözüldüyse çözüm tarihi ve çözüm notu da."""
+    satirlar = [str(ar.get("ariza_aciklama") or "").strip()]
+    if ar.get("durum") == "Çözüldü":
+        tarih = str(ar.get("cozum_tarihi") or "")[:16].replace("T", " ")
+        if tarih:
+            satirlar.append(f"Çözüm tarihi: {tarih}")
+        satirlar.append(f"Çözüm: {ar.get('cozum_notu') or 'not girilmemiş'}")
+    return "\n".join(s for s in satirlar if s)
+
+
 class ArizaYonetimEkrani(QWidget):
     """Ana Arıza Kayıtları Listesi Ekranı"""
     def __init__(self, api_url, token, yetkili_mi=False):
@@ -229,7 +240,9 @@ class ArizaYonetimEkrani(QWidget):
             cihaz_item.setToolTip(cihaz_ipucu(cihaz_item.text()))
             cihaz_item.setData(SIRALAMA_ROLU, cihaz_adi)                                              # sıralama cihaz adına göre
             self.tablo.setItem(satir, 1, cihaz_item)
-            self.tablo.setItem(satir, 2, metin_item(ar.get("ariza_baslik") or ""))
+            baslik_item = metin_item(ar.get("ariza_baslik") or "")
+            baslik_item.setToolTip(ariza_ipucu(ar))                                                   # açıklama, çözüldüyse çözüm notu
+            self.tablo.setItem(satir, 2, baslik_item)
 
             aciliyet = ar.get("aciliyet") or "Belirtilmedi"
             renk, arka = ACILIYET_RENKLERI.get(aciliyet, ("#6B7280", "#F3F4F6"))
@@ -321,6 +334,15 @@ class ArizaDuzenleFormu(QDialog):
         form_layout.addRow("Sorun Başlığı:", self.txt_baslik)
         form_layout.addRow("Açıklama:", self.txt_aciklama)
         form_layout.addRow("Mevcut Durum:", self.cmb_durum)
+
+        # Çözüm notu yalnızca "Çözüldü" seçilince görünür ve zorunludur: ne yapıldığı sonradan da bilinsin.
+        self.txt_cozum_notu = QTextEdit(self.ariza_verisi.get("cozum_notu") or "")
+        self.txt_cozum_notu.setPlaceholderText("Ne yapılarak çözüldü? (örn. kablo değiştirildi, yazılım güncellendi)")
+        self.txt_cozum_notu.setMaximumHeight(80)
+        self.etiket_cozum_notu = QLabel("Çözüm Notu (*):")
+        form_layout.addRow(self.etiket_cozum_notu, self.txt_cozum_notu)
+        self.cmb_durum.currentIndexChanged.connect(self._cozum_notu_gorunurlugu)
+        self._cozum_notu_gorunurlugu()
         layout.addLayout(form_layout)
 
         self.btn_kaydet = QPushButton("Güncelle")
@@ -328,6 +350,11 @@ class ArizaDuzenleFormu(QDialog):
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(self.btn_kaydet)
+
+    def _cozum_notu_gorunurlugu(self, *_):
+        gorunur = "Çözüldü" in self.cmb_durum.currentText()
+        self.etiket_cozum_notu.setVisible(gorunur)
+        self.txt_cozum_notu.setVisible(gorunur)
 
     def kaydet(self):
         baslik = self.txt_baslik.text().strip()
@@ -337,11 +364,19 @@ class ArizaDuzenleFormu(QDialog):
             QMessageBox.warning(self, "Hata", "Başlık ve açıklama boş bırakılamaz.")
             return
 
+        cozuldu = "Çözüldü" in self.cmb_durum.currentText()
+        cozum_notu = self.txt_cozum_notu.toPlainText().strip()
+        if cozuldu and len(cozum_notu) < 3:
+            QMessageBox.warning(self, "Çözüm Notu", "Arızayı çözüldü olarak işaretlerken ne yapıldığını kısaca yazın.")
+            self.txt_cozum_notu.setFocus()
+            return
+
         veri = {
             "ariza_baslik": baslik,
             "ariza_aciklama": aciklama,
             "aciliyet": self.cmb_aciliyet.currentText(),
-            "cozuldu_mu": "Çözüldü" in self.cmb_durum.currentText()
+            "cozuldu_mu": cozuldu,
+            "cozum_notu": cozum_notu if cozuldu else None,
         }
 
         try:
