@@ -14,9 +14,6 @@ SABIT_NOTLAR = {
     "IZIN_TANIMLA": (
         "Şu an sistemde bu izni kullanan bir sayfa, düğme ya da işlem yok; açıp kapatmak hiçbir şeyi değiştirmez."
     ),
-    "CIHAZ_TAKIP_KONTROL_LISTESI": (
-        "Şu an sistemde bu izni kullanan bir sayfa, düğme ya da işlem yok; açıp kapatmak hiçbir şeyi değiştirmez."
-    ),
 }
 
 

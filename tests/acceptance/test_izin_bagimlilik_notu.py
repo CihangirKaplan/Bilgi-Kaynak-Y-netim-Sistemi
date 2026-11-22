@@ -113,7 +113,7 @@ def test_gercek_menude_kendi_basina_sekme_acan_izinler_not_almaz():
 def test_gercek_menude_oda_izinleri_birlikte_gerektigini_soyler_ve_menuden_cikmayanlar_sabit_not_alir():
     notlar = ib.izin_notlari()
     assert "birlikte" in notlar["ODA_EKLE"] and "birlikte" in notlar["ODA_DUZENLE"]
-    assert {"PERSONEL_TANIMLA", "IZIN_TANIMLA", "CIHAZ_TAKIP_KONTROL_LISTESI"} <= set(notlar)
+    assert {"PERSONEL_TANIMLA", "IZIN_TANIMLA"} <= set(notlar) and "CIHAZ_TAKIP_KONTROL_LISTESI" not in notlar
 
 
 def test_gercek_menu_degismezi_her_dugme_izni_ya_sekme_acar_ya_not_alir():

@@ -83,7 +83,6 @@ IZIN_LISTESI = [
     ("Cihaz envanterini yönetme",            "Cihaz Yönetimi",    "HEEHHE"),
     ("Cihaz rezervasyonu yapma",             "Cihaz Yönetimi",    "HEHHEE"),
     ("Cihaz ekleme",                         "Cihaz Yönetimi",    "HEEHHE"),
-    ("Cihaz takip kontrol listesini yönetme","Cihaz Yönetimi",    "HEEHHE"),
     ("Cihaz raporlarını görüntüleme",        "Cihaz Yönetimi",    "HEEHHE"),
 
     ("Bakım kayıtlarını görüntüleme",        "Kayıt & Bakım",     "HEEHHE"),
@@ -167,7 +166,6 @@ IZIN_KODLARI = {
     "Cihaz envanterini yönetme": ("CIHAZ_ENVANTER_YONET",),
     "Cihaz rezervasyonu yapma": ("CIHAZ_REZERVASYON",),
     "Cihaz ekleme": ("CIHAZ_EKLE",),
-    "Cihaz takip kontrol listesini yönetme": ("CIHAZ_TAKIP_KONTROL_LISTESI",),
     "Cihaz raporlarını görüntüleme": ("CIHAZ_ENVANTER_YONET",),
     "Bakım kayıtlarını görüntüleme": ("BAKIM_KAYITLARI_GORUNTULE",),
     "Bakım kayıtlarını yönetme": ("BAKIM_KAYITLARI_YONET",),
