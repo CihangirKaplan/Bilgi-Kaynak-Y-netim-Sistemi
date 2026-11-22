@@ -7,6 +7,7 @@ from client.danisma_rapor_excel import excel_dosyasi_olustur
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
+    istek_hatasi_metni,
 )
 
 from PySide6.QtCore import Qt, QDate
@@ -474,7 +475,7 @@ class DanismaMasasiRaporlari(QWidget):
             QMessageBox.warning(
                 self,
                 "Rapor Hatası",
-                f"Rapor bilgileri alınamadı:\n{hata}"
+                f"Rapor bilgileri alınamadı:\n{istek_hatasi_metni(hata)}"
             )
             return
 

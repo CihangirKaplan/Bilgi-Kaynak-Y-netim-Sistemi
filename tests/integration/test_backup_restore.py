@@ -66,12 +66,13 @@ def test_yedi_gunluk_onizleme(yedek_ortami):
     script, klasor = yedek_ortami
     dosya = klasor / "crkys_alembic_test_20200101_000000_000000.dump"
     dosya.write_text("sahte yedek")
+    (klasor / "crkys_alembic_test_20261104_090000_000000.dump").write_text("yeni yedek")   # en yeni yedek her zaman korunur
 
     eski = time.time() - 10 * 86400
     os.utime(dosya, (eski, eski))
 
     sonuc = subprocess.run(
-        [sys.executable, str(script), "--database", "crkys_alembic_test", "--days", "7"],
+        [sys.executable, str(script), "--database", "crkys_alembic_test", "--days", "7", "--keep", "1"],
         capture_output=True,
         text=True,
         check=True,
@@ -94,7 +95,7 @@ def test_eski_yedek_silinir_yeni_korunur(yedek_ortami):
     os.utime(eski, (zaman, zaman))
 
     subprocess.run(
-        [sys.executable, str(script), "--database", "crkys_alembic_test", "--days", "7", "--apply"],
+        [sys.executable, str(script), "--database", "crkys_alembic_test", "--days", "7", "--keep", "1", "--apply"],
         check=True,
         capture_output=True,
         text=True,
@@ -204,8 +205,9 @@ def test_rotasyon_baska_veritabanlarinin_yedeklerine_dokunmaz(yedek_ortami):
     for d in (ana, test, elle, yabanci):
         d.write_text("x")
         os.utime(d, (zaman, zaman))
+    (klasor / "crkys_20261104_090000_000000.dump").write_text("yeni")   # en yeni yedek her zaman korunur
 
-    subprocess.run([sys.executable, str(script), "--database", "crkys", "--days", "7", "--apply"],
+    subprocess.run([sys.executable, str(script), "--database", "crkys", "--days", "7", "--keep", "1", "--apply"],
                    check=True, capture_output=True, text=True)
 
     assert not ana.exists()                                    # yalnız seçilen veritabanının eski yedeği silinir
@@ -220,3 +222,40 @@ def test_rotasyon_veritabani_adi_olmadan_calismaz(tmp_path):
     ortam = {k: v for k, v in os.environ.items() if k != "DB_NAME"}
     sonuc = subprocess.run([sys.executable, str(script), "--apply"], env=ortam, capture_output=True, text=True)
     assert sonuc.returncode != 0
+
+
+# ------------------------------------------------------------ rotasyon: en yeni yedekler her zaman korunur
+def test_yedekler_bir_suredir_alinmasa_bile_en_yeni_uc_yedek_silinmez(yedek_ortami):
+    """Yedekleme haftalarca çalışmamışsa bütün yedekler "eski"dir; elle çalıştırılan temizlik hepsini silmemeli."""
+    script, klasor = yedek_ortami
+    dosyalar = []
+    for gun in range(5):                                       # 30-34 gün önce alınmış 5 yedek
+        d = klasor / f"crkys_202001{gun + 1:02d}_000000_000000.dump"
+        d.write_text("x")
+        zaman = time.time() - (30 + gun) * 86400
+        os.utime(d, (zaman, zaman))
+        dosyalar.append(d)
+
+    sonuc = subprocess.run([sys.executable, str(script), "--database", "crkys", "--days", "14", "--apply"],
+                           check=True, capture_output=True, text=True)
+
+    assert [d.exists() for d in dosyalar] == [True, True, True, False, False]   # en yeni 3 korunur, en eski 2 silinir
+    assert sonuc.stdout.count("Silindi:") == 2
+
+
+def test_gecersiz_korunacak_yedek_sayisi_reddedilir(yedek_ortami):
+    script, _ = yedek_ortami
+    sonuc = subprocess.run([sys.executable, str(script), "--database", "crkys", "--keep", "0"],
+                           capture_output=True, text=True)
+    assert sonuc.returncode != 0
+
+
+def test_eksik_veritabani_ayari_acik_mesajla_bildirilir(tmp_path):
+    sonuc = yedekle(tmp_path)
+    assert sonuc.returncode == 0                               # tam ayarlarla çalışır
+    script = tmp_path / "scripts" / "backup" / "veritabani_yedekle.py"
+    ortam = {k: v for k, v in os.environ.items() if k not in ("DB_HOST", "DB_PASSWORD")}
+    ortam.update({"DB_NAME": "crkys", "DB_PORT": "5432", "DB_USER": "test", "PG_DUMP_PATH": str(sahte_pg_dump(tmp_path))})
+    sonuc = subprocess.run([sys.executable, str(script)], env=ortam, capture_output=True, text=True, cwd=tmp_path)
+    assert sonuc.returncode != 0
+    assert "Eksik ayar: DB_HOST, DB_PASSWORD" in sonuc.stderr and "Traceback" not in sonuc.stderr

@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import (
+    hata_detayi_metni,
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -740,14 +742,9 @@ class OdaEtkinlikleriEkrani(QWidget):
         if oturum_hatasi_mi(cevap):
             return None
         if not cevap.ok:
-            try:
-                detay = cevap.json().get("detail")
-            except ValueError:
-                detay = None
-            if isinstance(detay, (dict, list)):
-                detay = str(detay)
+            # Sunucunun Türkçe açıklaması gösterilir (liste/sözlük biçimindeki ayrıntılar da okunur metne çevrilir).
             raise ValueError(
-                detay or f"İşlem başarısız (HTTP {cevap.status_code})"
+                hata_detayi_metni(cevap, f"İşlem tamamlanamadı (HTTP {cevap.status_code}).")
             )
         return cevap.json()
 
@@ -768,7 +765,7 @@ class OdaEtkinlikleriEkrani(QWidget):
 
         except (requests.RequestException, ValueError) as hata:
             QMessageBox.warning(
-                self, "Oda Etkinlikleri", str(hata)
+                self, "Oda Etkinlikleri", istek_hatasi_metni(hata)
             )
             return
 
@@ -1306,7 +1303,7 @@ class OdaEtkinlikleriEkrani(QWidget):
             if sonuc is not None:
                 self.yenile()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Etkinlik Eklenemedi", str(hata))
+            QMessageBox.warning(self, "Etkinlik Eklenemedi", istek_hatasi_metni(hata))
 
     def duzenle(self):
         kayit = self.secili()
@@ -1340,7 +1337,7 @@ class OdaEtkinlikleriEkrani(QWidget):
                 self.yenile()
         except (requests.RequestException, ValueError) as hata:
             QMessageBox.warning(
-                self, "Etkinlik Güncellenemedi", str(hata)
+                self, "Etkinlik Güncellenemedi", istek_hatasi_metni(hata)
             )
 
     def iptal(self):
@@ -1377,5 +1374,5 @@ class OdaEtkinlikleriEkrani(QWidget):
                 self.yenile()
         except (requests.RequestException, ValueError) as hata:
             QMessageBox.warning(
-                self, "Etkinlik İptal Edilemedi", str(hata)
+                self, "Etkinlik İptal Edilemedi", istek_hatasi_metni(hata)
             )
