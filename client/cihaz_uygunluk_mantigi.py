@@ -25,7 +25,7 @@ KOD_ADLARI = {
     MUSAIT: "Müsait", KISMEN: "Kısmen rezerve", DOLU: "Tam rezerve", BAKIM: "Bakımda",
     KALIBRASYON: "Kalibrasyonda", ARIZA: "Arızalı", KULLANIM_DISI: "Kullanım dışı",
 }
-CALISMA_BASLANGIC_SAATI = 8      # takvimdeki mesai penceresi (haftalik_takvim.py ile aynı: 08:00-18:00)
+CALISMA_BASLANGIC_SAATI = 8      # uygunluk takvimindeki mesai penceresi (08:00-18:00)
 CALISMA_BITIS_SAATI = 18
 
 

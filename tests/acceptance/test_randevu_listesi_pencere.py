@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import client.haftalik_takvim as takvim_modulu
 import client.randevu_ekranlari as modul
 from client.randevu_ekranlari import RANDEVU_LISTE_SINIRI, RandevuAnaEkrani
 
@@ -77,24 +76,3 @@ def test_kesilmemisse_sayac_eskisi_gibi():
     ekran = _ac(Sunucu([_kayit(1)], toplam=1))
     assert ekran.lbl_sayac.text() == "1 / 1 randevu"
     ekran.close()
-
-
-def test_haftalik_takvim_yalniz_gosterilen_hafta_ve_odayi_ister():
-    from PySide6.QtCore import QDate
-    from PySide6.QtWidgets import QRadioButton
-
-    istekler = []
-
-    def sahte(yontem, url, **kwargs):
-        if url.endswith("/api/randevular"):
-            istekler.append(kwargs.get("params"))
-        return _cevap([])
-
-    with patch.object(takvim_modulu, "oturum_kontrollu_istek", side_effect=sahte):
-        takvim = takvim_modulu.HaftalikTakvimEkrani("http://testserver", "TOKEN")
-        dugme = QRadioButton("Oda")
-        takvim.oda_grubu.addButton(dugme, 42)
-        dugme.setChecked(True)
-        istekler.clear()
-        takvim.verileri_doldur(QDate(2026, 11, 16))
-    assert istekler and istekler[-1] == {"baslangic": "2026-11-16", "bitis": "2026-11-22", "oda_id": 42}

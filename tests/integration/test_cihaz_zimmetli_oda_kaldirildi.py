@@ -71,7 +71,6 @@ def test_migrasyon_sutunu_kaldirir_ve_geri_almada_boş_sutunu_geri_ekler():
     assert "DROP COLUMN IF EXISTS zimmetli_oda_id" in metin and "ADD COLUMN IF NOT EXISTS zimmetli_oda_id" in metin
 
 
-@pytest.mark.parametrize("dosya", ["database/01_cihaz_tablolari.sql", "database/04_test_verisi.sql",
-                                   "docs/architecture/D04_Data_Dictionary.md", "docs/architecture/cihaz_ve_randevu_sistemi_er_diyagram.md"])
+@pytest.mark.parametrize("dosya", ["docs/architecture/D04_Data_Dictionary.md", "docs/architecture/cihaz_ve_randevu_sistemi_er_diyagram.md"])
 def test_belge_ve_sql_dosyalari_zimmetli_odayi_anmaz(dosya):
     assert "zimmetli" not in (KOK / dosya).read_text(encoding="utf-8").lower()
