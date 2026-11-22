@@ -27,7 +27,7 @@ def pencere(qt_app, secili_rol_id):
 
 def kaydet(p, aktif, cevap=None):
     p.switch_aktif.setChecked(aktif)
-    with patch.object(modul.requests, "put") as put, patch.object(QMessageBox, "question", return_value=cevap or QMessageBox.Yes) as soru, \
+    with patch.object(modul, "oturum_kontrollu_istek") as put, patch.object(QMessageBox, "question", return_value=cevap or QMessageBox.Yes) as soru, \
             patch.object(QMessageBox, "warning") as uyari:
         put.return_value.status_code = 200
         p.rol_kaydet()
@@ -63,7 +63,7 @@ def test_aktif_kalan_rolde_uyari_cikmaz(qt_app):
 def test_sunucu_reddederse_sunucunun_mesaji_gosterilir(qt_app):
     p = pencere(qt_app, 3)
     p.switch_aktif.setChecked(False)
-    with patch.object(modul.requests, "put") as put, patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with patch.object(modul, "oturum_kontrollu_istek") as put, patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
             patch.object(QMessageBox, "warning") as uyari:
         put.return_value.status_code = 409
         put.return_value.json.return_value = {"detail": "Kendi rolünüzü pasife alamazsınız; oturumunuz kapanırdı."}

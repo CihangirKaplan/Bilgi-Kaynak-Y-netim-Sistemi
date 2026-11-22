@@ -27,6 +27,31 @@ from PySide6.QtWidgets import (
 from client.tablo_siralama import siralanabilir_yap
 from client.bildirim_toast import basari_bildirimi
 
+# Sunucudaki sınırla aynı: bir görev en fazla mesai süresi (08:00-18:00) kadar olabilir.
+GOREV_EN_UZUN_SAAT = 10
+GOREV_COK_UZUN_MESAJI = (
+    f"Bir görev en fazla {GOREV_EN_UZUN_SAAT} saat olabilir. "
+    "Daha uzun çalışmayı ayrı görevler olarak girin."
+)
+UZUN_GOREV_IPUCU = (
+    f"Görev {GOREV_EN_UZUN_SAAT} saatten uzun: öğrenci görevi bitirmeyi unutmuş olabilir. "
+    "Onaylamadan önce saatleri kontrol edin, gerekirse Düzenle ile düzeltin."
+)
+
+
+def gorev_uzun_mu(oturum):
+    """Görev mesai süresini aşıyor mu? Sunucu "uzun_gorev" gönderiyorsa o, göndermiyorsa (eski sunucu) süreden hesaplanır."""
+    if not isinstance(oturum, dict):
+        return False
+    if "uzun_gorev" in oturum:
+        return bool(oturum.get("uzun_gorev"))
+    saniye = oturum.get("toplam_saniye")
+    return saniye is not None and int(saniye) > GOREV_EN_UZUN_SAAT * 3600
+
+
+def gorev_suresi_cok_uzun_mu(baslangic, bitis):
+    return (bitis - baslangic).total_seconds() > GOREV_EN_UZUN_SAAT * 3600
+
 
 
 def _gorev_formunu_stille(pencere, form, baslik, aciklama):
@@ -395,6 +420,7 @@ class DanismaMasasiYonetimi(QWidget):
             self.tablo.setRowCount(len(oturumlar))
 
             for satir, oturum in enumerate(oturumlar):
+                uzun = gorev_uzun_mu(oturum)
                 degerler = [
                     oturum.get("ad_soyad", ""),
                     oturum.get("ogrenci_numarasi", ""),
@@ -422,6 +448,8 @@ class DanismaMasasiYonetimi(QWidget):
                                 f"{toplam_dakika // 60} sa "
                                 f"{toplam_dakika % 60:02d} dk"
                             )
+                        if uzun:
+                            deger = f"⚠ {deger}"
 
                     if sutun == 5:
                         deger = (
@@ -443,6 +471,13 @@ class DanismaMasasiYonetimi(QWidget):
 
                     elif sutun == 1:
                         hucre.setForeground(QColor("#617493"))
+
+                    elif sutun == 4 and uzun:
+                        hucre.setForeground(QColor("#B45309"))
+                        hucre.setToolTip(UZUN_GOREV_IPUCU)
+                        font = hucre.font()
+                        font.setBold(True)
+                        hucre.setFont(font)
 
                     elif sutun == 5:
                         renk = (
@@ -545,6 +580,9 @@ class DanismaMasasiYonetimi(QWidget):
             "Seçilen tamamlanmış görevi onaylamak istiyor musunuz?"
         )
         onay_penceresi.setIcon(QMessageBox.Question)
+        if gorev_uzun_mu(oturum):
+            onay_penceresi.setIcon(QMessageBox.Warning)
+            onay_penceresi.setInformativeText(UZUN_GOREV_IPUCU)
 
         evet_btn = onay_penceresi.addButton(
             "Evet", QMessageBox.YesRole
@@ -619,7 +657,8 @@ class DanismaMasasiYonetimi(QWidget):
         _gorev_formunu_stille(
             pencere, form,
             "Yeni Danışma Masası Görevi",
-            "Öğrenci için yeni görev kaydı oluşturun."
+            "Öğrenci için yeni görev kaydı oluşturun. "
+            f"Bir görev en fazla {GOREV_EN_UZUN_SAAT} saat olabilir."
         )
 
         ogrenci_sec = QComboBox()
@@ -674,6 +713,12 @@ class DanismaMasasiYonetimi(QWidget):
                 QMessageBox.warning(
                     pencere, "Geçersiz Zaman",
                     "Bitiş zamanı başlangıçtan sonra olmalıdır."
+                )
+                return
+
+            if gorev_suresi_cok_uzun_mu(bas, bit):
+                QMessageBox.warning(
+                    pencere, "Görev Çok Uzun", GOREV_COK_UZUN_MESAJI
                 )
                 return
 
@@ -762,7 +807,8 @@ class DanismaMasasiYonetimi(QWidget):
         _gorev_formunu_stille(
             pencere, form,
             "Danışma Masası Görevini Düzenle",
-            "Seçilen görevin başlangıç ve bitiş zamanını güncelleyin."
+            "Seçilen görevin başlangıç ve bitiş zamanını güncelleyin. "
+            f"Bir görev en fazla {GOREV_EN_UZUN_SAAT} saat olabilir."
         )
 
         ogrenci = QLabel(
@@ -826,6 +872,14 @@ class DanismaMasasiYonetimi(QWidget):
                     pencere,
                     "Geçersiz Zaman",
                     "Bitiş zamanı başlangıçtan sonra olmalıdır."
+                )
+                return
+
+            if gorev_suresi_cok_uzun_mu(bas, bit):
+                QMessageBox.warning(
+                    pencere,
+                    "Görev Çok Uzun",
+                    GOREV_COK_UZUN_MESAJI
                 )
                 return
 

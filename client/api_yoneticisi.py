@@ -1,7 +1,9 @@
+import os
+
 import requests
 
-# Sunucunun ana adresi (bunu bir kere tanımlamak işleri kolaylaştırır)
-BASE_URL = "http://127.0.0.1:8000/api"
+# Sunucunun ana adresi: diğer ekranlarla aynı ayarı (TKYS_API_URL) kullanır, yoksa yerel sunucu.
+BASE_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000").rstrip("/") + "/api"
 
 def personel_listesini_getir(token):
     """Sunucudan personel verilerini çeker ve liste olarak döndürür."""
@@ -116,9 +118,8 @@ def oturum_hatasi_mi(hata_veya_yanit):
     else:
         yanit = hata_veya_yanit
 
-    return bool(
-        getattr(yanit, "_tkys_oturum_reddedildi", False)
-    )
+    # Yalnızca oturum_kontrollu_istek'in koyduğu True işareti sayılır (sahte/eksik yanıt nesneleri oturum hatası sanılmaz).
+    return getattr(yanit, "_tkys_oturum_reddedildi", False) is True
 
 
 def hata_detayi_metni(yanit, varsayilan="Bilinmeyen bir hata oluştu."):

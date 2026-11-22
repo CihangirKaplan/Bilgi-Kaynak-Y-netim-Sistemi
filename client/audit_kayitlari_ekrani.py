@@ -84,6 +84,10 @@ AYRINTI_ETIKETLERI = {
     "pasife_alinan_danisan": "Pasife alınan danışan", "aktif_edilen_danisan": "Aktif edilen danışan",
     "girisi_engellenen_kullanici": "Girişi engellenen kullanıcı", "psikolog_kullanici_id": "Psikolog (kullanıcı no)",
     "izin_adi": "İzin adı", "rol_adi": "Rol adı", "kullanici_adi": "Kullanıcı adı",
+    "faaliyet_adi": "Faaliyet adı", "puan": "Puan", "faaliyet_puani": "Faaliyet puanı", "kayit_puani": "Kayıt puanı",
+    "gecmis_kayitlara_uygulandi": "Geçmiş kayıtlara uygulandı", "guncellenen_gecmis_kayit": "Güncellenen geçmiş kayıt",
+    "etkilenen_kayit": "Etkilenen kayıt", "faaliyet_id": "Faaliyet türü no", "ogrenci_id": "Öğrenci no",
+    "birim_id": "Birim no", "adet": "Miktar", "baslangic_zamani": "Başlangıç", "bitis_zamani": "Bitiş",
 }
 
 

@@ -477,7 +477,16 @@ def cikis_yap(kullanici_id: int = Depends(token_kullanici_id)):
 
 
 @app.post("/api/sifre-degistir")
-def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_kullanici_id)):
+def sifre_degistir(veri: SifreDegistirModeli, request: Request = None, kullanici_id: int = Depends(token_kullanici_id)):
+    # Eski şifre de giriş ekranındaki IP sınırıyla korunur: açık kalmış bir oturumdan şifre tahmin edilemesin.
+    istemci = giris_siniri.istemci_anahtari(request)
+    bekleme = giris_siniri.engel_suresi(VT_AYARLARI, istemci)
+    if bekleme:
+        raise HTTPException(
+            status_code=429,
+            detail="Bu bilgisayardan çok fazla hatalı şifre denemesi yapıldı. Lütfen biraz bekleyip tekrar deneyin.",
+            headers={"Retry-After": str(bekleme)},
+        )
     if veri.yeni_parola != veri.yeni_parola_tekrar:
         raise HTTPException(status_code=422, detail="Yeni şifreler birbiriyle eşleşmiyor.")
     if len(veri.yeni_parola.encode("utf-8")) > 72:
@@ -512,6 +521,7 @@ def sifre_degistir(veri: SifreDegistirModeli, kullanici_id: int = Depends(token_
                 (kullanici_id, "PASSWORD_CHANGE_FAILED", "kullanicilar", kullanici_id)
             )
             conn.commit()
+            giris_siniri.basarisiz_girisi_kaydet(VT_AYARLARI, istemci)
             raise HTTPException(status_code=401, detail="Eski şifre hatalı.")
 
         ihlaller = parola_ihlalleri(veri.yeni_parola, kullanici[2] if len(kullanici) > 2 else None)
@@ -6600,13 +6610,18 @@ def ogrenci_aktiflik_duzenle(
                 )
 
             if eski_durum != veri.aktif_mi:
+                aktiflik_degisimi = {
+                    "onceki": {"aktif_mi": eski_durum},
+                    "yeni": {"aktif_mi": veri.aktif_mi},
+                }
                 denetim_kaydi_olustur(
                     VT_AYARLARI,
                     "UPDATE",
                     yetkili_id,
                     "ogrenciler",
                     ogrenci_id,
-                    mevcut_cursor=cursor
+                    mevcut_cursor=cursor,
+                    ayrinti=aktiflik_degisimi
                 )
 
                 if hesap_guncellenecek:
@@ -6616,7 +6631,11 @@ def ogrenci_aktiflik_duzenle(
                         yetkili_id,
                         "kullanicilar",
                         kullanici_id,
-                        mevcut_cursor=cursor
+                        mevcut_cursor=cursor,
+                        ayrinti={
+                            **aktiflik_degisimi,
+                            "neden": "danışma öğrencisinin aktifliği ile birlikte değişti",
+                        }
                     )
 
                     denetim_kaydi_olustur(
@@ -6820,40 +6839,69 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        # Kaydın var olup olmadığını kontrol edelim
-        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
-        if not cursor.fetchone():
+        # Kaydı kilitleyip önceki değerlerini al (denetim kaydına "neyden neye" yazılır).
+        alanlar = ("ogrenci_id", "faaliyet_id", "birim_id", "adet", "kayit_puani")
+        cursor.execute(
+            "SELECT ogrenci_id, faaliyet_id, birim_id, adet, kayit_puani "
+            "FROM ogrenci_faaliyet_takip WHERE takip_id = %s FOR UPDATE;",
+            (takip_id,)
+        )
+        eski_satir = cursor.fetchone()
+        if not eski_satir:
             raise HTTPException(status_code=404, detail="Güncellenecek kayıt bulunamadı.")
+        onceki = dict(zip(alanlar, eski_satir))
+
+        # Faaliyet türü değişmediyse kayıttaki puan korunur (sonradan değişen tür puanı eski kaydı etkilemez).
+        # Değiştiyse yeni tür aktif olmalı ve kayıt o türün güncel puanını alır.
+        kayit_puani = onceki.get("kayit_puani")
+        if onceki.get("faaliyet_id") != kayit.faaliyet_id:
+            cursor.execute(
+                "SELECT puan FROM faaliyetler WHERE faaliyet_id = %s AND aktif_mi = TRUE;",
+                (kayit.faaliyet_id,)
+            )
+            puan = cursor.fetchone()
+            if puan is None:
+                raise HTTPException(status_code=400, detail="Aktif faaliyet türü bulunamadı.")
+            kayit_puani = puan[0]
+
+        yeni = {
+            "ogrenci_id": kayit.ogrenci_id,
+            "faaliyet_id": kayit.faaliyet_id,
+            "birim_id": kayit.birim_id,
+            "adet": kayit.miktar,
+            "kayit_puani": kayit_puani,
+        }
+        if all(onceki.get(alan) == yeni[alan] for alan in alanlar):
+            conn.commit()
+            return {"durum": "basarili", "mesaj": "Kayıtta değişiklik yapılmadı."}
 
         cursor.execute("""
-            UPDATE ogrenci_faaliyet_takip AS t
+            UPDATE ogrenci_faaliyet_takip
             SET ogrenci_id = %s,
                 faaliyet_id = %s,
                 birim_id = %s,
                 adet = %s,
-                kayit_puani = CASE
-                    WHEN t.faaliyet_id <> %s THEN (
-                        SELECT f.puan
-                        FROM faaliyetler AS f
-                        WHERE f.faaliyet_id = %s
-                          AND f.aktif_mi = TRUE
-                    )
-                    ELSE t.kayit_puani
-                END
-            WHERE t.takip_id = %s;
+                kayit_puani = %s
+            WHERE takip_id = %s;
         """, (
             kayit.ogrenci_id,
             kayit.faaliyet_id,
             kayit.birim_id,
             kayit.miktar,
-            kayit.faaliyet_id,
-            kayit.faaliyet_id,
+            kayit_puani,
             takip_id
         ))
 
-        # Audit log (Denetim kaydı)
+        # Denetim kaydı: yalnızca değişen alanların önceki ve yeni değeri (kimlik ve sayı; kişisel veri yok).
+        degisen = [alan for alan in alanlar if onceki.get(alan) != yeni[alan]]
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(
+            VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor,
+            ayrinti={
+                "onceki": {alan: onceki.get(alan) for alan in degisen},
+                "yeni": {alan: yeni[alan] for alan in degisen},
+            },
+        )
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
@@ -7374,6 +7422,19 @@ def danisma_onay_bildirimleri(
             conn.close()
 
 
+# Bir danışma masası görevi en fazla mesai süresi kadar olabilir (08:00-18:00 = 10 saat). Elle girilen ya da düzenlenen
+# daha uzun görev reddedilir; öğrencinin bitirmeyi unuttuğu görev ise kaydedilir ama onay listesinde "uzun görev" diye işaretlenir.
+DANISMA_GOREV_EN_UZUN_SAAT = 10
+DANISMA_GOREV_COK_UZUN_MESAJI = (
+    f"Bir görev en fazla {DANISMA_GOREV_EN_UZUN_SAAT} saat olabilir. "
+    "Daha uzun çalışmayı ayrı görevler olarak girin."
+)
+
+
+def danisma_gorevi_cok_uzun_mu(baslangic, bitis):
+    return (bitis - baslangic).total_seconds() > DANISMA_GOREV_EN_UZUN_SAAT * 3600
+
+
 @app.get("/api/danisma/yonetim/oturumlar")
 def danisma_yonetim_oturumlari(
     kullanici_id: int = Depends(
@@ -7437,7 +7498,9 @@ def danisma_yonetim_oturumlari(
                     f"{saat} saat {dakika} dakika {saniye} saniye"
                 ),
                 "durum": "AKTIF" if bitis is None else "TAMAMLANDI",
-                "onaylandi_mi": onay
+                "onaylandi_mi": onay,
+                # Mesai süresini aşan görev: öğrenci bitirmeyi unutmuş olabilir, onaylamadan önce saatler kontrol edilmeli.
+                "uzun_gorev": toplam_saniye > DANISMA_GOREV_EN_UZUN_SAAT * 3600,
             })
 
         return {
@@ -7611,6 +7674,12 @@ def danisma_yonetim_oturum_olustur(
                 detail="Bitiş zamanı başlangıçtan sonra olmalıdır."
             )
 
+        if danisma_gorevi_cok_uzun_mu(veri.baslangic_zamani, veri.bitis_zamani):
+            raise HTTPException(
+                status_code=422,
+                detail=DANISMA_GOREV_COK_UZUN_MESAJI
+            )
+
         if veri.bitis_zamani > datetime.now():
             raise HTTPException(
                 status_code=422,
@@ -7745,6 +7814,12 @@ def danisma_yonetim_oturum_duzenle(
                 detail="Bitiş zamanı başlangıçtan sonra olmalıdır."
             )
 
+        if danisma_gorevi_cok_uzun_mu(baslangic, bitis):
+            raise HTTPException(
+                status_code=422,
+                detail=DANISMA_GOREV_COK_UZUN_MESAJI
+            )
+
         if bitis > datetime.now():
             raise HTTPException(
                 status_code=422,
@@ -7788,7 +7863,7 @@ def danisma_yonetim_oturum_duzenle(
 
         # Düzenlenecek görev kaydını kilitle.
         cursor.execute("""
-            SELECT bitis_zamani, onaylandi_mi
+            SELECT baslangic_zamani, bitis_zamani, onaylandi_mi
             FROM danisma_masasi_oturumlari
             WHERE oturum_id = %s
               AND ogrenci_id = %s
@@ -7803,7 +7878,7 @@ def danisma_yonetim_oturum_duzenle(
                 detail="Düzenlenecek görev bulunamadı."
             )
 
-        eski_bitis, onaylandi_mi = oturum
+        eski_baslangic, eski_bitis, onaylandi_mi = oturum
 
         if eski_bitis is None:
             raise HTTPException(
@@ -7851,14 +7926,21 @@ def danisma_yonetim_oturum_duzenle(
             WHERE oturum_id = %s;
         """, (baslangic, bitis, oturum_id))
 
-        # Audit kaydı aynı transaction içinde tutulur.
+        # Audit kaydı aynı transaction içinde tutulur: görev saatlerinin önceki ve yeni hali.
+        def _saat(deger):
+            return deger.isoformat(sep=" ", timespec="minutes")
+
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="UPDATE",
             kullanici_id=kullanici_id,
             hedef_tablo="danisma_masasi_oturumlari",
             hedef_kayit_id=oturum_id,
-            mevcut_cursor=cursor
+            mevcut_cursor=cursor,
+            ayrinti={
+                "onceki": {"baslangic_zamani": _saat(eski_baslangic), "bitis_zamani": _saat(eski_bitis)},
+                "yeni": {"baslangic_zamani": _saat(baslangic), "bitis_zamani": _saat(bitis)},
+            }
         )
 
         conn.commit()
@@ -8748,6 +8830,23 @@ class FaaliyetTuruEkleModeli(_FaaliyetBaseModel):
     )
 
 
+FAALIYET_ADI_KAYITLI_MESAJI = "Bu adla bir faaliyet türü zaten kayıtlı (büyük/küçük harf farkı aynı ad sayılır)."
+
+
+def _faaliyet_adi_kayitli_mi(cursor, ad, haric_id=None):
+    """Aynı ad (büyük/küçük harf ve baş/son boşluk farkı gözetmeden) başka bir faaliyet türünde var mı?
+
+    Pasif türler de sayılır: veritabanındaki benzersizlik kuralı onları da kapsar. Kontrol ile kayıt arasında başka bir
+    isteğin aynı adı eklememesi için işlem boyunca tek bir kilit alınır."""
+    cursor.execute("SELECT pg_advisory_xact_lock(hashtext('TKYS_FAALIYET_ADI'));")
+    cursor.execute(
+        "SELECT faaliyet_id FROM faaliyetler "
+        "WHERE LOWER(BTRIM(faaliyet_adi)) = LOWER(%s) AND faaliyet_id <> %s;",
+        (ad, haric_id if haric_id is not None else 0),
+    )
+    return len(list(cursor.fetchall())) > 0
+
+
 @app.post("/api/faaliyetler", status_code=201)
 def faaliyet_turu_ekle(
     veri: FaaliyetTuruEkleModeli,
@@ -8769,6 +8868,9 @@ def faaliyet_turu_ekle(
         conn = vt_baglan(VT_AYARLARI)
 
         with conn.cursor() as cursor:
+            if _faaliyet_adi_kayitli_mi(cursor, ad):
+                raise HTTPException(status_code=409, detail=FAALIYET_ADI_KAYITLI_MESAJI)
+
             cursor.execute("""
                 INSERT INTO faaliyetler
                     (faaliyet_adi, puan, aktif_mi)
@@ -8893,6 +8995,9 @@ def faaliyet_turu_duzenle(
                     "guncellenen_gecmis_kayit": 0
                 }
 
+            if eski_ad != ad and _faaliyet_adi_kayitli_mi(cursor, ad, haric_id=faaliyet_id):
+                raise HTTPException(status_code=409, detail=FAALIYET_ADI_KAYITLI_MESAJI)
+
             cursor.execute("""
                 UPDATE faaliyetler
                 SET faaliyet_adi = %s,
@@ -8923,13 +9028,25 @@ def faaliyet_turu_duzenle(
 
             from server.denetim import denetim_kaydi_olustur
 
+            # Denetim kaydı: ad ve puanın önceki/yeni değeri; geçmiş kayıtlara uygulandıysa kaç kayıt etkilendiği.
+            degisiklik = {"onceki": {}, "yeni": {}}
+            if eski_ad != ad:
+                degisiklik["onceki"]["faaliyet_adi"] = eski_ad
+                degisiklik["yeni"]["faaliyet_adi"] = ad
+            if puan_degisti:
+                degisiklik["onceki"]["puan"] = eski_puan
+                degisiklik["yeni"]["puan"] = veri.puan
+                degisiklik["gecmis_kayitlara_uygulandi"] = bool(veri.gecmis_puanlari_guncelle)
+                degisiklik["guncellenen_gecmis_kayit"] = etkilenen
+
             denetim_kaydi_olustur(
                 VT_AYARLARI,
                 "UPDATE",
                 yetkili_id,
                 "faaliyetler",
                 faaliyet_id,
-                mevcut_cursor=cursor
+                mevcut_cursor=cursor,
+                ayrinti=degisiklik
             )
 
             # Toplu geçmiş güncellemesini ayrıca işaretle.
@@ -8940,7 +9057,14 @@ def faaliyet_turu_duzenle(
                     yetkili_id,
                     "ogrenci_faaliyet_takip",
                     None,
-                    mevcut_cursor=cursor
+                    mevcut_cursor=cursor,
+                    ayrinti={
+                        "neden": "faaliyet puanı geçmiş kayıtlara uygulandı",
+                        "faaliyet_id": faaliyet_id,
+                        "onceki": {"faaliyet_puani": eski_puan},
+                        "yeni": {"faaliyet_puani": veri.puan},
+                        "etkilenen_kayit": etkilenen,
+                    }
                 )
 
         conn.commit()
