@@ -12,7 +12,7 @@ def test_windows_gorev_olusturma():
     ):
         kurulum.main()
 
-    komut = calistir.call_args.args[0]
+    komut = calistir.call_args_list[0].args[0]                   # 1. çağrı görevi oluşturur, 2. çağrı ayarlarını düzenler
 
     assert komut[0] == "schtasks"
     assert "/Create" in komut
@@ -22,4 +22,4 @@ def test_windows_gorev_olusturma():
     assert "05:00" in komut
     assert "/RU" in komut
     assert "SYSTEM" in komut
-    assert calistir.call_args.kwargs["check"] is True
+    assert calistir.call_args_list[0].kwargs["check"] is True

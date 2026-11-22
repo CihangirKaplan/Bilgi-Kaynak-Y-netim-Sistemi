@@ -216,6 +216,15 @@ Bu komut `TKYS_Sunucu` adlı görevi oluşturur. Görev, bilgisayar açıldıkta
 yapmasa da) `scripts/windows/sunucu_baslat.py` betiğini çalıştırır. Betik önce PostgreSQL'in hazır olmasını
 bekler, sunucuyu başlatır ve sunucu beklenmedik şekilde kapanırsa 10 saniye sonra yeniden başlatır.
 
+Betik görevin iki ayarını da düzenler: Windows'un `schtasks` ile kurulan görevlere varsayılan olarak koyduğu
+**"3 günden uzun sürerse durdur"** sınırını kaldırır (sunucu sürekli çalışır, bu sınır kalırsa açılıştan yaklaşık 3 gün sonra
+kapanırdı) ve görev kapanırsa 1 dakika arayla 3 kez yeniden başlatılmasını sağlar. Bu betik daha önce bu ayarlar olmadan
+çalıştırıldıysa yeniden çalıştırmak yeterlidir; görev üzerine yazılır. Ayarı görmek için:
+
+    (Get-ScheduledTask -TaskName TKYS_Sunucu).Settings | Select-Object ExecutionTimeLimit, RestartCount
+
+`ExecutionTimeLimit` değeri `PT0S` (sınırsız) olmalıdır.
+
 Hemen denemek için (bilgisayarı yeniden başlatmadan):
 
     schtasks /Run /TN TKYS_Sunucu
