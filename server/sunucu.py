@@ -3657,7 +3657,8 @@ def cihaz_ekle(cihaz: CihazOlusturModeli, kullanici_id: int = Depends(izin_kontr
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT 1 FROM cihazlar WHERE envanter_kodu = %s OR seri_no = %s;", (cihaz.envanter_kodu, cihaz.seri_no))
+        # Envanter kodu büyük/küçük harf ayırt etmeden benzersiz olmalı (EEG-01 ile eeg-01 aynı cihazdır).
+        cursor.execute("SELECT 1 FROM cihazlar WHERE lower(envanter_kodu) = lower(%s) OR (%s IS NOT NULL AND seri_no = %s);", (cihaz.envanter_kodu, cihaz.seri_no, cihaz.seri_no))
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Bu envanter kodu veya seri no zaten kullanımda.")
 
@@ -3766,6 +3767,29 @@ def cihaz_guncelle(
         if conn is not None:
             conn.close()
 
+# Cihazın bugünkü ETKİN durumu: bakım/kalibrasyon kaydı kayıtlı durumu kendiliğinden değiştirmediğinden, bugün planlı bir bakım ya da
+# kalibrasyon aralığındaki cihaz "bakımda"/"kalibrasyonda" sayılır. Öncelik: arızalı/kullanım dışı > bakımda > kalibrasyonda.
+# Ana panel ve Cihaz Envanteri aynı tanımı kullanır; böylece iki ekranda aynı cihaz farklı durumda görünmez.
+ETKIN_CIHAZ_DURUMU_SQL = """
+    CASE
+        WHEN c.durum IN ('Arizali', 'Kullanim_Disi') THEN c.durum::text
+        WHEN c.durum = 'Bakimda' OR EXISTS (
+            SELECT 1 FROM cihaz_bakimlari b
+            WHERE b.cihaz_id = c.cihaz_id
+              AND COALESCE(b.bakim_baslangic_tarihi, b.bakim_tarihi::date) <= CURRENT_DATE
+              AND COALESCE(b.bakim_bitis_tarihi, b.bakim_tarihi::date) >= CURRENT_DATE
+        ) THEN 'Bakimda'
+        WHEN c.durum = 'Kalibrasyonda' OR EXISTS (
+            SELECT 1 FROM cihaz_kalibrasyonlari k
+            WHERE k.cihaz_id = c.cihaz_id
+              AND k.kalibrasyon_baslangic_tarihi <= CURRENT_DATE
+              AND k.kalibrasyon_bitis_tarihi >= CURRENT_DATE
+        ) THEN 'Kalibrasyonda'
+        ELSE c.durum::text
+    END
+"""
+
+
 @app.get("/api/cihazlar")
 def cihazlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_GORUNTULE"))):
     conn = None
@@ -3773,9 +3797,13 @@ def cihazlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_G
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, marka_model, seri_no, durum, kayit_tarihi FROM cihazlar ORDER BY cihaz_id;")
+        cursor.execute(
+            "SELECT c.cihaz_id, c.envanter_kodu, c.cihaz_adi, c.marka_model, c.seri_no, c.durum, c.kayit_tarihi, "
+            + ETKIN_CIHAZ_DURUMU_SQL + " AS etkin_durum FROM cihazlar c ORDER BY c.cihaz_id;"
+        )
         kayitlar = cursor.fetchall()
-        return [{"cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2], "marka_model": k[3], "seri_no": k[4], "durum": k[5], "kayit_tarihi": k[6]} for k in kayitlar]
+        return [{"cihaz_id": k[0], "envanter_kodu": k[1], "cihaz_adi": k[2], "marka_model": k[3], "seri_no": k[4], "durum": k[5], "kayit_tarihi": k[6],
+                 "etkin_durum": k[7] if len(k) > 7 else k[5]} for k in kayitlar]
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
@@ -4117,9 +4145,19 @@ def rezervasyon_iptal(rezervasyon_id: int, kullanici_id: int = Depends(izin_kont
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s AND iptal_edildi_mi = FALSE RETURNING rezervasyon_id;", (rezervasyon_id,))
+        # Yalnızca iptal edilmemiş VE süresi dolmamış rezervasyon iptal edilir (biten rezervasyonun geçmiş kullanım kaydı ve raporlardaki saati değişmesin).
+        cursor.execute(
+            "UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s AND iptal_edildi_mi = FALSE AND bitis_zamani > CURRENT_TIMESTAMP "
+            "RETURNING rezervasyon_id;", (rezervasyon_id,))
         if cursor.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Rezervasyon bulunamadı veya yetkiniz yok.")
+            # Nedeni kullanıcıya söyle: hiç yok mu, zaten iptal mi, yoksa süresi mi dolmuş?
+            cursor.execute("SELECT iptal_edildi_mi FROM cihaz_rezervasyonlari WHERE rezervasyon_id = %s;", (rezervasyon_id,))
+            mevcut = cursor.fetchone()
+            if mevcut is None:
+                raise HTTPException(status_code=404, detail="Rezervasyon bulunamadı.")
+            if mevcut[0]:
+                raise HTTPException(status_code=409, detail="Bu rezervasyon zaten iptal edilmiş.")
+            raise HTTPException(status_code=409, detail="Süresi dolmuş (tamamlanmış) rezervasyon iptal edilemez.")
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="CANCEL",
@@ -5211,27 +5249,7 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
         # Bakım/kalibrasyon kaydı cihaz durumunu kendiliğinden değiştirmediğinden, bugün planlı bir
         # bakım ya da kalibrasyon aralığında olan cihaz da "bakımda"/"kalibrasyonda" sayılır.
         # Öncelik: arızalı/kullanım dışı > bakımda > kalibrasyonda.
-        cursor.execute("""
-            SELECT CASE
-                       WHEN c.durum IN ('Arizali', 'Kullanim_Disi') THEN c.durum
-                       WHEN c.durum = 'Bakimda' OR EXISTS (
-                           SELECT 1 FROM cihaz_bakimlari b
-                           WHERE b.cihaz_id = c.cihaz_id
-                             AND COALESCE(b.bakim_baslangic_tarihi, b.bakim_tarihi::date) <= CURRENT_DATE
-                             AND COALESCE(b.bakim_bitis_tarihi, b.bakim_tarihi::date) >= CURRENT_DATE
-                       ) THEN 'Bakimda'
-                       WHEN c.durum = 'Kalibrasyonda' OR EXISTS (
-                           SELECT 1 FROM cihaz_kalibrasyonlari k
-                           WHERE k.cihaz_id = c.cihaz_id
-                             AND k.kalibrasyon_baslangic_tarihi <= CURRENT_DATE
-                             AND k.kalibrasyon_bitis_tarihi >= CURRENT_DATE
-                       ) THEN 'Kalibrasyonda'
-                       ELSE c.durum
-                   END AS etkin_durum,
-                   COUNT(*)
-            FROM cihazlar c
-            GROUP BY 1;
-        """)
+        cursor.execute("SELECT " + ETKIN_CIHAZ_DURUMU_SQL + " AS etkin_durum, COUNT(*) FROM cihazlar c GROUP BY 1;")
         cihaz_durumlari = cursor.fetchall()
         for durum, sayi in cihaz_durumlari:
             ozet["toplam_cihaz"] += sayi

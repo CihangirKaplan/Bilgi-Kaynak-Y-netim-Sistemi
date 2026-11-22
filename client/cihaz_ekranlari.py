@@ -33,6 +33,12 @@ BILGI_KUTUSU_STILI = ("background: #FEF3C7; color: #854D0E; border: 1px solid #F
                       "padding: 10px 12px; font-size: 12px; font-weight: 700;")
 
 
+def etkin_durum(cihaz):
+    """Listede gösterilen durum: sunucunun hesapladığı etkin durum (bugün bakım/kalibrasyon aralığındaki cihaz 'bakımda/kalibrasyonda').
+    Eski sunucu bu alanı göndermezse kayıtlı durum kullanılır. Düzenleme formu kayıtlı (ham) durumu kullanmaya devam eder."""
+    return cihaz.get("etkin_durum") or cihaz.get("durum")
+
+
 def durum_hapi(durum):
     ad, renk, arka = DURUMLAR.get(durum, (str(durum or "-"), "#6B7280", "#F3F4F6"))
     return hap(ad, renk, arka)
@@ -265,7 +271,7 @@ class CihazYonetimEkrani(QWidget):
         self.cihaz_detaylari = {c.get("cihaz_id"): c for c in cihazlar}
         self.tablo.setRowCount(len(cihazlar))
         for satir, cihaz in enumerate(cihazlar):
-            durum = cihaz.get("durum")
+            durum = etkin_durum(cihaz)                      # bugünkü bakım/kalibrasyon aralığı da hesaba katılır (ana panelle aynı)
             hazir += durum == "Kullanima_Hazir"
             bakimda += durum in ("Bakimda", "Kalibrasyonda")
             arizali += durum == "Arizali"
@@ -314,7 +320,7 @@ class CihazYonetimEkrani(QWidget):
             [("Envanter Kodu", None), ("Cihaz Adı", None), ("Marka / Model", None), ("Seri No", None),
              ("Durum", None), ("Kayıt Tarihi", TARIH_BICIMI)],
             [[c.get("envanter_kodu") or "", c.get("cihaz_adi") or "", c.get("marka_model") or "", c.get("seri_no") or "",
-              DURUMLAR.get(c.get("durum"), (c.get("durum") or "",))[0], _tarih_degeri(c.get("kayit_tarihi"))]
+              DURUMLAR.get(etkin_durum(c), (etkin_durum(c) or "",))[0], _tarih_degeri(c.get("kayit_tarihi"))]
              for c in cihazlar],
             filtre, sayfa_adi="Cihazlar", aciklama="Kayıtlı cihazların envanter listesi (demirbaş sayımı için).",
             kayit={"api_url": self.api_url, "token": self.token, "liste": "CIHAZ"},

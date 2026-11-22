@@ -470,6 +470,13 @@ class CihazModeli(BaseModel):
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
 # DEVICE-002: Cihaz Ekleme Modeli (Girdi)
+def _cihaz_metni_temizle(deger):
+    """Kenar boşlukları atılır; boş metin veritabanına '' değil NULL olarak yazılır (aksi halde ikinci boş seri no 'zaten kullanımda' çıkar)."""
+    if isinstance(deger, str):
+        return deger.strip() or None
+    return deger
+
+
 class CihazOlusturModeli(BaseModel):
     envanter_kodu: str = Field(min_length=1, max_length=50)
     cihaz_adi: str = Field(min_length=1, max_length=100)
@@ -477,12 +484,40 @@ class CihazOlusturModeli(BaseModel):
     seri_no: Optional[str] = Field(default=None, max_length=100)
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
 
+    @field_validator("envanter_kodu", "cihaz_adi", mode="before")
+    @classmethod
+    def zorunlu_metni_kirp(cls, deger):
+        if isinstance(deger, str):
+            deger = deger.strip()
+            if not deger:
+                raise ValueError("Bu alan boş bırakılamaz.")
+        return deger
+
+    @field_validator("marka_model", "seri_no", mode="before")
+    @classmethod
+    def istege_bagli_metni_temizle(cls, deger):
+        return _cihaz_metni_temizle(deger)
+
 # DEVICE-003, DEVICE-004, DEVICE-005: Cihaz Güncelleme/Durum Değiştirme Modeli
 class CihazGuncelleModeli(BaseModel):
     cihaz_adi: Optional[str] = Field(default=None, min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
     durum: Optional[CihazDurumu] = None
+
+    @field_validator("cihaz_adi", mode="before")
+    @classmethod
+    def ad_kirp(cls, deger):
+        if isinstance(deger, str):
+            deger = deger.strip()
+            if not deger:
+                raise ValueError("Cihaz adı boş bırakılamaz.")
+        return deger
+
+    @field_validator("marka_model", "seri_no", mode="before")
+    @classmethod
+    def istege_bagli_metni_temizle(cls, deger):
+        return _cihaz_metni_temizle(deger)
 
 # RES-001: Cihaz Rezervasyonu Oluşturma Modeli
 class RezervasyonOlusturModeli(BaseModel):
@@ -589,6 +624,8 @@ class KalibrasyonOlusturModeli(BaseModel):
     def bitis_baslangictan_once_olamaz(self):
         if self.kalibrasyon_bitis_tarihi < self.kalibrasyon_baslangic_tarihi:
             raise ValueError("Kalibrasyon bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        if self.gecerlilik_tarihi < self.kalibrasyon_bitis_tarihi:
+            raise ValueError("Geçerlilik tarihi, kalibrasyon bitiş tarihinden önce olamaz.")
         return self
 
 class KalibrasyonGuncelleModeli(BaseModel):
@@ -604,6 +641,8 @@ class KalibrasyonGuncelleModeli(BaseModel):
         bas, bit = self.kalibrasyon_baslangic_tarihi, self.kalibrasyon_bitis_tarihi
         if bas is not None and bit is not None and bit < bas:
             raise ValueError("Kalibrasyon bitiş tarihi, başlangıç tarihinden önce olamaz.")
+        if bit is not None and self.gecerlilik_tarihi is not None and self.gecerlilik_tarihi < bit:
+            raise ValueError("Geçerlilik tarihi, kalibrasyon bitiş tarihinden önce olamaz.")
         return self
 
 # ==========================================
