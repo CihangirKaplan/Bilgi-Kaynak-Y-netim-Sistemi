@@ -49,6 +49,13 @@ def main(argv=None):
     hedef = YEDEK_KLASORU / f"{args.database}_{zaman}.dump"
 
     ortam = os.environ.copy()
+    # Parola boş olabilir (parolasız yerel bağlantı) ama tanımlı olmalı; diğerleri boş olamaz.
+    eksik = [ad for ad in ("DB_HOST", "DB_PORT", "DB_USER") if not ortam.get(ad)]
+    eksik += [] if "DB_PASSWORD" in ortam else ["DB_PASSWORD"]
+    if eksik:
+        raise SystemExit(
+            "Eksik ayar: " + ", ".join(eksik) + ". Bu değerleri proje klasöründeki .env dosyasına yazın."
+        )
     ortam["PGPASSWORD"] = ortam["DB_PASSWORD"]
 
     pg_dump = os.getenv("PG_DUMP_PATH") or shutil.which("pg_dump")

@@ -726,7 +726,7 @@ veriler doğrulanabilmelidir.
 
 **FR-061 — Görev Geçmişi:** Sistem, yetkili kullanıcıların aktif ve geçmiş danışma masası oturumlarını görüntülemesini sağlamalıdır.
 
-**FR-062 — Görev Onayı ve Yönetimi:** Sistem, yetkili yöneticilerin danışma masası oturumlarını yönetmesine ve onaylamasına olanak sağlamalıdır.
+**FR-062 — Görev Onayı ve Yönetimi:** Sistem, yetkili yöneticilerin danışma masası oturumlarını yönetmesine ve onaylamasına olanak sağlamalıdır. Elle eklenen ya da düzenlenen bir görev en fazla mesai süresi (08:00–18:00, 10 saat) kadar olabilir. Öğrencinin bitirmeyi unuttuğu, 10 saatten uzun görev onay listesinde uyarıyla işaretlenir. Görev saatlerindeki her düzenleme, önceki ve yeni saatlerle denetim kaydına yazılır.
 
 **FR-063 — Danışma Masası Raporları:** Sistem, danışma masası görev kayıtlarına ilişkin raporların oluşturulmasını desteklemelidir.
 

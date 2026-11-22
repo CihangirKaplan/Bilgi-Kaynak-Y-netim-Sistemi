@@ -2716,7 +2716,7 @@ QLabel {
             headers = {"Authorization": f"Bearer {self.token}"}
             res = oturum_kontrollu_istek(
                 "GET", f"{self.api_url}/api/faaliyet-kayitlari", headers=headers,
-                params={"limit": FAALIYET_LISTE_SINIRI},
+                params={"limit": FAALIYET_LISTE_SINIRI}, timeout=15,
             )
             if oturum_hatasi_mi(res):
                 return
@@ -2867,7 +2867,7 @@ QLabel {
             hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}"
 
             try:
-                res = oturum_kontrollu_istek("DELETE", hedef_url, headers=headers)
+                res = oturum_kontrollu_istek("DELETE", hedef_url, headers=headers, timeout=10)
                 if oturum_hatasi_mi(res):
                     return
 

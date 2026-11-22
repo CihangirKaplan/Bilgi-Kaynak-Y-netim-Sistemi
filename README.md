@@ -108,8 +108,8 @@ PostgreSQL yedekleme, rotasyon ve geri yükleme betikleri `scripts/` altındadı
 | Amaç | Komut |
 |---|---|
 | Yedek al (`backups/<veritabani>_<tarih>.dump`) | `python scripts/backup/veritabani_yedekle.py` |
-| Yedek al + 7 günden eski yedekleri sil | `python scripts/backup/otomatik_yedekleme.py` |
-| Eski yedekleri önizle / sil | `python scripts/backup/yedek_rotasyonu.py --days 7` (silmek için `--apply`) |
+| Yedek al + 14 günden eski yedekleri sil (en yeni 3 yedek korunur) | `python scripts/backup/otomatik_yedekleme.py` |
+| Eski yedekleri önizle / sil | `python scripts/backup/yedek_rotasyonu.py --days 14` (silmek için `--apply`; en yeni 3 yedek her zaman korunur, `--keep` ile değişir) |
 | Yedeği **yeni** veritabanına geri yükle ve kontrol et | `python scripts/restore/veritabani_geri_yukle.py --hedef crkys_geri_yukleme_testi` |
 
 - Yedekleme yalnızca okur, veritabanını değiştirmez. Rotasyon yalnızca seçilen veritabanının, tam ad biçimine uyan yedeklerini siler.

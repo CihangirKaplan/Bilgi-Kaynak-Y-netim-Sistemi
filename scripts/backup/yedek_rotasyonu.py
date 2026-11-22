@@ -4,6 +4,8 @@ Yalnızca seçilen veritabanının yedeklerini siler (varsayılan: .env içindek
 Dosya adı tam olarak <veritabani>_<YYYYMMDD>_<HHMMSS>_<mikrosaniye>.dump biçiminde
 olmalıdır; başka veritabanlarının yedeklerine ve elle konmuş dosyalara dokunulmaz.
 Varsayılan davranış önizlemedir; silmek için --apply gerekir.
+Ne kadar eski olursa olsun en yeni --keep (varsayılan 3) yedek hiçbir zaman silinmez: yedekler bir süre
+alınamamışsa elle çalıştırılan temizlik bütün yedekleri yok etmez.
 """
 
 import argparse
@@ -28,6 +30,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--days", type=int, default=14)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--keep", type=int, default=3, help="Yaşına bakılmadan korunacak en yeni yedek sayısı")
     parser.add_argument(
         "--database",
         default=os.getenv("DB_NAME"),
@@ -37,6 +40,8 @@ def main(argv=None):
 
     if args.days < 1:
         parser.error("Saklama suresi en az 1 gun olmalidir.")
+    if args.keep < 1:
+        parser.error("En az 1 yedek korunmalidir (--keep).")
     if not args.database or not GECERLI_AD.fullmatch(args.database):
         parser.error("Gecerli bir veritabani adi gerekli: --database verin veya .env icinde DB_NAME tanimlayin.")
 
@@ -47,14 +52,19 @@ def main(argv=None):
     desen = dosya_deseni(args.database)
     esik = time.time() - args.days * 86400
 
-    eski_dosyalar = [
-        dosya
-        for dosya in YEDEK_KLASORU.iterdir()
-        if desen.fullmatch(dosya.name)
-        and dosya.is_file()
-        and not dosya.is_symlink()
-        and dosya.stat().st_mtime < esik
-    ]
+    yedekler = sorted(
+        (
+            dosya
+            for dosya in YEDEK_KLASORU.iterdir()
+            if desen.fullmatch(dosya.name)
+            and dosya.is_file()
+            and not dosya.is_symlink()
+        ),
+        key=lambda dosya: dosya.stat().st_mtime,
+        reverse=True,
+    )
+    # En yeni --keep yedek her durumda korunur; yalnızca geri kalanlardan süresi dolanlar silinir.
+    eski_dosyalar = [dosya for dosya in yedekler[args.keep:] if dosya.stat().st_mtime < esik]
 
     if not eski_dosyalar:
         print("Temizlenecek eski yedek bulunamadi.")

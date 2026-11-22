@@ -8,6 +8,8 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
     OturumSonaErdiHatasi,
+    hata_detayi_metni,
+    istek_hatasi_metni,
 )
 
 from PySide6.QtCore import Qt, QTimer
@@ -530,16 +532,9 @@ class DanismaMasasiEkrani(QWidget):
                     "Oturum sona erdi."
                 )
 
-            try:
-                detay = cevap.json().get(
-                    "detail",
-                    "İşlem başarısız."
-                )
-            except (ValueError, AttributeError):
-                detay = "İşlem başarısız."
-
+            # Sunucunun Türkçe açıklaması olduğu gibi gösterilir (başına durum kodu eklenmez).
             raise RuntimeError(
-                f"{cevap.status_code}: {detay}"
+                hata_detayi_metni(cevap, "İşlem tamamlanamadı.")
             )
 
         return cevap.json()
@@ -735,7 +730,7 @@ class DanismaMasasiEkrani(QWidget):
             )
 
             self.lbl_alt_durum.setText(
-                str(hata)
+                istek_hatasi_metni(hata)
             )
 
             self._butonlari_ayarla(
@@ -894,7 +889,7 @@ class DanismaMasasiEkrani(QWidget):
 
             self.lbl_gecmis.setText(
                 "Görev geçmişi alınamadı: "
-                f"{hata}"
+                f"{istek_hatasi_metni(hata)}"
             )
 
             self.lbl_gecmis_sayi.setText(
@@ -973,7 +968,7 @@ class DanismaMasasiEkrani(QWidget):
             QMessageBox.warning(
                 self,
                 "Görev Başlatılamadı",
-                str(hata)
+                istek_hatasi_metni(hata)
             )
 
             self.yenile()
@@ -1077,7 +1072,7 @@ class DanismaMasasiEkrani(QWidget):
             QMessageBox.warning(
                 self,
                 "Görev Bitirilemedi",
-                str(hata)
+                istek_hatasi_metni(hata)
             )
 
             self.yenile()

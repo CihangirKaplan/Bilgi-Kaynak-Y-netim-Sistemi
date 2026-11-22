@@ -208,7 +208,11 @@ Kısa sürede çok sayıda istek veya çok sayıda başarısız parola denemesi 
 - `LOGIN_FAILED` olaylarının denetim kayıtlarına aktarılması
 - API kötüye kullanımını sınırlandıracak kontroller
 
-Kesin teknik yöntem geliştirme aşamasında belirlenecektir.
+Uygulanan yöntem:
+
+- **Hesap kilidi:** Aynı hesapta 5 hatalı girişte 1 dakika, 10 hatalı girişte 15 dakika giriş engellenir.
+- **İstemci (IP) sınırı:** Aynı bilgisayardan 5 dakika içinde 20 başarısız denemeden sonra istekler 429 ile geri çevrilir. Var olmayan kullanıcı adlarıyla ya da sırayla birçok hesabı deneyen saldırıları da durdurur. IP adresi ham saklanmaz, SHA-256 özeti tutulur.
+- **Şifre değiştirme:** Açık kalmış bir oturumdan eski şifrenin tahmin edilmesini önlemek için aynı istemci sınırı burada da uygulanır. Her yanlış eski şifre başarısız deneme sayılır ve `PASSWORD_CHANGE_FAILED` olarak denetime yazılır.
 
 ---
 
@@ -260,7 +264,7 @@ Veritabanı yedeklerine erişim yetkili kullanıcılar veya yetkili sistem süre
 | Veri değiştirme | Kayıtların yetkisiz/hatalı değiştirilmesi | Yetkilendirme, validation ve iş kuralları |
 | Veri sızıntısı | Bilgilerin yetkisiz açığa çıkması | Erişim kontrolü ve güvenli bilgi yönetimi |
 | Audit manipülasyonu | İşlem geçmişinin değiştirilmesi/silinmesi | Audit kayıtlarının korunması |
-| DoS / Brute Force | Kaynak tüketimi veya parola denemeleri | Rate-control veya geçici hesap kilitleme |
+| DoS / Brute Force | Kaynak tüketimi veya parola denemeleri | Hesap kilidi ve istemci (IP) bazlı deneme sınırı (girişte ve şifre değiştirmede) |
 
 ---
 

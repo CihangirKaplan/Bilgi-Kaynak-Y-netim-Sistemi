@@ -148,6 +148,22 @@ def hata_detayi_metni(yanit, varsayilan="Bilinmeyen bir hata oluştu."):
     return varsayilan
 
 
+def istek_hatasi_metni(hata, varsayilan="İşlem tamamlanamadı."):
+    """Bir istek hatasını kullanıcıya gösterilecek Türkçe metne çevirir.
+
+    Sunucu yanıt verdiyse onun açıklaması (ör. "Onaylanmış görev düzenlenemez."), vermediyse bağlantı mesajı gösterilir;
+    "409 Client Error: ... for url: ..." ya da "HTTPConnectionPool(...)" gibi teknik metinler kullanıcıya çıkmaz.
+    Ekranın kendi ürettiği hatalar (RuntimeError/ValueError) zaten Türkçe olduğundan olduğu gibi döner."""
+    if isinstance(hata, requests.RequestException):
+        yanit = getattr(hata, "response", None)
+        if yanit is not None:
+            return hata_detayi_metni(yanit, api_hata_mesaji(yanit) or varsayilan)
+        return api_hata_mesaji(hata=hata)
+    if isinstance(hata, (KeyError, TypeError, AttributeError)):
+        return "Sunucudan beklenmeyen bir yanıt alındı. Lütfen tekrar deneyin."
+    return str(hata) or varsayilan
+
+
 def api_hata_mesaji(yanit=None, hata=None):
     """API ve bağlantı hatalarını kullanıcı dostu metne dönüştürür.
 

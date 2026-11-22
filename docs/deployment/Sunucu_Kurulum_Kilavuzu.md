@@ -263,7 +263,7 @@ adresini açmayı deneyin. Açılmıyorsa sorun ağ/güvenlik duvarındadır, uy
 ## 10. Yedekleme
 
 Yedekleme için `scripts/windows/README.md` dosyasındaki adımları uygulayın
-(günlük otomatik yedek, 7 günlük rotasyon, geri yükleme doğrulaması).
+(günlük otomatik yedek, 14 günlük rotasyon (en yeni 3 yedek her zaman korunur), geri yükleme doğrulaması).
 Yedeklerin en az bir kopyasını sunucu bilgisayarının dışında (harici disk gibi) saklayın.
 
 ## 11. Güncelleme

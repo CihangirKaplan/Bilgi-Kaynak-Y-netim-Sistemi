@@ -1,6 +1,6 @@
 from datetime import datetime
 import requests
-from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.api_yoneticisi import istek_hatasi_metni, oturum_kontrollu_istek, oturum_hatasi_mi
 
 from PySide6.QtCore import Qt, QDate, QRectF
 from PySide6.QtGui import QColor, QPainter, QFontMetrics
@@ -906,7 +906,7 @@ class AuditKayitlariEkrani(QWidget):
             sonuc = self._excel_icin_kayitlari_getir(parametreler, EN_FAZLA_KAYIT)
         except (requests.RequestException, ValueError) as hata:
             QApplication.restoreOverrideCursor()
-            QMessageBox.warning(self, "Rapor Hatası", f"Denetim kayıtları alınamadı:\n{hata}")
+            QMessageBox.warning(self, "Rapor Hatası", f"Denetim kayıtları alınamadı:\n{istek_hatasi_metni(hata)}")
             return
         QApplication.restoreOverrideCursor()
         if sonuc is None:
@@ -991,7 +991,7 @@ class AuditKayitlariEkrani(QWidget):
             self.toplam = 0
             self.sayfalama_guncelle()
             self.durum.setText(
-                f"Denetim kayıtları yüklenemedi: {hata}"
+                f"Denetim kayıtları yüklenemedi: {istek_hatasi_metni(hata)}"
             )
             return
 

@@ -6,6 +6,7 @@ import requests
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
+    istek_hatasi_metni,
 )
 
 from PySide6.QtCore import Qt, QTimer
@@ -527,7 +528,7 @@ class DanismaMasasiYonetimi(QWidget):
                 QMessageBox.warning(
                     self,
                     "Bağlantı Hatası",
-                    f"Görev kayıtları alınamadı:\n{hata}"
+                    f"Görev kayıtları alınamadı:\n{istek_hatasi_metni(hata)}"
                 )
 
     def _secim_degisti(self):
@@ -615,7 +616,7 @@ class DanismaMasasiYonetimi(QWidget):
             QMessageBox.warning(
                 self,
                 "Onay Hatası",
-                f"Görev onaylanamadı:\n{hata}"
+                f"Görev onaylanamadı:\n{istek_hatasi_metni(hata)}"
             )
     def yeni_gorev_penceresi(self):
         from PySide6.QtCore import QDateTime
@@ -638,7 +639,7 @@ class DanismaMasasiYonetimi(QWidget):
 
             QMessageBox.warning(
                 self, "Bağlantı Hatası",
-                f"Öğrenci listesi alınamadı:\n{hata}"
+                f"Öğrenci listesi alınamadı:\n{istek_hatasi_metni(hata)}"
             )
             return
 
@@ -758,7 +759,7 @@ class DanismaMasasiYonetimi(QWidget):
                     return
 
                 QMessageBox.warning(
-                    pencere, "Bağlantı Hatası", str(hata)
+                    pencere, "Bağlantı Hatası", istek_hatasi_metni(hata)
                 )
                 return
 
@@ -927,7 +928,7 @@ class DanismaMasasiYonetimi(QWidget):
                     return
 
                 QMessageBox.warning(
-                    pencere, "Bağlantı Hatası", str(hata)
+                    pencere, "Bağlantı Hatası", istek_hatasi_metni(hata)
                 )
                 return
 

@@ -93,7 +93,7 @@ Yedek, **tüm veriyi** (parola özetleri dahil) içeren bir `.dump` dosyasıdır
 ## 5.1 Otomatik yedekleme
 Sunucu bilgisayarında **Windows Görev Zamanlayıcı**'da `TKYS_Otomatik_Yedekleme` görevi her gün çalışır (kurulu saat bilgisayara göre değişebilir; saatin
 bilgisayar açıkken gelmesine dikkat edin). Görev açık değilken kaçırılan yedeği bilgisayar açılınca alacak şekilde kurulmalıdır.
-- Yedekler `backups` klasörüne (ya da `.env` içindeki `TKYS_BACKUP_DIR` klasörüne) yazılır; **14 günden eski** yedekler başarılı yedekten sonra otomatik silinir.
+- Yedekler `backups` klasörüne (ya da `.env` içindeki `TKYS_BACKUP_DIR` klasörüne) yazılır; **14 günden eski** yedekler başarılı yedekten sonra otomatik silinir; en yeni 3 yedek, eski olsa bile her zaman saklanır.
 - İşlem kayıtları `logs\yedekleme.log` dosyasındadır. Görev sonucu `0` ise başarılıdır.
 - **Sistem Durumu** sayfasındaki *Son Yedek* kartı da son yedeğin tarihini gösterir; **36 saatten eski** olduğunda sarı, hiç yoksa kırmızı olur.
 
