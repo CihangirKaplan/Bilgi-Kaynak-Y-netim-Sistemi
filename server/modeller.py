@@ -659,9 +659,32 @@ class KalibrasyonGuncelleModeli(BaseModel):
 BAKIM_MALIYET_EN_FAZLA = 99_999_999.99      # veritabanı: DECIMAL(10, 2)
 
 
+BAKIM_EN_UZUN_SURE_GUN = 366          # tek bir bakım kaydının başlangıç-bitiş aralığı en fazla bir yıl
+
+
+def bakim_tarihi_sorunu(baslangic, bitis, sonraki):
+    """Bakım tarihleri tutarlı olmalı: bitiş başlangıçtan önce olamaz, aralık bir yılı aşamaz, sonraki bakım bitişten SONRA gelir.
+    Sorun varsa kullanıcıya gösterilecek mesajı, yoksa None döndürür."""
+    if baslangic is not None and bitis is not None:
+        if bitis < baslangic:
+            return "Bakım bitiş tarihi, başlangıç tarihinden önce olamaz."
+        if (bitis - baslangic).days > BAKIM_EN_UZUN_SURE_GUN:
+            return "Bakım süresi bir yılı geçemez. Başlangıç ve bitiş tarihlerini kontrol edin."
+    if bitis is not None and sonraki is not None and sonraki <= bitis:
+        return "Sonraki bakım tarihi, bakım bitiş tarihinden sonra olmalıdır."
+    return None
+
+
+def bakim_tarihlerini_denetle(baslangic, bitis, sonraki):
+    sorun = bakim_tarihi_sorunu(baslangic, bitis, sonraki)
+    if sorun:
+        raise ValueError(sorun)
+
+
 class BakimOlusturModeli(BaseModel):
     cihaz_id: int = Field(gt=0)
-    bakim_tarihi: date  # <-- SİSTEMİN ÇÖKMESİNİ ENGELLEYEN EKSİK PARÇA
+    # Bakım tarihi artık ayrıca girilmez: her zaman bakım başlangıç tarihidir (eski istemci gönderirse yok sayılıp başlangıca eşitlenir).
+    bakim_tarihi: Optional[date] = None
     bakim_yapan_kisi: str = Field(min_length=1, max_length=100)
     yapilan_islem: str = Field(min_length=1)
     maliyet: Optional[float] = Field(default=0.0, ge=0, le=BAKIM_MALIYET_EN_FAZLA)
@@ -672,13 +695,13 @@ class BakimOlusturModeli(BaseModel):
     plan_id: Optional[int] = Field(default=None, gt=0)       # bu kaydın yerine getirdiği bakım planı
 
     @model_validator(mode="after")
-    def bitis_baslangictan_once_olamaz(self):
-        if self.bakim_bitis_tarihi < self.bakim_baslangic_tarihi:
-            raise ValueError("Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+    def bakim_tarihleri_tutarli_olmali(self):
+        bakim_tarihlerini_denetle(self.bakim_baslangic_tarihi, self.bakim_bitis_tarihi, self.sonraki_bakim_tarihi)
+        self.bakim_tarihi = self.bakim_baslangic_tarihi
         return self
 
 class BakimGuncelleModeli(BaseModel):
-    bakim_tarihi: Optional[date] = None  # <-- DÜZENLEME İÇİN EKSİK PARÇA
+    bakim_tarihi: Optional[date] = None  # gönderilse de yok sayılır; başlangıç tarihi değişince sunucu eşitler
     bakim_yapan_kisi: Optional[str] = Field(default=None, min_length=1, max_length=100)
     yapilan_islem: Optional[str] = Field(default=None, min_length=1)
     maliyet: Optional[float] = Field(default=None, ge=0, le=BAKIM_MALIYET_EN_FAZLA)
@@ -688,10 +711,8 @@ class BakimGuncelleModeli(BaseModel):
     uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
 
     @model_validator(mode="after")
-    def bitis_baslangictan_once_olamaz(self):
-        bas, bit = self.bakim_baslangic_tarihi, self.bakim_bitis_tarihi
-        if bas is not None and bit is not None and bit < bas:
-            raise ValueError("Bakım bitiş tarihi, başlangıç tarihinden önce olamaz.")
+    def bakim_tarihleri_tutarli_olmali(self):
+        bakim_tarihlerini_denetle(self.bakim_baslangic_tarihi, self.bakim_bitis_tarihi, self.sonraki_bakim_tarihi)
         return self
 
 
