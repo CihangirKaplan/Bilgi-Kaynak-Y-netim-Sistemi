@@ -5,10 +5,14 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
 from PySide6.QtGui import QColor, QPainter, QPen
-from client.api_yoneticisi import hata_detayi_metni
+from client.api_yoneticisi import hata_detayi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.bildirim_toast import basari_bildirimi
 
 import client.izin_bagimliliklari as izin_bagimliliklari
+
+BAGLANTI_HATASI_METNI = (
+    "Sunucuya ulaşılamadı. Sunucunun açık olduğunu ve ağ bağlantınızı kontrol edip tekrar deneyin."
+)
 
 
 def golge_ekle(widget, blur=20, alpha=30, dy=5):
@@ -169,14 +173,18 @@ class RolOlusturDialog(QDialog):
         hedef_url = f"{self.api_url}/api/roller" 
         
         try:
-            res = requests.post(hedef_url, json=payload, headers=headers, timeout=15)
-            if res.status_code in (200, 201):
-                basari_bildirimi(self, f"'{rol_adi}' rolü başarıyla oluşturuldu.")
-                self.accept()
-            else:
-                QMessageBox.warning(self, "Rol Oluşturulamadı", hata_detayi_metni(res, "Rol oluşturulamadı."))
-        except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{str(e)}")
+            res = oturum_kontrollu_istek("POST", hedef_url, json=payload, headers=headers, timeout=15)
+        except requests.RequestException:
+            QMessageBox.critical(self, "Bağlantı Hatası", BAGLANTI_HATASI_METNI)
+            return
+        if oturum_hatasi_mi(res):                 # oturum sona erdi: ana pencere giriş ekranına döner
+            self.reject()
+            return
+        if res.status_code in (200, 201):
+            basari_bildirimi(self, f"'{rol_adi}' rolü başarıyla oluşturuldu.")
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Rol Oluşturulamadı", hata_detayi_metni(res, "Rol oluşturulamadı."))
 
 
 def golge_ekle(widget, blur=15, alpha=15, dy=3):
@@ -432,22 +440,22 @@ class RolDuzenleDialog(QDialog):
                 return
 
         headers = {"Authorization": f"Bearer {self.token}"}
+        data = {
+            "gorunen_ad": yeni_ad,
+            "aktif_mi": self.switch_aktif.isChecked()
+        }
         try:
-            data = {
-                "gorunen_ad": yeni_ad,
-                "aktif_mi": self.switch_aktif.isChecked()
-            }
-            yanit = requests.put(f"{self.api_url}/api/roller/{rol_id}", json=data, headers=headers, timeout=15)
-            if yanit.status_code == 200:
-                self.accept()
-            else:
-                try:
-                    ayrinti = str(yanit.json().get("detail", ""))
-                except ValueError:
-                    ayrinti = ""
-                QMessageBox.warning(self, "Hata", ayrinti or f"Güncellenemedi. Kod: {yanit.status_code}")
-        except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası:\n{e}")
+            yanit = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/roller/{rol_id}", json=data, headers=headers, timeout=15)
+        except requests.RequestException:
+            QMessageBox.critical(self, "Bağlantı Hatası", BAGLANTI_HATASI_METNI)
+            return
+        if oturum_hatasi_mi(yanit):
+            self.reject()
+            return
+        if yanit.status_code == 200:
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Rol Güncellenemedi", hata_detayi_metni(yanit, "Rol güncellenemedi."))
 
 class IzinDuzenleDialog(QDialog):
     NOT_EK_YUKSEKLIK = 110       # not kutusu görününce pencerenin uzayacağı miktar (px)
@@ -758,15 +766,16 @@ class IzinDuzenleDialog(QDialog):
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            # 3. Sunucudaki doğru PUT rotasına istek atalım (/api/izinler/{izin_id})
-            yanit = requests.put(f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers, timeout=15)
-            
-            if yanit.status_code == 200:
-                basari_bildirimi(self, "İzin yetkileri başarıyla güncellendi.")
-                self.accept()
-            else:
-                # Sunucudan gelen hata mesajını detaylı gösterelim
-                hata_detayi = yanit.json().get("detail", f"Sunucu Kodu: {yanit.status_code}")
-                QMessageBox.warning(self, "Hata", f"Güncellenemedi:\n{hata_detayi}")
-        except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+            # Sunucudaki PUT rotası: /api/izinler/{izin_id}
+            yanit = oturum_kontrollu_istek("PUT", f"{self.api_url}/api/izinler/{self.izin_id}", json=payload, headers=headers, timeout=15)
+        except requests.RequestException:
+            QMessageBox.critical(self, "Bağlantı Hatası", BAGLANTI_HATASI_METNI)
+            return
+        if oturum_hatasi_mi(yanit):
+            self.reject()
+            return
+        if yanit.status_code == 200:
+            basari_bildirimi(self, "İzin yetkileri başarıyla güncellendi.")
+            self.accept()
+        else:
+            QMessageBox.warning(self, "İzin Güncellenemedi", hata_detayi_metni(yanit, "İzin güncellenemedi."))

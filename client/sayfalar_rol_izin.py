@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLab
                                QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 import client.izin_bagimliliklari as izin_bagimliliklari
+from client.api_yoneticisi import hata_detayi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
+from client.rol_izin_diyaloglari import BAGLANTI_HATASI_METNI
 
 
 def rol_etiketi(rol):
@@ -99,22 +101,22 @@ class RolIzinSayfasi(QWidget):
 
     def verileri_yukle(self):
         try:
-            yanit = requests.get(
+            yanit = oturum_kontrollu_istek(
+                "GET",
                 f"{self.api_url}/api/rol-izin-matrisi",
                 headers={"Authorization": f"Bearer {self.token}"},
                 timeout=5,
             )
-        except requests.exceptions.RequestException as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+        except requests.exceptions.RequestException:
+            QMessageBox.critical(self, "Bağlantı Hatası", BAGLANTI_HATASI_METNI)
+            return
+
+        if oturum_hatasi_mi(yanit):              # oturum sona erdi: ana pencere giriş ekranına döner
             return
 
         if yanit.status_code != 200:
-            try:
-                detay = str(yanit.json().get("detail", ""))
-            except ValueError:
-                detay = ""
             QMessageBox.warning(
-                self, "Hata", f"Matris alınamadı (Kod {yanit.status_code}).\n{detay}"
+                self, "Rol ve İzinler Alınamadı", hata_detayi_metni(yanit, "Rol ve izin listesi alınamadı.")
             )
             return
 

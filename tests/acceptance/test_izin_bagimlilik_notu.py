@@ -389,7 +389,7 @@ def test_uyarida_gorunen_ad_matristeki_adla_yazilir(qt_app):
 def test_kaydet_onkosul_eksikse_uyari_verir_ve_sunucuya_hicbir_sey_gondermez(qt_app):
     d = dialog3(2)
     isaretle(d, 1)
-    with patch.object(QMessageBox, "warning") as uyari, patch.object(rid.requests, "put") as put:
+    with patch.object(QMessageBox, "warning") as uyari, patch.object(rid, "oturum_kontrollu_istek") as put:
         d.kaydet()
     assert uyari.call_args.args[1] == "Önce bağlı izin gerekli" and "olması gerekiyor" in uyari.call_args.args[2]
     assert not put.called and d.result() == 0
@@ -399,7 +399,7 @@ def test_kaydet_onkosul_tamsa_normal_kaydeder(qt_app):
     d = dialog3(2)
     isaretle(d, 2)
     yanit = MagicMock(status_code=200)
-    with patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "information"), patch.object(rid.requests, "put", return_value=yanit) as put:
+    with patch.object(QMessageBox, "warning") as uyari, patch.object(QMessageBox, "information"), patch.object(rid, "oturum_kontrollu_istek", return_value=yanit) as put:
         d.kaydet()
     assert not uyari.called and put.call_count == 1
     gonderilen = put.call_args.kwargs["json"]["verilen_rol_idleri"]
@@ -433,7 +433,7 @@ def test_etkilenen_izin_yoksa_ya_da_degisiklik_yoksa_kaldirma_uyarisi_cikmaz(qt_
 def test_kaldirma_uyarisinda_hayir_denirse_sunucuya_hicbir_sey_gitmez(qt_app):
     d = dialog3(3, MATRIS_KALDIRMA)
     isaretle(d)
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru, patch.object(rid.requests, "put") as put:
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as soru, patch.object(rid, "oturum_kontrollu_istek") as put:
         d.kaydet()
     assert soru.call_count == 1 and not put.called and d.result() == 0
 
