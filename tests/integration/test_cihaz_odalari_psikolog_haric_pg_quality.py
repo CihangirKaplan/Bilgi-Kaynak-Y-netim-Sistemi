@@ -63,7 +63,8 @@ def test_psikolog_odasi_rezervasyona_kapali_pasif_psikologun_odasi_acik_gercek_v
     istemci = TestClient(app)
     app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
     liste = lambda: {o["oda_id"] for o in istemci.get("/api/cihaz-odalari").json()}
-    saat = [datetime.now() + timedelta(days=2 + n, hours=1) for n in range(3)]
+    # Rezervasyon saatleri mesai içinde sabit (10:00): testin günün hangi saatinde çalıştığına bağlı olmasın (08:00-18:00 kuralı).
+    saat = [(datetime.now() + timedelta(days=2 + n)).replace(hour=10, minute=0, second=0, microsecond=0) for n in range(3)]
     rezerve = lambda oda, n: istemci.post("/api/rezervasyonlar", json={
         "cihaz_id": cihaz, "kullanilacak_oda_id": oda, "baslangic_zamani": saat[n].isoformat(), "bitis_zamani": (saat[n] + timedelta(hours=1)).isoformat()})
 

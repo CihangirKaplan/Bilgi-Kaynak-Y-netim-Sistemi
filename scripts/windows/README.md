@@ -37,6 +37,7 @@ Yedekler TKYS_BACKUP_DIR ile belirtilen klasöre kaydedilir.
 Bu ayar yoksa proje içindeki backups/ klasörü kullanılır.
 Windows sunucusunda örnek: TKYS_BACKUP_DIR=C:\TKYS_Backups
 İşlem kayıtları logs/yedekleme.log dosyasında tutulur.
+Bilgisayar 05.00'te kapalıysa yedek, bilgisayar açıldığında alınır (kurulum betiği bu ayarı açar; eski bir kurulum için betiği yeniden çalıştırın).
 Başarılı yedekleme sonrasında 14 günden eski yedekler temizlenir. Ne kadar eski olursa olsun en yeni 3 yedek hiçbir zaman silinmez.
 
 ## Geri yükleme (yedeğin işe yaradığını doğrulama)

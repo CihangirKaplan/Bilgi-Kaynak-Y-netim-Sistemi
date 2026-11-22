@@ -156,8 +156,10 @@ def test_calistirma_proje_klasorune_gecer_ve_env_yukler(log_klasoru, temiz_ortam
 
 # --------------------------------------------------------------- Görev Zamanlayıcı kurulumu
 def kur(argv=None, env_var=True):
+    # Görev ayarlarını düzenleyen ikinci adım ayrıca sınanır (test_windows_gorev_ayarlari.py); burada yalnızca schtasks çağrısı izlenir.
     with patch.object(kurulum, "windows_mu", return_value=True), \
          patch.object(Path, "is_file", return_value=env_var), \
+         patch.object(kurulum, "gorev_ayarlarini_uygula"), \
          patch.object(kurulum.subprocess, "run") as calistir:
         kurulum.main(argv)
     return calistir
