@@ -477,12 +477,24 @@ def _cihaz_metni_temizle(deger):
     return deger
 
 
+def _elle_secilebilir_durum(deger):
+    """'Rezerve' ve 'Kullanımda' durumları artık elle seçilemez: bugünkü rezervasyonlardan hesaplanır (yönetim panelinde)."""
+    if deger in (CihazDurumu.REZERVE, CihazDurumu.KULLANIMDA):
+        raise ValueError("'Rezerve' ve 'Kullanımda' durumları elle seçilemez; rezervasyonlardan kendiliğinden hesaplanır.")
+    return deger
+
+
 class CihazOlusturModeli(BaseModel):
     envanter_kodu: str = Field(min_length=1, max_length=50)
     cihaz_adi: str = Field(min_length=1, max_length=100)
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
     durum: CihazDurumu = CihazDurumu.KULLANIMA_HAZIR
+
+    @field_validator("durum")
+    @classmethod
+    def durum_elle_secilebilir_olmali(cls, deger):
+        return _elle_secilebilir_durum(deger)
 
     @field_validator("envanter_kodu", "cihaz_adi", mode="before")
     @classmethod
@@ -504,6 +516,11 @@ class CihazGuncelleModeli(BaseModel):
     marka_model: Optional[str] = Field(default=None, max_length=100)
     seri_no: Optional[str] = Field(default=None, max_length=100)
     durum: Optional[CihazDurumu] = None
+
+    @field_validator("durum")
+    @classmethod
+    def durum_elle_secilebilir_olmali(cls, deger):
+        return deger if deger is None else _elle_secilebilir_durum(deger)
 
     @field_validator("cihaz_adi", mode="before")
     @classmethod

@@ -1,7 +1,8 @@
 """Etkinlik varken randevu ve cihaz rezervasyonu API çakışmaları."""
 
 import os
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import psycopg2
@@ -117,11 +118,17 @@ def test_etkinlik_varken_randevu_ve_cihaz_reddedilir():
                 cur, "CIHAZ_REZERVASYON"
             )
 
-            randevu_bas = datetime(2048, 6, 15, 10)
-            randevu_bit = datetime(2048, 6, 15, 11)
+            # Her çalıştırma uzak gelecekte rastgele bir hafta içi gün kullanır: yarıda kesilen bir önceki çalıştırmanın artığı
+            # ("Test aralığı zaten dolu") bu testi bir daha bozmaz.
+            gun = datetime(2060, 1, 1) + timedelta(days=random.randrange(0, 8000))
+            while gun.weekday() >= 5:
+                gun += timedelta(days=1)
 
-            cihaz_bas = datetime(2048, 6, 15, 12)
-            cihaz_bit = datetime(2048, 6, 15, 13)
+            randevu_bas = gun.replace(hour=10)
+            randevu_bit = gun.replace(hour=11)
+
+            cihaz_bas = gun.replace(hour=12)
+            cihaz_bit = gun.replace(hour=13)
 
             for oda_id, bas, bit in (
                 (randevu_oda_id, randevu_bas, randevu_bit),

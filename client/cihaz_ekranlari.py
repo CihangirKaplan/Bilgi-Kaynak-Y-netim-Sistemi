@@ -29,6 +29,8 @@ DURUMLAR = {
     "Arizali": ("Arızalı", "#991B1B", "#FEE2E2"),
     "Kullanim_Disi": ("Kullanım Dışı", "#475569", "#E2E8F0"),
 }
+# Elle seçilemeyen, rezervasyonlardan hesaplanan durumlar (eski kayıtlar için etiketleri DURUMLAR'da kalır).
+HESAPLANAN_DURUMLAR = ("Rezerve", "Kullanimda")
 BILGI_KUTUSU_STILI = ("background: #FEF3C7; color: #854D0E; border: 1px solid #FDE68A; border-radius: 10px; "
                       "padding: 10px 12px; font-size: 12px; font-weight: 700;")
 
@@ -69,6 +71,8 @@ class CihazIslemFormu(QDialog):
         
         self.cmb_durum = QComboBox()
         for db_degeri, (ad, _renk, _arka) in DURUMLAR.items():
+            if db_degeri in HESAPLANAN_DURUMLAR:
+                continue                                  # 'Rezerve' / 'Kullanımda' rezervasyonlardan hesaplanır, elle seçilmez
             self.cmb_durum.addItem(ad, db_degeri)         # gösterilen ad + sunucunun anladığı değer
 
 

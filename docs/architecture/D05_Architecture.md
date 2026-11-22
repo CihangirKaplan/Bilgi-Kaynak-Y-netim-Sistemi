@@ -116,7 +116,6 @@ Memur rolü özellikle cihaz ve operasyonel kaynak yönetiminde görev alır.
 - Kalibrasyon kayıtlarını yönetebilir.
 - Arıza kayıtlarını yönetebilir.
 - Sisteme yeni cihaz ekleyebilir.
-- Cihaz takip kontrol listesini yönetebilir.
 - Danışma masası oturumlarını yönetebilir.
 - Öğrenci faaliyet kayıtlarını düzenleyebilir.
 - Randevu oluşturamaz, düzenleyemez veya iptal edemez.
@@ -132,7 +131,6 @@ Müdür rolü hem yönetimsel kullanıcı işlemlerinde hem de cihaz süreçleri
 - Cihaz envanterini yönetebilir.
 - Bakım, kalibrasyon ve arıza kayıtlarını yönetebilir.
 - Sisteme yeni cihaz ekleyebilir.
-- Cihaz takip kontrol listesini yönetebilir.
 - Kullanıcı oluşturabilir.
 - Personel tanımlayabilir.
 - Kullanıcı hesaplarını pasifleştirebilir.
@@ -795,7 +793,6 @@ Roller:
 | Danışma masası oturumunu yönetme | Hayır | Evet | Evet | Evet | Hayır | Evet |
 | Cihaz ekleme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Faaliyet kayıtlarını düzenleme | Hayır | Evet | Evet | Hayır | Evet | Evet |
-| Cihaz takip kontrol listesini yönetme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Yeni izin tanımlama | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | İzin düzenleme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | Rol-izin yönetme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |

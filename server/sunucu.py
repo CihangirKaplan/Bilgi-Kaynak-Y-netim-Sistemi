@@ -10388,14 +10388,22 @@ def yonetim_bugun_merkezde(
               AND e.iptal_edildi_mi IS NOT TRUE
         """)
 
-        imlec.execute("""
-            SELECT durum::text, COUNT(*)
-            FROM cihazlar
-            GROUP BY durum::text
-        """)
+        # "Şu anki durum": bakım/kalibrasyon aralığı dahil etkin durum (Ana Panel ile aynı tanım). Hazır cihazlar ayrıca bugünkü rezervasyonlara göre
+        # bölünür: şu an rezervasyonda olan "Kullanimda", henüz kullanılmayan ama bugün sonrası rezervasyonu olan "Rezerve", kalanı "Kullanima_Hazir".
+        # (Bu iki durum artık elle seçilemez; hesaplanır.)
+        imlec.execute(
+            "SELECT etkin, simdi_kullanimda, bugun_rezerveli, COUNT(*) FROM (SELECT " + ETKIN_CIHAZ_DURUMU_SQL + " AS etkin, "
+            "EXISTS (SELECT 1 FROM cihaz_rezervasyonlari r WHERE r.cihaz_id = c.cihaz_id AND r.iptal_edildi_mi = FALSE "
+            "        AND r.baslangic_zamani <= NOW() AND r.bitis_zamani > NOW()) AS simdi_kullanimda, "
+            "EXISTS (SELECT 1 FROM cihaz_rezervasyonlari r WHERE r.cihaz_id = c.cihaz_id AND r.iptal_edildi_mi = FALSE "
+            "        AND r.baslangic_zamani > NOW() AND r.baslangic_zamani < CURRENT_DATE + 1) AS bugun_rezerveli "
+            "FROM cihazlar c) t GROUP BY etkin, simdi_kullanimda, bugun_rezerveli"
+        )
         cihaz_durumlari = {ad: 0 for ad in durum_adlari}
-        for durum, adet in imlec.fetchall():
-            cihaz_durumlari[durum] = int(adet)
+        for etkin, simdi_kullanimda, bugun_rezerveli, adet in imlec.fetchall():
+            if etkin == "Kullanima_Hazir":
+                etkin = "Kullanimda" if simdi_kullanimda else ("Rezerve" if bugun_rezerveli else "Kullanima_Hazir")
+            cihaz_durumlari[etkin] = cihaz_durumlari.get(etkin, 0) + int(adet)
 
         # Yalnızca gerçekten zaman damgası bulunan işlemler
         # günlük olay akışına alınır. Kişisel bilgiler dönülmez.

@@ -173,8 +173,8 @@ class BugunMerkezdeWidget(QWidget):
 
         durumlar = [
             ("Kullanıma hazır cihaz", "Kullanima_Hazir", "yesil"),
-            ("Kullanımdaki cihaz", "Kullanimda", "mavi"),
-            ("Rezerve cihaz", "Rezerve", "mavi"),
+            ("Şu an kullanımda", "Kullanimda", "mavi"),
+            ("Bugün rezervasyonu olan", "Rezerve", "mavi"),
         ]
 
         for baslik, kod, renk_adi in durumlar:

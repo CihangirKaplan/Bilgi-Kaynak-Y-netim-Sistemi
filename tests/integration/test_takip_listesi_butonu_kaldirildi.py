@@ -25,6 +25,7 @@ def test_diger_envanter_dugmeleri_hala_baglidir():
     assert "btn.clicked.connect(self.cihaz_envanter_duzenle_tetikle)" in KAYNAK
 
 
-def test_izin_tanimi_silinmedi_yalnizca_dugme_kaldirildi():
-    # Veritabanı/rol verisine dokunulmaz; yetki matrisindeki satır yerinde kalır.
-    assert '"Cihaz takip kontrol listesini yönetme"' in KAYNAK
+def test_ise_yaramayan_takip_kontrol_izni_matristen_de_kaldirildi():
+    # Düğme V1.0 kapsamı dışında kaldığı için izin hiçbir şeyi açmıyordu; yetki matrisinden ve veritabanından (migration) silindi.
+    assert "Cihaz takip kontrol listesini yönetme" not in KAYNAK and "CIHAZ_TAKIP_KONTROL_LISTESI" not in KAYNAK
+    assert "Cihaz takip kontrol listesini yönetme" not in mw.IZIN and "Cihaz takip kontrol listesini yönetme" not in mw.IZIN_KODLARI

@@ -268,3 +268,55 @@ def test_bakim_ve_kalibrasyon_goruntuleme_izni_yalnizca_okumaya_izin_verir():
         c.execute("DELETE FROM rol_izinleri WHERE rol_id = %s", (rol,))
         c.execute("DELETE FROM roller WHERE rol_id = %s", (rol,))
         conn.close()
+
+
+def test_yonetim_paneli_kullanimda_ve_rezerve_cihazlari_rezervasyonlardan_hesaplar():
+    """Elle seçilemeyen 'Kullanımda'/'Rezerve' durumları, bugünkü rezervasyonlardan hesaplanır (yönetim 'Şu anki durum')."""
+    etiket = uuid4().hex[:8]
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    _dogru_veritabani(c)
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id) VALUES (%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = 'ADMIN')) RETURNING kullanici_id", (f"yp_{etiket}",))
+    admin = c.fetchone()[0]
+    c.execute("INSERT INTO odalar (oda_adi, kapasite) VALUES (%s, 1), (%s, 1) RETURNING oda_id", (f"yp_o1_{etiket}", f"yp_o2_{etiket}"))
+    odalar = [r[0] for r in c.fetchall()]
+    c.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad) VALUES (%s, 'x') RETURNING bolum_id", (f"yp_b_{etiket}",))
+    bolum = c.fetchone()[0]
+    istemci = TestClient(app)
+
+    def say():
+        return istemci.get("/api/yonetim-raporlari/bugun-merkezde").json()["cihaz_durumlari"]
+
+    cihazlar = []
+    try:
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        onceki = say()
+        for sira in range(3):
+            c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi) VALUES (%s, 'YP') RETURNING cihaz_id", (f"YP{sira}-{etiket}",))
+            cihazlar.append(c.fetchone()[0])
+        # 0: şu an rezervasyonda; 1: birazdan başlayacak (bugün); 2: rezervasyonsuz
+        c.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, bolum_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani) "
+                  "VALUES (%s, %s, %s, now() - interval '5 minutes', now() + interval '1 hour')", (cihazlar[0], bolum, odalar[0]))
+        c.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, bolum_id, kullanilacak_oda_id, baslangic_zamani, bitis_zamani) "
+                  "VALUES (%s, %s, %s, now() + interval '1 second', now() + interval '2 seconds')", (cihazlar[1], bolum, odalar[1]))
+        sonra = say()
+        assert sonra["Kullanimda"] - onceki["Kullanimda"] == 1
+        assert sonra["Rezerve"] - onceki["Rezerve"] == 1
+        assert sonra["Kullanima_Hazir"] - onceki["Kullanima_Hazir"] == 1
+        # İptal edilen rezervasyon sayılmaz
+        c.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE cihaz_id = %s", (cihazlar[0],))
+        iptal = say()
+        assert iptal["Kullanimda"] == onceki["Kullanimda"] and iptal["Kullanima_Hazir"] - onceki["Kullanima_Hazir"] == 2
+        # Elle durum seçimi sunucuda reddedilir
+        yanit = istemci.post("/api/cihazlar", json={"envanter_kodu": f"YPX-{etiket}", "cihaz_adi": "X", "durum": "Rezerve"})
+        assert yanit.status_code == 422
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM cihaz_rezervasyonlari WHERE cihaz_id = ANY(%s)", (cihazlar,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = ANY(%s)", (cihazlar,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s", (admin,))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (admin,))
+        c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", (odalar,))
+        c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
+        conn.close()
