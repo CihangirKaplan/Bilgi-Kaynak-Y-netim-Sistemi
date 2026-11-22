@@ -10756,21 +10756,28 @@ def sistem_durumu_getir(kullanici_id: int = Depends(izin_kontrol("AUDIT_KAYITLAR
 
 # Liste ekranlarındaki "Excel'e Aktar" işleminin denetim kaydı: kim, ne zaman, hangi liste, kaç satır.
 # Kayıt için, o listeyi görme yetkisinin aynısı gerekir (listeyi göremeyen kişi aktarım kaydı da yazamaz).
+# liste -> (listeyi görmek için gereken izin(ler) [birinin olması yeter], denetim kaydındaki hedef tablo)
 LISTE_AKTARIM_HEDEFLERI = {
     "CIHAZ": ("CIHAZ_UYGUNLUK_GORUNTULE", "cihazlar"),
     "OGRENCI": ("FAALIYET_KAYITLARI_DUZENLE", "ogrenciler"),
     "DANISAN": ("RANDEVU_OLUSTUR", "danisan_kodlari"),
+    "REZERVASYON": ("CIHAZ_REZERVASYON", "cihaz_rezervasyonlari"),
+    "BAKIM": ("BAKIM_KAYITLARI_YONET", "cihaz_bakimlari"),
+    "KALIBRASYON": ("KALIBRASYON_KAYITLARI_YONET", "cihaz_kalibrasyonlari"),
+    "ARIZA": ("ARIZA_KAYITLARI_YONET", "cihaz_arizalari"),
+    "BAKIM_PLANI": (("BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_bakim_planlari"),
 }
 
 
 class ListeAktarimModeli(_DurumBaseModel):
-    liste: _Literal["CIHAZ", "OGRENCI", "DANISAN"]
+    liste: _Literal["CIHAZ", "OGRENCI", "DANISAN", "REZERVASYON", "BAKIM", "KALIBRASYON", "ARIZA", "BAKIM_PLANI"]
     satir_sayisi: int = _DurumField(ge=0, le=1_000_000)
 
 
 @app.post("/api/liste-aktarim-kaydi")
 def liste_aktarim_kaydi(veri: ListeAktarimModeli, kullanici_id: int = Depends(mevcut_kullanici_id)):
     izin_adi, tablo = LISTE_AKTARIM_HEDEFLERI[veri.liste]
+    izin_adlari = list(izin_adi) if isinstance(izin_adi, (tuple, list)) else [izin_adi]
     conn = None
     cursor = None
     try:
@@ -10781,11 +10788,11 @@ def liste_aktarim_kaydi(veri: ListeAktarimModeli, kullanici_id: int = Depends(me
             SELECT ri.izin_var FROM kullanicilar k
             JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
             JOIN izinler i ON ri.izin_id = i.izin_id
-            WHERE k.kullanici_id = %s AND i.izin_adi = %s;
-            """, (kullanici_id, izin_adi),
+            WHERE k.kullanici_id = %s AND i.izin_adi = ANY(%s) AND ri.izin_var = 1
+            LIMIT 1;
+            """, (kullanici_id, izin_adlari),
         )
-        sonuc = cursor.fetchone()
-        if sonuc is None or sonuc[0] != 1:
+        if cursor.fetchone() is None:
             raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz bulunmuyor.")
         denetim_kaydi_olustur(
             VT_AYARLARI, olay_turu="EXPORT", kullanici_id=kullanici_id, hedef_tablo=tablo,

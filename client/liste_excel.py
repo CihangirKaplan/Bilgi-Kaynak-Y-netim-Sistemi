@@ -7,7 +7,7 @@ ve tablonun kendisi. Metin hücreleri formül olarak yorumlanmaz (formül enjeks
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QPushButton
+from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton
 
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.rapor_excel_genel import excel_olustur
@@ -69,6 +69,50 @@ def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti
         _aktarimi_denetime_yaz(pencere, kayit, len(satirlar))
     QMessageBox.information(pencere, "Excel'e Aktar", f"{len(satirlar)} kayıt kaydedildi:\n{dosya_yolu}")
     return dosya_yolu
+
+
+def hucre_metni(tablo, satir, sutun):
+    """Tablo hücresinin gösterdiği metin: normal hücrede öğenin metni, rozet/etiket gibi hücre bileşeninde içindeki yazı."""
+    oge = tablo.item(satir, sutun)
+    if oge is not None:
+        return oge.text()
+    bilesen = tablo.cellWidget(satir, sutun)
+    if bilesen is None:
+        return ""
+    if isinstance(bilesen, QLabel):
+        return bilesen.text()
+    etiketler = bilesen.findChildren(QLabel)
+    return " ".join(e.text() for e in etiketler if e.text()).strip()
+
+
+def tablodan_excele_aktar(pencere, tablo, baslik, onek, sutunlar, liste, api_url, token, filtre_ozeti=(), sayfa_adi="Liste",
+                          aciklama="", ek_sutunlar=()):
+    """Ekranda GÖRÜNEN (aramaya uyan, gizlenmemiş) satırları, tablodaki yazılarıyla Excel'e aktarır.
+
+    sutunlar: [(Excel başlığı, tablo sütun numarası, tür)]; tür "metin" | "cihaz_kodu" | "cihaz_adi"
+              ("KOD · Ad" biçimindeki cihaz hücresi iki Excel sütununa ayrılır).
+    ek_sutunlar: [(Excel başlığı, fonksiyon(satir_no) -> değer)]; tabloda görünmeyen ama kayıtta olan bilgiler için.
+    """
+    from client.tablo_tasarimi import CihazHucresiDelegate
+    satirlar = []
+    for satir in range(tablo.rowCount()):
+        if tablo.isRowHidden(satir):
+            continue
+        deger = []
+        for _, sutun, tur in sutunlar:
+            metin = hucre_metni(tablo, satir, sutun).strip()
+            if tur in ("cihaz_kodu", "cihaz_adi"):
+                ad, kod = CihazHucresiDelegate.parcala(metin)
+                metin = kod if tur == "cihaz_kodu" else ad
+            deger.append(metin)
+        for _, fonksiyon in ek_sutunlar:
+            deger.append(fonksiyon(satir))
+        satirlar.append(deger)
+    kolonlar = [(b, None) for b, _, _ in sutunlar] + [(b, None) for b, _ in ek_sutunlar]
+    return listeyi_excele_aktar(
+        pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti, sayfa_adi=sayfa_adi, aciklama=aciklama,
+        kayit={"api_url": api_url, "token": token, "liste": liste},
+    )
 
 
 def _aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):

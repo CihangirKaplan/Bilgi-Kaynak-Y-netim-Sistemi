@@ -61,6 +61,20 @@ def test_aktarim_kaydi_listeyi_gorme_yetkisi_ister(kullanicilar):
     assert c.fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("liste,tablo", [
+    ("REZERVASYON", "cihaz_rezervasyonlari"), ("BAKIM", "cihaz_bakimlari"), ("KALIBRASYON", "cihaz_kalibrasyonlari"),
+    ("ARIZA", "cihaz_arizalari"), ("BAKIM_PLANI", "cihaz_bakim_planlari"),
+])
+def test_cihaz_listeleri_aktarimi_denetime_yazilir_ve_izin_ister(kullanicilar, liste, tablo):
+    k, c = kullanicilar
+    assert liste_aktarim_kaydi(ListeAktarimModeli(liste=liste, satir_sayisi=3), kullanici_id=k["admin"]) == {"durum": "basarili"}
+    c.execute("SELECT hedef_tablo, ayrinti FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu::text = 'EXPORT' ORDER BY denetim_id DESC", (k["admin"],))
+    assert c.fetchone() == (tablo, {"liste": liste, "satir_sayisi": 3})
+    with pytest.raises(HTTPException) as hata:                       # psikolog cihaz yönetim listelerini göremez
+        liste_aktarim_kaydi(ListeAktarimModeli(liste=liste, satir_sayisi=1), kullanici_id=k["psikolog"])
+    assert hata.value.status_code == 403
+
+
 def test_surum_ve_sema_surumu(kullanicilar):
     k, c = kullanicilar
     bilgi = surum_bilgisi(kullanici_id=k["psikolog"])

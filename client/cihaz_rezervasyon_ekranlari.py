@@ -21,6 +21,7 @@ from client.tablo_tasarimi import (
     tablo_olustur, tehlike_dugmesi, tek_islem_butonu, yenile_butonu_olustur,
 )
 from client.bildirim_toast import basari_bildirimi
+from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
@@ -749,7 +750,8 @@ class RezervasyonYonetimEkrani(QWidget):
         layout.addWidget(sayfa_basligi(
             "Cihaz Rezervasyonu", "Cihaz rezervasyonlarını görüntüleyin, düzenleyin ve iptal edin",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal]))
+            [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"], ortali=True)
         kb = self.tablo.horizontalHeader()
@@ -858,6 +860,17 @@ class RezervasyonYonetimEkrani(QWidget):
         iptal_fn = (lambda: self.rezervasyon_iptal_et(rezervasyon_id)) if yetkili else None
         duzenle_fn = (lambda: self.rezervasyon_duzenle(rez)) if yetkili else None
         RezervasyonDetayPenceresi(rez, iptal_fn, self, duzenle_fn=duzenle_fn).exec()
+
+    def excele_aktar(self):
+        """Ekranda görünen rezervasyonları Excel'e aktarır (arama süzgecine uyanlar)."""
+        tablodan_excele_aktar(
+            self, self.tablo, "Cihaz Rezervasyonları", "cihaz_rezervasyonlari",
+            [("Envanter Kodu", 0, "cihaz_kodu"), ("Cihaz Adı", 0, "cihaz_adi"), ("Bölüm", 1, "metin"), ("Oda", 2, "metin"),
+             ("Proje", 3, "metin"), ("Tarih ve Saat", 4, "metin"), ("Durum", SUTUN_DURUM, "metin")],
+            "REZERVASYON", self.api_url, self.token,
+            filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Rezervasyonlar",
+            aciklama="Cihaz rezervasyonları (ekranda görünen kayıtlar).",
+        )
 
     def rezervasyon_duzenle(self, rez):
         form = YeniRezervasyonFormu(self.api_url, self.token, self, duzenlenecek=rez)

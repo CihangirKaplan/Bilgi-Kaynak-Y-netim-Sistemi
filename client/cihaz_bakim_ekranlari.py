@@ -22,6 +22,7 @@ from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, is
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
+from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 
 BAKIM_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -347,7 +348,8 @@ class BakimYonetimEkrani(QWidget):
         layout.addWidget(sayfa_basligi(
             "Cihaz Bakım Geçmişi", "Yapılan bakımlar ve planlanan sonraki bakım tarihleri",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
                                     "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"], ortali=True)
@@ -377,6 +379,17 @@ class BakimYonetimEkrani(QWidget):
         layout.addWidget(kart, 1)
 
         self.verileri_yukle()
+
+    def excele_aktar(self):
+        """Ekranda görünen bakım kayıtlarını Excel'e aktarır (arama süzgecine uyanlar)."""
+        tablodan_excele_aktar(
+            self, self.tablo, "Cihaz Bakım Kayıtları", "cihaz_bakim_kayitlari",
+            [("Envanter Kodu", 0, "cihaz_kodu"), ("Cihaz Adı", 0, "cihaz_adi"), ("Yapan Kişi", 1, "metin"), ("Yapılan İşlem", 2, "metin"),
+             ("Maliyet", 3, "metin"), ("Bakım Tarihi", 4, "metin"), ("Sonraki Bakım", 5, "metin"), ("Bildirim", 6, "metin")],
+            "BAKIM", self.api_url, self.token,
+            filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Bakımlar",
+            aciklama="Cihaz bakım kayıtları (ekranda görünen kayıtlar).",
+        )
 
     def verileri_yukle(self):
         self.tablo.setRowCount(0)

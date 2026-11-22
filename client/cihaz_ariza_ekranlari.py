@@ -17,6 +17,7 @@ from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
+from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 
 # Ortak form stiline ek: kırmızı "bildir" butonu ve uyarı kutusu
 ARIZA_FORM_STIL = FORM_STIL + """
@@ -177,7 +178,8 @@ class ArizaYonetimEkrani(QWidget):
         layout.addWidget(sayfa_basligi(
             "Arıza Kayıtları", "Arıza bildirimi ve takibi",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_acik, self.cip_cozulen]))
+            [self.cip_toplam, self.cip_acik, self.cip_cozulen],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["NO", "CİHAZ", "SORUN BAŞLIĞI", "ACİLİYET", "DURUM",
                                     "BİLDİRİM TARİHİ", "İŞLEM"], ortali=True)
@@ -281,6 +283,24 @@ class ArizaYonetimEkrani(QWidget):
                 (self.tablo.item(satir, k).text() if self.tablo.item(satir, k) else "")
                 for k in (1, 2)).lower()
             self.tablo.setRowHidden(satir, aranan not in icerik)
+
+    def excele_aktar(self):
+        """Ekranda görünen arızaları Excel'e aktarır; çözüm tarihi ve çözüm notu da eklenir."""
+        def kayit(satir, alan):
+            oge = self.tablo.item(satir, 0)
+            ar = self.ariza_detaylari.get(int(oge.text())) if oge is not None and oge.text().isdigit() else None
+            return (ar or {}).get(alan) or ""
+        tablodan_excele_aktar(
+            self, self.tablo, "Cihaz Arıza Kayıtları", "cihaz_arizalari",
+            [("No", 0, "metin"), ("Envanter Kodu", 1, "cihaz_kodu"), ("Cihaz Adı", 1, "cihaz_adi"), ("Sorun Başlığı", 2, "metin"),
+             ("Aciliyet", 3, "metin"), ("Durum", 4, "metin"), ("Bildirim Tarihi", 5, "metin")],
+            "ARIZA", self.api_url, self.token,
+            filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Arızalar",
+            aciklama="Cihaz arıza kayıtları (ekranda görünen kayıtlar).",
+            ek_sutunlar=[("Açıklama", lambda s: kayit(s, "ariza_aciklama")),
+                         ("Çözüm Tarihi", lambda s: str(kayit(s, "cozum_tarihi"))[:16].replace("T", " ")),
+                         ("Çözüm Notu", lambda s: kayit(s, "cozum_notu"))],
+        )
 
     def ariza_duzenle_form_ac(self, ariza_id):
         secili_ariza = self.ariza_detaylari.get(ariza_id)
