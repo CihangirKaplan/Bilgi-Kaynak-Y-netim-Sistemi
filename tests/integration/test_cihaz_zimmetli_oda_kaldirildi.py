@@ -34,6 +34,7 @@ def test_cihaz_listesi_ve_detayi_zimmetli_oda_dondurmez():
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         liste = sunucu.cihazlari_listele(kullanici_id=1)
         detay = sunucu.cihaz_detayi_getir(1, kullanici_id=1)
+    assert liste[0].pop("etkin_durum") == "Kullanima_Hazir"                 # liste, bugünkü bakım/kalibrasyonu da hesaba katan etkin durumu da verir
     assert liste[0] == detay == {"cihaz_id": 1, "envanter_kodu": "E-1", "cihaz_adi": "EEG", "marka_model": "Marka", "seri_no": "SN1",
                                  "durum": "Kullanima_Hazir", "kayit_tarihi": "2026-10-13"}
     assert all("zimmetli" not in str(c.args[0]) for c in imlec.execute.call_args_list)
