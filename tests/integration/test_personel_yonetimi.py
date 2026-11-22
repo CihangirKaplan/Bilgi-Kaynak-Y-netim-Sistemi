@@ -12,7 +12,7 @@ def test_aktif_kullanici_icin_personel_olusturulur():
     mock_cursor = mock_conn.cursor.return_value
 
     mock_cursor.fetchone.side_effect = [
-        (True, "PSIKOLOG"),  # Kullanıcı aktif
+        (True, "PSIKOLOG", "ADMIN"),  # Kullanıcı aktif
         (15,),              # Yeni personel ID
     ]
 
@@ -50,7 +50,7 @@ def test_pasif_kullanici_icin_personel_olusturulamaz():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
-    mock_cursor.fetchone.return_value = (False, "PSIKOLOG")
+    mock_cursor.fetchone.return_value = (False, "PSIKOLOG", "ADMIN")
 
     yeni_personel = PersonelOlusturModeli(
         kullanici_id=25,
@@ -92,7 +92,7 @@ def test_mukerrer_personel_kaydi_reddedilir():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
-    mock_cursor.fetchone.return_value = (True, "PSIKOLOG")
+    mock_cursor.fetchone.return_value = (True, "PSIKOLOG", "ADMIN")
     mock_cursor.execute.side_effect = [
         None,
         UniqueViolation()
@@ -155,7 +155,7 @@ def test_personel_http_uzerinden_basariyla_olusturulur():
 
     mock_cursor.fetchone.side_effect = [
         (1,),                 # PERSONEL_TANIMLA izni var
-        (True, "PSIKOLOG"),  # Kullanıcı aktif
+        (True, "PSIKOLOG", "ADMIN"),  # Kullanıcı aktif
         (15,),                # Oluşturulan personel ID
     ]
 
@@ -275,7 +275,7 @@ from server.sunucu import personel_guncelle
 def test_personel_basariyla_guncellenir():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
-    mock_cursor.fetchone.return_value = (15, "PSK-025", True, 7)
+    mock_cursor.fetchone.return_value = (15, "PSK-025", True, 7, "PSIKOLOG", "ADMIN")
 
     guncelleme = PersonelGuncelleModeli(personel_kodu="PSK-NEW")
 
@@ -334,7 +334,7 @@ def test_personel_kodu_baska_kayitta_kullaniliyorsa_reddedilir():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
 
-    mock_cursor.fetchone.return_value = (15, "PSK-025", True)
+    mock_cursor.fetchone.return_value = (15, "PSK-025", True, 7, "PSIKOLOG", "ADMIN")
     mock_cursor.execute.side_effect = [
         None,
         UniqueViolation()
