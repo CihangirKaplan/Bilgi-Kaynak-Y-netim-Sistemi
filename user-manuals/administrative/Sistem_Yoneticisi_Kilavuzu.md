@@ -41,8 +41,8 @@ Varsayılan roller: **Sistem Admin, Müdür (Yönetici), Memur, Psikolog, Danı�
 Sayfa **Rol & İzin Yönetimi** (menüde *Sistem* bölümü) üç işlem sunar:
 
 ## 2.1 Rol Oluştur
-1. **＋ Rol Oluştur** → **ROL ADI**'nı yazın (örnek: *Klinik Sorumlusu*) → **Kaydet**.
-2. Yeni rol **hiç izinsiz** başlar; hiçbir şey yapamaz. İzinleri **İzin Düzenle** ile verirsiniz.
+1. **＋ Rol Oluştur** → **ROL ADI**'nı yazın (örnek: *Gözlemci*) → **Kaydet**.
+2. Yeni rol **hiç izinsiz** başlar; hiçbir şey yapamaz. İzinleri **İzin Düzenle** ile verirsiniz. Yeni roller **rol hiyerarşisinde en altta** sayılır (bkz. bölüm 3).
 3. Yeni rolü **Kullanıcı & Personel → Kullanıcı Oluştur / Rol Ata** ekranlarından kullanıcılara verirsiniz.
 
 ## 2.2 Rol Düzenle
@@ -56,7 +56,9 @@ Sayfa **Rol & İzin Yönetimi** (menüde *Sistem* bölümü) üç işlem sunar:
 **✎ İzin Düzenle** → **DÜZENLENEN İZİN**'i seçin → **BU İZNİN GEÇERLİ OLACAĞI ROLLER** listesinde rolleri işaretleyin/işareti kaldırın → **Değişiklikleri Kaydet**.
 - Sunucu izinleri **hemen** uygular (yetkisi alınan kişi o işlemi artık yapamaz). Kullanıcının **menüsü** ise yetkiler yenilendiğinde (kısa süre içinde ya da yeniden girişte) güncellenir.
 - **Geniş yetkili** izinleri (kullanıcı oluşturma, rol atama, audit gibi) yalnızca güvendiğiniz rollere verin.
-- Çok yetkili bir izni kazara kaldırmamak için değişikliği **kaydetmeden önce** iki kez bakın; işlem denetim kaydına yazılır.
+- Çok yetkili bir izni kazara kaldırmamak için değişikliği **kaydetmeden önce** iki kez bakın; işlem denetim kaydına yazılır (hangi roller eklendi/çıkarıldı, önceki ve yeni durumla).
+- **Bağlı izinler:** Bazı izinler tek başına bir sayfa açmaz, başka bir iznin sayfasına bağlıdır (örneğin bir sayfadaki düğme izni). Bir izin kaldırılırsa rolde kalan **bağlı izinler kullanılamaz hale** gelebilir; sistem bu durumda **"Bağlı izinler etkilenecek"** uyarısıyla hangi izinlerin etkileneceğini listeler ve onay ister. Tek başına sayfa açmayan izinlerin yanında bu bilgiyi veren bir not görünür.
+- Pencerelerde **Enter** tuşu kaydeder; rol ve izin listelerinde satıra **çift tıklayarak** düzenleme açılır. Hata olursa teknik bir kod değil, okunur bir mesaj görürsünüz.
 
 ## 2.4 Faaliyet Birimleri
 **Faaliyet Kayıtları** sayfasındaki **🏢 Faaliyet Birimleri** düğmesiyle (*Kişi, Saat* gibi) birimleri **eklersiniz, düzenlersiniz, silersiniz**. **Geçmiş faaliyet kayıtlarında kullanılmış** bir birim **silinemez** (sistem bunu uyarır); adını düzenleyebilirsiniz.
@@ -66,7 +68,8 @@ Sayfa **Rol & İzin Yönetimi** (menüde *Sistem* bölümü) üç işlem sunar:
 # 3. Kullanıcı ve oda yönetimi
 
 Ayrıntı: [Müdür Kılavuzu → Kullanıcı & Personel](../director/Mudur_Kilavuzu.md). Kısa hatırlatma:
-- Kullanıcı adı **yalnızca İngilizce harf, rakam ve `. _ -`** içerebilir.
+- Kullanıcı adı **yalnızca İngilizce harf, rakam ve `. _ -`** içerebilir; **büyük/küçük harf fark etmez** (`Ayse` ile `ayse` aynı hesaptır).
+- **Rol hiyerarşisi:** Kullanıcı yönetimi yetkisi olan biri **kendi seviyesindeki ya da daha yüksek** bir rolü veremez ve o roldeki kullanıcıları yönetemez. Sıra: **Sistem Admin › Müdür › Memur › Psikolog › Proje Asistanı › Danışma Öğrencisi**; sonradan eklenen roller en altta sayılır. Sistem Admin bu kurala takılmaz; bu yüzden **başka bir Müdür açmak ya da pasife almak yalnızca sizdedir.** Ayrıntı: [Müdür Kılavuzu → Rol hiyerarşisi](../director/Mudur_Kilavuzu.md).
 - **Psikologun en az bir odası** olmalıdır (**Oda Yetkileri**).
 - Bir psikoloğu pasife alırken planlı randevusu, atanmış odası ve danışanları kontrol edilir.
 - Hiçbir kullanıcı **silinmez**, yalnızca pasife alınır; geçmiş kayıtlar korunur.
@@ -81,7 +84,7 @@ Ayrıntı: [Müdür Kılavuzu bölüm 3–5](../director/Mudur_Kilavuzu.md). Yö
 | Sıklık | Ne? |
 |---|---|
 | **Her gün** | **Sistem Durumu** → *Son Yedek* kartı **yeşil** mi? Başarısız giriş sayısı olağan mı? |
-| **Her hafta** | **Audit Kayıtları** → *Başarısız Giriş*, *Silme*, *Rol Değişikliği*, *Parola Sıfırlama*, *Excel Aktarımı* kayıtlarına göz atın |
+| **Her hafta** | **Audit Kayıtları** → *Başarısız Giriş*, *Silme*, *Rol Değişikliği*, *Parola Sıfırlama*, *Excel Aktarımı* kayıtlarına göz atın; aynı hesabın alışılmadık bir **İstemci Adresi**'nden girip girmediğine bakın. *Görüntüleme* kayıtları denetim kayıtlarına kimin baktığını gösterir |
 | **Her ay** | **Yetki Raporu** → kilitli, hiç giriş yapmamış, kullanılmayan hesaplar; artık çalışmayanları pasife alın |
 
 ---
@@ -145,6 +148,9 @@ Sunucu bilgisayarındaki `.env` dosyası **gizlidir; GitHub'a yüklenmez, kimsey
 | `TKYS_BACKUP_DIR` | Yedeklerin yazılacağı klasör (ayarsızsa projenin `backups` klasörü) |
 | `PG_DUMP_PATH` | `pg_dump.exe` dosyasının tam yolu |
 | `TKYS_API_DOCS` | `1` ise API belge sayfaları (`/docs`) açılır; **varsayılan kapalıdır**, yalnızca teknik kişi gerektiğinde açmalı |
+| `TKYS_SSL_CERTFILE`, `TKYS_SSL_KEYFILE` | Sunucu için HTTPS: sertifika ve gizli anahtar dosyalarının yolu (ikisi birlikte verilir). Ayarlanmazsa sunucu düz HTTP ile çalışır; ağa açıksa günlüğe uyarı yazılır. Kurulum: [TLS Kurulum Rehberi](../../docs/deployment/TLS_Kurulum_Rehberi.md) |
+| `TKYS_GUVENILIR_VEKIL` | `1` yalnızca TLS'i başka bir sunucu (ters vekil) sonlandırıyorsa verilir; denetim kaydındaki istemci adresi ve HTTPS başlığı vekilin gönderdiği bilgiden alınır. Vekil yoksa **vermeyin** |
+| `TKYS_API_URL`, `TKYS_CA_BUNDLE` | **İstemci bilgisayarlarda:** sunucu adresi (HTTPS için `https://...`) ve kendi imzalı sertifikayı güvenilir saymak için sertifika dosyasının yolu |
 
 **Dikkat:** `.env` dosyasına satır eklerken önceki satırın **sonunda yeni satır** olduğundan emin olun; aksi halde iki ayar **aynı satırda** birleşir ve ikisi de bozulur.
 `.env` içeriğini (özellikle `JWT_SECRET` ve parolayı) sohbetlere, e-postalara ya da ekran görüntülerine **yapıştırmayın.**
@@ -163,6 +169,8 @@ Sunucu bilgisayarındaki `.env` dosyası **gizlidir; GitHub'a yüklenmez, kimsey
 | **Sistem Durumu → Son Yedek: Yedek bulunamadı** | Yedekleme görevi çalışmıyor ya da yedekler başka klasörde; `TKYS_BACKUP_DIR`'i ve `logs\yedekleme.log`'u kontrol edin |
 | **Sistem Durumu → Uygulama Sürümü sarı** | İstemci ile sunucu sürümü farklı; istemcileri güncelleyin |
 | İstemci "veritabanı şeması güncel değil" diyor | Sunucuda `python -m alembic upgrade head` çalıştırın, sunucuyu yeniden başlatın |
+| Kullanıcı "beklenmeyen hata" mesajı görüyor | Ekranda yalnızca genel mesaj çıkar; gerçek neden `logs\sunucu.log` dosyasında, hangi işlemin bozulduğu (yöntem ve adres) ve hata satırıyla yazılıdır. Geliştiriciye bu bloğu olduğu gibi iletin ([Sunucu Kurulum Kılavuzu](../../docs/deployment/Sunucu_Kurulum_Kilavuzu.md)) |
+| Kullanıcı "Oturum geçersiz. Yeniden giriş yapınız." görüyor | Hesabından çıkış yapılmış ya da şifresi değişmiş; yeniden giriş yapması yeterli |
 | `JWT_SECRET en az 32 karakter olmalıdır` hatasıyla sunucu açılmıyor | `.env`'deki anahtarı uzun rastgele bir değerle değiştirin: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 
 Ek kaynaklar: [Sunucu Kurulum Kılavuzu](../../docs/deployment/Sunucu_Kurulum_Kilavuzu.md), [Windows sunucu sorun giderme](../../docs/deployment/windows-sunucu/SORUN_GIDERME.md), [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).

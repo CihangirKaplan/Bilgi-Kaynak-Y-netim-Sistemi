@@ -27,7 +27,7 @@ Kayıtlı tüm cihazlar ve anlık durumları. Üstteki **sayaç çipleri** topla
 
 - **Aramak:** Arama kutusuna envanter kodu, cihaz adı, marka ya da seri no yazın.
 - **Sıralamak:** Sütun başlığına tıklayın (Durum sütununda rozet metnine göre sıralanır).
-- **＋ Cihaz Ekle:** Formda **Envanter Kodu \*** ve **Cihaz Adı \*** zorunludur; **Marka / Model**, **Seri No** isteğe bağlıdır; **Durum \*** seçilir. Envanter kodu **benzersiz** olmalıdır.
+- **＋ Cihaz Ekle:** Formda **Envanter Kodu \*** ve **Cihaz Adı \*** zorunludur; **Marka / Model**, **Seri No** isteğe bağlıdır; **Durum \*** seçilir. Envanter kodu **benzersiz** olmalıdır ve **büyük/küçük harf fark etmez** (`EEG-01` ile `eeg-01` aynı kod sayılır). Seri no boş bırakılabilir (birden fazla cihazın seri nosu boş olabilir); doluysa o da benzersiz olmalıdır. Bunlardan biri kullanımdaysa "Bu envanter kodu veya seri no zaten kullanımda." uyarısı çıkar.
 - **✎ Envanteri Düzenle** (ya da listede çift tıklama): Cihaz bilgilerini ve durumunu güncellersiniz. Bir cihazı kullanımdan kaldırmak için durumunu **Kullanım Dışı** yapın; cihaz silinmez, geçmişi korunur.
 - **⬇ Excel'e Aktar:** Ekranda görünen cihazları **demirbaş sayımı** için Excel'e yazar (Envanter Kodu, Cihaz Adı, Marka/Model, Seri No, Durum, Kayıt Tarihi). Ana panelden bir durum kartına tıklayıp geldiyseniz yalnızca o durumdaki cihazlar listelenir ve aktarılır; hepsini istiyorsanız önce **Filtreyi kaldır, tümünü göster**'e basın. Aktarım denetim kaydına yazılır.
 - **🕘 Cihaz geçmişi** (satır sonundaki düğme): Cihazın **bakım, kalibrasyon, arıza ve rezervasyon** kayıtlarını tek bir zaman çizgisinde (en yeni önce) gösterir. Üstte cihazın **bugünkü durumu** ve özet sayılar (toplam bakım maliyeti, kalibrasyon geçerliliği, açık arıza, rezervasyon saati) bulunur; **Bakım / Kalibrasyon / Arıza / Rezervasyon** düğmeleriyle tek türü süzebilirsiniz. Her türden en yeni 300 kayıt gösterilir.
@@ -51,12 +51,12 @@ aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla ça
 
 ## 1.4 Bakım Kayıtları
 Cihaza yapılan bakımın kaydı.
-- **＋ Bakım Kaydı:** **Cihaz \***, **Bakım Yapan Kişi \***, **Yapılan İşlem \***, **Maliyet (₺)**, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir. Bitiş tarihi başlangıçtan önce olamaz ve bir bakım **en fazla bir yıl** sürebilir. **Sonraki bakım tarihi bitiş tarihinden sonra** olmalıdır. Ayrı bir "bakım tarihi" girilmez; her zaman başlangıç tarihidir.
+- **＋ Bakım Kaydı:** **Cihaz \***, **Bakım Yapan Kişi \***, **Yapılan İşlem \***, **Maliyet (₺)**, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir. Bitiş tarihi başlangıçtan önce olamaz ve bir bakım **en fazla bir yıl** sürebilir. **Sonraki bakım tarihi bitiş tarihinden sonra** olmalıdır. Ayrı bir "bakım tarihi" girilmez; her zaman başlangıç tarihidir. **Sonraki bakım** için **3 ay / 6 ay / 1 yıl / Tarih seç** düğmelerinden biri ve **Bildirim ne zaman** (tarihe kaç gün kala uyarı çıksın) seçilir; form kaydetmeden önce bu tarih kurallarını denetler ve sorun varsa nedenini yazar.
 - Mevcut bir kaydı düzenlerken **cihaz değiştirilemez**; diğer alanlar düzeltilebilir.
 - Bakım kaydı cihazın Envanter'deki durumunu **kendiliğinden değiştirmez**; ancak kaydın tarih aralığında cihaz **Cihaz Uygunluğu**'nda uygun değil görünür ve **Ana Kontrol Paneli**'nde "bakımda" sayılır.
 
 ## 1.5 Kalibrasyon
-- **＋ Kalibrasyon Kaydı:** **Cihaz \***, **Yapan Kurum \***, **Sertifika No \***, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir.
+- **＋ Kalibrasyon Kaydı:** **Cihaz \***, **Yapan Kurum \***, **Sertifika No \***, **Başlangıç Tarihi \*** ve **Bitiş Tarihi \*** girilir; **Geçerlilik** (sertifikanın geçerli olduğu son tarih; **3 ay / 6 ay / 1 yıl / Tarih seç** düğmeleriyle) ve **Bildirim ne zaman** seçilir. **Geçerlilik tarihi kalibrasyon bitiş tarihinden önce olamaz.**
 - Bakım kaydı gibi, kalibrasyon aralığı boyunca cihaz uygunluk takviminde "kalibrasyonda" görünür.
 
 ## 1.6 Arıza Kayıtları
@@ -100,7 +100,7 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
 Öğrencilerin yaptığı faaliyetlerin kaydı; **puanı** buradan hesaplanır.
 - **＋ Yeni Faaliyet Ekle:** **Öğrenci Seç**, **Faaliyet Türü**, **Birim** (*Kişi, Saat* gibi) ve **Miktar**. Kaydın puanı = **Miktar × kaydın girildiği andaki faaliyet puanı**; faaliyet puanı sonradan değişse de eski kayıtlar değişmez.
 - **✎ Faaliyet Düzenle** ve **🗑️ Faaliyet Sil**: Listeden kaydı seçip kullanın. İşlemler denetim kaydına yazılır.
-- **📋 Faaliyet Türleri:** Yeni faaliyet türü tanımlar, puanını belirler, düzenler.
+- **📋 Faaliyet Türleri:** Yeni faaliyet türü tanımlar, puanını belirler, düzenler. **Aynı ad yeniden eklenemez; büyük/küçük harf farkı aynı ad sayılır.** Pasif bir faaliyet türüne kayıt girilemez ya da kayıt taşınamaz ("Aktif faaliyet türü bulunamadı."). Puanı değişen bir türün önceki/yeni puanı ve etkilenen kayıt sayısı denetim kaydına yazılır.
 - Liste **en yeni 1000** kaydı gösterir; altındaki not toplam sayıyı söyler. Tümü için **Faaliyet Raporu**'nu kullanın.
 - Birimleri yönetmek (**🏢 Faaliyet Birimleri**) yalnızca **Sistem Admin**'e açıktır.
 
@@ -115,7 +115,9 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
 Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her görevin öğrencisini, başlangıç/bitişini, çalışma süresini ve **onay durumunu** gösterir; üstte onay bekleyen görev sayıları vardır.
 - **✓ Seçilen Görevi Onayla:** Biten bir görevi onaylar. **Devam eden** görev onaylanamaz; **zaten onaylanmış** görev tekrar onaylanamaz.
 - **＋ Yeni Görev Ekle:** Öğrencinin görevini elle girersiniz (**Öğrenci**, **Başlangıç**, **Bitiş**). Öğrenci görevi başlatmayı/bitirmeyi unuttuysa bu yolla düzeltirsiniz. Aktif öğrenci yoksa sistem bunu söyler.
-- **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir.
+  **Bir görev en fazla 10 saat olabilir** (mesai süresi 08:00–18:00); daha uzun çalışmayı ayrı görevler olarak girin, aksi halde "Bir görev en fazla 10 saat olabilir" uyarısı çıkar.
+- **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir (aynı 10 saat sınırı geçerlidir). Düzeltmede **önceki ve yeni saatler denetim kaydına** yazılır.
+- **Uzun görev işareti:** Öğrenci görevi bitirmeyi unutmuşsa süre 10 saati aşar; listede böyle görevler işaretlenir ve üzerine gelince "öğrenci görevi bitirmeyi unutmuş olabilir; onaylamadan önce saatleri kontrol edin" ipucu çıkar. **Onaylamadan önce saatleri kontrol edip gerekirse Düzenle ile düzeltin.**
 - Onay bekleyen görevler **🔔 bildirim** olarak da size gelir; bildirime tıklayınca ilgili sayfa açılır.
 
 ## 3.2 Danışma Masası Raporları
