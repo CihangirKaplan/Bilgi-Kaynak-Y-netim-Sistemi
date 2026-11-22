@@ -22,6 +22,7 @@ from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, is
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
+from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 
 KALIBRASYON_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -284,7 +285,8 @@ class KalibrasyonYonetimEkrani(QWidget):
         layout.addWidget(sayfa_basligi(
             "Cihaz Kalibrasyon Kayıtları", "Kalibrasyon sertifikaları ve geçerlilik süreleri",
             self.arama, yenile_butonu_olustur(self.yukle),
-            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "KURUM", "SERTİFİKA NO", "KALİBRASYON TARİHİ",
                                     "GEÇERLİLİK", "BİLDİRİM", "İŞLEM"], ortali=True)
@@ -312,6 +314,17 @@ class KalibrasyonYonetimEkrani(QWidget):
         layout.addWidget(kart, 1)
 
         self.yukle()
+
+    def excele_aktar(self):
+        """Ekranda görünen kalibrasyon kayıtlarını Excel'e aktarır (arama süzgecine uyanlar)."""
+        tablodan_excele_aktar(
+            self, self.tablo, "Cihaz Kalibrasyon Kayıtları", "cihaz_kalibrasyon_kayitlari",
+            [("Envanter Kodu", 0, "cihaz_kodu"), ("Cihaz Adı", 0, "cihaz_adi"), ("Kurum", 1, "metin"), ("Sertifika No", 2, "metin"),
+             ("Kalibrasyon Tarihi", 3, "metin"), ("Geçerlilik", 4, "metin"), ("Bildirim", 5, "metin")],
+            "KALIBRASYON", self.api_url, self.token,
+            filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Kalibrasyonlar",
+            aciklama="Cihaz kalibrasyon kayıtları (ekranda görünen kayıtlar).",
+        )
 
     def yukle(self):
         self.tablo.setRowCount(0)

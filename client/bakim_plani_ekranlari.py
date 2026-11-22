@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from client.api_yoneticisi import api_hata_mesaji
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cihaz_hucresi_uygula
 from client.tablo_siralama import SIRALAMA_ROLU
@@ -379,7 +380,8 @@ class BakimPlanlariEkrani(QWidget):
             "Bakım ve Kalibrasyon Planları",
             "Cihazların tekrar aralığı, uyarı süresi ve sonraki bakım/kalibrasyon tarihi",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis]))
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis],
+            ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "PLAN", "TEKRAR", "UYARI", "SONRAKİ TARİH", "DURUM", "İŞLEM"], ortali=True)
         baslik = self.tablo.horizontalHeader()
@@ -423,6 +425,17 @@ class BakimPlanlariEkrani(QWidget):
     # --------------------------------------------------------------------- veri
     def secili_aktiflik_filtresi(self):
         return self.FILTRELER[self.cmb_filtre.currentIndex()][1]
+
+    def excele_aktar(self):
+        """Ekranda görünen bakım/kalibrasyon planlarını Excel'e aktarır (arama süzgecine uyanlar)."""
+        tablodan_excele_aktar(
+            self, self.tablo, "Bakım ve Kalibrasyon Planları", "bakim_kalibrasyon_planlari",
+            [("Envanter Kodu", 0, "cihaz_kodu"), ("Cihaz Adı", 0, "cihaz_adi"), ("Plan", 1, "metin"), ("Tekrar", 2, "metin"),
+             ("Uyarı", 3, "metin"), ("Sonraki Tarih", 4, "metin"), ("Durum", 5, "metin")],
+            "BAKIM_PLANI", self.api_url, self.token,
+            filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Planlar",
+            aciklama="Cihaz bakım ve kalibrasyon planları (ekranda görünen kayıtlar).",
+        )
 
     def verileri_yukle(self, *_):
         self.tablo.setRowCount(0)
