@@ -50,9 +50,10 @@ def test_ariza_listesi_satirlari_ve_cipleri(qt_app):
     assert e.tablo.item(1, 5).text() == ""                 # tarih boşsa çökmez
 
 
-def test_duzenle_butonu_yalniz_yetkili_ve_acik_arizada(qt_app):
+def test_duzenle_butonu_yalniz_yetkiliye_gorunur_cozulmus_arizada_yeniden_ac_simgesi_olur(qt_app):
     e = ariza_ekrani(True)
-    assert e.tablo.cellWidget(0, 6) is not None and e.tablo.cellWidget(1, 6) is None
+    assert e.tablo.cellWidget(0, 6) is not None and e.tablo.cellWidget(1, 6) is not None             # çözülmüş arıza da yeniden açılabilir
+    assert e.tablo.cellWidget(0, 6).findChildren(ariza.QPushButton)[0].text() == "✎" and e.tablo.cellWidget(1, 6).findChildren(ariza.QPushButton)[0].text() == "↺"
     assert ariza_ekrani(False).tablo.cellWidget(0, 6) is None
 
 
@@ -76,16 +77,24 @@ def test_ariza_bos_ve_hata_mesaji(qt_app):
     assert "yüklenemedi" in e.bos_mesaj.text() and not e.bos_mesaj.isHidden()
 
 
-def test_ariza_bildirim_formu_yalniz_uygun_cihazlari_listeler_ve_gonderir(qt_app):
+def test_ariza_bildirim_formu_kullanim_disi_haric_tum_cihazlari_listeler_ve_gonderir(qt_app):
     cihazlar = [
         {"cihaz_id": 1, "envanter_kodu": "E1", "cihaz_adi": "A", "durum": "Kullanima_Hazir"},
         {"cihaz_id": 2, "envanter_kodu": "E2", "cihaz_adi": "B", "durum": "Arizali"},
         {"cihaz_id": 3, "envanter_kodu": "E3", "cihaz_adi": "C", "durum": "Bakimda"},
         {"cihaz_id": 4, "envanter_kodu": "E4", "cihaz_adi": "D", "durum": "Rezerve"},
+        {"cihaz_id": 5, "envanter_kodu": "E5", "cihaz_adi": "E", "durum": "Kullanim_Disi"},
     ]
     with patch.object(ariza, "oturum_kontrollu_istek", return_value=cevap(200, cihazlar)):
         f = ariza.ArizaBildirimFormu("http://x", "T")
-    assert [f.cmb_cihaz.itemData(i) for i in range(f.cmb_cihaz.count())] == [1, 4]
+    assert [f.cmb_cihaz.itemData(i) for i in range(f.cmb_cihaz.count())] == [1, 2, 3, 4]       # yalnızca kullanım dışı cihaz listelenmez
+    assert f.cmb_cihaz.itemText(2).endswith("(Bakımda)") and f.cmb_cihaz.itemText(1).endswith("(Zaten arızalı)") and "(" not in f.cmb_cihaz.itemText(0)
+    f.cmb_cihaz.setCurrentIndex(2)
+    assert "Bakımda" in f.lbl_bilgi.text() and "durumu değişmez" in f.lbl_bilgi.text()           # bakımdaki cihazın durumu değişmez, not bunu söyler
+    f.cmb_cihaz.setCurrentIndex(1)
+    assert "zaten arızalı" in f.lbl_bilgi.text()
+    f.cmb_cihaz.setCurrentIndex(0)
+    assert "'Arızalı' durumuna geçecektir" in f.lbl_bilgi.text()
     f.txt_baslik.setText("Başlık")
     f.txt_aciklama.setPlainText("Açıklama")
     f.cmb_aciliyet.setCurrentText("Yüksek")
@@ -101,7 +110,7 @@ def test_ariza_bildirim_formu_yalniz_uygun_cihazlari_listeler_ve_gonderir(qt_app
 
 def test_ariza_bildirim_formu_uygun_cihaz_yoksa_buton_kapanir(qt_app):
     with patch.object(ariza, "oturum_kontrollu_istek",
-                      return_value=cevap(200, [{"cihaz_id": 2, "envanter_kodu": "E", "cihaz_adi": "B", "durum": "Arizali"}])):
+                      return_value=cevap(200, [{"cihaz_id": 2, "envanter_kodu": "E", "cihaz_adi": "B", "durum": "Kullanim_Disi"}])):
         f = ariza.ArizaBildirimFormu("http://x", "T")
     assert not f.btn_kaydet.isEnabled()
     f.close()

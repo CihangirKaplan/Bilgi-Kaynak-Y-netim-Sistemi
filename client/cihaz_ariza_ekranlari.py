@@ -39,6 +39,25 @@ ACILIYET_RENKLERI = {
 }
 
 
+# Arıza yalnızca kullanım dışı bırakılmış cihaza açılmaz. Bakımda/kalibrasyonda ya da zaten arızalı cihaza da arıza bildirilebilir:
+# sunucu kaydı alır, cihazın bakım/kalibrasyon durumunu korur (arızalı olmayan hazır cihaz "Arızalı" olur).
+ARIZA_ACILMAYAN_DURUMLAR = ("Kullanim_Disi",)
+DURUM_ADLARI = {
+    "Kullanima_Hazir": "Kullanıma Hazır", "Kullanılabilir": "Kullanıma Hazır", "Rezerve": "Rezerve", "Kullanimda": "Kullanımda",
+    "Bakimda": "Bakımda", "Kalibrasyonda": "Kalibrasyonda", "Arizali": "Zaten arızalı", "Kullanim_Disi": "Kullanım Dışı",
+}
+HAZIR_DURUMLAR = ("Kullanima_Hazir", "Kullanılabilir", "Rezerve", "Kullanimda")
+
+
+def ariza_cihaz_notu(durum):
+    """Seçilen cihazın durumuna göre arıza bildirimi sonucunu anlatan not."""
+    if durum in HAZIR_DURUMLAR or durum is None:
+        return "Bu cihaz otomatik olarak 'Arızalı' durumuna geçecektir."
+    if durum == "Arizali":
+        return "Bu cihaz zaten arızalı; yeni arıza ayrı bir kayıt olarak eklenir, cihaz durumu değişmez."
+    return f"Cihaz şu anda '{DURUM_ADLARI.get(durum, durum)}' durumunda: arıza kaydedilir, cihazın durumu değişmez."
+
+
 class ArizaBildirimFormu(QDialog):
     """Yeni Cihaz Arıza Bildirimi Oluşturma Ekranı (FAIL-002)"""
     def __init__(self, api_url, token, parent=None):
@@ -52,16 +71,16 @@ class ArizaBildirimFormu(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        bilgi = QLabel("Arızalanan cihazı ve sorunun detaylarını giriniz.\n"
-                       "Bu cihaz otomatik olarak 'Arızalı' durumuna geçecektir.")
-        bilgi.setStyleSheet(UYARI_KUTUSU_STILI)
-        bilgi.setWordWrap(True)
-        layout.addWidget(bilgi)
+        self.lbl_bilgi = QLabel("Arızalanan cihazı ve sorunun detaylarını giriniz.\n" + ariza_cihaz_notu(None))
+        self.lbl_bilgi.setStyleSheet(UYARI_KUTUSU_STILI)
+        self.lbl_bilgi.setWordWrap(True)
+        layout.addWidget(self.lbl_bilgi)
 
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
 
         self.cmb_cihaz = QComboBox()
+        self.cmb_cihaz.currentIndexChanged.connect(self._cihaz_notunu_guncelle)
         self.cmb_aciliyet = QComboBox()
         self.cmb_aciliyet.addItems(ACILIYETLER)
         self.txt_baslik = QLineEdit()
@@ -85,8 +104,13 @@ class ArizaBildirimFormu(QDialog):
 
         self.cihazlari_yukle()
 
+    def _cihaz_notunu_guncelle(self, *_):
+        """Seçilen cihazın durumu hazır değilse (bakımda, arızalı...) arıza bildiriminin ne yapacağını söyler."""
+        durum = self.cmb_cihaz.currentData(Qt.UserRole + 1)
+        self.lbl_bilgi.setText("Arızalanan cihazı ve sorunun detaylarını giriniz.\n" + ariza_cihaz_notu(durum))
+
     def cihazlari_yukle(self):
-        """Sadece 'Kullanılabilir' ve 'Rezerve' durumdaki cihazları listeler."""
+        """Kullanım dışı olmayan tüm cihazları listeler; hazır olmayanların yanına durumu yazılır."""
         self.cmb_cihaz.clear()
         try:
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/cihazlar", headers={"Authorization": f"Bearer {self.token}"})
@@ -95,10 +119,14 @@ class ArizaBildirimFormu(QDialog):
             if cevap.status_code == 200:
                 aktif_cihaz_var_mi = False
                 for cihaz in cevap.json():
-                    # Zaten arızalı veya bakımda olan cihaza yeni arıza kaydı açılamaz
-                    if cihaz["durum"] in ["Kullanima_Hazir", "Kullanılabilir", "Rezerve"]:
-                        self.cmb_cihaz.addItem(f"{cihaz['envanter_kodu']} - {cihaz['cihaz_adi']}", cihaz["cihaz_id"])
-                        aktif_cihaz_var_mi = True
+                    if cihaz["durum"] in ARIZA_ACILMAYAN_DURUMLAR:
+                        continue
+                    etiket = f"{cihaz['envanter_kodu']} - {cihaz['cihaz_adi']}"
+                    if cihaz["durum"] not in HAZIR_DURUMLAR:
+                        etiket += f"  ({DURUM_ADLARI.get(cihaz['durum'], cihaz['durum'])})"
+                    self.cmb_cihaz.addItem(etiket, cihaz["cihaz_id"])
+                    self.cmb_cihaz.setItemData(self.cmb_cihaz.count() - 1, cihaz["durum"], Qt.UserRole + 1)
+                    aktif_cihaz_var_mi = True
 
                 if not aktif_cihaz_var_mi:
                     self.cmb_cihaz.addItem("Arıza bildirilebilecek cihaz bulunamadı!", None)
@@ -258,11 +286,15 @@ class ArizaYonetimEkrani(QWidget):
             tarih = str(ar.get("bildirim_tarihi") or "")[:16].replace("T", " ")
             self.tablo.setItem(satir, 5, metin_item(tarih, ortala=True))
 
-            if self.yetkili_mi and not cozuldu:
-                self.tablo.setCellWidget(satir, 6, tek_islem_butonu(
-                    lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id),
-                    "✎", "Düzenle / Çöz"))
-                satira_kimlik_ata(self.tablo, satir, ariza_id)      # yalnızca düzenlenebilir (yetkili + açık) satırlar çift tıkla açılır
+            if self.yetkili_mi:
+                # Açık arıza düzenlenir/çözülür; çözülmüş arıza yanlışlıkla çözüldü işaretlendiyse yeniden açılabilir.
+                if cozuldu:
+                    dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "↺", "Düzenle / yeniden aç",
+                                             renk="#1D4ED8", arka="#DBEAFE", hover="#BFDBFE")
+                else:
+                    dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "✎", "Düzenle / Çöz")
+                self.tablo.setCellWidget(satir, 6, dugme)
+                satira_kimlik_ata(self.tablo, satir, ariza_id)      # yetkili kullanıcı için her satır (açık ya da çözülmüş) çift tıkla açılır
 
         self.cip_toplam.setText(f"{len(arizalar)} kayıt")
         self.cip_acik.setText(f"{acik} açık")
@@ -365,11 +397,24 @@ class ArizaDuzenleFormu(QDialog):
         self._cozum_notu_gorunurlugu()
         layout.addLayout(form_layout)
 
+        # Çözülmüş bir arıza yeniden açılırken sonucu önceden söyler.
+        self.lbl_yeniden_ac = QLabel("Arıza yeniden açılırsa çözüm notu ve çözüm tarihi silinir; cihaz tekrar 'Arızalı' olur "
+                                     "(bakımda ya da kalibrasyondaysa cihazın durumu değişmez).")
+        self.lbl_yeniden_ac.setStyleSheet(UYARI_KUTUSU_STILI)
+        self.lbl_yeniden_ac.setWordWrap(True)
+        layout.addWidget(self.lbl_yeniden_ac)
+        self.zaten_cozulmustu = self.ariza_verisi.get("durum") == "Çözüldü"
+        self.cmb_durum.currentIndexChanged.connect(self._yeniden_ac_notu)
+        self._yeniden_ac_notu()
+
         self.btn_kaydet = QPushButton("Güncelle")
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
         layout.addWidget(self.btn_kaydet)
+
+    def _yeniden_ac_notu(self, *_):
+        self.lbl_yeniden_ac.setVisible(self.zaten_cozulmustu and "Çözüldü" not in self.cmb_durum.currentText())
 
     def _cozum_notu_gorunurlugu(self, *_):
         gorunur = "Çözüldü" in self.cmb_durum.currentText()
