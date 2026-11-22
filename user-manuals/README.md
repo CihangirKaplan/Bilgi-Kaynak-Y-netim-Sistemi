@@ -43,6 +43,8 @@ yetkileri değiştirebilir; bu durumda menünüz farklı olabilir. Menüde göre
 | Cihaz Envanteri | – | – | – | ✔ | ✔ | ✔ |
 | Cihaz Rezervasyonu | – | – | ✔ | ✔ | – | ✔ |
 | Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları | – | – | – | ✔ | ✔ | ✔ |
+
+> **Not:** Bakım Kayıtları ve Kalibrasyon sayfaları iki ayrı izinle çalışır: **görüntüleme** (sayfayı açar, kayıtları gösterir, Excel'e aktarır) ve **yönetme** (kayıt ekleme, düzenleme, silme). Yalnızca görüntüleme izni olan kullanıcı düzenle/sil düğmelerini görmez. Mevcut Memur, Müdür ve Admin rollerinde ikisi de açıktır; yönetici **Rol-İzin** ekranından başka bir role yalnızca görüntüleme verebilir.
 | Cihaz Raporları (beş sekme: Bakım Geçmişi, Kalibrasyon, Arızalar, Cihaz Rezervasyonu, Geciken Bakım Planları) | – | – | – | ✔ | ✔ | ✔ |
 | Yönetim Raporları ve İstatistikler | – | – | – | – | ✔ | ✔ |
 | Kullanıcı & Personel | – | – | – | – | ✔ | ✔ |

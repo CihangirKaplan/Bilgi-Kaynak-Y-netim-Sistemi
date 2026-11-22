@@ -22,14 +22,14 @@ from server.sunucu import app  # noqa: E402
 
 
 def izinleri_bul(bagimlilik):
-    """Uçtaki izin_kontrol('...') / izin_kontrol_tumu(...) bağımlılıklarının izin adları."""
+    """Uçtaki izin_kontrol('...') / izin_kontrol_tumu(...) / izin_kontrol_biri(...) bağımlılıklarının izin adları."""
     bulunan = []
     for alt in bagimlilik.dependencies:
         cagri = alt.call
         ad = getattr(cagri, "__qualname__", "")
         if ad.startswith("izin_kontrol.") and cagri.__closure__:
             bulunan += [h.cell_contents for h in cagri.__closure__ if isinstance(h.cell_contents, str)]
-        elif ad.startswith("izin_kontrol_tumu.") and cagri.__closure__:
+        elif ad.startswith(("izin_kontrol_tumu.", "izin_kontrol_biri.")) and cagri.__closure__:     # birden çok izin (tümü ya da biri)
             for hucre in cagri.__closure__:
                 if isinstance(hucre.cell_contents, (tuple, list)):
                     bulunan += [str(x) for x in hucre.cell_contents]

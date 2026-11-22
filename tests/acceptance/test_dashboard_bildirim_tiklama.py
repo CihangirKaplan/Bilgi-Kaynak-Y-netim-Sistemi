@@ -332,7 +332,7 @@ def test_sayfa_izni_menudeki_izne_gore_belirlenir(temiz_yetkiler):
 
     mw.yetkileri_ayarla(
         "memur",
-        ["BAKIM_KAYITLARI_YONET"]
+        ["BAKIM_KAYITLARI_GORUNTULE"]                  # sayfayı görmek için görüntüleme izni yeter (düzenleme ayrı izin)
     )
     assert izinli_mi(mw, "memur", "Bakım Kayıtları")
     assert not izinli_mi(mw, "memur", "Kalibrasyon")
@@ -340,7 +340,7 @@ def test_sayfa_izni_menudeki_izne_gore_belirlenir(temiz_yetkiler):
 
     mw.yetkileri_ayarla(
         "memur",
-        ["KALIBRASYON_KAYITLARI_YONET"]
+        ["KALIBRASYON_KAYITLARI_GORUNTULE"]
     )
     assert izinli_mi(mw, "memur", "Kalibrasyon")
     assert not izinli_mi(mw, "memur", "Bakım Kayıtları")

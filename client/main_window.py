@@ -86,7 +86,9 @@ IZIN_LISTESI = [
     ("Cihaz takip kontrol listesini yönetme","Cihaz Yönetimi",    "HEEHHE"),
     ("Cihaz raporlarını görüntüleme",        "Cihaz Yönetimi",    "HEEHHE"),
 
+    ("Bakım kayıtlarını görüntüleme",        "Kayıt & Bakım",     "HEEHHE"),
     ("Bakım kayıtlarını yönetme",            "Kayıt & Bakım",     "HEEHHE"),
+    ("Kalibrasyon kayıtlarını görüntüleme",  "Kayıt & Bakım",     "HEEHHE"),
     ("Kalibrasyon kayıtlarını yönetme",      "Kayıt & Bakım",     "HEEHHE"),
     ("Arıza kayıtlarını yönetme",            "Kayıt & Bakım",     "HEEHHE"),
     ("Faaliyet kayıtlarını düzenleme",       "Kayıt & Bakım",     "HEEHEE"),
@@ -167,7 +169,9 @@ IZIN_KODLARI = {
     "Cihaz ekleme": ("CIHAZ_EKLE",),
     "Cihaz takip kontrol listesini yönetme": ("CIHAZ_TAKIP_KONTROL_LISTESI",),
     "Cihaz raporlarını görüntüleme": ("CIHAZ_ENVANTER_YONET",),
+    "Bakım kayıtlarını görüntüleme": ("BAKIM_KAYITLARI_GORUNTULE",),
     "Bakım kayıtlarını yönetme": ("BAKIM_KAYITLARI_YONET",),
+    "Kalibrasyon kayıtlarını görüntüleme": ("KALIBRASYON_KAYITLARI_GORUNTULE",),
     "Kalibrasyon kayıtlarını yönetme": ("KALIBRASYON_KAYITLARI_YONET",),
     "Arıza kayıtlarını yönetme": ("ARIZA_KAYITLARI_YONET",),
     "Faaliyet kayıtlarını düzenleme": ("FAALIYET_KAYITLARI_DUZENLE",),
@@ -326,13 +330,13 @@ MENU = [
         dict(ikon="📌", ad="Cihaz Rezervasyonu", izin="Cihaz rezervasyonu yapma",
              aciklama="Cihaz rezervasyon işlemleri",
              aksiyon=[("＋  Yeni Rezervasyon", "Cihaz rezervasyonu yapma")]),
-        dict(ikon="🛠️", ad="Bakım Kayıtları", izin="Bakım kayıtlarını yönetme",
+        dict(ikon="🛠️", ad="Bakım Kayıtları", izin="Bakım kayıtlarını görüntüleme",
              aciklama="Periyodik bakım kayıtları",
              aksiyon=[("＋  Bakım Kaydı", "Bakım kayıtlarını yönetme")]),
         dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım/kalibrasyon planlarını yönetme",
              aciklama="Cihazların tekrar aralığı, uyarı süresi ve sonraki bakım/kalibrasyon tarihi",
              aksiyon=[("＋  Yeni Plan", "Bakım/kalibrasyon planlarını yönetme")]),
-        dict(ikon="🎯", ad="Kalibrasyon", izin="Kalibrasyon kayıtlarını yönetme",
+        dict(ikon="🎯", ad="Kalibrasyon", izin="Kalibrasyon kayıtlarını görüntüleme",
              aciklama="Kalibrasyon planı ve sertifikaları",
              aksiyon=[("＋  Kalibrasyon Kaydı", "Kalibrasyon kayıtlarını yönetme")]),
         dict(ikon="⚠️", ad="Arıza Kayıtları", izin="Arıza kayıtlarını yönetme",
@@ -2394,7 +2398,8 @@ QLabel {
         elif oge["ad"] == "Kalibrasyon":
             self.aktif_kalibrasyon_ekrani = KalibrasyonYonetimEkrani(
                 api_url=self.api_url,
-                token=self.token
+                token=self.token,
+                yetkili_mi=izin_var(rol, "Kalibrasyon kayıtlarını yönetme"),
             )
             lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
 
@@ -2432,7 +2437,8 @@ QLabel {
         elif oge["ad"] == "Bakım Kayıtları":
             self.aktif_bakim_ekrani = BakimYonetimEkrani(
                 api_url=self.api_url,
-                token=self.token
+                token=self.token,
+                yetkili_mi=izin_var(rol, "Bakım kayıtlarını yönetme"),
             )
             lay.addWidget(self.aktif_bakim_ekrani, 1)
         elif oge["ad"] == "Bakım Planları":

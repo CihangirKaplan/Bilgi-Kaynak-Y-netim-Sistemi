@@ -263,10 +263,11 @@ class KalibrasyonDuzenleFormu(QDialog):
 
 class KalibrasyonYonetimEkrani(QWidget):
     """Kalibrasyon kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
-    def __init__(self, api_url, token):
+    def __init__(self, api_url, token, yetkili_mi=True):
         super().__init__()
         self.api_url = api_url
         self.token = token
+        self.yetkili_mi = yetkili_mi            # False: yalnızca görüntüleme (düzenle/sil düğmeleri ve çift tıkla düzenleme yok)
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.detaylar = {}
 
@@ -302,7 +303,8 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(4, 230)
         self.tablo.setColumnWidth(6, 110)
 
-        cift_tikla_ac(self.tablo, self.duzenle)                                # satıra çift tıklayınca düzenleme açılır
+        cift_tikla_ac(self.tablo, self.duzenle)                                # satıra çift tıklayınca düzenleme açılır (yalnızca yetkililer: satıra kimlik atanır)
+        self.tablo.setColumnHidden(6, not self.yetkili_mi)
         self.bos_mesaj = bos_mesaj_olustur("Henüz kalibrasyon kaydı yok.")
 
         kart = QFrame()
@@ -365,10 +367,11 @@ class KalibrasyonYonetimEkrani(QWidget):
             self.tablo.setCellWidget(i, 4, widget)
             self.tablo.setItem(i, 5, metin_item(hatirlatma_metni(k.get("uyari_suresi_gun")), ortala=True))
 
-            self.tablo.setCellWidget(i, 6, islem_butonlari(
-                lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
-                lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
-            satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
+            if self.yetkili_mi:
+                self.tablo.setCellWidget(i, 6, islem_butonlari(
+                    lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
+                    lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
+                satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
 
         self.cip_toplam.setText(f"{len(kayitlar)} kayıt")
         self.cip_yaklasan.setText(f"{yaklasan} süresi yaklaşan")

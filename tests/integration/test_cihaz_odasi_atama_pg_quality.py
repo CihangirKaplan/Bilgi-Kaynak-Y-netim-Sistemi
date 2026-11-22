@@ -225,3 +225,46 @@ def test_cihaz_gecmisi_tum_kayit_turlerini_zaman_cizgisinde_dondurur_ve_yonetici
         c.execute("DELETE FROM odalar WHERE oda_id = %s", (oda,))
         c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
         conn.close()
+
+
+def test_bakim_ve_kalibrasyon_goruntuleme_izni_yalnizca_okumaya_izin_verir():
+    """Yalnızca *_GORUNTULE izni olan rol listeleri görür ve aktarım kaydı yazabilir; ekleme/silme 403. *_YONET sahibi (memur) hepsini yapar."""
+    etiket = uuid4().hex[:8]
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    _dogru_veritabani(c)
+    c.execute("INSERT INTO roller (rol_adi) VALUES (%s) RETURNING rol_id", (f"RGORUNTULE_{etiket}",))
+    rol = c.fetchone()[0]
+    c.execute("INSERT INTO rol_izinleri (rol_id, izin_id, izin_var) SELECT %s, izin_id, 1 FROM izinler "
+              "WHERE izin_adi IN ('BAKIM_KAYITLARI_GORUNTULE', 'KALIBRASYON_KAYITLARI_GORUNTULE')", (rol,))
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id) VALUES (%s, 'x', %s) RETURNING kullanici_id", (f"gor_{etiket}", rol))
+    gorur = c.fetchone()[0]
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id) VALUES (%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = 'MEMUR')) RETURNING kullanici_id", (f"yon_{etiket}",))
+    yonetir = c.fetchone()[0]
+    c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi) VALUES (%s, 'GR') RETURNING cihaz_id", (f"GR-{etiket}",))
+    cihaz = c.fetchone()[0]
+    istemci = TestClient(app)
+    govde = {"cihaz_id": cihaz, "bakim_yapan_kisi": "A", "yapilan_islem": "F", "maliyet": 1,
+             "bakim_baslangic_tarihi": "2026-01-01", "bakim_bitis_tarihi": "2026-01-02"}
+    try:
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: gorur
+        assert istemci.get("/api/bakimlar").status_code == 200 and istemci.get("/api/kalibrasyonlar").status_code == 200
+        assert istemci.post("/api/liste-aktarim-kaydi", json={"liste": "BAKIM", "satir_sayisi": 1}).status_code == 200
+        assert istemci.post("/api/liste-aktarim-kaydi", json={"liste": "KALIBRASYON", "satir_sayisi": 1}).status_code == 200
+        assert istemci.post("/api/bakimlar", json=govde).status_code == 403                 # görüntüleme izni düzenleme vermez
+        assert istemci.put("/api/bakimlar/1", json={"yapilan_islem": "x"}).status_code == 403
+        assert istemci.delete("/api/bakimlar/1").status_code == 403
+        assert istemci.delete("/api/kalibrasyonlar/1").status_code == 403
+        assert istemci.get("/api/arizalar").status_code == 403                              # ilgisiz liste hâlâ kapalı
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: yonetir
+        assert istemci.get("/api/bakimlar").status_code == 200 and istemci.post("/api/bakimlar", json=govde).status_code == 201
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM cihaz_bakimlari WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s)", ([gorur, yonetir],))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = ANY(%s)", ([gorur, yonetir],))
+        c.execute("DELETE FROM rol_izinleri WHERE rol_id = %s", (rol,))
+        c.execute("DELETE FROM roller WHERE rol_id = %s", (rol,))
+        conn.close()

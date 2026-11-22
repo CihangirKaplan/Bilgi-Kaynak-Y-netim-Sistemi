@@ -782,7 +782,9 @@ Roller:
 | Cihaz uygunluğunu görüntüleme | Evet | Evet | Evet | Hayır | Evet | Evet |
 | Cihaz envanterini yönetme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Cihaz rezervasyonu yapma | Hayır | Evet | Hayır | Hayır | Evet | Evet |
+| Bakım kayıtlarını görüntüleme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Bakım kayıtlarını yönetme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
+| Kalibrasyon kayıtlarını görüntüleme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Kalibrasyon kayıtlarını yönetme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Arıza kayıtlarını yönetme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Kullanıcı oluşturma | Hayır | Hayır | Evet | Hayır | Hayır | Evet |
