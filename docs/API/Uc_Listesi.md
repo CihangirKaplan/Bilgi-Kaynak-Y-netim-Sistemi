@@ -125,7 +125,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | GET | `/api/dashboard/bugunku-randevular` | TAKVIM_GORUNTULE | dashboard_bugunku_randevular |
 | GET | `/api/dashboard/bugunku-rezervasyonlar` | CIHAZ_ENVANTER_YONET | dashboard_bugunku_rezervasyonlar |
 | GET | `/api/dashboard/ozet` | CIHAZ_ENVANTER_YONET | dashboard_ozet_getir |
-| GET | `/api/dashboard/yaklasan-islemler` | CIHAZ_ENVANTER_YONET | yaklasan_islemler_getir |
+| GET | `/api/dashboard/yaklasan-islemler` | BAKIM_KAYITLARI_GORUNTULE, BAKIM_KAYITLARI_YONET, CIHAZ_ENVANTER_YONET, KALIBRASYON_KAYITLARI_GORUNTULE, KALIBRASYON_KAYITLARI_YONET | Ana panel/zil bildirimleri için yaklaşan ve geciken bakım ve kalibrasyonlar. Cihaz envanterini yönetenler heps |
 
 ## /api/faaliyet-birimleri
 
