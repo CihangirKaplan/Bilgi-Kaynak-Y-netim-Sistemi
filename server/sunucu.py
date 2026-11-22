@@ -82,7 +82,7 @@ from server import giris_siniri, rapor_bakim_plani, rapor_kullanim, rapor_ogrenc
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
 from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
-from server.modeller import bakim_tarihi_sorunu, RezervasyonGuncelleModeli
+from server.modeller import bakim_tarihi_sorunu, RezervasyonGuncelleModeli, rezervasyon_zaman_sorunu
 import psycopg2.errors
 from server.modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
@@ -4265,6 +4265,9 @@ def rezervasyon_uygunlugunu_denetle(cursor, rez, haric_rezervasyon_id=None):
 def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     if rez.baslangic_zamani >= rez.bitis_zamani:
         raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
+    zaman_sorunu = rezervasyon_zaman_sorunu(rez.baslangic_zamani, rez.bitis_zamani)
+    if zaman_sorunu:
+        raise HTTPException(status_code=422, detail=zaman_sorunu)
 
     # Geçmiş bir zamana yeni cihaz rezervasyonu oluşturulamaz.
     if rez.baslangic_zamani < datetime.now(rez.baslangic_zamani.tzinfo):
@@ -4401,6 +4404,12 @@ def rezervasyon_guncelle(rezervasyon_id: int, rez: RezervasyonGuncelleModeli, ku
                     raise HTTPException(status_code=422, detail="Bitiş zamanı şu andan sonra olmalıdır.")
             elif bas < simdi.replace(tzinfo=None):
                 raise HTTPException(status_code=422, detail="Rezervasyon başlangıç zamanı geçmişte olamaz.")
+
+            if (bas, bit) != (mevcut_bas, mevcut_bit):
+                # Saatler değişiyorsa mesai ve süre kuralı yeniden uygulanır (yalnızca açıklama/bölüm değişirse eski kayıtlar engellenmez).
+                zaman_sorunu = rezervasyon_zaman_sorunu(rez.baslangic_zamani, rez.bitis_zamani)
+                if zaman_sorunu:
+                    raise HTTPException(status_code=422, detail=zaman_sorunu)
 
             if zaman_oda_degisti:
                 from types import SimpleNamespace

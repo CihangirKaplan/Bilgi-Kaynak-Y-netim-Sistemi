@@ -43,7 +43,7 @@ Cihazların hangi gün/saatlerde **uygun olmadığını** (bakım, kalibrasyon, 
 4. İsterseniz **Proje türü** (yoksa yenisini ekleyebilirsiniz) ve **Açıklama** girin.
 5. Kaydedin.
 
-Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra değilse, başlangıç geçmişteyse, cihaz şu anda bakımda/arızalı gibi uygun olmayan bir durumdaysa,
+Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra değilse, başlangıç geçmişteyse, saatler **08:00–18:00** dışındaysa, süre **30 günü** aşıyorsa (daha uzun çalışmalar için ardışık rezervasyonlar açın), cihaz şu anda bakımda/arızalı gibi uygun olmayan bir durumdaysa,
 aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla çakıştığını söyler) ya da oda bu iş için uygun değilse.
 **Düzenleme ve iptal:** Rezervasyonun ayrıntısını çift tıklayarak açın. **✎ Rezervasyonu düzenle** ile saat, oda, bölüm ve proje bilgisini değiştirebilirsiniz (**cihaz değişmez**; başka cihaz için yeni rezervasyon açın). Saat ya da oda değişirse çakışmalar yeniden denetlenir; rezervasyonun kendisi çakışma sayılmaz. **Başlamış** rezervasyonda başlangıç saati ve oda değiştirilemez; yalnızca bitiş saati, bölüm ve proje bilgileri düzenlenir. Biten ve iptal edilmiş rezervasyonlar düzenlenemez.
 **İptal** için ayrıntı penceresinde iptal düğmesine basın; kayıt silinmez, iptal edildi olarak kalır. Bir rezervasyonu **yalnızca oluşturan kişi ya da cihaz yöneticisi** (Memur, Müdür, Admin) düzenleyebilir ya da iptal edebilir; başkasının rezervasyonunda düğmeler görünmez. Biten (süresi dolmuş) rezervasyon iptal edilemez.
@@ -61,9 +61,9 @@ Cihaza yapılan bakımın kaydı.
 
 ## 1.6 Arıza Kayıtları
 - **＋ Arıza Kaydı:** **Arızalı Cihaz \***, **Aciliyet Seviyesi \*** (*Düşük, Orta, Yüksek, Kritik*), **Sorun Başlığı \*** ve **Açıklama \*** girilir.
-  Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur.
+  Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur. **Bakımda ya da kalibrasyondaki** cihaza da arıza bildirilebilir: arıza kaydedilir, cihazın durumu değişmez. Zaten arızalı cihaza ikinci bir arıza da eklenebilir. Yalnızca *Kullanım Dışı* cihaza arıza açılmaz.
 - Arızayı düzeltirken **Mevcut Durum** alanında **Açık (devam ediyor)** ya da **Çözüldü (cihaz kullanıma açılır)** seçersiniz; *Çözüldü* cihazı yeniden kullanıma açar.
-- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, listede sorun başlığının üzerine gelince ve **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Arıza yeniden açılırsa not temizlenir.
+- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, listede sorun başlığının üzerine gelince ve **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Çözülmüş bir arızanın satırındaki **↺** düğmesiyle (ya da çift tıklayarak) arızayı **yeniden açabilirsiniz** (yanlışlıkla çözüldü işaretlendiyse): çözüm notu ve çözüm tarihi silinir, cihaz tekrar *Arızalı* olur (bakımda/kalibrasyondaysa durumu değişmez).
 
 ## 1.7 Bakım Planları
 Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tarihe yaklaşınca ve tarih geçince sizi uyarır.

@@ -519,6 +519,21 @@ class CihazGuncelleModeli(BaseModel):
     def istege_bagli_metni_temizle(cls, deger):
         return _cihaz_metni_temizle(deger)
 
+REZERVASYON_EN_UZUN_GUN = 30           # tek bir cihaz rezervasyonu en fazla bu kadar gün sürebilir (uzun çalışma için ardışık rezervasyonlar açılır)
+
+
+def rezervasyon_zaman_sorunu(baslangic, bitis):
+    """Cihaz rezervasyonu zaman kuralları: başlangıç ve bitiş saati 08:00-18:00 arasında, süre en fazla REZERVASYON_EN_UZUN_GUN gün.
+    (Formdaki saat listesi zaten bu aralıktadır; kural sunucuda da uygulanır.) Sorun varsa kullanıcıya gösterilecek mesajı, yoksa None döndürür."""
+    bas_dk = baslangic.hour * 60 + baslangic.minute
+    bit_dk = bitis.hour * 60 + bitis.minute
+    if not (480 <= bas_dk < 1080) or not (480 < bit_dk <= 1080) or (bit_dk == 1080 and (bitis.second or bitis.microsecond)):
+        return "Cihaz rezervasyonları yalnızca 08:00-18:00 saatleri arasında yapılabilir."
+    if (bitis - baslangic).days > REZERVASYON_EN_UZUN_GUN:
+        return f"Bir rezervasyon en fazla {REZERVASYON_EN_UZUN_GUN} gün sürebilir. Daha uzun çalışmalar için ardışık rezervasyonlar açın."
+    return None
+
+
 # RES-001: Cihaz Rezervasyonu Oluşturma Modeli
 class RezervasyonOlusturModeli(BaseModel):
     cihaz_id: int = Field(gt=0)

@@ -231,15 +231,15 @@ def ariza_ekrani(temizle, yetkili):
     return e
 
 
-def test_acik_arizaya_cift_tiklayinca_duzenleme_acilir_cozulen_ve_yetkisiz_acilmaz(temizle):
+def test_arizaya_cift_tiklayinca_duzenleme_acilir_cozulmus_de_yeniden_acilabilir_yetkisiz_acilmaz(temizle):
     e = ariza_ekrani(temizle, True)
     with patch.object(ariza, "ArizaDuzenleFormu") as form:
         form.return_value.exec.return_value = 0
         cift_tikla(e, 0)
         assert form.call_args.args[2]["ariza_id"] == 1
         form.reset_mock()
-        cift_tikla(e, 1)                                              # çözülmüş kayıtta düzenleme simgesi yok, çift tık da yok
-        form.assert_not_called()
+        cift_tikla(e, 1)                                              # çözülmüş kayıt da açılır (yanlışlıkla çözüldüyse yeniden açılabilsin)
+        assert form.call_args.args[2]["ariza_id"] == 2
     yetkisiz = ariza_ekrani(temizle, False)
     with patch.object(ariza, "ArizaDuzenleFormu") as form:
         cift_tikla(yetkisiz, 0)
