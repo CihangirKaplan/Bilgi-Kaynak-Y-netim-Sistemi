@@ -215,4 +215,8 @@ def merkezi_hata_yakalayicilari_kur(app):
             cevap = _veritabani_cevabi(asil, request.url.path) if asil is not None else None
             if cevap is not None:
                 return cevap
+        if hata.status_code >= 500:
+            # Uçlar beklenmeyen hatayı yakalayıp genel bir 500/503 yanıtına çevirir; özgün hata zincirde (__context__) durur.
+            # exc_info zinciri baştan sona yazar: sorunun asıl nedeni (hangi satırda, hangi hata) günlükte kalır, kullanıcıya dönen yanıt değişmez.
+            GUNLUK.error("Sunucu hatası %s: %s %s", hata.status_code, request.method, request.url.path, exc_info=hata)
         return await http_exception_handler(request, hata)

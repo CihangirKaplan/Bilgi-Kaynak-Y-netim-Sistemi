@@ -223,6 +223,19 @@ Hemen denemek için (bilgisayarı yeniden başlatmadan):
 Sunucunun çalıştığını `http://SUNUCU_ADRESI:8000/api/saglik` adresini tarayıcıda açarak görebilirsiniz (`{"durum":"calisiyor"}` yazmalı).
 Sunucunun çıktıları ve hataları `logs\sunucu.log` dosyasına yazılır (5 MB'ı aşınca yeni dosyaya geçilir).
 
+**Kullanıcı "beklenmeyen hata" mesajı görürse:** ekranda yalnızca genel bir mesaj çıkar (iç ayrıntılar kullanıcıya gösterilmez). Gerçek neden
+sunucuda `logs\sunucu.log` dosyasına, zamanıyla birlikte şu biçimde yazılır:
+
+```
+Sunucu hatası 500: POST /api/kullanicilar
+Traceback (most recent call last): ...
+KeyError: 'rol_id'            <- asıl neden burada
+```
+
+Satırın başındaki **yöntem ve adres** hangi işlemin bozulduğunu, altındaki izin son satırı nedenini gösterir. Bir hatayı geliştiriciye
+iletirken bu bloğu olduğu gibi gönderin. Dosyada **veritabanı hata mesajları** yer alabilir (örn. yinelenen bir öğrenci numarası);
+dosya yalnızca sunucuda tutulur, paylaşırken içeriğe göz atın. Kullanıcı hataları (404 bulunamadı, 403 yetkisiz, 409 çakışma, 422 geçersiz girdi) hata sayılmaz ve bu dosyaya yazılmaz.
+
 Sorun çıkarsa:
 
 - Görev çalışmıyorsa ya da sunucu açılmıyorsa önce `logs\sunucu.log` dosyasına bakın.
