@@ -108,8 +108,11 @@ def test_iptal_nedenine_gore_ayri_mesaj_verir():
         _iptal([None, None])
     assert yok.value.status_code == 404 and "bulunamadı" in yok.value.detail
     with pytest.raises(HTTPException) as zaten:
-        _iptal([None, (True,)])
+        _iptal([None, (True, False, True)])
     assert zaten.value.status_code == 409 and "zaten iptal" in zaten.value.detail
     with pytest.raises(HTTPException) as bitmis:
-        _iptal([None, (False,)])
+        _iptal([None, (False, True, True)])
     assert bitmis.value.status_code == 409 and "Süresi dolmuş" in bitmis.value.detail
+    with pytest.raises(HTTPException) as yetkisiz:
+        _iptal([None, (False, False, False)])
+    assert yetkisiz.value.status_code == 403 and "oluşturan kişi" in yetkisiz.value.detail
