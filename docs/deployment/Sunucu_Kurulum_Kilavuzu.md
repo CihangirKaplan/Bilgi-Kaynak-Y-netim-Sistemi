@@ -266,6 +266,11 @@ Yedekleme için `scripts/windows/README.md` dosyasındaki adımları uygulayın
 (günlük otomatik yedek, 14 günlük rotasyon (en yeni 3 yedek her zaman korunur), geri yükleme doğrulaması).
 Yedeklerin en az bir kopyasını sunucu bilgisayarının dışında (harici disk gibi) saklayın.
 
+**Yedek klasörüne erişim (SEC-T13):** Yedek dosyaları parola özetlerini ve kişisel verileri (öğrenci ad soyad, telefon) içerir.
+Yedek klasörüne (`backups/` ya da `TKYS_BACKUP_DIR`) ve harici diskteki kopyaya yalnızca sistem sorumlusu erişebilmelidir:
+klasörü ağda paylaşmayın ve Windows'ta klasör izinlerinden (Özellikler → Güvenlik) "Users" / "Everyone" erişimini kaldırın,
+yalnızca sistem sorumlusu hesabı ve SYSTEM kalsın. Uygulama kullanıcıları yedeklere API üzerinden erişemez; koruma bu klasör izniyle tamamlanır.
+
 ## 11. Güncelleme
 
 Yeni sürüm geldiğinde sunucu bilgisayarında, sunucuyu durdurduktan sonra:

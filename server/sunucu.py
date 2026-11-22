@@ -2104,10 +2104,19 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT k.aktif_mi, r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (yeni_personel.kullanici_id,))
+        # Hedef kullanıcının durumu/rolü ve işlemi yapanın rolü tek sorguda alınır (rol hiyerarşisi denetimi için).
+        cursor.execute(
+            "SELECT k.aktif_mi, r.rol_adi, "
+            "(SELECT ry.rol_adi FROM kullanicilar ky JOIN roller ry ON ry.rol_id = ky.rol_id WHERE ky.kullanici_id = %s) "
+            "FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;",
+            (islem_yapan_id, yeni_personel.kullanici_id),
+        )
         kullanici = cursor.fetchone()
         if kullanici is None:
             raise HTTPException(status_code=404, detail="Kullanıcı hesabı bulunamadı.")
+        # Kullanıcı yönetimindeki kural personel kaydında da geçerli: kendi seviyesindeki ya da üstündeki rolün kaydına dokunulamaz.
+        if hiyerarsi_ihlali_var_mi(kullanici[2], kullanici[1]):
+            raise HTTPException(status_code=403, detail=HIYERARSI_MESAJI)
         if not kullanici[0]:
             raise HTTPException(status_code=422, detail="Pasif kullanıcı için personel kaydı oluşturulamaz.")
 
@@ -2244,10 +2253,18 @@ def personel_guncelle(personel_id: int, guncelleme: PersonelGuncelleModeli, isle
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT personel_id, personel_kodu, aktif_mi, kullanici_id FROM kullanicilar WHERE personel_id = %s FOR UPDATE;", (personel_id,))
+        cursor.execute(
+            "SELECT k.personel_id, k.personel_kodu, k.aktif_mi, k.kullanici_id, r.rol_adi, "
+            "(SELECT ry.rol_adi FROM kullanicilar ky JOIN roller ry ON ry.rol_id = ky.rol_id WHERE ky.kullanici_id = %s) "
+            "FROM kullanicilar k JOIN roller r ON r.rol_id = k.rol_id WHERE k.personel_id = %s FOR UPDATE OF k;",
+            (islem_yapan_id, personel_id),
+        )
         mevcut = cursor.fetchone()
         if mevcut is None:
             raise HTTPException(status_code=404, detail="Personel bulunamadı.")
+        # Örn. müdür, ADMIN'in ya da başka bir müdürün personel kodunu değiştiremez (ADMIN için hiyerarşi engel olmaz).
+        if hiyerarsi_ihlali_var_mi(mevcut[5], mevcut[4]):
+            raise HTTPException(status_code=403, detail=HIYERARSI_MESAJI)
 
         # Yalnızca personel kodu değişir; aktiflik kullanıcı durum ucundan yönetilir (kurallar atlanmasın).
         yeni_kod = degisiklikler.get("personel_kodu", mevcut[1])

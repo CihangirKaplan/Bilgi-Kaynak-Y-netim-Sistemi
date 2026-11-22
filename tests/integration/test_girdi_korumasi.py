@@ -489,3 +489,52 @@ def test_kisa_anahtar_hatasi_uzunlugu_ve_uretim_komutunu_soyler_anahtarin_kendis
 def test_eksik_anahtar_mesaji_degismedi():
     with pytest.raises(RuntimeError, match="JWT_SECRET ortam değişkeni tanımlı değil"):
         guvenlik_yukle("")
+
+
+# ================================================================ içerik türü atlatma (son kontrol)
+@pytest.mark.parametrize("tur,beklenen", [
+    (b"application/json", True), (b"application/json; charset=utf-8", True), (b"Application/JSON", True),
+    (b"application/merge-patch+json", True), (b"APPLICATION/VND.API+JSON", True),
+    (b"text/plain", False), (b"application/jsonx", False), (b"text/json", False), (b"", False),
+])
+def test_json_icerik_turu_fastapi_ile_ayni_kurali_kullanir(tur, beklenen):
+    assert gk.json_icerik_turu_mu(tur) is beklenen
+
+
+@pytest.mark.parametrize("tur", ["Application/Json", "application/merge-patch+json", "application/vnd.api+json"])
+def test_buyuk_harfli_ya_da_arti_json_turu_nul_ve_tasan_sayi_denetimini_atlatamaz(mini, tur):
+    assert mini.post("/yankı", content=json.dumps({"a": "x\u0000y"}).encode(), headers={"content-type": tur}).json() == {"detail": gk.NUL_MESAJI}
+    assert mini.post("/yankı", content=json.dumps({"id": 2**40}).encode(), headers={"content-type": tur}).json() == {"detail": gk.SAYI_MESAJI}
+
+
+@pytest.mark.parametrize("tur", ["Application/Json", "application/merge-patch+json", "text/plain", "application/octet-stream"])
+def test_boyut_siniri_icerik_turunden_bagimsiz_uygulanir(mini, tur):
+    buyuk = b'{"a":"' + b"x" * (gk.EN_BUYUK_GOVDE_BAYT + 10) + b'"}'
+    yanit = mini.post("/yankı", content=buyuk, headers={"content-type": tur})
+    assert yanit.status_code == 413 and yanit.json() == {"detail": gk.BUYUK_GOVDE_MESAJI}
+
+
+def test_content_length_siniri_asiyorsa_govde_hic_okunmadan_reddedilir():
+    okunan = []
+
+    async def uygulama(scope, receive, send):                    # buraya hiç gelinmemeli
+        raise AssertionError("uygulamaya ulaşmamalıydı")
+
+    async def al():
+        okunan.append(1)
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    gonderilen = []
+
+    async def gonder(m):
+        gonderilen.append(m)
+
+    scope = {"type": "http", "method": "POST", "path": "/", "query_string": b"",
+             "headers": [(b"content-type", b"text/plain"), (b"content-length", str(gk.EN_BUYUK_GOVDE_BAYT + 1).encode())]}
+    asyncio.run(gk.NulVeSayiKorumasi(uygulama)(scope, al, gonder))
+    assert gonderilen[0]["status"] == 413 and okunan == []
+
+
+def test_json_olmayan_kucuk_govde_aynen_uygulamaya_iletilir(mini):
+    assert mini.post("/metin", content=b"merhaba", headers={"content-type": "text/plain"}).status_code in (200, 422)
+    assert mini.get("/sorgu?a=b").json() == {"a": "b"}                  # gövdesiz GET etkilenmez

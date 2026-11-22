@@ -43,7 +43,7 @@ def test_danisma_ogrencisi_icin_ogrenci_kaydi_da_olusur():
         ad_soyad="  Veli Kaya ", ogrenci_numarasi="2021002", telefon="05551112233",
     )
     sonuc, hata, conn, cursor = calistir(model, [
-        (True, "DANISMA_OGRENCISI"),  # kullanıcı
+        (True, "DANISMA_OGRENCISI", "ADMIN"),  # kullanıcı
         (15,),                        # personel_id
         None,                         # bağlı öğrenci kaydı yok
         (7,),                         # ogrenci_id
@@ -63,7 +63,7 @@ def test_telefon_istege_baglidir():
         kullanici_id=8, personel_kodu="PER-OGR-001",
         ad_soyad="Veli Kaya", ogrenci_numarasi="2021002",
     )
-    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI"), (15,), None, (7,)])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI", "ADMIN"), (15,), None, (7,)])
     assert hata is None
     ogrenci_insert = next(c for c in cursor.execute.call_args_list if "INSERT INTO ogrenciler" in c.args[0])
     assert ogrenci_insert.args[1][3] is None
@@ -74,7 +74,7 @@ def test_zaten_bagli_ogrenci_kaydi_varsa_yenisi_olusmaz():
         kullanici_id=8, personel_kodu="PER-OGR-001",
         ad_soyad="Veli Kaya", ogrenci_numarasi="2021002",
     )
-    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI"), (15,), (3,)])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI", "ADMIN"), (15,), (3,)])
     assert hata is None and sonuc["ogrenci_id"] == 3
     assert not any("INSERT INTO ogrenciler" in s for s in sorgular(cursor))
 
@@ -87,7 +87,7 @@ def test_zaten_bagli_ogrenci_kaydi_varsa_yenisi_olusmaz():
 ])
 def test_danisma_ogrencisi_icin_ad_ve_numara_zorunludur(alanlar):
     model = PersonelOlusturModeli(kullanici_id=8, personel_kodu="PER-OGR-001", **alanlar)
-    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI")])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI", "ADMIN")])
     assert hata.status_code == 422
     assert not any("INSERT" in s for s in sorgular(cursor))
     conn.commit.assert_not_called()
@@ -97,14 +97,14 @@ def test_diger_rollerde_ogrenci_bilgisi_kabul_edilmez():
     model = PersonelOlusturModeli(
         kullanici_id=25, personel_kodu="PER-PSK-001", ad_soyad="Ali Veli",
     )
-    sonuc, hata, conn, cursor = calistir(model, [(True, "PSIKOLOG")])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "PSIKOLOG", "ADMIN")])
     assert hata.status_code == 422
     assert not any("INSERT" in s for s in sorgular(cursor))
 
 
 def test_diger_roller_ogrenci_kaydi_olusturmaz():
     model = PersonelOlusturModeli(kullanici_id=25, personel_kodu="PER-PSK-001")
-    sonuc, hata, conn, cursor = calistir(model, [(True, "PSIKOLOG"), (15,)])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "PSIKOLOG", "ADMIN"), (15,)])
     assert hata is None and sonuc["ogrenci_id"] is None
     assert not any("ogrenciler" in s for s in sorgular(cursor))
 
@@ -115,7 +115,7 @@ def test_ayni_ogrenci_numarasi_409_verir_ve_geri_alinir():
         ad_soyad="Veli Kaya", ogrenci_numarasi="2021002",
     )
     sonuc, hata, conn, cursor = calistir(
-        model, [(True, "DANISMA_OGRENCISI"), (15,), None],
+        model, [(True, "DANISMA_OGRENCISI", "ADMIN"), (15,), None],
         execute_hatasi=psycopg2.errors.UniqueViolation(),
     )
     assert hata.status_code == 409
@@ -128,7 +128,7 @@ def test_ayni_personel_kodu_eski_mesajla_409_verir():
     model = PersonelOlusturModeli(kullanici_id=25, personel_kodu="PER-PSK-001")
     conn = MagicMock()
     cursor = conn.cursor.return_value
-    cursor.fetchone.side_effect = [(True, "PSIKOLOG")]
+    cursor.fetchone.side_effect = [(True, "PSIKOLOG", "ADMIN")]
     def execute(sorgu, *a, **k):
         if "personel_kodu = %s" in sorgu:
             raise psycopg2.errors.UniqueViolation()
@@ -182,7 +182,7 @@ def test_gruplu_telefon_veritabanina_11_haneli_yazilir():
         kullanici_id=8, personel_kodu="PER-OGR-001",
         ad_soyad="Veli Kaya", ogrenci_numarasi="2021002", telefon="555 111 22 33",
     )
-    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI"), (15,), None, (7,)])
+    sonuc, hata, conn, cursor = calistir(model, [(True, "DANISMA_OGRENCISI", "ADMIN"), (15,), None, (7,)])
     assert hata is None
     ogrenci_insert = next(c for c in cursor.execute.call_args_list if "INSERT INTO ogrenciler" in c.args[0])
     assert ogrenci_insert.args[1][3] == "05551112233"

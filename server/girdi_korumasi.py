@@ -76,8 +76,28 @@ def _gecersiz_girdi_bul(veri):
     return None
 
 
+def json_icerik_turu_mu(icerik_turu: bytes) -> bool:
+    """FastAPI'nin gövdeyi JSON olarak çözdüğü içerik türleriyle aynı kural: application/json ve application/*+json,
+    büyük/küçük harf duyarsız, parametreler (charset vb.) yok sayılır.
+
+    Önceden yalnızca tam "application/json" yazısı aranıyordu; "Application/Json" ya da "application/merge-patch+json"
+    gönderen bir istemci NUL/taşan sayı/1 MiB denetimini atlayıp yine de JSON olarak işleniyordu."""
+    tur = icerik_turu.decode("latin-1").split(";", 1)[0].strip().lower()
+    ana, _, alt = tur.partition("/")
+    return ana == "application" and (alt == "json" or alt.endswith("+json"))
+
+
+def _bildirilen_boyut(basliklar: dict) -> int | None:
+    try:
+        return int(basliklar.get(b"content-length", b"").decode("latin-1"))
+    except ValueError:
+        return None
+
+
 class NulVeSayiKorumasi:
-    """Saf ASGI ara katmanı: bozuk girdiyi uca ulaşmadan 422/413 ile reddeder."""
+    """Saf ASGI ara katmanı: bozuk girdiyi uca ulaşmadan 422/413 ile reddeder.
+
+    Boyut sınırı içerik türünden bağımsız olarak HER gövdeye uygulanır; NUL/taşan sayı denetimi JSON gövdelere yapılır."""
 
     def __init__(self, app):
         self.app = app
@@ -92,10 +112,14 @@ class NulVeSayiKorumasi:
             await JSONResponse({"detail": hata}, status_code=422)(scope, receive, send)
             return
 
-        icerik_turu = dict(scope.get("headers", [])).get(b"content-type", b"")
-        if b"application/json" not in icerik_turu:
-            await self.app(scope, receive, send)
+        basliklar = dict(scope.get("headers", []))
+        bildirilen = _bildirilen_boyut(basliklar)
+        if bildirilen is not None and bildirilen > EN_BUYUK_GOVDE_BAYT:
+            # Gövde hiç okunmadan reddedilir (bellek harcanmaz).
+            await JSONResponse({"detail": BUYUK_GOVDE_MESAJI}, status_code=413)(scope, receive, send)
             return
+
+        json_mu = json_icerik_turu_mu(basliklar.get(b"content-type", b""))
 
         govde = b""
         while True:
@@ -107,7 +131,7 @@ class NulVeSayiKorumasi:
             if not mesaj.get("more_body", False):
                 break
 
-        hata = self._govde_hatasi(govde)
+        hata = self._govde_hatasi(govde) if json_mu else None
         if hata:
             await JSONResponse({"detail": hata}, status_code=422)(scope, receive, send)
             return
