@@ -41,7 +41,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/bakimlar` | BAKIM_KAYITLARI_YONET | bakimlari_listele |
+| GET | `/api/bakimlar` | BAKIM_KAYITLARI_GORUNTULE, BAKIM_KAYITLARI_YONET | bakimlari_listele |
 | POST | `/api/bakimlar` | BAKIM_KAYITLARI_YONET | bakim_kaydi_ekle |
 | DELETE | `/api/bakimlar/{bakim_id}` | BAKIM_KAYITLARI_YONET | bakim_kaydi_sil |
 | PUT | `/api/bakimlar/{bakim_id}` | BAKIM_KAYITLARI_YONET | bakim_guncelle |
@@ -170,7 +170,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/kalibrasyonlar` | KALIBRASYON_KAYITLARI_YONET | kalibrasyonlari_listele |
+| GET | `/api/kalibrasyonlar` | KALIBRASYON_KAYITLARI_GORUNTULE, KALIBRASYON_KAYITLARI_YONET | kalibrasyonlari_listele |
 | POST | `/api/kalibrasyonlar` | KALIBRASYON_KAYITLARI_YONET | kalibrasyon_kaydi_ekle |
 | DELETE | `/api/kalibrasyonlar/{kalibrasyon_id}` | KALIBRASYON_KAYITLARI_YONET | kalibrasyon_kaydi_sil |
 | PUT | `/api/kalibrasyonlar/{kalibrasyon_id}` | KALIBRASYON_KAYITLARI_YONET | kalibrasyon_guncelle |

@@ -283,6 +283,31 @@ def izin_kontrol(izin_adi: str):
             if conn is not None: conn.close()
     return kontrol
 
+def izin_kontrol_biri(*izin_adlari: str):
+    """İzinlerden en az birine sahip kullanıcıya izin verir (örn. kayıtları görme VEYA yönetme)."""
+    def kontrol(kullanici_id: int = Depends(mevcut_kullanici_id)):
+        conn = None
+        cursor = None
+        try:
+            conn = vt_baglan(VT_AYARLARI)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT MAX(ri.izin_var) FROM kullanicilar k
+                JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
+                JOIN izinler i ON ri.izin_id = i.izin_id
+                WHERE k.kullanici_id = %s AND i.izin_adi = ANY(%s);
+                """, (kullanici_id, list(izin_adlari)),
+            )
+            sonuc = cursor.fetchone()
+            if sonuc is None or sonuc[0] != 1:
+                raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz bulunmuyor.")
+            return kullanici_id
+        finally:
+            if cursor is not None: cursor.close()
+            if conn is not None: conn.close()
+    return kontrol
+
 @app.get("/api/korumali-test")
 def korumali_test(kullanici_id: int = Depends(mevcut_kullanici_id)):
     return {"durum": "basarili", "mesaj": "Token geçerli.", "kullanici_id": kullanici_id}
@@ -4814,7 +4839,7 @@ def cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis):
 
 
 @app.get("/api/bakimlar")
-def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol("BAKIM_KAYITLARI_YONET"))):
+def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -5018,7 +5043,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
 # ==========================================
 
 @app.get("/api/kalibrasyonlar")
-def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("KALIBRASYON_KAYITLARI_YONET"))):
+def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -10883,8 +10908,8 @@ LISTE_AKTARIM_HEDEFLERI = {
     "OGRENCI": ("FAALIYET_KAYITLARI_DUZENLE", "ogrenciler"),
     "DANISAN": ("RANDEVU_OLUSTUR", "danisan_kodlari"),
     "REZERVASYON": ("CIHAZ_REZERVASYON", "cihaz_rezervasyonlari"),
-    "BAKIM": ("BAKIM_KAYITLARI_YONET", "cihaz_bakimlari"),
-    "KALIBRASYON": ("KALIBRASYON_KAYITLARI_YONET", "cihaz_kalibrasyonlari"),
+    "BAKIM": (("BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"), "cihaz_bakimlari"),
+    "KALIBRASYON": (("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_kalibrasyonlari"),
     "ARIZA": ("ARIZA_KAYITLARI_YONET", "cihaz_arizalari"),
     "BAKIM_PLANI": (("BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_bakim_planlari"),
 }

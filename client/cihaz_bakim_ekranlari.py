@@ -324,10 +324,11 @@ class BakimDuzenleFormu(QDialog):
 
 class BakimYonetimEkrani(QWidget):
     """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
-    def __init__(self, api_url, token):
+    def __init__(self, api_url, token, yetkili_mi=True):
         super().__init__()
         self.api_url = api_url
         self.token = token
+        self.yetkili_mi = yetkili_mi            # False: yalnızca görüntüleme (düzenle/sil düğmeleri ve çift tıkla düzenleme yok)
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.bakim_detaylari = {}
         self.arayuzu_olustur()
@@ -367,7 +368,8 @@ class BakimYonetimEkrani(QWidget):
         self.tablo.setColumnWidth(5, 230)
         self.tablo.setColumnWidth(7, 110)
 
-        cift_tikla_ac(self.tablo, self.bakim_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır
+        cift_tikla_ac(self.tablo, self.bakim_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır (yalnızca yetkililer: satıra kimlik atanır)
+        self.tablo.setColumnHidden(7, not self.yetkili_mi)
         self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
 
         kart = QFrame()
@@ -442,10 +444,11 @@ class BakimYonetimEkrani(QWidget):
             hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
             self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
 
-            self.tablo.setCellWidget(i, 7, islem_butonlari(
-                lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
-                lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
-            satira_kimlik_ata(self.tablo, i, b["bakim_id"])
+            if self.yetkili_mi:
+                self.tablo.setCellWidget(i, 7, islem_butonlari(
+                    lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
+                    lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
+                satira_kimlik_ata(self.tablo, i, b["bakim_id"])
 
         self.cip_toplam.setText(f"{len(bakimlar)} kayıt")
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
