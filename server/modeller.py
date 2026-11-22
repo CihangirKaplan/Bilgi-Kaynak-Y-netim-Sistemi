@@ -542,6 +542,32 @@ class RezervasyonOlusturModeli(BaseModel):
         _ayni_dilim_denetle(self.baslangic_zamani, self.bitis_zamani)
         return self
 
+class RezervasyonGuncelleModeli(BaseModel):
+    """Mevcut rezervasyonun düzenlenmesi. Cihaz değiştirilemez (başka cihaz için yeni rezervasyon açılır)."""
+    model_config = ConfigDict(extra="forbid")
+
+    bolum_id: Optional[int] = Field(default=None, gt=0)
+    kullanilacak_oda_id: Optional[int] = Field(default=None, gt=0)
+    baslangic_zamani: ZamanDamgasi
+    bitis_zamani: ZamanDamgasi
+    proje_turu: Optional[str] = Field(default=None, max_length=50)
+    proje_adi_aciklamasi: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("proje_turu", "proje_adi_aciklamasi", mode="before")
+    @classmethod
+    def bos_metin_yok_say(cls, deger):
+        if isinstance(deger, str):
+            return deger.strip() or None
+        return deger
+
+    @model_validator(mode="after")
+    def ayni_dilim(self):
+        if self.baslangic_zamani >= self.bitis_zamani:
+            raise ValueError("Bitiş zamanı, başlangıçtan sonra olmalıdır.")
+        _ayni_dilim_denetle(self.baslangic_zamani, self.bitis_zamani)
+        return self
+
+
 def _zorunlu_metin(ad):
     """Baş/son boşlukları atar, boş metni reddeder (uzunluk sınırı kırpılmış metne uygulanır)."""
     def temizle(deger):

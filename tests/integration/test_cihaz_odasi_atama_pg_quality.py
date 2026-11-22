@@ -97,3 +97,73 @@ def test_cihaz_rezervasyonlu_oda_psikologa_atanamaz_gercek_veritabaninda(ortam):
     assert atama(psi1, odalar["cihaz"], odalar["bos"]).status_code == 200                   # mevcut atama korunur, güncelleme engellenmez
     assert sorted(_atanmis(c, psi1)) == sorted([odalar["cihaz"], odalar["bos"]])
     assert atama(psi2, odalar["cihaz"]).status_code == 409                                  # başka psikolog aynı odayı alamaz
+
+
+def test_rezervasyon_sahiplik_duzenleme_ve_iptal_gercek_veritabaninda():
+    """Rezervasyonu yalnızca oluşturan ya da yönetici (CIHAZ_ENVANTER_YONET) değiştirir/iptal eder; düzenlemede rezervasyonun kendisi çakışma sayılmaz."""
+    etiket = uuid4().hex[:8]
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    _dogru_veritabani(c)
+
+    def kul(ad, rol):
+        c.execute(
+            "INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id, personel_id, personel_kodu) VALUES "
+            "(%s, 'x', (SELECT rol_id FROM roller WHERE rol_adi = %s), (SELECT COALESCE(MAX(personel_id), 0) + 1 FROM kullanicilar), %s) RETURNING kullanici_id",
+            (f"{ad}_{etiket}", rol, f"P-{ad}-{etiket}"))
+        return c.fetchone()[0]
+
+    sahip, baskasi, yonetici = kul("rs1", "PROJE_ASISTANI"), kul("rs2", "PROJE_ASISTANI"), kul("rsm", "MEMUR")
+    c.execute("INSERT INTO odalar (oda_adi, kapasite) VALUES (%s, 1), (%s, 1) RETURNING oda_id", (f"rs_oda1_{etiket}", f"rs_oda2_{etiket}"))
+    odalar = [r[0] for r in c.fetchall()]
+    c.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad) VALUES (%s, 'x') RETURNING bolum_id", (f"rs_b_{etiket}",))
+    bolum = c.fetchone()[0]
+    c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi) VALUES (%s, 'RS') RETURNING cihaz_id", (f"RS-{etiket}",))
+    cihaz = c.fetchone()[0]
+    istemci = TestClient(app)
+    g = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+
+    def ben(k):
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: k
+
+    def govde(**k):
+        veri = {"bolum_id": bolum, "kullanilacak_oda_id": odalar[0], "baslangic_zamani": g.isoformat(),
+                "bitis_zamani": (g + timedelta(hours=2)).isoformat(), "proje_adi_aciklamasi": "yeni", "proje_turu": None}
+        veri.update(k)
+        return veri
+    try:
+        ben(sahip)
+        r = istemci.post("/api/rezervasyonlar", json={"cihaz_id": cihaz, **{k: v for k, v in govde().items() if k not in ("proje_turu",)}})
+        assert r.status_code == 201
+        rid = r.json()["rezervasyon_id"]
+        liste = {x["rezervasyon_id"]: x for x in istemci.get("/api/rezervasyonlar").json()}
+        assert liste[rid]["yonetebilir"] is True and liste[rid]["rezerve_eden"] == f"rs1_{etiket}"
+
+        ben(baskasi)
+        assert {x["rezervasyon_id"]: x for x in istemci.get("/api/rezervasyonlar").json()}[rid]["yonetebilir"] is False
+        assert istemci.put(f"/api/rezervasyonlar/{rid}", json=govde()).status_code == 403
+        assert istemci.patch(f"/api/rezervasyonlar/{rid}/iptal").status_code == 403
+
+        ben(sahip)
+        kaydir = govde(baslangic_zamani=(g + timedelta(hours=1)).isoformat(), bitis_zamani=(g + timedelta(hours=3)).isoformat())
+        assert istemci.put(f"/api/rezervasyonlar/{rid}", json=kaydir).status_code == 200                # kendisiyle çakışmaz
+        oda_degis = govde(kullanilacak_oda_id=odalar[1], baslangic_zamani=kaydir["baslangic_zamani"], bitis_zamani=kaydir["bitis_zamani"])
+        assert istemci.put(f"/api/rezervasyonlar/{rid}", json=oda_degis).status_code == 200
+        gecmis = govde(baslangic_zamani=(g - timedelta(days=9)).isoformat(), bitis_zamani=(g - timedelta(days=9, hours=-1)).isoformat())
+        assert istemci.put(f"/api/rezervasyonlar/{rid}", json=gecmis).status_code == 422
+
+        ben(yonetici)
+        assert istemci.patch(f"/api/rezervasyonlar/{rid}/iptal").status_code == 200                      # yönetici başkasınınkini iptal edebilir
+        assert istemci.patch(f"/api/rezervasyonlar/{rid}/iptal").status_code == 409                      # zaten iptal
+        assert istemci.put(f"/api/rezervasyonlar/{rid}", json=govde()).status_code == 409                # iptal edilmiş düzenlenmez
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM cihaz_rezervasyonlari WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
+        kullanicilar = [sahip, baskasi, yonetici]
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s)", (kullanicilar,))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = ANY(%s)", (kullanicilar,))
+        c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", (odalar,))
+        c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
+        conn.close()

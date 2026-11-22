@@ -50,12 +50,14 @@ def varsayilan_rezervasyon_zamanlari(simdi=None):
 class YeniRezervasyonFormu(QDialog):
     """Yeni Cihaz Rezervasyonu formu (diğer cihaz formlarıyla aynı görünüm)."""
     def __init__(self, api_url, token, parent=None, cihaz_id=None, tarih=None,
-                 baslangic_saati=None, bitis_saati=None):
+                 baslangic_saati=None, bitis_saati=None, duzenlenecek=None):
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
+        self.duzenlenecek = duzenlenecek            # None: yeni rezervasyon; sözlük: düzenlenen rezervasyon (liste kaydı)
+        duzenleme = duzenlenecek is not None
 
-        self.setWindowTitle("Yeni Cihaz Rezervasyonu")
+        self.setWindowTitle("Rezervasyonu Düzenle" if duzenleme else "Yeni Cihaz Rezervasyonu")
         self.setMinimumSize(560, 620)
         self.setObjectName("RezervasyonKutusu")
         self.setStyleSheet(FORM_STIL + KISAYOL_STIL)
@@ -64,9 +66,10 @@ class YeniRezervasyonFormu(QDialog):
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(14)
 
-        baslik = QLabel("📌  Yeni Cihaz Rezervasyonu")
+        baslik = QLabel("✎  Rezervasyonu Düzenle" if duzenleme else "📌  Yeni Cihaz Rezervasyonu")
         baslik.setStyleSheet("font-size: 18px; font-weight: 800; color: #0A1F5C;")
-        alt = QLabel("Cihazı, odayı ve saat aralığını seçin. Mesai saatleri 08:00 – 18:00'dir.")
+        alt = QLabel("Cihaz değiştirilemez; farklı bir cihaz için yeni rezervasyon açın. Saat ya da oda değişirse çakışmalar yeniden denetlenir."
+                     if duzenleme else "Cihazı, odayı ve saat aralığını seçin. Mesai saatleri 08:00 – 18:00'dir.")
         alt.setStyleSheet("font-size: 12px; font-weight: 500; color: #6B7FA8;")
         alt.setWordWrap(True)
         layout.addWidget(baslik)
@@ -139,7 +142,7 @@ class YeniRezervasyonFormu(QDialog):
         layout.addLayout(form_layout)
         layout.addStretch()
 
-        self.btn_kaydet = QPushButton("Rezervasyonu Onayla")
+        self.btn_kaydet = QPushButton("Değişiklikleri Kaydet" if duzenleme else "Rezervasyonu Onayla")
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
@@ -147,6 +150,46 @@ class YeniRezervasyonFormu(QDialog):
 
         self.verileri_yukle()
         self.on_degerleri_uygula(cihaz_id, tarih, baslangic_saati, bitis_saati)
+        if duzenleme:
+            self._duzenleme_degerlerini_uygula()
+
+    def _duzenleme_degerlerini_uygula(self):
+        """Düzenlenen rezervasyonun mevcut değerlerini forma yazar; cihaz sabittir, başlamış rezervasyonda başlangıç ve oda da sabittir."""
+        r = self.duzenlenecek
+        cihaz_no = r.get("cihaz_numarasi")
+        if cihaz_no is not None and self.cmb_cihaz.findData(cihaz_no) < 0:                     # cihaz artık 'kullanıma hazır' olmasa da gösterilir
+            self.cmb_cihaz.addItem(str(r.get("cihaz_id") or r.get("cihaz_adi") or "Cihaz"), cihaz_no)
+        indeks = self.cmb_cihaz.findData(cihaz_no)
+        if indeks >= 0:
+            self.cmb_cihaz.setCurrentIndex(indeks)
+        self.cmb_cihaz.setEnabled(False)
+        if r.get("oda_id") is not None and self.cmb_oda.findData(r["oda_id"]) < 0 and r.get("oda_adi"):
+            self.cmb_oda.addItem(str(r["oda_adi"]), r["oda_id"])
+        if r.get("oda_id") is not None:
+            self.cmb_oda.setCurrentIndex(max(self.cmb_oda.findData(r["oda_id"]), 0))
+        if r.get("bolum_id") is not None:
+            self.bolumleri_yukle(secilecek_kimlik=r["bolum_id"])
+        if r.get("proje_turu"):
+            self.proje_turlerini_yukle(secilecek_ad=r["proje_turu"])
+        self.txt_proje_aciklama.setPlainText(str(r.get("proje_adi_aciklamasi") or ""))
+
+        bas = QDateTime.fromString(str(r.get("baslangic_zamani") or "")[:16].replace("T", " "), "yyyy-MM-dd HH:mm")
+        bit = QDateTime.fromString(str(r.get("bitis_zamani") or "")[:16].replace("T", " "), "yyyy-MM-dd HH:mm")
+        self.basladi = bool(bas.isValid() and bas <= QDateTime.currentDateTime())
+        for tarih_kutusu in (self.dt_baslangic_tarih, self.dt_bitis_tarih):
+            tarih_kutusu.setMinimumDate(min(QDate.currentDate(), bas.date()) if bas.isValid() else QDate.currentDate())
+        if bas.isValid():
+            self.dt_baslangic_tarih.setDate(bas.date())
+            self.cmb_baslangic_saat.setCurrentText(bas.time().toString("HH:mm"))
+        if bit.isValid():
+            self.dt_bitis_tarih.setDate(bit.date())
+            self.cmb_bitis_saat.setCurrentText(bit.time().toString("HH:mm"))
+        if self.basladi:
+            for kutu in (self.dt_baslangic_tarih, self.cmb_baslangic_saat, self.cmb_oda):
+                kutu.setEnabled(False)
+            self.lbl_uyari.setStyleSheet("background: #E0ECFF; color: #1E3A8A; border-radius: 10px; font-size: 12px; font-weight: 700; padding: 10px 14px;")
+            self.lbl_uyari.setText("Bu rezervasyon başladı: başlangıç saati ve oda değiştirilemez; bitiş saati, bölüm ve proje bilgileri düzenlenebilir.")
+            self.lbl_uyari.show()
 
     @staticmethod
     def _kisayol_dugmesi(yazi, ipucu, tikla):
@@ -363,11 +406,16 @@ class YeniRezervasyonFormu(QDialog):
             f"{bit_tarih} {bit_saat}", "yyyy-MM-dd HH:mm"
         )
 
-        if bas_dt <= QDateTime.currentDateTime():
+        duzenleme = self.duzenlenecek is not None
+        baslamis_duzenleme = duzenleme and getattr(self, "basladi", False)
+        if bas_dt <= QDateTime.currentDateTime() and not baslamis_duzenleme:
             QMessageBox.warning(
                 self, "Geçersiz Tarih",
                 "Rezervasyon başlangıç zamanı geçmişte olamaz."
             )
+            return
+        if baslamis_duzenleme and bit_dt <= QDateTime.currentDateTime():
+            QMessageBox.warning(self, "Geçersiz Tarih", "Bitiş zamanı şu andan sonra olmalıdır.")
             return
 
         if bit_dt <= bas_dt:
@@ -387,6 +435,10 @@ class YeniRezervasyonFormu(QDialog):
             "proje_adi_aciklamasi": self.txt_proje_aciklama.toPlainText().strip()
         }
 
+        if duzenleme:
+            self._duzenlemeyi_gonder(veri)
+            return
+
         try:
             res = cakisma_cozumlu_istek(self, "POST", f"{self.api_url}/api/rezervasyonlar", veri, {"Authorization": f"Bearer {self.token}"}, *REZERVASYON_CAKISMA_METINLERI)
             if res is None or oturum_hatasi_mi(res):
@@ -404,6 +456,25 @@ class YeniRezervasyonFormu(QDialog):
                 QMessageBox.warning(self, "İşlem Başarısız", hata_detay)
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+
+
+    def _duzenlemeyi_gonder(self, veri):
+        """Düzenlenen rezervasyonu PUT ile gönderir (cihaz değişmez); çakışma çıkarsa kullanıcıya gösterilir, çözülünce yeniden denenir."""
+        veri = {k: v for k, v in veri.items() if k != "cihaz_id"}
+        veri["proje_turu"] = veri.get("proje_turu") or None
+        rezervasyon_id = self.duzenlenecek["rezervasyon_id"]
+        try:
+            res = cakisma_cozumlu_istek(self, "PUT", f"{self.api_url}/api/rezervasyonlar/{rezervasyon_id}", veri,
+                                        {"Authorization": f"Bearer {self.token}"}, *REZERVASYON_CAKISMA_METINLERI)
+            if res is None or oturum_hatasi_mi(res):
+                return
+            if res.status_code == 200:
+                basari_bildirimi(self, "Rezervasyon güncellendi.")
+                self.accept()
+            else:
+                QMessageBox.warning(self, "İşlem Başarısız", hata_detayi_metni(res, "Bilinmeyen bir hata oluştu."))
+        except Exception:
+            QMessageBox.critical(self, "Bağlantı Hatası", "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.")
 
 
 KISAYOL_STIL = """
@@ -560,12 +631,13 @@ class IptalOnayKutusu(QDialog):
 
 
 class RezervasyonDetayPenceresi(QDialog):
-    """Satıra çift tıklayınca açılan rezervasyon ayrıntısı. Rezervasyonlar düzenlenmez; aktif olanı (yetkili kullanıcı için)
-    pencerenin altındaki düğmeyle iptal edilir. `iptal_fn` verilmezse düğme görünmez."""
-    def __init__(self, rez, iptal_fn=None, parent=None):
+    """Satıra çift tıklayınca açılan rezervasyon ayrıntısı. Aktif rezervasyonu (oluşturan kişi ya da yönetici için)
+    pencerenin altındaki düğmelerle düzenleyebilir ya da iptal edebilirsiniz. `duzenle_fn`/`iptal_fn` verilmezse düğme görünmez."""
+    def __init__(self, rez, iptal_fn=None, parent=None, duzenle_fn=None):
         super().__init__(parent)
         self.rez = rez
         self.iptal_fn = iptal_fn
+        self.duzenle_fn = duzenle_fn
         self.setWindowTitle("Rezervasyon Ayrıntısı")
         self.setMinimumWidth(480)
         self.setStyleSheet(FORM_STIL)
@@ -588,6 +660,7 @@ class RezervasyonDetayPenceresi(QDialog):
         form = QFormLayout()
         form.setSpacing(10)
         self.degerler = {
+            "Rezervasyonu yapan": rez.get("rezerve_eden") or "—",
             "Bölüm": rez.get("bolum_adi") or "—",
             "Oda": rez.get("oda_adi") or "—",
             "Tarih ve saat": zaman_araligi(rez.get("baslangic_zamani"), rez.get("bitis_zamani")),
@@ -601,10 +674,22 @@ class RezervasyonDetayPenceresi(QDialog):
             form.addRow(ad, etiket)
         layout.addLayout(form)
 
+        self.btn_duzenle = None
+        if duzenle_fn:
+            self.btn_duzenle = QPushButton("✎  Rezervasyonu düzenle")
+            self.btn_duzenle.setObjectName("kaydet")
+            self.btn_duzenle.setCursor(Qt.PointingHandCursor)
+            self.btn_duzenle.clicked.connect(self.duzenle)
+            layout.addWidget(self.btn_duzenle)
         self.btn_iptal = None
         if iptal_fn:
             self.btn_iptal = tehlike_dugmesi("Rezervasyonu iptal et", self.iptal)
             layout.addWidget(self.btn_iptal)
+
+    def duzenle(self):
+        self.accept()                                          # ayrıntı kapanır, düzenleme formu açılır
+        if self.duzenle_fn:
+            self.duzenle_fn()
 
     def iptal(self):
         self.accept()                                          # ayrıntı kapanır, onay penceresi iptal akışında açılır
@@ -662,7 +747,7 @@ class RezervasyonYonetimEkrani(QWidget):
         self.cip_iptal = sayi_cipi("0 iptal", "#991B1B", "#FEE2E2")
 
         layout.addWidget(sayfa_basligi(
-            "Cihaz Rezervasyonu", "Cihaz rezervasyonlarını görüntüleyin ve iptal edin",
+            "Cihaz Rezervasyonu", "Cihaz rezervasyonlarını görüntüleyin, düzenleyin ve iptal edin",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
             [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal]))
 
@@ -767,8 +852,17 @@ class RezervasyonYonetimEkrani(QWidget):
         rez = next((r for r in self.rezervasyonlar if r.get("rezervasyon_id") == rezervasyon_id), None)
         if rez is None:
             return
-        iptal_fn = (lambda: self.rezervasyon_iptal_et(rezervasyon_id)) if rez.get("durum") == "Aktif" and self.yetkili_mi else None
-        RezervasyonDetayPenceresi(rez, iptal_fn, self).exec()
+        # Düğmeler yalnızca aktif rezervasyonda, rezervasyon iznine sahip ve (oluşturan kişi ya da yönetici olan) kullanıcıya görünür.
+        # Eski sunucu "yonetebilir" alanını göndermezse sunucu yine de yetkisiz isteği reddeder.
+        yetkili = rez.get("durum") == "Aktif" and self.yetkili_mi and rez.get("yonetebilir", True)
+        iptal_fn = (lambda: self.rezervasyon_iptal_et(rezervasyon_id)) if yetkili else None
+        duzenle_fn = (lambda: self.rezervasyon_duzenle(rez)) if yetkili else None
+        RezervasyonDetayPenceresi(rez, iptal_fn, self, duzenle_fn=duzenle_fn).exec()
+
+    def rezervasyon_duzenle(self, rez):
+        form = YeniRezervasyonFormu(self.api_url, self.token, self, duzenlenecek=rez)
+        if form.exec():
+            self.verileri_yukle()
 
     def yeni_rezervasyon_olustur(self, **on_degerler):
         form = YeniRezervasyonFormu(self.api_url, self.token, **on_degerler)

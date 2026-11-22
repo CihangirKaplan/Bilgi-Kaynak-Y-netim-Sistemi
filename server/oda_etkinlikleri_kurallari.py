@@ -19,6 +19,7 @@ def oda_cakismasi_bul(
     bitis,
     haric_etkinlik_id=None,
     haric_randevu_id=None,
+    haric_cihaz_rezervasyon_id=None,
 ):
     """
     Odanın istenen saatlerde dolu olup olmadığını kontrol eder.
@@ -60,11 +61,12 @@ def oda_cakismasi_bul(
         FROM cihaz_rezervasyonlari
         WHERE kullanilacak_oda_id = %s
           AND COALESCE(iptal_edildi_mi, FALSE) = FALSE
+          AND (%s IS NULL OR rezervasyon_id <> %s)
           AND baslangic_zamani < %s
           AND bitis_zamani > %s
         LIMIT 1
         """,
-        (oda_id, bitis, baslangic),
+        (oda_id, haric_cihaz_rezervasyon_id, haric_cihaz_rezervasyon_id, bitis, baslangic),
     )
     if cursor.fetchone():
         return "cihaz"
