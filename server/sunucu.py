@@ -4282,16 +4282,15 @@ def rezervasyon_uygunlugunu_denetle(cursor, rez, haric_rezervasyon_id=None):
 def cihaz_rezervasyonu_yap(rez: RezervasyonOlusturModeli, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     if rez.baslangic_zamani >= rez.bitis_zamani:
         raise HTTPException(status_code=422, detail="Bitiş zamanı, başlangıçtan sonra olmalıdır.")
-    zaman_sorunu = rezervasyon_zaman_sorunu(rez.baslangic_zamani, rez.bitis_zamani)
-    if zaman_sorunu:
-        raise HTTPException(status_code=422, detail=zaman_sorunu)
-
-    # Geçmiş bir zamana yeni cihaz rezervasyonu oluşturulamaz.
+    # Geçmiş bir zamana yeni cihaz rezervasyonu oluşturulamaz (mesai kuralından önce söylenir: saatten bağımsız, açık mesaj).
     if rez.baslangic_zamani < datetime.now(rez.baslangic_zamani.tzinfo):
         raise HTTPException(
             status_code=422,
             detail="Rezervasyon başlangıç zamanı geçmişte olamaz."
         )
+    zaman_sorunu = rezervasyon_zaman_sorunu(rez.baslangic_zamani, rez.bitis_zamani)
+    if zaman_sorunu:
+        raise HTTPException(status_code=422, detail=zaman_sorunu)
 
     maksimum_deneme = 3
     for deneme in range(maksimum_deneme):
@@ -5274,7 +5273,7 @@ def _plan_yetkileri(cursor, kullanici_id):
           AND i.izin_adi = ANY(%s);
     """, (
         kullanici_id,
-        ["BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"]
+        ["BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET", "BAKIM_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_GORUNTULE"]
     ))
     return {satir[0] for satir in cursor.fetchall()}
 
@@ -5307,8 +5306,10 @@ def bakim_planlarini_listele(
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         izinler = _plan_yetkileri(cursor, kullanici_id)
-        bakim = "BAKIM_KAYITLARI_YONET" in izinler
-        kalibrasyon = "KALIBRASYON_KAYITLARI_YONET" in izinler
+        # Planları görmek için görüntüleme YA DA yönetme izni yeter; ekleme/düzenleme/silme yalnızca yönetme ister
+        # (_plan_turu_yetkisini_dogrula *_YONET arar).
+        bakim = bool(izinler & {"BAKIM_KAYITLARI_YONET", "BAKIM_KAYITLARI_GORUNTULE"})
+        kalibrasyon = bool(izinler & {"KALIBRASYON_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_GORUNTULE"})
 
         if not bakim and not kalibrasyon:
             raise HTTPException(
@@ -5320,11 +5321,11 @@ def bakim_planlarini_listele(
 
         if bakim and not kalibrasyon:
             kosullar.append(
-                "LOWER(BTRIM(p.gorev_turu)) NOT LIKE 'kalibrasyon%'"
+                "LOWER(BTRIM(p.gorev_turu)) NOT LIKE 'kalibrasyon%%'"
             )
         elif kalibrasyon and not bakim:
             kosullar.append(
-                "LOWER(BTRIM(p.gorev_turu)) LIKE 'kalibrasyon%'"
+                "LOWER(BTRIM(p.gorev_turu)) LIKE 'kalibrasyon%%'"
             )
         if cihaz_id is not None:
             kosullar.append("p.cihaz_id = %s")
@@ -5674,7 +5675,10 @@ YAKLASAN_ISLEM_UST_SINIR = 50
 
 
 @app.get("/api/dashboard/yaklasan-islemler")
-def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol_biri(
+        "CIHAZ_ENVANTER_YONET", "BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"))):
+    """Ana panel/zil bildirimleri için yaklaşan ve geciken bakım ve kalibrasyonlar. Cihaz envanterini yönetenler hepsini görür; yalnızca bakım ya da
+    kalibrasyon izni olan kullanıcı yalnızca kendi türünün kayıtlarını görür."""
     import datetime
     conn = None
     cursor = None
@@ -5683,6 +5687,18 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
         cursor = conn.cursor()
         islemler = []
         bugun = datetime.date.today()
+        cursor.execute("""
+            SELECT COALESCE(array_agg(i.izin_adi), ARRAY[]::text[]) FROM kullanicilar k
+            JOIN rol_izinleri ri ON ri.rol_id = k.rol_id JOIN izinler i ON i.izin_id = ri.izin_id
+            WHERE k.kullanici_id = %s AND ri.izin_var = 1
+              AND i.izin_adi IN ('CIHAZ_ENVANTER_YONET', 'BAKIM_KAYITLARI_GORUNTULE', 'BAKIM_KAYITLARI_YONET',
+                                 'KALIBRASYON_KAYITLARI_GORUNTULE', 'KALIBRASYON_KAYITLARI_YONET');
+        """, (kullanici_id,))
+        satir = cursor.fetchone()
+        sahip = set(satir[0] or []) if satir else set()
+        hepsi = "CIHAZ_ENVANTER_YONET" in sahip or not sahip                     # (boş küme: taklit/eski ortam; sunucu izni zaten denetledi)
+        bakim_gorur = hepsi or bool(sahip & {"BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"})
+        kalibrasyon_gorur = hepsi or bool(sahip & {"KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"})
 
         # 1. YAKLAŞAN BAKIMLAR
         # Her cihaz için yalnızca SON bakım kaydı dikkate alınır (eski kayıtların planı geçersizdir).
@@ -5755,6 +5771,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVA
                 "durum_kodu": "KRITIK" if kalan_gun <= 5 else "UYARI"
             })
 
+        islemler = [i for i in islemler if (bakim_gorur if i["islem_turu"] == "Bakım" else kalibrasyon_gorur)]
         islemler.sort(key=lambda x: x["kalan_gun"])
         return islemler[:YAKLASAN_ISLEM_UST_SINIR]
 
@@ -10945,7 +10962,7 @@ LISTE_AKTARIM_HEDEFLERI = {
     "BAKIM": (("BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"), "cihaz_bakimlari"),
     "KALIBRASYON": (("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_kalibrasyonlari"),
     "ARIZA": ("ARIZA_KAYITLARI_YONET", "cihaz_arizalari"),
-    "BAKIM_PLANI": (("BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_bakim_planlari"),
+    "BAKIM_PLANI": (("BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET", "BAKIM_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_GORUNTULE"), "cihaz_bakim_planlari"),
 }
 
 

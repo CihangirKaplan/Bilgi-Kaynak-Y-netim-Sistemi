@@ -428,6 +428,15 @@ class CihazRaporlariEkrani(QWidget):
 
         QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
 
+    def sayfa_gosterildi(self):
+        """Sayfaya her dönüşte açık sekmenin verisi güncellenir: ilk üç sekme ortak süzgeçle, ek sekmeler (rezervasyon, geciken plan) kendi verisiyle.
+        Böylece başka sayfada (bakım, arıza, rezervasyon) yapılan değişiklik raporlara kendiliğinden yansır."""
+        ek = self._ek_sekmeler.get(self.rapor_sekmeleri.currentIndex())
+        if ek is None:
+            self.yenile()
+        elif ek["ekran"] is not None:
+            ek["ekran"].yenile()
+
     def yenile(self):
         try:
             params = self._parametreler()

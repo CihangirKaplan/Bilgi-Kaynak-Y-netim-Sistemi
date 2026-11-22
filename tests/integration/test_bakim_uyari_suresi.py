@@ -159,7 +159,7 @@ def test_sorgular_kullanim_disi_cihazlari_disarida_birakir():
     cursor.fetchall.side_effect = [[], [], []]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yaklasan_islemler_getir(kullanici_id=1)
-    sorgular = [c.args[0] for c in cursor.execute.call_args_list]
+    sorgular = [c.args[0] for c in cursor.execute.call_args_list if "izin_adi" not in c.args[0]]     # izin sorgusu hariç: bakım, kalibrasyon, plan
     assert len(sorgular) == 3 and all("Kullanim_Disi" in q for q in sorgular)   # bakım, kalibrasyon, plan
 
 
@@ -185,7 +185,7 @@ def test_sorgular_kayittaki_uyari_suresini_secer():
     cursor.fetchall.side_effect = [[], [], []]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yaklasan_islemler_getir(kullanici_id=1)
-    sorgular = [c.args[0] for c in cursor.execute.call_args_list]
+    sorgular = [c.args[0] for c in cursor.execute.call_args_list if "izin_adi" not in c.args[0]]     # izin sorgusu hariç: bakım, kalibrasyon, plan
     assert "b.uyari_suresi_gun" in sorgular[0] and "k.uyari_suresi_gun" in sorgular[1]
     assert "p.uyari_suresi_gun" in sorgular[2]
 

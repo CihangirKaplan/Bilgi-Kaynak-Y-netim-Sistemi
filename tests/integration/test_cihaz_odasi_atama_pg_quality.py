@@ -320,3 +320,48 @@ def test_yonetim_paneli_kullanimda_ve_rezerve_cihazlari_rezervasyonlardan_hesapl
         c.execute("DELETE FROM odalar WHERE oda_id = ANY(%s)", (odalar,))
         c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
         conn.close()
+
+
+def test_planlar_ve_bildirimler_goruntuleme_iznine_gore_gercek_veritabaninda():
+    """Yalnızca BAKIM_KAYITLARI_GORUNTULE izni olan rol: bakım planlarını görür (kalibrasyon planlarını görmez), plan ekleyemez/silemez;
+    bildirim ucu yalnızca bakım kayıtlarını döndürür."""
+    etiket = uuid4().hex[:8]
+    conn = psycopg2.connect(**VT_AYARLARI)
+    conn.autocommit = True
+    c = conn.cursor()
+    _dogru_veritabani(c)
+    c.execute("INSERT INTO roller (rol_adi) VALUES (%s) RETURNING rol_id", (f"RPLAN_{etiket}",))
+    rol = c.fetchone()[0]
+    c.execute("INSERT INTO rol_izinleri (rol_id, izin_id, izin_var) SELECT %s, izin_id, 1 FROM izinler WHERE izin_adi = 'BAKIM_KAYITLARI_GORUNTULE'", (rol,))
+    c.execute("INSERT INTO kullanicilar (kullanici_adi, parola_hash, rol_id) VALUES (%s, 'x', %s) RETURNING kullanici_id", (f"pg_{etiket}", rol))
+    gorur = c.fetchone()[0]
+    c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi) VALUES (%s, 'PL') RETURNING cihaz_id", (f"PL-{etiket}",))
+    cihaz = c.fetchone()[0]
+    bugun = datetime.now().date()
+    c.execute("INSERT INTO cihaz_bakim_planlari (cihaz_id, gorev_turu, periyot_gun, uyari_suresi_gun, sonraki_gorev_tarihi) VALUES "
+              "(%s, 'Yıllık bakım', 365, 30, %s), (%s, 'Kalibrasyon yıllık', 365, 30, %s)", (cihaz, bugun + timedelta(days=3), cihaz, bugun + timedelta(days=3)))
+    istemci = TestClient(app)
+    try:
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: gorur
+        yanit = istemci.get("/api/bakim-planlari", params={"cihaz_id": cihaz})
+        assert yanit.status_code == 200
+        assert [p["gorev_turu"] for p in yanit.json()] == ["Yıllık bakım"]                      # kalibrasyon planı bu role görünmez
+        assert istemci.post("/api/bakim-planlari", json={"cihaz_id": cihaz, "gorev_turu": "Haftalık bakım", "periyot_gun": 7, "uyari_suresi_gun": 1}).status_code == 403
+        plan_id = yanit.json()[0]["plan_id"]
+        assert istemci.delete(f"/api/bakim-planlari/{plan_id}").status_code == 403
+        assert istemci.put(f"/api/bakim-planlari/{plan_id}", json={"uyari_suresi_gun": 2}).status_code == 403
+        assert istemci.post("/api/liste-aktarim-kaydi", json={"liste": "BAKIM_PLANI", "satir_sayisi": 1}).status_code == 200
+        islemler = istemci.get("/api/dashboard/yaklasan-islemler")
+        assert islemler.status_code == 200
+        ben = [i for i in islemler.json() if i["cihaz_adi"].startswith(f"PL-{etiket}")]
+        assert [i["islem_turu"] for i in ben] == ["Bakım"]                                     # kalibrasyon planı bildirimi gelmez
+        assert istemci.get("/api/dashboard/ozet").status_code == 403                            # envanter özeti hâlâ yalnızca envanter yöneticisine
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM cihaz_bakim_planlari WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = %s", (gorur,))
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_id = %s", (gorur,))
+        c.execute("DELETE FROM rol_izinleri WHERE rol_id = %s", (rol,))
+        c.execute("DELETE FROM roller WHERE rol_id = %s", (rol,))
+        conn.close()

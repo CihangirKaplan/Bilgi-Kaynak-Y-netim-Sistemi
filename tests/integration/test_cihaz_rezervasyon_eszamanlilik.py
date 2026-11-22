@@ -145,7 +145,7 @@ def test_gercek_eszamanli_cihaz_rezervasyonu():
         # 2. Test icin zaman araligi olustur.
         baslangic = (
             datetime.now(timezone.utc)
-            .replace(tzinfo=None, microsecond=0)
+            .replace(tzinfo=None, hour=10, minute=0, second=0, microsecond=0)         # mesai içinde (08:00-18:00): günün saatinden bağımsız
             + timedelta(days=30)
         )
         bitis = baslangic + timedelta(hours=1)

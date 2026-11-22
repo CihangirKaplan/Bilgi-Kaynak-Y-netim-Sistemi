@@ -64,6 +64,10 @@ def test_menu_ve_aksiyonlardaki_izin_adlari_tabloda_vardir():
             "Bakım kayıtlarını yönetme",
             "Kalibrasyon kayıtlarını yönetme",
         ),
+        "Bakım/kalibrasyon planlarını görüntüleme": (          # dört izinden biri yeter (görüntüleme ya da yönetme)
+            "Bakım kayıtlarını görüntüleme", "Bakım kayıtlarını yönetme",
+            "Kalibrasyon kayıtlarını görüntüleme", "Kalibrasyon kayıtlarını yönetme",
+        ),
     }
 
     for bilesenler in birlesik_izinler.values():
