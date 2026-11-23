@@ -33,7 +33,7 @@ from client.k_personel_ekranlari import KullaniciPersonelEkrani
 from client.sayfalar_rol_izin import RolIzinSayfasi
 from client.rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
 from client.tablo_siralama import siralanabilir_yap
-from client.tablo_tasarimi import ortak_liste_stili_uygula
+from client.tablo_tasarimi import bos_mesaj_olustur, ortak_liste_stili_uygula
 
 logger = logging.getLogger(__name__)
 
@@ -2583,7 +2583,15 @@ QLabel {
             self.tablo_faaliyetler.setSelectionBehavior(QAbstractItemView.SelectRows)
 
             ortak_liste_stili_uygula(self.tablo_faaliyetler)
+            self.arama_faaliyet = QLineEdit()
+            self.arama_faaliyet.setPlaceholderText("🔍  Öğrenci, öğrenci no veya faaliyet ara...")
+            self.arama_faaliyet.setClearButtonEnabled(True)
+            self.arama_faaliyet.setMinimumHeight(36)
+            self.arama_faaliyet.textChanged.connect(self._faaliyet_listesini_suz)
+            il.addWidget(self.arama_faaliyet)
             il.addWidget(self.tablo_faaliyetler)
+            self.bos_mesaj_faaliyet = bos_mesaj_olustur("Henüz faaliyet kaydı yok.")
+            il.addWidget(self.bos_mesaj_faaliyet)
             self.lbl_faaliyet_sinir = QLabel("")
             self.lbl_faaliyet_sinir.setStyleSheet("color: #64748B; font-size: 12px;")
             self.lbl_faaliyet_sinir.hide()
@@ -2749,6 +2757,7 @@ QLabel {
 
                 for satir_no, kayit in enumerate(kayitlar):
                     id_ogesi = QTableWidgetItem(str(kayit.get("id", "")))
+                    id_ogesi.setTextAlignment(Qt.AlignCenter)
                     # Düzenleme penceresi öğrenci, faaliyet ve birimi ad yerine kimlikle seçer.
                     id_ogesi.setData(Qt.UserRole, {
                         alan: kayit.get(alan) for alan in ("ogrenci_id", "faaliyet_id", "birim_id")
@@ -2763,12 +2772,39 @@ QLabel {
                     miktar_ogesi = QTableWidgetItem(f"{sayi} {birim_goster(birim)}".strip())
                     miktar_ogesi.setData(Qt.UserRole, ham_miktar)   # düzenleme ekranı birimi bu ham değerden eşler
                     self.tablo_faaliyetler.setItem(satir_no, 4, miktar_ogesi)
-                    self.tablo_faaliyetler.setItem(satir_no, 5, QTableWidgetItem(f"{kayit.get('toplam_puan', '0')} Puan"))
-                    self.tablo_faaliyetler.setItem(satir_no, 6, QTableWidgetItem(str(kayit.get("tarih", ""))))
+                    puan_ogesi = QTableWidgetItem(f"{kayit.get('toplam_puan', '0')} Puan")
+                    tarih_ogesi = QTableWidgetItem(str(kayit.get("tarih", "")))
+                    for oge in (miktar_ogesi, puan_ogesi, tarih_ogesi):
+                        oge.setTextAlignment(Qt.AlignCenter)
+                    self.tablo_faaliyetler.setItem(satir_no, 5, puan_ogesi)
+                    self.tablo_faaliyetler.setItem(satir_no, 6, tarih_ogesi)
+                self._faaliyet_listesini_suz()
+            else:
+                self.bos_mesaj_faaliyet.setText("Faaliyet kayıtları yüklenemedi.")
+                self.bos_mesaj_faaliyet.show()
+                self.tablo_faaliyetler.hide()
 
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{istek_hatasi_metni(e)}")
+
+    def _faaliyet_listesini_suz(self, *_):
+        """Aramaya göre satırları gizler/gösterir; liste ya da arama sonucu boşsa tablo yerine açıklayıcı mesaj gösterir."""
+        aranan = self.arama_faaliyet.text().strip().casefold()
+        toplam = self.tablo_faaliyetler.rowCount()
+        gorunen = 0
+        for satir in range(toplam):
+            metin = " ".join(
+                (self.tablo_faaliyetler.item(satir, sutun).text() if self.tablo_faaliyetler.item(satir, sutun) else "")
+                for sutun in (1, 2, 3)
+            ).casefold()
+            gizle = aranan not in metin
+            self.tablo_faaliyetler.setRowHidden(satir, gizle)
+            gorunen += not gizle
+        if gorunen == 0:
+            self.bos_mesaj_faaliyet.setText("Henüz faaliyet kaydı yok." if toplam == 0 else "Aramaya uyan faaliyet kaydı yok.")
+        self.bos_mesaj_faaliyet.setVisible(gorunen == 0)
+        self.tablo_faaliyetler.setVisible(gorunen > 0)
 
     def yeni_faaliyet_ekrani_ac(self):
         from client.faaliyet_dialog import FaaliyetEkleDialog
