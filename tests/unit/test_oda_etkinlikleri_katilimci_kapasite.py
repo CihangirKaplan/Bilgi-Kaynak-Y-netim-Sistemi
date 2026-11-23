@@ -18,8 +18,8 @@ class SahteCursor:
             self.kaydedilen_katilimci = parametreler[3]
 
     def fetchone(self):
-        if "SELECT kapasite" in self.sorgu:
-            return {"kapasite": 1}
+        if "FROM odalar" in self.sorgu:
+            return {"?column?": 1}
 
         if "FROM personel" in self.sorgu:
             return {"personel_id": 1}

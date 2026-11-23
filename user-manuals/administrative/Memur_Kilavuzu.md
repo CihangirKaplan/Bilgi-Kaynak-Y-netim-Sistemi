@@ -129,7 +129,7 @@ Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz;
 # 4. Odalar
 
 - **Oda Kullanımı:** Odaların saatlik doluluğu (randevu ve etkinlikler birlikte).
-- **Oda Etkinlikleri:** Odalardaki etkinlikler; **Durum** ve **Dönem** süzgeçleri vardır. Yetkiniz varsa **＋ Yeni Etkinlik**, **Düzenle**, **İptal Et** ve **Oturumları Gör** düğmeleri görünür (çok günlü etkinliklerin her günü ayrı "oturum"dur).
+- **Oda Etkinlikleri:** Odalardaki etkinlikler; **Durum** ve **Dönem** süzgeçleri vardır. Yetkiniz varsa **＋ Yeni Etkinlik**, **Düzenle**, **İptal Et** ve **Oturumları Gör** düğmeleri görünür (çok günlü etkinliklerin her günü ayrı "oturum"dur). Başlıklara tıklayarak listeyi sıralayabilirsiniz; sayfa yenilendiğinde sıralamanız ve seçili etkinlik korunur. **Düzenle** ve **İptal Et** düğmeleri, listeden iptal edilmemiş bir etkinlik seçince açılır. Düzenlemede yalnızca gerçekten değiştirdiğiniz alanlar denetim kaydına yazılır.
 - **Oda Yönetimi:** **＋ Yeni Oda Ekle**, **✎ Odayı Düzenle**, **✕ Odayı Pasife Al**. Pasife alınan oda yeni randevu ve rezervasyonlarda seçilemez; geçmiş kayıtlar korunur.
 
 ---

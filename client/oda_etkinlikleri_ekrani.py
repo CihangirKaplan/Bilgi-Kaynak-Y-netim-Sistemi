@@ -1,15 +1,17 @@
 """TKYS Oda Etkinlikleri yönetim ekranı."""
 
-from datetime import datetime
+import calendar
+from datetime import datetime, time as saat_tipi, timedelta
 
 import requests
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator
+from PySide6.QtCore import QDate, QTime, Qt
+from PySide6.QtGui import QColor, QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout,
     QFormLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QComboBox, QLineEdit, QLabel,
     QPushButton, QMessageBox, QDialogButtonBox, QAbstractItemView,
+    QDateEdit, QTimeEdit, QScrollArea, QFrame, QGridLayout,
 )
 
 from client.api_yoneticisi import (
@@ -18,6 +20,8 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
+from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, siralanabilir_yap
+from client.tablo_tasarimi import bos_mesaj_olustur
 
 
 def tarih_yaz(deger):
@@ -28,9 +32,6 @@ def tarih_yaz(deger):
     except ValueError:
         return str(deger)
 
-
-from PySide6.QtCore import QDate, QTime
-from PySide6.QtWidgets import QDateEdit, QTimeEdit, QScrollArea, QFrame, QGridLayout
 
 class OdaEtkinlikFormu(QDialog):
     """Tek etkinliğe birden fazla bağımsız oturum ekleme formu."""
@@ -53,7 +54,7 @@ class OdaEtkinlikFormu(QDialog):
                 color: #243653;
                 font-size: 12px;
             }
-            QLineEdit, QComboBox, QSpinBox,
+            QLineEdit, QComboBox,
             QDateEdit, QTimeEdit {
                 background: white;
                 color: #243653;
@@ -148,6 +149,14 @@ class OdaEtkinlikFormu(QDialog):
         ana.addWidget(ekle_btn)
 
         if kayit:
+            # Etkinliğin odası ya da düzenleyeni seçeneklerde yoksa (Admin düzenleyen, sonradan psikoloğa atanan oda)
+            # kutu boş kalmasın; mevcut değer listeye eklenir ve seçili gelir.
+            if self.oda.findData(kayit["oda_id"]) < 0:
+                self.oda.addItem(str(kayit.get("oda_adi") or "—"), kayit["oda_id"])
+            if self.personel.findData(kayit["organize_eden_personel_id"]) < 0:
+                self.personel.addItem(
+                    str(kayit.get("duzenleyen_adi") or "—"), kayit["organize_eden_personel_id"]
+                )
             self.oda.setCurrentIndex(
                 self.oda.findData(kayit["oda_id"])
             )
@@ -163,40 +172,10 @@ class OdaEtkinlikFormu(QDialog):
                 else ""
             )
 
-            gunler = kayit.get("gunler") or []
-
-            if not gunler:
-                # Eski API yanıtları için geriye dönük uyumluluk.
-                from datetime import timedelta
-
-                bas = datetime.fromisoformat(
-                    str(kayit["baslangic_zamani"])
-                )
-                bit = datetime.fromisoformat(
-                    str(kayit["bitis_zamani"])
-                )
-
-                gun_sayisi = (bit.date() - bas.date()).days + 1
-                if not 1 <= gun_sayisi <= 366:
-                    raise ValueError(
-                        "Etkinliğin gün bilgileri geçersiz."
-                    )
-
-                for i in range(gun_sayisi):
-                    gun = bas.date() + timedelta(days=i)
-                    gunler.append({
-                        "baslangic_zamani": datetime.combine(
-                            gun, bas.time()
-                        ).isoformat(),
-                        "bitis_zamani": datetime.combine(
-                            gun, bit.time()
-                        ).isoformat(),
-                    })
-
-            for gun in gunler:
+            for gun in kayit.get("gunler") or [{}]:                 # günü olmayan kayıtta bir boş oturum satırı açılır
                 self.oturum_ekle(
-                    gun["baslangic_zamani"],
-                    gun["bitis_zamani"],
+                    gun.get("baslangic_zamani"),
+                    gun.get("bitis_zamani"),
                 )
         else:
             self.oturum_ekle()
@@ -335,8 +314,6 @@ class OdaEtkinlikFormu(QDialog):
             )
             return
 
-        from datetime import time as _time
-
         araliklar = []
 
         for gun in self.oturum_verileri():
@@ -349,8 +326,8 @@ class OdaEtkinlikFormu(QDialog):
 
             if not (
                 bas.date() == bit.date()
-                and _time(8, 0) <= bas.time()
-                < bit.time() <= _time(18, 0)
+                and saat_tipi(8, 0) <= bas.time()
+                < bit.time() <= saat_tipi(18, 0)
             ):
                 QMessageBox.warning(
                     self, "Geçersiz Oturum",
@@ -412,6 +389,7 @@ class OdaEtkinlikleriEkrani(QWidget):
         self.odalar = []
         self.personeller = []
         self.yonetebilir = False
+        self.toplam_kayit = 0                 # sunucudaki toplam etkinlik (liste kısaltıldıysa yüklenenden büyük olur)
 
         self.setStyleSheet("""
             QWidget {
@@ -424,15 +402,14 @@ class OdaEtkinlikleriEkrani(QWidget):
                 border: 1px solid #E3EAF5;
                 border-radius: 11px;
             }
-            QLineEdit, QComboBox {
+            QLineEdit, QComboBox, QDateEdit {
                 background: white;
                 border: 1px solid #D0DDF0;
                 border-radius: 8px;
                 padding: 8px;
                 min-height: 20px;
             }
-            QLineEdit:focus, QComboBox:focus,
-            QComboBox:focus {
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
                 border: 1px solid #1763E9;
             }
             QPushButton {
@@ -516,8 +493,6 @@ class OdaEtkinlikleriEkrani(QWidget):
         ])
         filtreler.addWidget(self.durum_filtre, 1)
 
-        filtreler.addWidget(QLabel("Dönem:"))
-
         self.donem = QComboBox()
         self.donem.addItems([
             "Tümü",
@@ -526,7 +501,7 @@ class OdaEtkinlikleriEkrani(QWidget):
             "Bu Ay",
             "Tarih Aralığı",
         ])
-        filtreler.addWidget(self.donem, 1)
+        self.donem.setFixedWidth(185)
 
         self.filtre_btn = QPushButton("Filtrele")
         self.filtre_btn.setObjectName("birincil")
@@ -542,6 +517,8 @@ class OdaEtkinlikleriEkrani(QWidget):
 
         # Tarih aralığı
         tarih_satiri = QHBoxLayout()
+        tarih_satiri.addWidget(QLabel("Dönem:"))
+        tarih_satiri.addWidget(self.donem)
         tarih_satiri.addWidget(QLabel("Başlangıç:"))
 
         self.tarih_bas = QDateEdit()
@@ -564,27 +541,6 @@ class OdaEtkinlikleriEkrani(QWidget):
 
 
         tarih_satiri.addStretch()
-        # DONEM_TARIHLERIN_SOLUNDA
-        # Dönem seçimini mevcut satırından çıkar.
-        for duzen in (filtreler, tarih_satiri):
-            for indeks in reversed(range(duzen.count())):
-                widget = duzen.itemAt(indeks).widget()
-
-                if widget is self.donem:
-                    duzen.removeWidget(widget)
-
-                elif (
-                    isinstance(widget, QLabel)
-                    and widget.text().strip() == "Dönem:"
-                ):
-                    duzen.removeWidget(widget)
-                    widget.deleteLater()
-
-        # Dönem, Başlangıç ve Bitiş aynı satırda.
-        self.donem.setFixedWidth(185)
-        tarih_satiri.insertWidget(0, self.donem)
-        tarih_satiri.insertWidget(0, QLabel("Dönem:"))
-
         ana.addLayout(tarih_satiri)
 
         # Dört özet kartı
@@ -685,16 +641,21 @@ class OdaEtkinlikleriEkrani(QWidget):
         self.tablo.verticalHeader().setVisible(False)
         self.tablo.verticalHeader().setDefaultSectionSize(43)
 
+        # Etkinlik adı ve oda adı kalan genişliği paylaşır (uzun oda adı iki satıra bölünmesin); diğerleri içeriğine göre boyutlanır.
         basliklar = self.tablo.horizontalHeader()
-        basliklar.setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        basliklar.setStretchLastSection(True)
+        basliklar.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        basliklar.setSectionResizeMode(QHeaderView.ResizeToContents)
+        basliklar.setSectionResizeMode(0, QHeaderView.Stretch)
+        basliklar.setSectionResizeMode(1, QHeaderView.Stretch)
+        basliklar.setMinimumSectionSize(110)
         self.tablo.setHorizontalScrollBarPolicy(
             Qt.ScrollBarAlwaysOff
         )
+        siralanabilir_yap(self.tablo)
 
         liste_duzen.addWidget(self.tablo, 1)
+        self.bos_mesaj = bos_mesaj_olustur("Henüz oda etkinliği yok.")
+        liste_duzen.addWidget(self.bos_mesaj)
 
         ana.addWidget(liste_karti, 1)
 
@@ -767,6 +728,7 @@ class OdaEtkinlikleriEkrani(QWidget):
             secenek.get("yonetebilir", False)
         )
         self.etkinlikler = sonuc.get("etkinlikler", [])
+        self.toplam_kayit = sonuc.get("toplam", len(self.etkinlikler)) if sonuc.get("kesildi") else len(self.etkinlikler)
 
         self.ozet_guncelle()
         self.filtrele()
@@ -870,14 +832,12 @@ class OdaEtkinlikleriEkrani(QWidget):
             aralik_bit = bugun
 
         elif donem == "Bu Hafta":
-            from datetime import timedelta
             aralik_bas = bugun - timedelta(
                 days=bugun.weekday()
             )
             aralik_bit = aralik_bas + timedelta(days=6)
 
         elif donem == "Bu Ay":
-            import calendar
             aralik_bas = bugun.replace(day=1)
             aralik_bit = bugun.replace(
                 day=calendar.monthrange(
@@ -983,6 +943,11 @@ class OdaEtkinlikleriEkrani(QWidget):
             for p in self.personeller
         }
 
+        # Yenileme/süzme sonrası kullanıcının sıralaması ve seçili etkinliği korunur.
+        secili_kayit = self.secili()
+        secili_id = secili_kayit["etkinlik_id"] if secili_kayit else None
+        siralama = siralama_durumunu_al(self.tablo)
+
         self.gorunen = []
 
         for e in self.etkinlikler:
@@ -990,8 +955,9 @@ class OdaEtkinlikleriEkrani(QWidget):
                 e.get("oda_adi")
                 or oda_adlari.get(e["oda_id"], "")
             )
-            personel = personel_adlari.get(
-                e["organize_eden_personel_id"], ""
+            personel = (
+                e.get("duzenleyen_adi")
+                or personel_adlari.get(e["organize_eden_personel_id"], "")
             )
 
             aranabilir = " ".join([
@@ -1024,8 +990,9 @@ class OdaEtkinlikleriEkrani(QWidget):
                 e.get("oda_adi")
                 or oda_adlari.get(e["oda_id"], "—")
             )
-            personel = personel_adlari.get(
-                e["organize_eden_personel_id"], "—"
+            personel = (
+                e.get("duzenleyen_adi")
+                or personel_adlari.get(e["organize_eden_personel_id"], "—")
             )
             durum = self.etkinlik_durumu(e)
 
@@ -1051,8 +1018,6 @@ class OdaEtkinlikleriEkrani(QWidget):
                 )
 
                 if sutun == 6:
-                    from PySide6.QtGui import QColor
-
                     renkler = {
                         "Planlandı": "#078346",
                         "Devam Ediyor": "#075DE3",
@@ -1065,51 +1030,29 @@ class OdaEtkinlikleriEkrani(QWidget):
 
                 self.tablo.setItem(satir, sutun, oge)
 
-        self.durum.setText(
-            f"{len(self.etkinlikler)} kayıttan "
-            f"{len(self.gorunen)} tanesi gösteriliyor."
+        siralamayi_geri_yukle(self.tablo, siralama)
+        if secili_id is not None:
+            # Sıralamadan sonra satır sırası değişir; seçim etkinlik kimliğiyle geri getirilir.
+            for satir in range(self.tablo.rowCount()):
+                hucre = self.tablo.item(satir, 0)
+                if hucre is not None and hucre.data(Qt.UserRole) == secili_id:
+                    self.tablo.selectRow(satir)
+                    break
+
+        bos = not self.gorunen
+        self.tablo.setVisible(not bos)
+        self.bos_mesaj.setVisible(bos)
+        self.bos_mesaj.setText(
+            "Henüz oda etkinliği yok." if not self.etkinlikler else "Aramaya ve süzgeçlere uyan etkinlik yok."
         )
+
+        metin = f"{len(self.etkinlikler)} kayıttan {len(self.gorunen)} tanesi gösteriliyor."
+        if self.toplam_kayit > len(self.etkinlikler):
+            metin += (
+                f" Toplam {self.toplam_kayit} etkinlik var; yalnızca en yeni {len(self.etkinlikler)} tanesi yüklendi."
+            )
+        self.durum.setText(metin)
         self.butonlari_guncelle()
-
-    @staticmethod
-    def oturum_detay_metni(etkinlik):
-        """Etkinliğe ait oturumları kronolojik sırada göster."""
-        gunler = etkinlik.get("gunler") or []
-
-        if not gunler:
-            return (
-                "Bu etkinlik için ayrı oturum bilgisi bulunamadı."
-            )
-
-        araliklar = []
-        for gun in gunler:
-            try:
-                bas = datetime.fromisoformat(
-                    str(gun["baslangic_zamani"])
-                )
-                bit = datetime.fromisoformat(
-                    str(gun["bitis_zamani"])
-                )
-                araliklar.append((bas, bit))
-            except (ValueError, TypeError, KeyError):
-                continue
-
-        if not araliklar:
-            return "Geçerli oturum bilgisi bulunamadı."
-
-        araliklar.sort(key=lambda aralik: aralik[0])
-
-        satirlar = [
-            f"Toplam {len(araliklar)} oturum"
-        ]
-        for sira, (bas, bit) in enumerate(araliklar, 1):
-            satirlar.append(
-                f"{sira}.  {bas:%d.%m.%Y}  "
-                f"{bas:%H:%M}–{bit:%H:%M}"
-            )
-
-        return "\n".join(satirlar)
-
 
     def oturumlari_goster(self):
         etkinlik = self.secili()
@@ -1259,22 +1202,24 @@ class OdaEtkinlikleriEkrani(QWidget):
 
 
     def secili(self):
-        satir = self.tablo.currentRow()
-
-        if 0 <= satir < len(self.gorunen):
-            return self.gorunen[satir]
-
-        return None
+        # Tablo başlıktan sıralanabildiği için satır sırası liste sırasıyla aynı olmayabilir; etkinlik kimliğiyle bulunur.
+        hucre = self.tablo.item(self.tablo.currentRow(), 0)
+        if hucre is None:
+            return None
+        kimlik = hucre.data(Qt.UserRole)
+        return next((e for e in self.gorunen if e["etkinlik_id"] == kimlik), None)
 
     def butonlari_guncelle(self):
         self.ekle_btn.setVisible(self.yonetebilir)
         self.duzenle_btn.setVisible(self.yonetebilir)
         self.iptal_btn.setVisible(self.yonetebilir)
 
-        # Seçim olmasa da butonlar tıklanabilir.
-        # Yetkisiz kullanıcılar için butonlar gizli kalır.
-        self.duzenle_btn.setEnabled(self.yonetebilir)
-        self.iptal_btn.setEnabled(self.yonetebilir)
+        # Yetkisiz kullanıcılar için düğmeler gizli kalır; yetkili kullanıcıda seçime ve etkinliğin durumuna göre açılır.
+        kayit = self.secili()
+        islenebilir = bool(kayit) and not kayit.get("iptal_edildi_mi")
+        self.duzenle_btn.setEnabled(self.yonetebilir and islenebilir)
+        self.iptal_btn.setEnabled(self.yonetebilir and islenebilir)
+        self.oturum_gor_btn.setEnabled(bool(kayit))
 
     def ekle(self):
         dialog = OdaEtkinlikFormu(
