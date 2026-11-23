@@ -22,6 +22,7 @@ from client.tablo_tasarimi import (
 )
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
@@ -785,17 +786,21 @@ class RezervasyonYonetimEkrani(QWidget):
             rezervasyonlar = cevap.json()
             if not isinstance(rezervasyonlar, list):
                 raise ValueError("Geçersiz rezervasyon listesi")
+            toplam = liste_toplami(cevap, len(rezervasyonlar))
         except Exception as e:
             QMessageBox.warning(self, "Rezervasyon Listesi", api_hata_mesaji(hata=e))
             return
         # Liste başarıyla alındıktan sonra eski satırlar yenisiyle değişir (hata olursa mevcut liste korunur).
         self.rezervasyonlar = rezervasyonlar
+        self._rezervasyon_toplami = toplam
         self._sayaclari_guncelle()
         self.filtrele()
 
     def _sayaclari_guncelle(self):
         durumlar = [r.get("durum") for r in self.rezervasyonlar]
-        self.cip_toplam.setText(f"{len(durumlar)} rezervasyon")
+        toplam = getattr(self, "_rezervasyon_toplami", len(durumlar))
+        self.cip_toplam.setText(toplam_etiketi(len(durumlar), toplam, "rezervasyon"))
+        self.cip_toplam.setToolTip(kisaltma_ipucu(len(durumlar), toplam))
         self.cip_aktif.setText(f"{durumlar.count('Aktif')} aktif")
         self.cip_tamam.setText(f"{durumlar.count('Tamamlandı')} tamamlandı")
         self.cip_iptal.setText(f"{durumlar.count('İptal Edildi')} iptal")

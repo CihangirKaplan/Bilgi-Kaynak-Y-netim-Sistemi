@@ -636,3 +636,38 @@ def test_denetim_kayitlarini_goruntuleme_kayda_gecer_ve_sik_yenilemede_kalabalik
         assert yanit.json()["kayitlar"][0]["olay_turu"] == "VIEW" and "istemci_adresi" in yanit.json()["kayitlar"][0]
     finally:
         _girisli_temizle(c, kimlik)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Büyüyen listelerin üst sınırı (gerçek veritabanı): en yeni kayıtlar gelir, gerçek toplam başlıkta bildirilir
+# ----------------------------------------------------------------------------------------------------------------------
+def test_ariza_listesi_ust_sinirda_en_yeni_kayitlari_ve_gercek_toplami_verir_gercek_veritabaninda(ortam):
+    from unittest.mock import patch
+    c, admin = ortam[0], ortam[1]
+    etiket = uuid4().hex[:8]
+    c.execute("INSERT INTO cihazlar (envanter_kodu, cihaz_adi, durum) VALUES (%s, %s, 'Kullanima_Hazir') RETURNING cihaz_id", (f"LS-{etiket}", f"ls_cihaz_{etiket}"))
+    cihaz = c.fetchone()[0]
+    try:
+        for gun, baslik in ((30, "eski"), (20, "orta"), (1, "yeni")):
+            c.execute("INSERT INTO cihaz_arizalari (cihaz_id, bildiren_personel, ariza_baslik, ariza_aciklamasi, aciliyet, bildirim_tarihi, cozuldu_mu) "
+                      "VALUES (%s, 'ali', %s, 'x', 'Düşük', now() - make_interval(days => %s), FALSE)", (cihaz, f"{baslik}-{etiket}", gun))
+        c.execute("SELECT count(*) FROM cihaz_arizalari")
+        gercek_toplam = c.fetchone()[0]
+        app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+        istemci = TestClient(app)
+
+        yanit = istemci.get("/api/arizalar")                                                      # varsayılan sınır: her şey gelir, başlık yok
+        assert yanit.status_code == 200 and "x-toplam-kayit" not in yanit.headers
+        assert {a["ariza_baslik"] for a in yanit.json()} >= {f"eski-{etiket}", f"orta-{etiket}", f"yeni-{etiket}"}
+
+        with patch("server.sunucu.LISTE_UST_SINIRI", 2):                                          # sınır 2: yalnızca en yeni iki kayıt
+            yanit = istemci.get("/api/arizalar")
+        assert yanit.status_code == 200
+        basliklar = [a["ariza_baslik"] for a in yanit.json()]
+        assert len(basliklar) == 2 and basliklar[0] == f"yeni-{etiket}"                           # en yeni önce
+        assert f"eski-{etiket}" not in basliklar
+        assert yanit.headers["x-toplam-kayit"] == str(gercek_toplam)                              # gerçek toplam bildirilir
+    finally:
+        app.dependency_overrides.pop(mevcut_kullanici_id, None)
+        c.execute("DELETE FROM cihaz_arizalari WHERE cihaz_id = %s", (cihaz,))
+        c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))

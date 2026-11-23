@@ -19,6 +19,7 @@ from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,7 @@ class ArizaYonetimEkrani(QWidget):
                 return
             cevap.raise_for_status()
             arizalar = cevap.json()
+            toplam = liste_toplami(cevap, len(arizalar))
         except Exception as e:
             logger.warning("Arıza listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Arıza kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
@@ -299,7 +301,8 @@ class ArizaYonetimEkrani(QWidget):
                 self.tablo.setCellWidget(satir, 6, dugme)
                 satira_kimlik_ata(self.tablo, satir, ariza_id)      # yetkili kullanıcı için her satır (açık ya da çözülmüş) çift tıkla açılır
 
-        self.cip_toplam.setText(f"{len(arizalar)} kayıt")
+        self.cip_toplam.setText(toplam_etiketi(len(arizalar), toplam))
+        self.cip_toplam.setToolTip(kisaltma_ipucu(len(arizalar), toplam))
         self.cip_acik.setText(f"{acik} açık")
         self.cip_cozulen.setText(f"{cozulen} çözüldü")
         self.bos_mesaj.setText("Henüz arıza kaydı yok.")
