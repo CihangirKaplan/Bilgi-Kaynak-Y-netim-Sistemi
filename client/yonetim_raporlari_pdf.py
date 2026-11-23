@@ -229,8 +229,8 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
             ])
             c.not_ekle(
                 "Öğrenci mevcudu günceldir. Diğer sayılar seçilen "
-                "döneme aittir. Faaliyet puanı onaylanmamış "
-                "kayıtları da içerir. İptal edilenler sayılara dahil değildir."
+                "döneme aittir. "
+                "İptal edilenler sayılara dahil değildir."
             )
 
             # 2. Randevular
@@ -289,7 +289,6 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
                 ("Faaliyet kaydı", s["kayit_sayisi"]),
                 ("Faaliyet yapan öğrenci", s["faaliyet_yapan_ogrenci"]),
                 ("Toplam puan", s["toplam_puan"]),
-                ("Onaylı puan", s["onayli_puan"]),
                 (
                     "Önceki dönem faaliyet kaydı",
                     o["onceki_ozet"]["kayit_sayisi"],
@@ -297,10 +296,6 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
                 (
                     "Önceki dönem toplam puanı",
                     o["onceki_ozet"]["toplam_puan"],
-                ),
-                (
-                    "Önceki dönem onaylı puanı",
-                    o["onceki_ozet"]["onayli_puan"],
                 ),
             ])
             c.bar_grafik(
@@ -312,8 +307,7 @@ def pdf_olustur(dosya_yolu, baslangic, bitis, veriler):
                 y,
             )
             c.not_ekle(
-                "Toplam puan bütün faaliyet kayıtlarını, onaylı "
-                "puan ise yalnızca onaylanan kayıtları kapsar."
+                "Toplam puan, seçilen dönemdeki bütün faaliyet kayıtlarının puanlarının toplamıdır."
             )
 
             # 5. Proje / Etkinlik

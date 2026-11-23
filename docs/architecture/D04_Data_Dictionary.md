@@ -398,7 +398,6 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | `birim_id` | INTEGER | FK → `faaliyet_birimleri(birim_id)`; NOT NULL | Faaliyet miktarının birimi. |
 | `faaliyet_tarihi` | DATE | NOT NULL; DEFAULT `CURRENT_DATE` | Faaliyetin gerçekleştiği tarih. |
 | `aciklama` | VARCHAR(255) | NULL | Faaliyet kaydına ilişkin ek açıklama. |
-| `onaylandi_mi` | BOOLEAN | NOT NULL; DEFAULT `false` | Faaliyet kaydının onay durumu. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Faaliyet kaydının oluşturulma zamanı. |
 | `kayit_puani` | INTEGER | NOT NULL | Bu faaliyet kaydına ait, sıfır veya daha büyük puan. |
 

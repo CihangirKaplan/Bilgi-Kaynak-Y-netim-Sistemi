@@ -35,13 +35,13 @@ Merkezin dönemsel özet panelidir. Sayfayı açtığınızda ve süzgeçleri de
 | **Genel Bakış** | Randevu, bakım, kalibrasyon, arıza, rezervasyon, etkinlik ve öğrenci faaliyeti özeti |
 | **Randevular** | Durum sayıları, günlük eğilim, oda kullanımı |
 | **Cihazlar** | Bakım/kalibrasyon/arıza/rezervasyon sayıları, cihaz kullanımı |
-| **Öğrenciler** | Faaliyet türüne göre puanlar, onaylı puan |
+| **Öğrenciler** | Faaliyet türüne göre puanlar, toplam puan ve kayıt sayısı |
 | **Proje / Deney** | Proje türü rezervasyonları ve oda etkinlikleri (rezervasyon, "tamamlanmış deney" demek değildir) |
 | **Oda Kullanımı** | Oda Kullanım Raporu'nun özeti |
 | **Cihaz Kullanımı** | Cihaz Rezervasyon Raporu'nun özeti |
 | **Yetkiler** | Yetki Raporu'nun özeti (dönemden bağımsız) |
 | **Öğrenci Mevcudu** | Öğrenci Raporu'nun özeti |
-| **Faaliyet Onayları** | Faaliyet Raporu'nun özeti (onay bekleyen puanlar) |
+| **Faaliyetler** | Faaliyet Raporu'nun özeti (kayıt, miktar ve puan) |
 | **Bakım Gecikmeleri** | Geciken Bakım Planı Raporu'nun özeti |
 | **Bugün Merkezde** | Seçilen günün zamanlı olayları (randevu, rezervasyon, etkinlik) ve günlük özeti; dönemden bağımsızdır |
 
@@ -52,7 +52,7 @@ Merkezin dönemsel özet panelidir. Sayfayı açtığınızda ve süzgeçleri de
 - Kartlardaki **değişim rozeti** seçilen dönemi **takvime göre** seçilen önceki dönemle karşılaştırır: *Bu Ay* için geçen ayın aynı günleri (1–21 Kasım ↔ 1–21 Ekim), *Geçen Ay* için bir önceki ayın tamamı, *Bugün* ve *Bu Hafta* için geçen haftanın aynı günleri, diğer tarih aralıkları için hemen önceki aynı uzunluktaki aralık. Önceki dönemde hiç kayıt yoksa yüzde hesaplanamaz ve "önceki dönemde yok" yazar. Aynı bilgi **ⓘ Dönemler Hakkında** düğmesindedir.
 - Her grafikte **Sütun / Çizgi / Pasta** seçici vardır; grafiğin türünü ihtiyacınıza göre değiştirebilirsiniz.
 
-Önemli: **Oda Kullanımı, Cihaz Kullanımı, Yetkiler, Öğrenci Mevcudu, Faaliyet Onayları ve Bakım Gecikmeleri** görünümleri, ayrıntılı rapor sayfalarıyla **aynı veriden** beslenir; sayılar birebir aynıdır.
+Önemli: **Oda Kullanımı, Cihaz Kullanımı, Yetkiler, Öğrenci Mevcudu, Faaliyetler ve Bakım Gecikmeleri** görünümleri, ayrıntılı rapor sayfalarıyla **aynı veriden** beslenir; sayılar birebir aynıdır.
 Bir görünümün verisi için yetkiniz yoksa yalnızca o görünümde **"Bu rapor alınamadı"** yazar, diğerleri çalışır.
 Hesaplama tanımları (doluluk oranı, iptal sayımı vb.) için [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md)'ne bakın.
 
@@ -64,7 +64,7 @@ Yönetim panelindeki özetin ayrıntısı için ilgili sayfayı açın; her biri
 | **Randevu Raporları** | Durum sayıları, psikolog bazlı döküm, iptal nedenleri, görüşme tipi/terapi türü/yaş grubu dağılımı |
 | **Oda Kullanım Raporu** | Oda bazlı saat, mesai doluluk oranı, hiç kullanılmayan odalar, gün dağılımı |
 | **Cihaz Raporları** (5 sekme) | Bakım-kalibrasyon-arıza; Cihaz Rezervasyonu sekmesinde cihaz/proje/bölüm bazlı kullanım; Geciken Bakım Planları sekmesinde geciken ve yaklaşan planlar |
-| **Puan / Öğrenci / Faaliyet Raporu** | Öğrenci puanları, mevcut ve dağılım, faaliyet ve onay durumları |
+| **Puan / Öğrenci / Faaliyet Raporu** | Öğrenci puanları, mevcut ve dağılım, faaliyet dağılımı |
 | **Danışma Masası Raporları** | Görev sayıları ve çalışma süreleri, öğrenci bazlı özet |
 
 Excel dosyaları kişisel veri içerebilir (öğrenci adı vb.); paylaşırken dikkatli olun.
@@ -163,7 +163,7 @@ Aşağıdaki sayfalar için adım adım anlatım [Memur Kılavuzu](../administra
 
 **Her hafta**
 - **Cihaz Raporları → Geciken Bakım Planları** sekmesi ve **Bakım Planları**'ndaki *Gecikmiş* satırlar.
-- **Faaliyet Raporu** → onay bekleyen puanlar; **Danışma Masası Raporları** → onay bekleyen görevler (onayı Memur/Admin verir).
+- **Danışma Masası Raporları** → onay bekleyen görevler (onayı Memur/Admin verir).
 - **Sistem Durumu** → son yedek yeşil mi?
 
 **Her ay**
