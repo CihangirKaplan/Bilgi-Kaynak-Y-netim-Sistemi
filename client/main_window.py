@@ -2185,24 +2185,6 @@ QLabel {
         )
         lay.addWidget(self.istatistik_paneli)
 
-        # Günlük faaliyetler yalnızca yönetim rollerine gösterilir.
-        # Sunucu ayrıca YONETIM_RAPORLARI_GORUNTULE iznini doğrular.
-        self.gunluk_akis_paneli = None
-
-        if str(rol).lower() in ("admin", "mudur"):
-            from client.dashboard_gunluk_akis import DashboardGunlukAkis
-
-            self.gunluk_akis_paneli = DashboardGunlukAkis(
-                api_url=self.api_url,
-                token=self.token,
-                sayfa_ac=lambda hedef: self._karttan_sayfaya_git(
-                    hedef, None
-                ),
-                sayfa_izinli_mi=self._sayfa_izinli_mi,
-            )
-            lay.addWidget(self.gunluk_akis_paneli)
-            self.gunluk_akis_paneli.verileri_yukle()
-
         baslik = QLabel("Hızlı Erişim")
         baslik.setStyleSheet("font-size:17px; font-weight:800; color:#0A1F5C;")
         lay.addWidget(baslik)
