@@ -8,6 +8,7 @@ from server.oda_etkinlikleri_kurallari import (
     oda_kilidini_al,
     oda_cakismasi_bul,
 )
+import logging
 import os
 import time
 from functools import lru_cache
@@ -36,7 +37,6 @@ from server.modeller import (
     randevu_terapisini_belirle,
     BakimPlaniGuncelleModeli,
     BakimPlaniOlusturModeli,
-    DanisanKoduModeli,
     OdaOlusturModeli,
     OdaGuncelleModeli,
     CihazOlusturModeli,
@@ -50,7 +50,6 @@ from server.modeller import (
     KalibrasyonGuncelleModeli,
     BakimOlusturModeli,
     BakimGuncelleModeli,
-    HizliIzinGuncelleModel,
     IzinDuzenleModeli,
     RolGorunenAdModeli
 )
@@ -81,10 +80,10 @@ from server.denetim import (
 from server import giris_siniri, rapor_bakim_plani, rapor_kullanim, rapor_ogrenci_faaliyet
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
-from server.modeller import CihazGuncelleModeli, ArizaBildirimModeli, ArizaGuncelleModeli, FaaliyetKayitModeli
+from server.modeller import FaaliyetKayitModeli
 from server.modeller import bakim_tarihi_sorunu, RezervasyonGuncelleModeli, rezervasyon_zaman_sorunu
 import psycopg2.errors
-from server.modeller import FaaliyetKayitModeli, OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
+from server.modeller import OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
 
 load_dotenv()
 
@@ -633,7 +632,6 @@ def kullanici_olustur(
     yeni_kullanici: KullaniciOlusturModeli,
     kullanici_id: int = Depends(izin_kontrol("KULLANICI_OLUSTUR")),
 ):
-    import re
 
     conn = None
     cursor = None
@@ -641,15 +639,6 @@ def kullanici_olustur(
     personel_id = None
     personel_kodu = None
     ogrenci_id = None
-
-    rol_kodlari = {
-        "PSIKOLOG": "PSK",
-        "MEMUR": "MEM",
-        "MUDUR": "MUD",
-        "DANISMA_OGRENCISI": "OGR",
-        "PROJE_ASISTANI": "AST",
-        "ADMIN": "ADM",
-    }
 
     try:
         conn = vt_baglan(VT_AYARLARI)
@@ -1248,7 +1237,7 @@ def kullanici_rol_degistir(kullanici_id: int, veri: RolDegistirModeli, islem_yap
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -2088,7 +2077,7 @@ def kullanici_durum_degistir(
     except DeadlockDetected:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=503, detail="İşlem eşzamanlı yoğunluk nedeniyle tamamlanamadı. Lütfen tekrar deneyin.")
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -2169,7 +2158,7 @@ def personel_olustur(yeni_personel: PersonelOlusturModeli, islem_yapan_id: int =
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -2446,7 +2435,6 @@ def randevu_olustur(randevu: RandevuOlusturModeli, kullanici_id: int = Depends(i
         if conn is not None:
             conn.rollback()
         # İç hata metni (SQL, tablo adı vb.) istemciye sızdırılmaz; ayrıntı yalnızca sunucu günlüğüne yazılır.
-        import logging
         logging.getLogger(__name__).exception("Randevu oluşturulurken beklenmeyen hata: %s", e)
         raise HTTPException(
             status_code=500,
@@ -4634,7 +4622,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
             }
             for k in cursor.fetchall()
         ]
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -4904,7 +4892,7 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("BAKIM_KAYIT
             }
             for k in kayitlar
         ]
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -4964,7 +4952,7 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -5025,7 +5013,7 @@ def bakim_guncelle(bakim_id: int, guncelleme: BakimGuncelleModeli, kullanici_id:
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -5055,9 +5043,8 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
-        print("BAKIM SILME HATA:", str(e))
         raise HTTPException(status_code=500, detail="Bakım kaydı silinemedi.")
     finally:
         if cursor is not None: cursor.close()
@@ -5105,7 +5092,7 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("KALIB
             }
             for k in kayitlar
         ]
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -5154,7 +5141,7 @@ def kalibrasyon_kaydi_ekle(kalib: KalibrasyonOlusturModeli, kullanici_id: int = 
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -5206,7 +5193,7 @@ def kalibrasyon_guncelle(kalibrasyon_id: int, guncelleme: KalibrasyonGuncelleMod
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -5234,9 +5221,8 @@ def kalibrasyon_kaydi_sil(kalibrasyon_id: int, kullanici_id: int = Depends(izin_
     except HTTPException:
         if conn is not None: conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
-        print("KALIBRASYON SILME HATA:", str(e))
         raise HTTPException(status_code=500, detail="Kalibrasyon kaydı silinemedi.")
     finally:
         if cursor is not None: cursor.close()
@@ -5588,7 +5574,7 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
 
         return ozet
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -5620,8 +5606,7 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVI
             "bitis": s[5].strftime("%H:%M"),
             "durum": s[6]
         } for s in cursor.fetchall()]
-    except Exception as e:
-        print("DASHBOARD RANDEVU HATA:", str(e))
+    except Exception:
         raise HTTPException(status_code=500, detail="Bugünkü randevular alınamadı.")
     finally:
         if cursor is not None: cursor.close()
@@ -5662,8 +5647,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
             "baslangic": zaman(s[5]),
             "bitis": zaman(s[6])
         } for s in cursor.fetchall()]
-    except Exception as e:
-        print("DASHBOARD REZERVASYON HATA:", str(e))
+    except Exception:
         raise HTTPException(status_code=500, detail="Bugünkü rezervasyonlar alınamadı.")
     finally:
         if cursor is not None: cursor.close()
@@ -5775,8 +5759,7 @@ def yaklasan_islemler_getir(kullanici_id: int = Depends(izin_kontrol_biri(
         islemler.sort(key=lambda x: x["kalan_gun"])
         return islemler[:YAKLASAN_ISLEM_UST_SINIR]
 
-    except Exception as e:
-        print("DASHBOARD API ÇÖKTÜ HATA:", str(e))
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -5804,7 +5787,7 @@ def faaliyetleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITL
                 "puan": kayit[2]
             })
         return faaliyetler
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -5827,7 +5810,7 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_
                 "ad": kayit[1]
             })
         return birimler
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
         if cursor is not None: cursor.close()
@@ -7074,7 +7057,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
     except psycopg2.errors.UniqueViolation:
         if conn: conn.rollback()
         raise HTTPException(status_code=400, detail="Bu öğrenci numarası sistemde zaten kayıtlı!")
-    except Exception as e:
+    except Exception:
         if conn: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -7137,7 +7120,7 @@ def faaliyet_kayitlarini_getir(
                 "tarih": row[7].strftime("%d.%m.%Y") if row[7] else ""
             })
         return kayitlar
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -7222,7 +7205,7 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -7255,7 +7238,7 @@ def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FA
         if conn is not None:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -8511,7 +8494,7 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -8544,7 +8527,7 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
         return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -8573,7 +8556,7 @@ def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("F
         return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
     finally:
@@ -8713,7 +8696,6 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
 # AUDIT KAYITLARI — SALT OKUNUR
 # =========================================================
 
-from fastapi import Query
 
 
 @app.get("/api/audit-kayitlari")

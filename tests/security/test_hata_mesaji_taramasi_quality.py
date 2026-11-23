@@ -58,9 +58,8 @@ def test_quality_api_hata_detayi_sizdirmaz(fonksiyon_adi):
         if not isinstance(handler, ast.ExceptHandler):
             continue
 
-        if not handler.name:
-            continue
-
+        # Adsız blok (`except Exception:`) istisna değişkenine sahip değildir; yanıta aktaracağı bir şey yoktur, bu yüzden de güvenlidir.
+        # Yine de bloktaki HTTPException(detail=...) çağrıları sayılır: asıl amaç, sınanan her fonksiyonda hata yanıtının denetlendiğini göstermek.
         for dugum in ast.walk(handler):
             if not isinstance(dugum, ast.Call):
                 continue
@@ -83,7 +82,7 @@ def test_quality_api_hata_detayi_sizdirmaz(fonksiyon_adi):
                     if isinstance(isim, ast.Name)
                 }
 
-                assert handler.name not in kullanilan_isimler, (
+                assert not handler.name or handler.name not in kullanilan_isimler, (
                     f"{fonksiyon_adi}: Teknik hata bilgisi "
                     f"HTTP yanitina aktariliyor."
                 )
