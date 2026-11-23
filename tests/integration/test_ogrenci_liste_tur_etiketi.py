@@ -45,17 +45,20 @@ def test_faaliyet_ogrenci_listesinde_her_ogrencinin_turu_belirtilir():
     assert liste[2]["tur"] == "DANISMA_MASASI"
 
 
-def test_danisma_yonetimi_ogrenci_listesi_tur_bilgisi_dondurur():
+def test_danisma_yonetimi_ogrenci_listesi_yalniz_danisma_ogrencilerini_sorgular():
     satirlar = [
-        (1, "Ali Yılmaz", "2021001", "GONULLU"),
         (2, "Veli Kaya", "2021002", "DANISMA_MASASI"),
+        (4, "Zeynep Ak", "2021004", "DANISMA_MASASI"),
     ]
-    with patch("server.sunucu.psycopg2.connect", return_value=sahte_baglanti(satirlar)):
+    baglanti = sahte_baglanti(satirlar)
+    with patch("server.sunucu.psycopg2.connect", return_value=baglanti):
         with TestClient(app) as istemci:
             yanit = istemci.get("/api/danisma/yonetim/ogrenciler")
 
     assert yanit.status_code == 200
     ogrenciler = yanit.json()["ogrenciler"]
-    assert [o["tur"] for o in ogrenciler] == ["GONULLU", "DANISMA_MASASI"]
-    assert [o["tur_etiketi"] for o in ogrenciler] == ["Gönüllü Öğrenci", "Danışma Masası Öğrencisi"]
-    assert ogrenciler[1]["ad_soyad"] == "Veli Kaya"
+    assert [o["tur"] for o in ogrenciler] == ["DANISMA_MASASI", "DANISMA_MASASI"]
+    assert [o["tur_etiketi"] for o in ogrenciler] == ["Danışma Masası Öğrencisi"] * 2
+    assert ogrenciler[0]["ad_soyad"] == "Veli Kaya"
+    sorgular = " ".join(c.args[0] for c in baglanti.cursor.return_value.execute.call_args_list)
+    assert "tur::text = 'DANISMA_MASASI'" in sorgular            # Gönüllü ve Asistan öğrenciler listeye hiç gelmez

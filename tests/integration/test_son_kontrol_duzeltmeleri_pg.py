@@ -20,8 +20,11 @@ from server.sunucu import (
     FaaliyetTuruDuzenleModeli,
     FaaliyetTuruEkleModeli,
     OgrenciAktiflikModeli,
+    danisma_yonetim_ogrencileri,
+    danisma_yonetim_onay_geri_al,
     danisma_yonetim_oturum_duzenle,
     danisma_yonetim_oturum_olustur,
+    danisma_yonetim_oturum_onayla,
     danisma_yonetim_oturumlari,
     faaliyet_kaydi_guncelle,
     faaliyet_turu_duzenle,
@@ -72,7 +75,7 @@ def ortam():
 
             cur.execute("""
                 INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, tur)
-                VALUES (%s, %s, 'GONULLU') RETURNING ogrenci_id
+                VALUES (%s, %s, 'DANISMA_MASASI') RETURNING ogrenci_id
             """, (f"QA Son {etiket}", f"QS{etiket}"))
             ogrenci_id = cur.fetchone()[0]
 
@@ -183,6 +186,108 @@ def test_bitirilmesi_unutulan_gorev_listede_uzun_gorev_olarak_isaretlenir(ortam)
     assert oturumlar[normal_id]["uzun_gorev"] is False
 
 
+def _onayli_gorev(ortam, onayla=True):
+    bas, bit = _gecmis(30, 3)
+    oturum_id = danisma_yonetim_oturum_olustur(
+        DanismaGorevOlusturModeli(ogrenci_id=ortam["ogrenci_id"], baslangic_zamani=bas, bitis_zamani=bit),
+        ortam["kullanici_id"])["oturum_id"]
+    if onayla:
+        danisma_yonetim_oturum_onayla(oturum_id, ortam["kullanici_id"])
+    return oturum_id, bas, bit
+
+
+# Not: hata veren uç nokta işlemi geri aldığı için (testin SAVEPOINT'ine döner) hata beklenen adımlar testin sonunda yapılır.
+def test_onay_geri_alinabilir_ve_geri_alinan_gorev_yeniden_duzenlenebilir(ortam):
+    oturum_id, bas, bit = _onayli_gorev(ortam)
+    assert son_denetim(ortam, "danisma_masasi_oturumlari", oturum_id)[1] == {
+        "onceki": {"onaylandi_mi": False}, "yeni": {"onaylandi_mi": True}}
+
+    sonuc = danisma_yonetim_onay_geri_al(oturum_id, ortam["kullanici_id"])
+    assert sonuc["onaylandi_mi"] is False
+    assert son_denetim(ortam, "danisma_masasi_oturumlari", oturum_id)[1] == {
+        "onceki": {"onaylandi_mi": True}, "yeni": {"onaylandi_mi": False}}
+
+    danisma_yonetim_oturum_duzenle(                                                         # geri alınınca yeniden düzenlenebilir
+        oturum_id, DanismaGorevDuzenleModeli(baslangic_zamani=bas - timedelta(hours=1), bitis_zamani=bit),
+        ortam["kullanici_id"])
+    danisma_yonetim_oturum_onayla(oturum_id, ortam["kullanici_id"])                         # ve yeniden onaylanabilir
+
+
+def test_gorev_olusturma_denetim_kaydinda_ogrenci_ve_saatler_bulunur(ortam):
+    oturum_id, bas, bit = _onayli_gorev(ortam, onayla=False)
+    olay, ayrinti = son_denetim(ortam, "danisma_masasi_oturumlari", oturum_id)
+    assert olay == "CREATE"
+    assert ayrinti["yeni"] == {
+        "ogrenci_id": ortam["ogrenci_id"],
+        "baslangic_zamani": bas.isoformat(sep=" ", timespec="minutes"),
+        "bitis_zamani": bit.isoformat(sep=" ", timespec="minutes"),
+    }
+
+
+def test_onaysiz_gorevin_onayi_geri_alinamaz(ortam):
+    oturum_id, _, _ = _onayli_gorev(ortam, onayla=False)
+    with pytest.raises(HTTPException) as hata:
+        danisma_yonetim_onay_geri_al(oturum_id, ortam["kullanici_id"])
+    assert hata.value.status_code == 409
+
+
+def test_olmayan_gorevin_onayi_geri_alinamaz(ortam):
+    with pytest.raises(HTTPException) as hata:
+        danisma_yonetim_onay_geri_al(99999999, ortam["kullanici_id"])
+    assert hata.value.status_code == 404
+
+
+def test_onayli_gorev_duzenlenemez_ve_mesaj_geri_almayi_soyler(ortam):
+    oturum_id, bas, bit = _onayli_gorev(ortam)
+    with pytest.raises(HTTPException) as hata:
+        danisma_yonetim_oturum_duzenle(
+            oturum_id, DanismaGorevDuzenleModeli(baslangic_zamani=bas - timedelta(hours=1), bitis_zamani=bit),
+            ortam["kullanici_id"])
+    assert hata.value.status_code == 409 and "onayı geri alın" in hata.value.detail
+
+
+def test_gorev_yalniz_danisma_masasi_ogrencisine_eklenir_ve_liste_yalniz_onlari_getirir(ortam):
+    with ortam["conn"].cursor() as cur:
+        cur.execute("""
+            INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, tur)
+            VALUES (%s, %s, 'GONULLU') RETURNING ogrenci_id
+        """, (f"QA Gonullu {ortam['etiket']}", f"QG{ortam['etiket']}"))
+        gonullu_id = cur.fetchone()[0]
+
+    bas, bit = _gecmis(30, 2)
+    with pytest.raises(HTTPException) as hata:
+        danisma_yonetim_oturum_olustur(
+            DanismaGorevOlusturModeli(ogrenci_id=gonullu_id, baslangic_zamani=bas, bitis_zamani=bit), ortam["kullanici_id"])
+    assert hata.value.status_code == 404 and "danışma masası öğrencisi" in hata.value.detail
+
+    idler = {o["ogrenci_id"] for o in danisma_yonetim_ogrencileri(ortam["kullanici_id"])["ogrenciler"]}
+    assert ortam["ogrenci_id"] in idler and gonullu_id not in idler
+
+
+def test_yonetim_listesi_gercek_sayilari_verir_ve_eski_onay_bekleyen_gorev_kaybolmaz(ortam):
+    with ortam["conn"].cursor() as cur:
+        eski = datetime.now() - timedelta(days=900)
+        cur.execute("""
+            INSERT INTO danisma_masasi_oturumlari (ogrenci_id, baslangic_zamani, bitis_zamani, onaylandi_mi)
+            VALUES (%s, %s, %s, FALSE) RETURNING oturum_id
+        """, (ortam["ogrenci_id"], eski, eski + timedelta(hours=2)))
+        eski_bekleyen = cur.fetchone()[0]
+        for gun in range(1, 4):                                                # sınırı aşacak kadar yeni onaylı kayıt yerine: sayı denetimi
+            cur.execute("""
+                INSERT INTO danisma_masasi_oturumlari (ogrenci_id, baslangic_zamani, bitis_zamani, onaylandi_mi)
+                VALUES (%s, %s, %s, TRUE)
+            """, (ortam["ogrenci_id"], datetime.now() - timedelta(days=gun + 1),
+                  datetime.now() - timedelta(days=gun + 1) + timedelta(hours=1)))
+
+    with patch("server.sunucu.DANISMA_LISTE_EN_FAZLA", 2):                     # liste yalnızca en yeni 2 kaydı almaya zorlanır
+        veri = danisma_yonetim_oturumlari(ortam["kullanici_id"])
+    kimlikler = {o["oturum_id"] for o in veri["oturumlar"]}
+    assert eski_bekleyen in kimlikler                                          # 900 gün önceki onay bekleyen görev yine de gelir
+    assert veri["ozet"]["toplam"] == veri["toplam_kayit"] >= 4 and veri["ozet"]["onaylanan"] >= 3
+    assert veri["ozet"]["bekleyen"] >= 1
+    assert all("calisilan_sure" not in o for o in veri["oturumlar"])
+
+
 # ------------------------------------------------------------------ faaliyet kaydı
 def test_faaliyet_kaydi_pasif_ture_gecemez_ve_mesaj_dogrudur(ortam):
     with pytest.raises(HTTPException) as hata:
@@ -250,6 +355,8 @@ def test_faaliyet_puani_degisince_denetimde_onceki_yeni_ve_etkilenen_sayi_var(or
 
 # ------------------------------------------------------------------ öğrenci aktifliği
 def test_ogrenci_aktifligi_onceki_ve_yeni_durumla_denetime_yazilir(ortam):
+    with ortam["conn"].cursor() as cur:                                       # danışma masası öğrencileri bu ekrandan pasife alınamaz
+        cur.execute("UPDATE ogrenciler SET tur = 'GONULLU' WHERE ogrenci_id = %s", (ortam["ogrenci_id"],))
     ogrenci_aktiflik_duzenle(ortam["ogrenci_id"], OgrenciAktiflikModeli(aktif_mi=False), ortam["kullanici_id"])
     olay, ayrinti = son_denetim(ortam, "ogrenciler", ortam["ogrenci_id"])
     assert olay == "UPDATE"

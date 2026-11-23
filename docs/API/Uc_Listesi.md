@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **135** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **136** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -116,6 +116,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | GET | `/api/danisma/yonetim/oturumlar` | DANISMA_OTURUMU_YONETIM | danisma_yonetim_oturumlari |
 | POST | `/api/danisma/yonetim/oturumlar` | DANISMA_OTURUMU_YONETIM | danisma_yonetim_oturum_olustur |
 | PATCH | `/api/danisma/yonetim/oturumlar/{oturum_id}` | DANISMA_OTURUMU_YONETIM | danisma_yonetim_oturum_duzenle |
+| PATCH | `/api/danisma/yonetim/oturumlar/{oturum_id}/onay-geri-al` | DANISMA_OTURUMU_YONETIM | Onaylanmış görevin onayını kaldırır; görev yeniden onay bekler ve düzenlenebilir. |
 | PATCH | `/api/danisma/yonetim/oturumlar/{oturum_id}/onayla` | DANISMA_OTURUMU_YONETIM | danisma_yonetim_oturum_onayla |
 
 ## /api/dashboard
@@ -149,7 +150,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/faaliyet-raporu` | FAALIYET_KAYITLARI_DUZENLE | Faaliyet Raporu: dönemdeki (faaliyet tarihi) kayıtların faaliyet türü, birim ve öğrenci türü dağılımı, puanlar |
+| GET | `/api/faaliyet-raporu` | FAALIYET_KAYITLARI_DUZENLE | Faaliyet Raporu: dönemdeki (faaliyet tarihi) kayıtların faaliyet türü, birim ve öğrenci türü dağılımı ve puanl |
 
 ## /api/faaliyetler
 

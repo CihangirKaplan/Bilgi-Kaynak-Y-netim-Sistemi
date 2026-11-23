@@ -166,4 +166,23 @@ def siralanabilir_yap(tablo, sirasiz_sutunlar=()):
     model.rowsRemoved.connect(sirayi_sifirla)
     model.dataChanged.connect(sirayi_sifirla)
     tablo._tiklandi_siralama = tiklandi               # testler ve kod aynı yolu kullanabilsin
+    tablo._siralama_durumu = durum                    # yeniden doldurulmadan önce okunup sonra geri yüklenebilsin
     return tablo
+
+
+def siralama_durumunu_al(tablo):
+    """Kullanıcının seçtiği sıralamayı (sütun, yön) döndürür; sıralama yoksa None. Tablo yeniden doldurulmadan ÖNCE çağrılır."""
+    durum = getattr(tablo, "_siralama_durumu", None)
+    if not durum or durum["sutun"] is None:
+        return None
+    return durum["sutun"], durum["yon"]
+
+
+def siralamayi_geri_yukle(tablo, durum):
+    """Tablo yeniden dolduruldu: daha önce alınan sıralamayı (siralama_durumunu_al) yeniden uygular, başlıktaki ok geri gelir."""
+    if not durum or not hasattr(tablo, "_tiklandi_siralama"):
+        return
+    sutun, yon = durum
+    tablo._tiklandi_siralama(sutun)                   # ilk tıklama: artan
+    if yon == Qt.DescendingOrder:
+        tablo._tiklandi_siralama(sutun)               # ikinci tıklama: azalan

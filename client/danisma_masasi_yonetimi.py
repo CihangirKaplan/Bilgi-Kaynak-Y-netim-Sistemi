@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QHeaderView,
 )
-from client.tablo_siralama import siralanabilir_yap
+from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, siralanabilir_yap
+from client.tablo_tasarimi import bos_mesaj_olustur
 from client.bildirim_toast import basari_bildirimi
 
 # Sunucudaki sınırla aynı: bir görev en fazla mesai süresi (08:00-18:00) kadar olabilir.
@@ -260,10 +261,10 @@ class DanismaMasasiYonetimi(QWidget):
 
         ust = QHBoxLayout()
 
-        self.ozet = QLabel("Görev kayıtları yükleniyor...")
-        self.ozet.setStyleSheet(
-            f"font-size: 13px; font-weight: bold; color: {self.NAVY};"
-        )
+        # Liste kısaltıldığında nedenini söyler; aksi halde gizlidir (sayılar zaten kartlarda).
+        self.ozet = QLabel("")
+        self.ozet.setStyleSheet(f"font-size: 12px; color: {self.MUTED};")
+        self.ozet.hide()
         ust.addWidget(self.ozet)
         ust.addStretch()
 
@@ -325,11 +326,16 @@ class DanismaMasasiYonetimi(QWidget):
         self.tablo.setEditTriggers(
             QAbstractItemView.NoEditTriggers
         )
-        self.tablo.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
+        self.tablo.verticalHeader().hide()
+        # Öğrenci adı kalan genişliği alır (dar pencerede iki satıra bölünmesin); diğer sütunlar içeriğine göre boyutlanır.
+        baslik = self.tablo.horizontalHeader()
+        baslik.setSectionResizeMode(QHeaderView.ResizeToContents)
+        baslik.setSectionResizeMode(0, QHeaderView.Stretch)
+        baslik.setMinimumSectionSize(110)
 
         kart_layout.addWidget(self.tablo)
+        self.bos_mesaj = bos_mesaj_olustur("Henüz görev kaydı yok.")
+        kart_layout.addWidget(self.bos_mesaj)
         ana.addWidget(kart, 1)
 
         alt = QHBoxLayout()
@@ -339,6 +345,16 @@ class DanismaMasasiYonetimi(QWidget):
         self.duzenle_btn.clicked.connect(self.gorev_duzenle)
         self.duzenle_btn.setEnabled(False)
         alt.addWidget(self.duzenle_btn)
+
+        self.geri_al_btn = QPushButton("↶ Onayı Geri Al")
+        self.geri_al_btn.setToolTip("Onaylanmış görevi yeniden onay bekleyen duruma döndürür; görev düzenlenebilir olur.")
+        self.geri_al_btn.setStyleSheet(
+            "QPushButton { background: #B86B08; } QPushButton:hover { background: #945606; } "
+            "QPushButton:disabled { background: #DCE2EB; color: #8491A5; }"
+        )
+        self.geri_al_btn.clicked.connect(self.onayi_geri_al)
+        self.geri_al_btn.setEnabled(False)
+        alt.addWidget(self.geri_al_btn)
 
         self.onay_btn = QPushButton("✓ Seçilen Görevi Onayla")
         self.onay_btn.clicked.connect(self.gorev_onayla)
@@ -387,6 +403,9 @@ class DanismaMasasiYonetimi(QWidget):
                 if isinstance(kayit, dict):
                     secili_id = kayit.get("oturum_id")
 
+        # Kullanıcının seçtiği sıralama, otomatik yenilemede sunucu sırasına dönmesin.
+        siralama = siralama_durumunu_al(self.tablo)
+
         try:
             yanit = oturum_kontrollu_istek("GET",
                 f"{self.api_url}/api/danisma/yonetim/oturumlar",
@@ -398,26 +417,22 @@ class DanismaMasasiYonetimi(QWidget):
 
             oturumlar = veri.get("oturumlar", [])
             self.tablo.setRowCount(0)
-            secili_satir = None
 
-            aktif = sum(
-                1 for x in oturumlar
-                if x.get("bitis_zamani") is None
-            )
-            bekleyen = sum(
-                1 for x in oturumlar
-                if x.get("bitis_zamani") is not None
-                and not x.get("onaylandi_mi")
-            )
-            onaylanan = sum(
-                1 for x in oturumlar
-                if x.get("onaylandi_mi")
-            )
+            # Kart sayıları sunucunun tüm kayıtlardan hesapladığı özetten gelir (liste kısaltılmış olabilir).
+            ozet = veri.get("ozet")
+            if not isinstance(ozet, dict):
+                ozet = {
+                    "toplam": len(oturumlar),
+                    "aktif": sum(1 for x in oturumlar if x.get("bitis_zamani") is None),
+                    "bekleyen": sum(
+                        1 for x in oturumlar
+                        if x.get("bitis_zamani") is not None and not x.get("onaylandi_mi")
+                    ),
+                    "onaylanan": sum(1 for x in oturumlar if x.get("onaylandi_mi")),
+                }
 
-            self.ozet_kartlari["toplam"].setText(str(len(oturumlar)))
-            self.ozet_kartlari["aktif"].setText(str(aktif))
-            self.ozet_kartlari["bekleyen"].setText(str(bekleyen))
-            self.ozet_kartlari["onaylanan"].setText(str(onaylanan))
+            for anahtar in ("toplam", "aktif", "bekleyen", "onaylanan"):
+                self.ozet_kartlari[anahtar].setText(str(ozet.get(anahtar, 0)))
 
             self.tablo.setRowCount(len(oturumlar))
 
@@ -432,7 +447,7 @@ class DanismaMasasiYonetimi(QWidget):
                     self._tarih_bicimlendir(
                         oturum.get("bitis_zamani")
                     ),
-                    oturum.get("calisilan_sure", ""),
+                    "",
                     oturum.get("durum", ""),
                     (
                         "Onaylandı"
@@ -509,15 +524,29 @@ class DanismaMasasiYonetimi(QWidget):
                     Qt.UserRole, oturum
                 )
 
-                if oturum.get("oturum_id") == secili_id:
-                    secili_satir = satir
+            siralamayi_geri_yukle(self.tablo, siralama)
 
-            self.ozet.setText(
-                f"Toplam {len(oturumlar)} görev kaydı"
-            )
+            if veri.get("kisaltildi"):
+                self.ozet.setText(
+                    f"Toplam {ozet.get('toplam', len(oturumlar))} görev kaydı var; devam eden ve onay bekleyen görevlerin tümü "
+                    f"ile en yeni görevler gösteriliyor."
+                )
+                self.ozet.show()
+            else:
+                self.ozet.hide()
 
-            if secili_satir is not None:
-                self.tablo.selectRow(secili_satir)
+            bos = not oturumlar
+            self.bos_mesaj.setVisible(bos)
+            self.tablo.setVisible(not bos)
+
+            # Seçim, sıralama sonrası satır sırasından bağımsız olarak görev kimliğiyle geri getirilir.
+            if secili_id is not None:
+                for satir in range(self.tablo.rowCount()):
+                    hucre = self.tablo.item(satir, 0)
+                    kayit = hucre.data(Qt.UserRole) if hucre is not None else None
+                    if isinstance(kayit, dict) and kayit.get("oturum_id") == secili_id:
+                        self.tablo.selectRow(satir)
+                        break
 
             self._secim_degisti()
 
@@ -535,27 +564,19 @@ class DanismaMasasiYonetimi(QWidget):
     def _secim_degisti(self):
         satir = self.tablo.currentRow()
 
-        if satir < 0:
-            self.onay_btn.setEnabled(False)
-            self.duzenle_btn.setEnabled(False)
-            return
-
-        hucre = self.tablo.item(satir, 0)
-        if hucre is None:
-            self.onay_btn.setEnabled(False)
-            self.duzenle_btn.setEnabled(False)
-            return
-
-        oturum = hucre.data(Qt.UserRole)
+        hucre = self.tablo.item(satir, 0) if satir >= 0 else None
+        oturum = hucre.data(Qt.UserRole) if hucre is not None else None
 
         uygun = (
             isinstance(oturum, dict)
             and oturum.get("bitis_zamani") is not None
             and not oturum.get("onaylandi_mi")
         )
+        onayli = isinstance(oturum, dict) and bool(oturum.get("onaylandi_mi"))
 
         self.onay_btn.setEnabled(uygun)
         self.duzenle_btn.setEnabled(uygun)
+        self.geri_al_btn.setEnabled(onayli)
 
     def gorev_onayla(self):
         satir = self.tablo.currentRow()
@@ -619,8 +640,58 @@ class DanismaMasasiYonetimi(QWidget):
                 "Onay Hatası",
                 f"Görev onaylanamadı:\n{istek_hatasi_metni(hata)}"
             )
+
+    def onayi_geri_al(self):
+        satir = self.tablo.currentRow()
+        hucre = self.tablo.item(satir, 0) if satir >= 0 else None
+        oturum = hucre.data(Qt.UserRole) if hucre is not None else None
+        if not isinstance(oturum, dict) or not oturum.get("onaylandi_mi"):
+            return
+
+        soru = QMessageBox(self)
+        soru.setWindowTitle("Onayı Geri Al")
+        soru.setIcon(QMessageBox.Question)
+        soru.setText("Seçilen görevin onayı kaldırılsın mı?")
+        soru.setInformativeText(
+            "Görev yeniden \"Onay Bekliyor\" durumuna döner ve düzenlenebilir. İşlem denetim kaydına yazılır."
+        )
+        evet_btn = soru.addButton("Evet", QMessageBox.YesRole)
+        soru.addButton("Hayır", QMessageBox.NoRole)
+        soru.exec()
+        if soru.clickedButton() != evet_btn:
+            return
+
+        try:
+            yanit = oturum_kontrollu_istek("PATCH",
+                f"{self.api_url}/api/danisma/yonetim/oturumlar/"
+                f"{oturum['oturum_id']}/onay-geri-al",
+                headers=self._headers(),
+                timeout=10
+            )
+            yanit.raise_for_status()
+
+            basari_bildirimi(self, "Görevin onayı geri alındı.")
+            self.yenile()
+
+        except requests.HTTPError as hata:
+            if oturum_hatasi_mi(hata):
+                return
+            QMessageBox.warning(
+                self, "Onay Geri Alınamadı",
+                hata_detayi_metni(hata.response, "Görevin onayı geri alınamadı.")
+            )
+            self.yenile(sessiz=True)
+
+        except requests.RequestException as hata:
+            if oturum_hatasi_mi(hata):
+                return
+            QMessageBox.warning(
+                self, "Bağlantı Hatası",
+                f"Görevin onayı geri alınamadı:\n{istek_hatasi_metni(hata)}"
+            )
+
     def yeni_gorev_penceresi(self):
-        from PySide6.QtCore import QDateTime
+        from PySide6.QtCore import QDateTime, QTime
         from PySide6.QtWidgets import (
             QComboBox, QDateTimeEdit, QDialog,
             QDialogButtonBox, QFormLayout
@@ -647,7 +718,7 @@ class DanismaMasasiYonetimi(QWidget):
         if not ogrenciler:
             QMessageBox.information(
                 self, "Öğrenci Bulunamadı",
-                "Görev eklemek için aktif öğrenci bulunamadı."
+                "Görev eklemek için aktif danışma masası öğrencisi bulunamadı."
             )
             return
 
@@ -673,17 +744,21 @@ class DanismaMasasiYonetimi(QWidget):
                 metin += f" ({ogrenci['tur_etiketi']})"
             ogrenci_sec.addItem(metin, ogrenci["ogrenci_id"])
 
+        def dakikaya_yuvarla(zaman):
+            """Saat kutusu saniyeyi göstermediği için varsayılan zamanın saniyesi sıfırlanır (görünmeyen saniye kaydedilmesin)."""
+            return QDateTime(zaman.date(), QTime(zaman.time().hour(), zaman.time().minute(), 0))
+
         baslangic = QDateTimeEdit()
         baslangic.setCalendarPopup(True)
         baslangic.setDisplayFormat("dd.MM.yyyy HH:mm")
         baslangic.setDateTime(
-            QDateTime.currentDateTime().addSecs(-3600)
+            dakikaya_yuvarla(QDateTime.currentDateTime().addSecs(-3600))
         )
 
         bitis = QDateTimeEdit()
         bitis.setCalendarPopup(True)
         bitis.setDisplayFormat("dd.MM.yyyy HH:mm")
-        bitis.setDateTime(QDateTime.currentDateTime())
+        bitis.setDateTime(dakikaya_yuvarla(QDateTime.currentDateTime()))
 
         form.addRow("Öğrenci:", ogrenci_sec)
         form.addRow("Başlangıç:", baslangic)
@@ -908,15 +983,8 @@ class DanismaMasasiYonetimi(QWidget):
                 if oturum_hatasi_mi(yanit):
                     return
 
-                try:
-                    mesaj = yanit.json().get(
-                        "detail", "Görev düzenlenemedi."
-                    )
-                except ValueError:
-                    mesaj = "Görev düzenlenemedi."
-
                 QMessageBox.warning(
-                    pencere, "Düzenleme Hatası", str(mesaj)
+                    pencere, "Düzenleme Hatası", hata_detayi_metni(yanit, "Görev düzenlenemedi.")
                 )
                 return
 
