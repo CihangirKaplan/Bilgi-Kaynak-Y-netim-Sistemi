@@ -28,6 +28,15 @@ def veritabani_adi_dogrula(ad):
     return ad
 
 
+def yedek_izinlerini_kisitla(yol, izin):
+    """Linux/macOS'ta yedeği yalnızca sahibine açar (yedek parola özetleri ve kişisel veri içerir). Windows'ta izinler klasörden
+    devralınır; chmod orada anlamsızdır ve hata verirse yedeği engellemez."""
+    try:
+        os.chmod(yol, izin)
+    except OSError:
+        pass
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -44,7 +53,10 @@ def main(argv=None):
     except ValueError as hata:
         parser.error(str(hata))
 
+    klasor_vardi = YEDEK_KLASORU.is_dir()
     YEDEK_KLASORU.mkdir(parents=True, exist_ok=True)
+    if not klasor_vardi:                                   # kullanıcının var olan (paylaşımlı olabilir) klasörüne dokunulmaz
+        yedek_izinlerini_kisitla(YEDEK_KLASORU, 0o700)
     zaman = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     hedef = YEDEK_KLASORU / f"{args.database}_{zaman}.dump"
 
@@ -76,6 +88,7 @@ def main(argv=None):
         args.database,
     ]
 
+    onceki_umask = os.umask(0o077)           # pg_dump dosyayı oluşturduğu anda yalnızca sahibi okuyabilsin
     try:
         subprocess.run(
             komut,
@@ -85,9 +98,12 @@ def main(argv=None):
         )
         if not hedef.is_file() or hedef.stat().st_size == 0:
             raise RuntimeError("Yedek dosyası boş veya oluşturulamadı.")
+        yedek_izinlerini_kisitla(hedef, 0o600)
     except Exception:
         hedef.unlink(missing_ok=True)
         raise
+    finally:
+        os.umask(onceki_umask)
 
     print(f"Yedek oluşturuldu: {hedef.name}")
     print(f"Veritabanı: {args.database}")
