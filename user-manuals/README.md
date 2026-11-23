@@ -1,7 +1,7 @@
 # TKYS Kullanıcı Kılavuzları
 
 Bu klasör, Travma Kaynak Yönetim Sistemi'ni (TKYS) kullanan herkesin ilk başvuracağı kılavuzları içerir.
-Kılavuzlar uygulamada gördüğünüz düğme ve sayfa adlarıyla yazılmıştır; sürüm **1.0.0**, son güncelleme **20 Kasım 2026**.
+Kılavuzlar uygulamada gördüğünüz düğme ve sayfa adlarıyla yazılmıştır; sürüm **1.0.0**, son güncelleme **22 Kasım 2026**.
 
 ## Hangi kılavuzu okumalıyım?
 

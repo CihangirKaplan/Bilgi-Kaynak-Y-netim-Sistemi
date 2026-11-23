@@ -35,6 +35,7 @@ Danışma masasında geçirdiğiniz süre, **Görevi Başlat** ve **Görevi Biti
 - **Onaylandı:** Yönetici görevi onayladı; süreniz geçerli sayıldı.
 
 Görevi başlatmayı ya da bitirmeyi **unuttuysanız** kendiniz düzeltemezsiniz; **Memur**'a ya da yöneticiye haber verin, süreyi onlar düzenler.
+Görevi **bitirmeyi unutursanız** süre uzar: bir görev **en fazla 10 saat** (mesai süresi) olabilir; 10 saati aşan görevler yönetici ekranında "uzun görev" diye işaretlenir ve onaylanmadan önce saatleri kontrol edilir. Mümkünse görevi işiniz biter bitmez bitirin.
 
 ## 2. Danışan oluşturmak
 
@@ -105,7 +106,7 @@ Bir öğrencinin **Detay / Puanlar** düğmesiyle faaliyetlerini ve puanlarını
 
 1. **Faaliyet Kayıtları** sayfasında **＋ Yeni Faaliyet Ekle**'ye basın (ya da **Ctrl + N**).
 2. **Öğrenci Seç:** Listeden öğrenciyi seçin.
-3. **Faaliyet Türü:** Yapılan faaliyeti seçin. Aradığınız tür yoksa **📋 Faaliyet Türleri** ile yeni tür tanımlayabilirsiniz.
+3. **Faaliyet Türü:** Yapılan faaliyeti seçin. Aradığınız tür yoksa **📋 Faaliyet Türleri** ile yeni tür tanımlayabilirsiniz (aynı ad yeniden eklenemez; büyük/küçük harf farkı aynı ad sayılır). Pasif bir türe kayıt girilemez.
 4. **Birim:** *Kişi, Saat* gibi ölçü birimini seçin.
 5. **Miktar:** Sayıyı girin.
 6. Kaydedin. Yeşil bir bildirim çıkar.

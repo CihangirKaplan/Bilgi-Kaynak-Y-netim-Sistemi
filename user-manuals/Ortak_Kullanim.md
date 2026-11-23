@@ -32,11 +32,15 @@ telefonla doğruladıktan sonra** geçici bir şifre verir. (Güvenlik için tal
 ### Hatalı giriş ve kilit
 - Aynı hesapta art arda **5 hatalı** denemeden sonra hesap **1 dakika**, **10 hatalı** denemeden sonra **15 dakika** kilitlenir. Beklemeniz yeterlidir.
 - Aynı bilgisayardan kısa sürede çok fazla hatalı deneme yapılırsa o bilgisayardan giriş kısa süre engellenir.
+- **Şifre değiştirirken** eski şifrenizi art arda yanlış girerseniz de aynı kural geçerlidir: "Bu bilgisayardan çok fazla hatalı şifre denemesi yapıldı" uyarısı çıkar, biraz bekleyip yeniden deneyin.
 - Doğru giriş yapınca hatalı deneme sayacı sıfırlanır.
 
 ### Oturum süresi
 Oturumunuz giriş yaptıktan yaklaşık **45 dakika** sonra sona erer. Süre dolduğunda sistem sizi uyarır ve yeniden giriş ister.
 Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
+
+**Çıkış Yap** ya da başka bir bilgisayarda aynı hesapla çıkış yapılması oturumu hemen kapatır; eski oturumla yapılan istek
+"Oturum geçersiz. Yeniden giriş yapınız." uyarısıyla reddedilir. Ortak bilgisayarda işiniz bitince mutlaka **Çıkış Yap**'ı kullanın.
 
 ## 2. Ekran düzeni
 
@@ -94,7 +98,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 
 - **Danışanlar adla değil kodla** (örneğin `DAN-2026-0001`) kayıtlıdır. Danışanın adını, telefonunu ya da tanısını sisteme **yazmayın**.
 - Randevu iptal ederken ya da açıklama alanlarına **kişisel bilgi (ad, telefon, tanı) yazmayın**. İptal notu en fazla 100 karakterdir.
-- Sisteme yaptığınız önemli işlemler (giriş, kayıt ekleme/düzeltme/silme, rol değişikliği, Excel aktarımı) **denetim kaydına yazılır**.
+- Sisteme yaptığınız önemli işlemler (giriş, çıkış, kayıt ekleme/düzeltme/silme, rol değişikliği, Excel aktarımı) **denetim kaydına yazılır**; kaydın yanında işlemi yapan bilgisayarın adresi de tutulur.
 - Ekranınızı açık bırakıp ayrılmayın; ayrılırken pencereyi kapatın.
 
 ## 8. Sık karşılaşılan durumlar
@@ -104,7 +108,8 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 | **"Bu işlem için yetkiniz bulunmuyor."** | Rolünüzün bu işleme izni yok. Gerekiyorsa sistem yöneticinizden yetki isteyin |
 | Menüde bir sayfa yok | O sayfa için yetkiniz yok (bkz. [kılavuz ana sayfası](README.md) yetki tablosu) |
 | **"Sunucuya ulaşılamadı"** / liste yüklenmiyor | Sunucuyla bağlantı kesilmiş olabilir. Ağınızı kontrol edin, birkaç saniye sonra **F5** deneyin; sürerse yöneticinize bildirin |
-| **"Token süresi dolmuş"** / oturum uyarısı | Oturum süreniz doldu; yeniden giriş yapın |
+| **"Token süresi dolmuş"** / **"Oturum geçersiz"** | Oturum süreniz doldu ya da hesabınızdan çıkış yapıldı; yeniden giriş yapın |
+| **"Bu bilgisayardan çok fazla hatalı giriş / şifre denemesi yapıldı."** | Aynı bilgisayardan çok sayıda hatalı deneme yapıldı; birkaç dakika bekleyip yeniden deneyin |
 | **"Hesap geçici olarak kilitli."** | Çok fazla hatalı giriş yaptınız; 1 ya da 15 dakika bekleyip yeniden deneyin |
 | Liste boş görünüyor | Arama kutusunu ve dönem/durum süzgeçlerini kontrol edin; **Filtreleri Temizle** ya da dönemi "Tüm tarihler" yapın |
 | Randevu listesinde "(toplam N; en yeniler yüklendi, daraltmak için dönem seçin)" | Çok fazla randevu olduğundan en yeni 2000'i gösteriliyor; **Bu ay**, **Bu hafta** ya da **Özel aralık** seçerek eskilere ulaşın |

@@ -26,7 +26,7 @@ Yetkileriniz sistem yöneticisi tarafından değiştirilmiş olabilir; menüde o
 Merkezin dönemsel özet panelidir. Sayfayı açtığınızda ve süzgeçleri değiştirdiğinizde veri **kendiliğinden yüklenir**; **Yenile**'ye basmanız gerekmez
 (yalnızca **Tarih Aralığı** seçince tarihleri seçip **Yenile**'ye basarsınız).
 
-**Dönem:** *Bugün, Bu Hafta, Bu Ay, Geçen Ay, Tarih Aralığı.* Seçilen dönem, **aynı uzunluktaki önceki dönemle karşılaştırılır**.
+**Dönem:** *Bugün, Bu Hafta, Bu Ay, Geçen Ay, Tarih Aralığı.* Seçilen dönem, **önceki dönemle karşılaştırılır** (önceki dönemin nasıl seçildiği aşağıda).
 
 **Görünüm** (rapor türü) listesi:
 
@@ -44,6 +44,13 @@ Merkezin dönemsel özet panelidir. Sayfayı açtığınızda ve süzgeçleri de
 | **Faaliyet Onayları** | Faaliyet Raporu'nun özeti (onay bekleyen puanlar) |
 | **Bakım Gecikmeleri** | Geciken Bakım Planı Raporu'nun özeti |
 | **Bugün Merkezde** | Seçilen günün zamanlı olayları (randevu, rezervasyon, etkinlik) ve günlük özeti; dönemden bağımsızdır |
+
+**Sayılar nasıl okunur?**
+- Randevu, rezervasyon ve etkinlik sayılarında **iptal edilenler hariçtir**; iptaller ayrıca ("iptal hariç · N iptal ayrıca") gösterilir.
+- **Gelmeme oranı** = gelmeyenler / sonuçlanan randevular (tamamlanan + gelmeyen); **Tamamlanma oranı** de aynı paydayla hesaplanır.
+  Başlangıç saati geçtiği hâlde **sonucu girilmemiş** (ne Tamamlandı ne Gelmedi işaretlenmiş) randevu varsa kartta **"⚠ N randevunun sonucu girilmemiş"** uyarısı çıkar; oranlar bu yüzden eksik olabilir. Psikologlardan gün sonunda randevuları işaretlemelerini isteyin.
+- Kartlardaki **değişim rozeti** seçilen dönemi **takvime göre** seçilen önceki dönemle karşılaştırır: *Bu Ay* için geçen ayın aynı günleri (1–21 Kasım ↔ 1–21 Ekim), *Geçen Ay* için bir önceki ayın tamamı, *Bugün* ve *Bu Hafta* için geçen haftanın aynı günleri, diğer tarih aralıkları için hemen önceki aynı uzunluktaki aralık. Önceki dönemde hiç kayıt yoksa yüzde hesaplanamaz ve "önceki dönemde yok" yazar. Aynı bilgi **ⓘ Dönemler Hakkında** düğmesindedir.
+- Her grafikte **Sütun / Çizgi / Pasta** seçici vardır; grafiğin türünü ihtiyacınıza göre değiştirebilirsiniz.
 
 Önemli: **Oda Kullanımı, Cihaz Kullanımı, Yetkiler, Öğrenci Mevcudu, Faaliyet Onayları ve Bakım Gecikmeleri** görünümleri, ayrıntılı rapor sayfalarıyla **aynı veriden** beslenir; sayılar birebir aynıdır.
 Bir görünümün verisi için yetkiniz yoksa yalnızca o görünümde **"Bu rapor alınamadı"** yazar, diğerleri çalışır.
@@ -83,7 +90,7 @@ Başlığa tıklayarak sıralayabilir, arama ile süzebilirsiniz. Sayfanın sağ
 ## 2.1 Yeni kullanıcı oluşturmak
 1. **＋ Kullanıcı Oluştur**'a basın.
 2. **Sistem Rolü**'nü seçin. (Atayabileceğiniz roller yetkinize göre listelenir. **Geniş yetkili** bir rol seçince sistem uyarı gösterir: yalnızca güvendiğiniz kişilere verin.)
-3. **Kullanıcı Adı**'nı yazın. Kullanıcı adı **yalnızca İngilizce harf, rakam ve `.` `_` `-`** içerebilir; **boşluk, görünmez karakter ve benzer görünen yabancı harfler (Kiril, Yunan)** kabul edilmez. Başındaki/sonundaki boşluklar silinir. Kullanıcı adı **benzersiz** olmalıdır.
+3. **Kullanıcı Adı**'nı yazın. Kullanıcı adı **yalnızca İngilizce harf, rakam ve `.` `_` `-`** içerebilir; **boşluk, görünmez karakter ve benzer görünen yabancı harfler (Kiril, Yunan)** kabul edilmez. Başındaki/sonundaki boşluklar silinir. Kullanıcı adı **benzersiz** olmalıdır; **büyük/küçük harf fark etmez** (`Ayse` ile `ayse` aynı hesaptır, ikisi birlikte açılamaz ve girişte hangisini yazdığınız önemli değildir).
 4. Rol **Psikolog** ise **Kullanacağı Odaları** seçin: **her psikologun en az bir odası olmalıdır.**
 5. Rol **Danışma Öğrencisi** ise öğrencinin **Ad Soyad**, **Öğrenci Numarası** ve (isteğe bağlı) **Telefon** bilgisi de girilir.
 6. Kaydedin. Sistem kişiye bir **geçici parola** üretir ve **bir kez** gösterir (kopyalanabilir pencerede). **Pencere kapandıktan sonra bu parola tekrar gösterilemez**; kişiye hemen iletin. Kişi ilk girişte kendi şifresini belirler.
@@ -91,8 +98,14 @@ Başlığa tıklayarak sıralayabilir, arama ile süzebilirsiniz. Sayfanın sağ
 ## 2.2 Aktiflik, rol ve oda yetkisi
 - **Aktiflik Düzenle:** Seçili kullanıcıyı **pasife** alır ya da yeniden **aktif** eder. Pasif kullanıcı sisteme giremez. Hiçbir hesap silinmez; geçmişi korunur.
   Bir **psikoloğu pasife alırken** sistem bazı koşullar arar (örneğin ilerideki planlı randevuları, atanmış odaları, danışanları); bunlar çözülmeden pasife alma reddedilebilir ve nedenini yazar.
-- **Rol Ata / Değiştir:** Seçili kullanıcının rolünü değiştirir. **Kendi rolünüzü değiştiremezsiniz.** Rol değişikliği **denetim kaydına** yazılır.
+- **Rol Ata / Değiştir:** Seçili kullanıcının rolünü değiştirir. **Kendi rolünüzü değiştiremezsiniz.** Rol değişikliği **denetim kaydına** yazılır (önceki ve yeni rol, personel kodu ve etkilenen danışan sayısıyla).
 - **Oda Yetkileri:** Psikologun randevu verebileceği odaları belirler. Bir psikolog randevu açarken yalnızca kendisine atanmış odaları görür; "oda listesi boş" şikâyeti genellikle buradan çözülür. **Her psikologun en az bir odası olmalıdır.**
+
+## 2.3 Rol hiyerarşisi
+Kullanıcı yönetimi yetkisi olan biri, **kendi seviyesindeki ya da daha yüksek** bir rolü kullanıcıya veremez ve o roldeki kullanıcıları yönetemez
+(oluşturma, rol değiştirme, aktif/pasif yapma). Sıra yukarıdan aşağıya: **Sistem Admin › Müdür › Memur › Psikolog › Proje Asistanı › Danışma Öğrencisi**;
+sonradan tanımlanan roller en altta sayılır. Örneğin Müdür bir Memur ya da Psikolog oluşturabilir, ama **başka bir Müdür** oluşturamaz ya da pasife alamaz; bunu yalnızca Sistem Admin yapar.
+Engellenen işlemde "Kendi rolünüzle aynı ya da daha yüksek seviyedeki bir rolü atayamaz veya bu roldeki kullanıcıları yönetemezsiniz." mesajı çıkar.
 
 ---
 
@@ -100,13 +113,15 @@ Başlığa tıklayarak sıralayabilir, arama ile süzebilirsiniz. Sayfanın sağ
 
 Sistemde yapılan önemli işlemlerin **değiştirilemez** izidir (kim, ne zaman, ne yaptı). **Salt okunur**dur; kayıt silinemez ya da değiştirilemez.
 
-- **Süzgeçler:** **Dönem** (hazır ya da **Başlangıç / Bitiş** tarihi), **işlem türü** (aşağıdaki tablo), **kullanıcı adı ara**; **Filtrele**, **Filtreleri Temizle**, **Yenile**.
+- **Süzgeçler:** **Dönem** (hazır ya da **Başlangıç / Bitiş** tarihi), **işlem türü** (aşağıdaki liste), **kullanıcı adı ara**; **Filtrele**, **Filtreleri Temizle**, **Yenile**.
 - Liste sayfalıdır (**← Önceki / Sonraki →**). Bir satırın **Görüntüle** düğmesi **Denetim Kaydı Detayları** penceresini açar; silme ve güncelleme kayıtlarında **silinen veri ya da önceki/yeni değerler** burada görünür (kişisel veri olduğu için bazı alanlar kaydedilmez ve "kaydedilmeyen alanlar" olarak belirtilir).
 - **⬇ Excel'e Aktar:** Süzgeçlerinize uyan kayıtları dosyaya yazar.
 
-İşlem türleri: *Giriş Başarılı, Başarısız Giriş, Oluşturma, Güncelleme, İptal, Silme, Rol Değişikliği, Cihaz Durum Değişikliği, Parola Sıfırlama, Parola Değiştirme, Başarısız Parola Değiştirme* ve **Excel Aktarımı** (Cihaz, Öğrenci ve Danışan listelerinden Excel'e aktarım: kim, ne zaman, hangi liste, kaç satır).
+İşlem türleri: *Giriş Başarılı, Başarısız Giriş, Oluşturma, Güncelleme, İptal, Silme, Rol Değişikliği, Cihaz Durum Değişikliği, Parola Sıfırlama, Parola Değiştirme, Başarısız Parola Değiştirme, Çıkış, Görüntüleme* ve **Excel Aktarımı** (Cihaz, Öğrenci ve Danışan listelerinden Excel'e aktarım: kim, ne zaman, hangi liste, kaç satır).
+**Görüntüleme**, denetim kayıtlarına **kimin baktığını** gösterir (ilk sayfa açıldığında, aynı kişi için 10 dakikada bir kaydedilir; sayfa yenilemeleri günlüğü doldurmaz).
+Her kaydın **Görüntüle** penceresinde ve Excel çıktısında işlemin hangi bilgisayardan yapıldığını gösteren **İstemci Adresi** vardır (eski kayıtlarda boş olabilir).
 
-**Neye dikkat edilmeli?** Aynı kullanıcıdan art arda *Başarısız Giriş*, beklenmedik saatlerde *Silme* ya da çok satırlı *Excel Aktarımı* kayıtları incelenmeye değerdir.
+**Neye dikkat edilmeli?** Aynı kullanıcıdan art arda *Başarısız Giriş*, beklenmedik saatlerde *Silme* ya da çok satırlı *Excel Aktarımı* kayıtları incelenmeye değerdir; aynı hesabın alışılmadık bir **İstemci Adresi**'nden girmesi de dikkat çekicidir.
 
 # 4. Yetki Raporu
 
