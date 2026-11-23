@@ -102,7 +102,7 @@ def test_durum_degismiyorsa_ya_da_gonderilmediyse_arizali_cihaz_duzenlenebilir()
 def test_migrasyon_zincire_baglidir_ve_iki_yonde_onarir():
     yol = next((KOK / "database" / "migrations" / "versions").glob("d5f2a9c1b843_*.py"))
     kaynak = yol.read_text(encoding="utf-8")
-    assert 'revision: str = "d5f2a9c1b843"' in kaynak and '"c4e9a7d2b815"' in kaynak
+    assert 'revision: str = "d5f2a9c1b843"' in kaynak and '"e6a1d4b8c273"' in kaynak
     assert "SET durum = 'Kullanima_Hazir'" in kaynak and "SET durum = 'Arizali'" in kaynak
     assert kaynak.count("INSERT INTO denetim_kayitlari") == 2 and "'DEVICE_STATUS_CHANGE'" in kaynak     # her onarım denetim kaydına yazılır
     assert "NOT EXISTS (SELECT 1 FROM cihaz_arizalari" in kaynak and "cozuldu_mu IS NOT TRUE" in kaynak

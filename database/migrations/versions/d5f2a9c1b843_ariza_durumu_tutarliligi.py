@@ -9,7 +9,7 @@ Bu gecis mevcut tutarsiz kayitlari duzeltir ve her degisikligi denetim kaydina (
 2. Sutunu 'Kullanima_Hazir' olup acik arizasi OLAN cihazlar 'Arizali' yapilir (bakimda/kalibrasyonda/kullanim disi cihazlara dokunulmaz).
 
 Revision ID: d5f2a9c1b843
-Revises: c4e9a7d2b815
+Revises: e6a1d4b8c273
 Create Date: 2026-11-23 13:00:00.000000
 """
 from typing import Sequence, Union
@@ -17,7 +17,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "d5f2a9c1b843"
-down_revision: Union[str, Sequence[str], None] = "c4e9a7d2b815"
+down_revision: Union[str, Sequence[str], None] = "e6a1d4b8c273"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
