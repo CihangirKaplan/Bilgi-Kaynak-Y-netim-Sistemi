@@ -4,10 +4,12 @@ from datetime import date
 from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+LISTE_EN_FAZLA_ID = 200        # oda/rol kimliği listelerinde makul üst sınır (çok büyük listeyle sunucuyu yormayı engeller)
 
 
 def _zaman_coz(deger):
@@ -50,15 +52,6 @@ class Oda(Base):
     aktif_mi = Column(Boolean, default=True, nullable=False)
 
 
-# AUTH-001: User Modeli
-class KullaniciModeli(BaseModel):
-    kullanici_id: Optional[int] = None
-    kullanici_adi: str
-    parola_hash: str
-    rol_id: int
-    aktif_mi: bool = True
-    olusturulma_tarihi: Optional[datetime.datetime] = None
-
 # AUTH: Yeni kullanıcı oluşturma modeli
 # Kullanıcı adı: yalnızca ASCII harf, rakam ve . _ - (başta/sonda harf ya da rakam). Boşluk, görünmez karakter ve Kiril/Yunan gibi
 # Latin'e benzeyen harfler (taklit hesap) kabul edilmez. Başta/sonda boşluk kaydedilmeden önce kırpılır.
@@ -75,7 +68,7 @@ class KullaniciOlusturModeli(BaseModel):
         return deger.strip() if isinstance(deger, str) else deger
 
     rol_id: int = Field(gt=0)
-    oda_idleri: Optional[List[int]] = Field(default_factory=list)
+    oda_idleri: Optional[List[int]] = Field(default_factory=list, max_length=LISTE_EN_FAZLA_ID)
 
     # Yalnızca danışma öğrencisi rolü için: aynı işlemde öğrenci kaydı da oluşturulur.
     ad_soyad: Optional[str] = Field(default=None, max_length=100)
@@ -184,7 +177,7 @@ class RolDegistirModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rol_id: int = Field(gt=0)
-    oda_idleri: Optional[List[int]] = None  # yalnızca psikolog rolüne geçerken (en az bir aktif oda zorunlu)
+    oda_idleri: Optional[List[int]] = Field(default=None, max_length=LISTE_EN_FAZLA_ID)  # yalnızca psikolog rolüne geçerken (en az bir aktif oda zorunlu)
     ad_soyad: Optional[str] = Field(default=None, max_length=100)
     ogrenci_numarasi: Optional[str] = Field(default=None, max_length=15)
     telefon: Optional[str] = Field(default=None, max_length=20)
@@ -248,13 +241,6 @@ class DanisanKoduModeli(BaseModel):
     aktif_mi: bool = True
     olusturulma_tarihi: Optional[datetime.datetime] = None
     yas_grubu: Optional[str] = None       # COCUK / YETISKIN (kapalı liste)
-
-# ROOM-001: Oda Modeli -> odalar tablosu
-class OdaModeli(BaseModel):
-    oda_id: Optional[int] = None
-    oda_adi: str
-    kapasite: int = 1
-    aktif_mi: bool = True
 
 # APT-001: Randevu Modeli -> randevular tablosu
 class RandevuModeli(BaseModel):
@@ -775,10 +761,6 @@ class BakimGuncelleModeli(BaseModel):
 
 
 # ==========================================
-# DASHBOARD VE RAPORLAMA MODELLERİ (DASH)
-# ==========================================
-
-# ==========================================
 # BAKIM / KALİBRASYON PLANLARI (müdür konfigürasyonu)
 # ==========================================
 def _gorev_turu_temizle(deger):
@@ -820,22 +802,6 @@ class BakimPlaniGuncelleModeli(BaseModel):
 
     _gorev_turu = field_validator("gorev_turu")(_gorev_turu_temizle)
 
-
-class DashboardOzetModeli(BaseModel):
-    toplam_cihaz: int
-    aktif_cihaz: int
-    arizali_cihaz: int
-    bakimdaki_cihaz: int
-    kalibrasyondaki_cihaz: int = 0
-    acik_ariza_sayisi: int
-    bugunku_randevu_sayisi: int
-
-class YaklasanIslemModeli(BaseModel):
-    cihaz_adi: str
-    islem_turu: str # 'Bakım' veya 'Kalibrasyon'
-    tاريخ: str
-    kalan_gun: int
-    durum_kodu: str # 'KRITIK' (Süresi geçmiş/Çok yakın), 'UYARI' (Yaklaşıyor)
 
 class FaaliyetKayitModeli(BaseModel):
     ogrenci_id: int = Field(gt=0)
@@ -896,7 +862,7 @@ class HizliIzinGuncelleModel(BaseModel):
 class IzinDuzenleModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
     gorunen_ad: str = Field(min_length=1, max_length=100)
-    verilen_rol_idleri: list[int]
+    verilen_rol_idleri: list[int] = Field(max_length=LISTE_EN_FAZLA_ID)
  
  
 class RolGorunenAdModeli(BaseModel):
