@@ -8,9 +8,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from server.guvenlik import JWT_EXPIRE_MINUTES
 from server.surum import SURUM, UYGULAMA_ADI
 
-OTURUM_SURESI_DK = int(os.getenv("JWT_EXPIRE_MINUTES") or 45)
+OTURUM_SURESI_DK = JWT_EXPIRE_MINUTES      # tek kaynak: oturum anahtarının gerçek ömrüyle her zaman aynı
 YEDEK_ESKI_SAAT = 36        # bundan eski son yedek "eski" sayılır (günlük yedek + pay)
 
 
