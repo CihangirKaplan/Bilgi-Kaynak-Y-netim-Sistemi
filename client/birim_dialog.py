@@ -1,5 +1,6 @@
-import requests
 from client.api_yoneticisi import (
+    hata_detayi_metni,
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -20,7 +21,7 @@ class BirimYonetimDialog(QDialog):
         self.setWindowTitle("Faaliyet Birimleri Yönetimi")
         self.setMinimumSize(450, 450)
 
-        # HAYALET BUTONLARI VE SİYAH KUTULARI ÇÖZEN YENİ STİL YAPISI
+        # Pencere stili (açık zemin, belirgin düğmeler)
         self.setStyleSheet("""
             QDialog { background-color: #F8F9FA; }
             QLabel { color: #2C3E50; font-weight: bold; font-size: 13px; }
@@ -112,7 +113,7 @@ class BirimYonetimDialog(QDialog):
                     self.tablo.setItem(i, 0, item_id)
                     self.tablo.setItem(i, 1, item_ad)
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Veriler yüklenemedi: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Veriler yüklenemedi: {istek_hatasi_metni(e)}")
 
     def birim_ekle(self):
         yeni_ad, ok = QInputDialog.getText(self, "Yeni Birim Ekle", "Eklenecek birim adını girin (Örn: SAAT, KİŞİ):")
@@ -128,9 +129,9 @@ class BirimYonetimDialog(QDialog):
                     basari_bildirimi(self, "Yeni birim başarıyla eklendi!")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Hata", res.json().get("detail", "Eklenemedi."))
+                    QMessageBox.warning(self, "Hata", hata_detayi_metni(res, "Eklenemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {istek_hatasi_metni(e)}")
 
     def birim_duzenle(self):
         secili = self.tablo.selectionModel().selectedRows()
@@ -156,9 +157,9 @@ class BirimYonetimDialog(QDialog):
                     basari_bildirimi(self, "Birim başarıyla güncellendi!")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Hata", res.json().get("detail", "Güncellenemedi."))
+                    QMessageBox.warning(self, "Hata", hata_detayi_metni(res, "Güncellenemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {istek_hatasi_metni(e)}")
 
     def birim_sil(self):
         secili = self.tablo.selectionModel().selectedRows()
@@ -198,6 +199,6 @@ class BirimYonetimDialog(QDialog):
                     basari_bildirimi(self, "Birim başarıyla silindi.")
                     self.verileri_yukle()
                 else:
-                    QMessageBox.warning(self, "Kritik Uyarı", res.json().get("detail", "Silinemedi."))
+                    QMessageBox.warning(self, "Kritik Uyarı", hata_detayi_metni(res, "Silinemedi."))
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {istek_hatasi_metni(e)}")

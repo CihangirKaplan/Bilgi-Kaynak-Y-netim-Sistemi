@@ -1,11 +1,11 @@
-from client.api_yoneticisi import hata_detayi_metni
+import logging
+from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
-    QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit, QFrame
+    QWidget, QVBoxLayout, QPushButton, QLabel, QHeaderView,
+    QMessageBox, QDialog, QFormLayout, QComboBox, QDateEdit,
+    QLineEdit, QTextEdit, QFrame
 )
 from PySide6.QtCore import Qt, QDate
-import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, cihaz_siralama_adi
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
@@ -23,6 +23,8 @@ from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, is
                             yenile_butonu_olustur, bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+
+logger = logging.getLogger(__name__)
 
 BAKIM_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -69,7 +71,7 @@ class YeniBakimFormu(QDialog):
         self.txt_islem.setMaximumHeight(80)
         self.txt_maliyet = QLineEdit("0.0")
 
-        # --- YENİ EKLENEN: BAŞLANGIÇ VE BİTİŞ TARİHLERİ ---
+        # Başlangıç ve bitiş tarihleri
         self.dt_baslangic = QDateEdit(QDate.currentDate())
         self.dt_baslangic.setCalendarPopup(True)
 
@@ -201,11 +203,11 @@ class YeniBakimFormu(QDialog):
                 basari_bildirimi(self, "Bakım kaydı başarıyla eklendi.")
                 self.accept()
             else:
-                # ARTIK HATAYI GİZLEMİYORUZ, SUNUCUNUN CEVABINI EKRANA BASIYORUZ!
+                # Sunucunun verdiği neden kullanıcıya gösterilir.
                 hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Kayıt yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
 class BakimDuzenleFormu(QDialog):
     def __init__(self, api_url, token, bakim_verisi, parent=None, sil_fn=None):
@@ -320,7 +322,7 @@ class BakimDuzenleFormu(QDialog):
                 hata_mesaji = hata_detayi_metni(res, "Bilinmeyen Sunucu Hatası")
                 QMessageBox.warning(self, "Hata", f"Güncelleme yapılamadı!\n\nSebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
 class BakimYonetimEkrani(QWidget):
     """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
@@ -404,7 +406,7 @@ class BakimYonetimEkrani(QWidget):
             res.raise_for_status()
             bakimlar = res.json()
         except Exception as e:
-            print("Bakım listesi yükleme hatası:", e)
+            logger.warning("Bakım listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Bakım kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
             self.bos_mesaj.show()
             self.tablo.hide()
@@ -499,5 +501,5 @@ class BakimYonetimEkrani(QWidget):
             hata = hata_detayi_metni(res, "Bilinmeyen hata")
             QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
         return False

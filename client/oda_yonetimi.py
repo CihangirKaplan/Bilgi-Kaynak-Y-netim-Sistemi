@@ -1,11 +1,10 @@
 import sys
 import requests
-from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.api_yoneticisi import istek_hatasi_metni, oturum_kontrollu_istek, oturum_hatasi_mi
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QHBoxLayout, 
     QMessageBox, QApplication, QCheckBox, QLabel, QFrame
 )
-from PySide6.QtCore import Qt
 from client.bildirim_toast import basari_bildirimi
 from client.ui_components import StandartButon, StandartGirdi
 
@@ -215,7 +214,7 @@ class OdaFormu(QWidget):
         except requests.exceptions.Timeout:
             QMessageBox.warning(self, "Zaman Aşımı", "Sunucuya bağlanılamadı.")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", str(e))
+            QMessageBox.critical(self, "Hata", istek_hatasi_metni(e))
 
 
 if __name__ == "__main__":

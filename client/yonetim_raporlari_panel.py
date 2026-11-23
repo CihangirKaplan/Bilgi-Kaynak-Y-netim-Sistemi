@@ -6,9 +6,8 @@ from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
     QWidget, QFrame, QLabel, QPushButton, QComboBox,
     QDateEdit, QFileDialog, QMessageBox, QScrollArea,
-    QVBoxLayout, QHBoxLayout, QGridLayout,
-    QTableWidget, QTableWidgetItem, QHeaderView,
-    QSizePolicy,
+    QVBoxLayout, QHBoxLayout, QTableWidget,
+    QTableWidgetItem, QHeaderView,
 )
 
 from client.tablo_tasarimi import cihaz_hucresi_uygula
@@ -1445,7 +1444,6 @@ class YonetimRaporlariEkrani(QWidget):
                 p["proje_turu_dagilimi"]
             )
             etkinlik_iptal = max(0, po["etkinlik_toplam"] - po["etkinlik_iptal_edilmemis"])
-            etkinlik_iptal_once = max(0, pr["etkinlik_toplam"] - pr["etkinlik_iptal_edilmemis"])
             rez_iptal_orani = iptal_orani({"iptal_edildi": po["rezervasyon_iptal"], "toplam": po["rezervasyon_toplam"]})
             kartlar = [
                 ("Cihaz Rezervasyonu", po["rezervasyon_iptal_edilmemis"],

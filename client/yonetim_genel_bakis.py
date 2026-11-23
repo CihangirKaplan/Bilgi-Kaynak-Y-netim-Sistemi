@@ -5,7 +5,7 @@ import requests
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QFrame, QScrollArea, QSizePolicy,
+    QLabel, QFrame, QScrollArea,
 )
 
 from client.api_yoneticisi import (

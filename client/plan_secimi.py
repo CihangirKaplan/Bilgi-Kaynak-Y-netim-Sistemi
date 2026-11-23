@@ -5,9 +5,8 @@ Cihazın aktif planı varsa kayıt o plana bağlanabilir: sonraki tarih plan per
 kaydedilince sunucu planın 'sonraki tarihini' de ilerletir; böylece plan ile kayıt hep aynı
 tarihi gösterir. Plan seçmek zorunlu değildir; "Plan yok" seçiliyken form eskisi gibi çalışır.
 """
-import datetime
 
-from PySide6.QtCore import QDate, QObject
+from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QComboBox, QLabel
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi

@@ -7,7 +7,7 @@ Danışanlar yalnızca kodla tutulduğundan rapor kişisel veri içermez (FR-008
 from datetime import datetime
 
 import requests
-from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.randevu_rapor_excel import excel_dosyasi_olustur
 
 from PySide6.QtCore import QDate, Qt
@@ -329,7 +329,7 @@ class RandevuRaporlariEkrani(QWidget):
                 yanit.raise_for_status()
                 veri = yanit.json()
             except (requests.RequestException, ValueError) as hata:
-                QMessageBox.warning(self, "Rapor Hatası", f"Randevu raporu alınamadı:\n{hata}")
+                QMessageBox.warning(self, "Rapor Hatası", f"Randevu raporu alınamadı:\n{istek_hatasi_metni(hata)}")
                 return
         finally:
             self._yukleniyor = False
@@ -407,7 +407,7 @@ class RandevuRaporlariEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{hata}")
+            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
             return
         try:
             excel_dosyasi_olustur(veri, self._son_filtre, dosya_yolu)

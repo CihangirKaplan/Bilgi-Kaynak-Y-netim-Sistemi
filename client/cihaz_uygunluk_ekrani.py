@@ -8,6 +8,7 @@ Veri `/api/cihaz-uygunluk` ucundan gelir (yalnızca CIHAZ_UYGUNLUK_GORUNTULE izn
 işlem açıklaması gibi ayrıntılar içermez). Rezervasyon, arıza, bakım ve kalibrasyon sayfalarına
 geçiş düğmeleri yalnızca kullanıcının o işlem için yetkisi varsa görünür.
 """
+import logging
 from datetime import date, datetime, time, timedelta
 
 from PySide6.QtCore import Qt, QDate
@@ -20,6 +21,8 @@ from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.cihaz_rezervasyon_ekranlari import varsayilan_rezervasyon_zamanlari
 from client.tablo_tasarimi import (cihaz_hucresi_uygula, FORM_STIL, bos_mesaj_olustur, sayfa_basligi, sayi_cipi, tablo_olustur,
                             yenile_butonu_olustur)
+
+logger = logging.getLogger(__name__)
 
 # durum kodu -> (yazı rengi, arka plan)
 RENKLER = {
@@ -494,7 +497,7 @@ class CihazUygunlukEkrani(QWidget):
             if bugunku is None:
                 return
         except Exception as hata:
-            print("Cihaz uygunluk yükleme hatası:", hata)
+            logger.warning("Cihaz uygunluk bilgisi yüklenemedi: %s", hata)
             yanit = getattr(hata, "response", None)
             yetkisiz = yanit is not None and getattr(yanit, "status_code", None) == 403
             self.hafta_verisi = self.bugun_verisi = None

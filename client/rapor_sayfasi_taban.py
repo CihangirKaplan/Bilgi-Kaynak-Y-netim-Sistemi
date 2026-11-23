@@ -9,7 +9,7 @@ from datetime import datetime
 
 import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula
-from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
@@ -298,7 +298,7 @@ class RaporSayfasiTaban(QWidget):
             try:
                 veri = self.veriyi_getir(params)
             except (requests.RequestException, ValueError) as hata:
-                QMessageBox.warning(self, self.HATA_BASLIGI, f"{self.BASLIK} alınamadı:\n{hata}")
+                QMessageBox.warning(self, self.HATA_BASLIGI, f"{self.BASLIK} alınamadı:\n{istek_hatasi_metni(hata)}")
                 return
         finally:
             self._yukleniyor = False
@@ -346,7 +346,7 @@ class RaporSayfasiTaban(QWidget):
         try:
             veri = self.veriyi_getir({**self._son_params, "detay": "true"}, zaman_asimi=30)
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, self.HATA_BASLIGI, f"Excel için rapor verisi alınamadı:\n{hata}")
+            QMessageBox.warning(self, self.HATA_BASLIGI, f"Excel için rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
             return
         if veri is None:
             return

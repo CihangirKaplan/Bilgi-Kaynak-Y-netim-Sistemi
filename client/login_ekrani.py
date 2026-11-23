@@ -10,13 +10,24 @@ from PySide6.QtGui import QColor, QPixmap
 from client.main_window import AnaPencere, dinamik_rol_tanimla
 from client.sifre_degistir_ekrani import SifreDegistirEkrani
 from client.parola_talebi_dialog import ParolaTalebiDialog
-import faulthandler, traceback
+from client.istemci_gunlugu import GUNLUK_DOSYASI, gunlugu_kur
+import faulthandler
+import logging
 faulthandler.enable()
 
+logger = logging.getLogger(__name__)
+
+
 def hata_yakala(tip, deger, tb):
-    metin = "".join(traceback.format_exception(tip, deger, tb))
-    print(metin)
-    QMessageBox.critical(None, "Beklenmeyen Hata", metin)
+    # Teknik ayrıntı (hata dökümü) günlüğe yazılır; kullanıcıya yalnızca anlaşılır bir mesaj gösterilir.
+    logger.error("Beklenmeyen hata", exc_info=(tip, deger, tb))
+    QMessageBox.critical(
+        None,
+        "Beklenmeyen Hata",
+        "Beklenmeyen bir hata oluştu; son işleminiz tamamlanmamış olabilir.\n\n"
+        "Sorun tekrar ederse sistem sorumlusuna bildirin.\n"
+        f"Ayrıntılar: {GUNLUK_DOSYASI}",
+    )
 
 sys.excepthook = hata_yakala
 
@@ -474,9 +485,6 @@ class LoginEkrani(QWidget):
                 self.hatali_deneme = 0
                 self.hata_lbl.hide()
 
-                print("DEBUG: AnaPencere oluşturulmaya çalışılıyor...")
-                print(f"DEBUG Parametreler -> Rol: {aktif_rol}, Kullanıcı: {veri.get('kullanici_adi')}, ID: {veri.get('personel_id') or veri.get('kullanici_id')}")
-
                 dinamik_rol_tanimla(
                     aktif_rol, veri.get("rol_adi")
                 )
@@ -486,7 +494,6 @@ class LoginEkrani(QWidget):
                     token=veri.get("access_token"),
                     kullanici_id=veri.get("personel_id") or veri.get("kullanici_id")
                 )
-                print("DEBUG: AnaPencere başarıyla oluşturuldu!")
                 
                 self.ana_pencere.oturum_kapatildi.connect(self.oturum_kapandi)
                 self.ana_pencere.showMaximized()
@@ -513,7 +520,7 @@ class LoginEkrani(QWidget):
                 self.sifre_input.setFocus()
 
         except requests.exceptions.ConnectionError:
-            self.hata_goster("Sunucuya bağlanılamadı. API'nin açık olduğundan emin olun.")
+            self.hata_goster("Sunucuya bağlanılamadı. Ağ bağlantınızı kontrol edin; sorun sürerse sistem sorumlusuna bildirin.")
         except requests.exceptions.Timeout:
             self.hata_goster(
                 "Sunucu yanıt vermedi. Lütfen tekrar deneyin."
@@ -587,9 +594,10 @@ class LoginEkrani(QWidget):
 
 if __name__ == "__main__":
     from client.qt_dil import turkce_ceviriyi_yukle
+    gunlugu_kur()
     app = QApplication(sys.argv)
     if not turkce_ceviriyi_yukle(app):
-        print("Uyarı: Qt Türkçe çevirisi yüklenemedi.")
+        logger.warning("Qt Türkçe çevirisi yüklenemedi.")
     app.setStyle("Fusion")
     pencere = LoginEkrani()
     pencere.show()

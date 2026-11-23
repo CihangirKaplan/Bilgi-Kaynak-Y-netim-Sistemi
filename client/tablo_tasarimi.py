@@ -2,8 +2,8 @@
 import datetime
 import re
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame,
-                               QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy,
-                               QMessageBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QApplication)
+                               QTableWidget, QTableWidgetItem, QSizePolicy, QMessageBox,
+                               QStyle, QStyledItemDelegate, QStyleOptionViewItem, QApplication)
 from PySide6.QtCore import Qt, QRect, QSize
 from PySide6.QtGui import QColor, QFont, QFontMetrics
 from client.tablo_siralama import siralanabilir_yap

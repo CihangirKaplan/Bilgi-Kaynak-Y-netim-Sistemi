@@ -1,8 +1,9 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QFrame, QLabel)
-import requests
 from client.api_yoneticisi import (
+    hata_detayi_metni,
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -150,8 +151,8 @@ class OgrenciEkleDialog(QDialog):
                 basari_bildirimi(self, "Öğrenci sisteme başarıyla eklendi!")
                 self.accept()
             elif res.status_code == 400:
-                QMessageBox.warning(self, "Hata", res.json().get("detail", "Bu öğrenci numarası sistemde zaten var."))
+                QMessageBox.warning(self, "Hata", hata_detayi_metni(res, "Bu öğrenci numarası sistemde zaten var."))
             else:
                 QMessageBox.critical(self, "Hata", "Öğrenci kaydedilemedi.")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")

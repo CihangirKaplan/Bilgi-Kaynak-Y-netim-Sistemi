@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.api_yoneticisi import (
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -25,7 +26,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QTableWidget,
     QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
@@ -460,7 +460,7 @@ class CihazRaporlariEkrani(QWidget):
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
             QMessageBox.warning(
-                self, "Rapor Hatası", f"Rapor bilgileri alınamadı:\n{hata}"
+                self, "Rapor Hatası", f"Rapor bilgileri alınamadı:\n{istek_hatasi_metni(hata)}"
             )
             return
 
