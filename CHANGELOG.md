@@ -34,7 +34,7 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 - Randevu oluşturma, düzenleme, iptal (nedeniyle); Tamamlandı / Gelmedi durumları.
 - Psikolog ve oda çakışması veritabanı düzeyinde engellenir; formda dolu saatler soluk ve seçilemez.
-- Mesai (08:00–18:00), hafta sonu ve geçmiş tarih kuralları; psikolog yalnızca kendi randevularını yönetir.
+- Saat kuralı (saat başı 09:00–15:00, her randevu 1 saat; ekranla sunucu aynı kuralı uygular), hafta sonu ve geçmiş tarih kuralları; psikolog yalnızca kendi randevularını yönetir.
 - Danışan kodları (yıl bazlı), danışan yaş grubu, terapi türü ve görüşme tipi; Danışanlar sayfası.
 - Randevu Raporları sayfası ve dört sayfalı Excel çıktısı.
 

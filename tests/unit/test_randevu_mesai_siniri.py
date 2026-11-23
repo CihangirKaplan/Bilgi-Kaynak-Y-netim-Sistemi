@@ -1,4 +1,4 @@
-"""Randevuların 08:00-18:00 mesai sınırı testleri."""
+"""Randevu saat kuralı: saat başı 09:00-15:00 arasında başlar, tam 1 saat sürer (istemcideki saat listesiyle aynı)."""
 
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -22,9 +22,9 @@ def randevu_verisi(bas, bit):
 
 
 @pytest.mark.parametrize("bas,bit", [
-    ("08:00", "09:00"),
-    ("08:30", "10:00"),
-    ("17:00", "18:00"),
+    ("09:00", "10:00"),
+    ("12:00", "13:00"),
+    ("15:00", "16:00"),
 ])
 def test_mesai_icinde_randevu_kabul_edilir(bas, bit):
     model = RandevuOlusturModeli.model_validate(
@@ -34,10 +34,16 @@ def test_mesai_icinde_randevu_kabul_edilir(bas, bit):
 
 
 @pytest.mark.parametrize("bas,bit", [
-    ("07:30", "09:00"),
-    ("17:00", "19:00"),
+    ("08:00", "09:00"),       # ilk saatten önce
+    ("16:00", "17:00"),       # son başlangıç saatinden sonra
+    ("17:00", "18:00"),
     ("18:00", "19:00"),
-    ("10:00", "10:00"),
+    ("07:30", "09:00"),
+    ("10:00", "10:00"),       # süre sıfır
+    ("09:30", "10:30"),       # saat başı değil
+    ("10:00", "11:30"),       # 1 saatten uzun
+    ("10:00", "12:00"),
+    ("10:00", "10:30"),       # 1 saatten kısa
 ])
 def test_mesai_disinda_randevu_reddedilir(bas, bit):
     with pytest.raises(ValidationError):
@@ -86,7 +92,7 @@ def test_yalnizca_bitis_1900_yapilirsa_guncelleme_reddedilir():
             )
 
     assert hata.value.status_code == 422
-    assert "08:00-18:00" in str(hata.value.detail)
+    assert "1 saat" in str(hata.value.detail)
 
     sorgular = [
         cagri.args[0].strip().upper()
@@ -98,3 +104,23 @@ def test_yalnizca_bitis_1900_yapilirsa_guncelleme_reddedilir():
         for sorgu in sorgular
     )
     conn.commit.assert_not_called()
+
+
+def test_sunucu_kurali_istemcideki_saat_listesiyle_ayni():
+    """Ekranın sunduğu saatlerle sunucunun kabul ettiği saatler birebir aynı olmalı (biri değişirse bu test düşer)."""
+    from client.randevu_ekranlari import SAAT_LISTESI
+    from server.modeller import RANDEVU_ILK_SAAT, RANDEVU_SON_BASLANGIC_SAATI
+
+    beklenen = [f"{saat:02d}:00" for saat in range(RANDEVU_ILK_SAAT, RANDEVU_SON_BASLANGIC_SAATI + 1)]
+    assert SAAT_LISTESI == beklenen
+
+    for saat in SAAT_LISTESI:                                  # ekrandaki her saat sunucuda geçerli
+        bas = int(saat[:2])
+        RandevuOlusturModeli.model_validate(randevu_verisi(saat, f"{bas + 1:02d}:00"))
+
+
+def test_eski_mesai_penceresindeki_ama_ekranda_olmayan_saatler_reddedilir():
+    """Önceki kural 08:00-18:00 arasındaki her dakikayı kabul ediyordu; artık yalnızca ekrandaki saatler geçerli."""
+    for bas, bit in (("08:00", "09:00"), ("08:30", "10:00"), ("17:00", "18:00")):
+        with pytest.raises(ValidationError):
+            RandevuOlusturModeli.model_validate(randevu_verisi(bas, bit))

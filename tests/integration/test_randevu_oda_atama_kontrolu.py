@@ -22,7 +22,7 @@ from server.sunucu import (
     randevulari_listele,
 )
 
-BASLANGIC = datetime(2026, 12, 1, 10, 0)
+BASLANGIC = datetime(2035, 12, 4, 10, 0)        # uzak gelecekte bir Salı: "geçmişe alınamaz" ve hafta sonu kuralları bu testi zamanla bozmasın
 BITIS = BASLANGIC + timedelta(hours=1)
 
 
@@ -89,7 +89,7 @@ def test_guncellemede_oda_ve_psikolog_degismiyorsa_atama_sorgulanmaz():
         None,  # çakışma yok
     ] + [None] * 8
     guncelleme = MagicMock()
-    guncelleme.model_dump.return_value = {"bitis_zamani": BITIS + timedelta(hours=1)}
+    guncelleme.model_dump.return_value = {"baslangic_zamani": BASLANGIC + timedelta(hours=1), "bitis_zamani": BITIS + timedelta(hours=1)}   # bir saat sonraki geçerli saate kaydır
 
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         sonuc = randevu_guncelle(randevu_id=10, guncelleme=guncelleme, kullanici_id=1)

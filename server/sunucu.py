@@ -2592,7 +2592,7 @@ def danisan_psikologa_ait_mi(sahip_psikolog_id, psikolog_id) -> bool:
     return sahip_psikolog_id is None or sahip_psikolog_id == psikolog_id
 
 
-def randevu_taraflarini_denetle(cursor, danisan_kod_id, psikolog_id, danisan_degisti=True):
+def randevu_taraflarini_denetle(cursor, danisan_kod_id, psikolog_id):
     """Randevunun danışanı aktif mi, psikologu aktif bir psikolog mu ve danışan bu psikoloğa mı ait? Danışanın yaş grubunu döndürür."""
     cursor.execute("SELECT yas_grubu, olusturan_psikolog_id FROM danisan_kodlari WHERE danisan_kod_id = %s AND aktif_mi = TRUE FOR SHARE;", (danisan_kod_id,))
     danisan = cursor.fetchone()

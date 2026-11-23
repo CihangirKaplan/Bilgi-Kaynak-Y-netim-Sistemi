@@ -155,8 +155,9 @@ kayıt cihaz durumunu değiştirmemiş olsa bile "bakımda/kalibrasyonda" sayıl
   2 saattir).
 - **İptal edilen** randevu, rezervasyon ve etkinlikler kullanım sayılmaz; cihaz raporunda iptaller ayrıca gösterilir.
 - **Oda toplamı** = randevu + (odası seçilmiş) cihaz rezervasyonu + oda etkinliği saatleri.
-- **Mesai doluluk oranı** = toplam saat / (hafta içi gün sayısı × günlük 8 saat). Bu bir **varsayımdır** ve raporda belirtilir; hafta sonu kullanımı oranı %100'ün
-  üzerine çıkarabilir.
+- **Mesai doluluk oranı** = toplam saat / (hafta içi gün sayısı × günlük 8 saat). Bu bir **varsayımdır** ve raporda belirtilir: normal çalışma günü 8 saat sayılır.
+  Sistem istisnai durumlar için 08:00-18:00 arasındaki (10 saatlik) bir pencerede de kayıt kabul eder (cihaz rezervasyonu, oda etkinliği); bu yüzden
+  günde 8 saatten fazla kullanım ya da hafta sonu kullanımı oranı **%100'ün üzerine çıkarabilir**. Bu bir hata değil, istisna kullanımının göstergesidir.
 
 ### 4.3 Öğrenci ve faaliyet
 - **Puan** = adet × kaydın girildiği andaki faaliyet puanı. Faaliyetin puanı sonradan değişse bile eski kayıtların puanı, yöneticinin açıkça "geçmişi güncelle" demesi
@@ -214,7 +215,7 @@ Aynı bilgi farklı raporlarda farklı sayı vermemelidir. Aşağıdaki eşleşm
 ## 7. Bilinen sınırlar ve varsayımlar
 
 - Oda ve cihaz kullanım saatleri **planlanan süredir**; gerçekleşen kullanım süresi ölçülmez.
-- Mesai doluluk oranı **hafta içi günlük 8 saat** varsayımına dayanır (kodda sabit değerdir; merkezin gerçek çalışma saatine göre değiştirilebilir).
+- Mesai doluluk oranı **hafta içi günlük 8 saat** varsayımına dayanır (merkezin kararıdır, kodda sabit değerdir: `GUNLUK_MESAI_SAATI`). Psikolog randevuları ise 09:00-15:00 arasında saat başı, 1 saatliktir.
 - **PDF** çıktısı yalnızca Yönetim Raporları'ndadır; diğer raporlar Excel olarak alınır.
 - Excel detay sayfaları kayıt sayısıyla sınırlıdır (rezervasyon ve faaliyet detayı en çok 5.000 kayıt, audit en çok 20.000 kayıt, onay bekleyen listesi ilk 20).
 - **Danışan bazlı devam raporu yoktur.** Danışan tarafı gizlilik açısından hassas olduğundan, ihtiyaç doğarsa yalnızca toplam sayılarla ve küçük gruplarda gizleme kuralıyla

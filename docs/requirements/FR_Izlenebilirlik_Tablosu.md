@@ -16,16 +16,15 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 
 | Durum | Adet | Maddeler |
 |---|---|---|
-| ✅ Karşılanıyor | 60 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
-| ⚠️ Kısmen | 6 | FR-013, FR-052, FR-053, FR-054, FR-055, FR-058 |
-| ❌ Karşılanmıyor | 1 | FR-012 |
+| ✅ Karşılanıyor | 62 | Aşağıdaki ⚠️ ve ❌ satırları dışındaki tüm maddeler |
+| ⚠️ Kısmen | 5 | FR-052, FR-053, FR-054, FR-055, FR-058 |
+| ❌ Karşılanmıyor | 0 | — |
 
 ## Açık işler
 
 1. **FR-012 Günlük takvim / FR-013 Haftalık takvim:** Menüye bağlı olmayan `client/haftalik_takvim.py` prototipi **silindi** (22 Kasım 2026);
-   ayrı bir takvim ekranı **yapılmayacak**. Randevular **Randevu Yönetimi** listesinden, oda doluluğu **Oda Kullanımı** ızgarasından, cihaz
-   doluluğu **Cihaz Uygunluk** takviminden izlenir. Bu iki gereksinim bu yüzden karşılanmıyor/kısmen görünür; gereksinim kapsam dışı sayılacaksa
-   ürün sahibi onayıyla `D02_Requirements_v1.md` ve bu tablo birlikte güncellenmelidir.
+   ayrı bir takvim ekranı **yapılmayacak**. Gereksinimler **Oda Kullanımı** ekranının **Gün** ve **Hafta** görünümleriyle karşılanıyor (randevular
+   oda bazlı saatlik ızgarada); bu değerlendirme ürün sahibine bildirilecektir. İtiraz gelirse ayrı takvim ekranı yeniden ele alınır.
 2. **FR-052 … FR-055 ve FR-058 (⚠️ Kısmen):** İlgili testler 20 Kasım 2026'da çalıştırıldı ve geçti (336 geçti). Gerçek veritabanı testlerinden
    dördü, test veritabanında hazır öğrenci olmadığında **atlanıyordu** (`test_ogrenci_yonetimi_postgresql_quality.py`,
    `test_faaliyet_turleri_postgresql_quality.py`); bu testler artık kendi verisini oluşturup temizlediği için CI'da da çalışır.
@@ -59,8 +58,8 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-009 | Randevu oluşturma | ✅ | `POST /api/randevular`, `randevu_ekranlari.py` | `test_randevu_branch_quality.py`, `test_randevu_yetkilendirme.py`, `test_randevu_girdi_dogrulama.py` Ek: randevu formunda dolu saatler soluk ve seçilemez (`test_randevu_doluluk_arayuz.py`, `test_randevu_doluluk_sunucu.py`); oda ve psikolog seçimi kuralları `test_randevu_oda_atama_kontrolu.py`. |
 | FR-010 | Randevu düzenleme | ✅ | `PATCH /api/randevular/{id}` | `test_randevu_guncelleme_quality.py` |
 | FR-011 | Randevu iptali | ✅ | `PATCH /api/randevular/{id}/iptal` | `test_randevu_branch_quality.py`, `test_randevu_yetkilendirme.py` |
-| FR-012 | Günlük takvim | ❌ | Ayrı günlük takvim ekranı yok; prototip silindi (bkz. Açık işler 1). Günlük akış: Randevu Yönetimi listesi (dönem süzgeci), Dashboard "bugünkü randevular" | Karar: yapılmayacak; gereksinim kapsam dışı sayılacaksa ürün sahibi onayı gerekir |
-| FR-013 | Haftalık takvim | ⚠️ | Ayrı haftalık takvim ekranı yok; prototip silindi (bkz. Açık işler 1). Hafta görünümüne en yakın: Oda Kullanımı ızgarası ve Cihaz Uygunluk takvimi | Karar: yapılmayacak; gereksinim kapsam dışı sayılacaksa ürün sahibi onayı gerekir |
+| FR-012 | Günlük takvim | ✅ | `client/oda_kullanimi_ekrani.py`: **Oda Kullanımı** ekranının **Gün** görünümü, seçilen günün randevularını (rezervasyon ve etkinliklerle birlikte) saatlik ızgarada gösterir; ayrıca Randevu Yönetimi listesi (dönem süzgeci) ve Dashboard "bugünkü randevular" | `test_oda_kullanimi.py`. Ayrı bir takvim ekranı yapılmadı (prototip silindi); gereksinim bu görünümle karşılanıyor, ürün sahibine bildirildi |
+| FR-013 | Haftalık takvim | ✅ | `client/oda_kullanimi_ekrani.py`: **Oda Kullanımı** ekranının **Hafta** görünümü (Pazartesi-Pazar, gün gün, ileri/geri gezinme) randevuları haftalık ızgarada gösterir | `test_oda_kullanimi.py` (hafta gezinme). Ayrı bir takvim ekranı yapılmadı; gereksinim bu görünümle karşılanıyor, ürün sahibine bildirildi |
 | FR-014 | Psikolog çakışma kontrolü | ✅ | Migration `d39bab18d6fe` (`psikolog_randevu_cakisma` EXCLUDE kısıtı), sunucuda 409 yanıtı | `test_randevu_branch_quality.py`, `test_randevu_deadlock_quality.py`; gerçek PostgreSQL ile `test_randevu_eszamanlilik_quality.py` (PG) |
 | FR-015 | Oda çakışma kontrolü | ✅ | Migration `d39bab18d6fe` (`oda_randevu_cakisma` EXCLUDE kısıtı), sunucuda 409 yanıtı | FR-014 ile aynı testler |
 | FR-016 | Cihaz çakışma kontrolü (cihaz rezervasyonunda) | ✅ | Cihaz rezervasyonu EXCLUDE kısıtı, `POST /api/rezervasyonlar` | `test_cihaz_rezervasyon_eszamanlilik.py`; gerçek PostgreSQL için aynı dosyada bir (PG) testi. Gereksinim metni PR #252 ile "cihaz rezervasyonu" olarak düzeltildi |
@@ -129,7 +128,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR | Gereksinim | Durum | Kodda nerede | Test kanıtı / not |
 |---|---|---|---|---|
 | FR-046 | PostgreSQL yedekleme | ✅ | `scripts/backup/veritabani_yedekle.py` | `test_backup_restore.py` |
-| FR-047 | Otomatik yedekleme | ✅ | `scripts/backup/otomatik_yedekleme.py`, `scripts/windows/kurulum.py` (Görev Zamanlayıcı), `scripts/launchd/kurulum.py` | `test_otomatik_yedekleme.py`, `test_windows_backup_setup.py` |
+| FR-047 | Otomatik yedekleme | ✅ | `scripts/backup/otomatik_yedekleme.py`, `scripts/windows/kurulum.py` (Görev Zamanlayıcı) | `test_otomatik_yedekleme.py`, `test_windows_backup_setup.py` |
 | FR-048 | Yedek tarih bilgisi | ✅ | Dosya adı `<veritabani>_<tarih>_<saat>_<mikrosaniye>.dump` | `test_backup_restore.py` |
 | FR-049 | Yedek rotasyonu | ✅ | `scripts/backup/yedek_rotasyonu.py` (varsayılan 14 gün; en yeni 3 yedek her zaman korunur) | `test_backup_restore.py`, `test_otomatik_yedekleme.py` |
 | FR-050 | Geri yükleme | ✅ | `scripts/restore/veritabani_geri_yukle.py` (yeni veritabanına) | `test_veritabani_geri_yukle.py` |

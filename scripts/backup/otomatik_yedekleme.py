@@ -1,7 +1,7 @@
 """TKYS otomatik veritabanı yedekleme ve rotasyon görevi.
 
 Varsayılan olarak .env içindeki DB_NAME veritabanını yedekler, ardından o veritabanının
-14 günden eski yedeklerini temizler. Zamanlanmış görev (Windows/macOS) bu betiği
+14 günden eski yedeklerini temizler. Zamanlanmış görev (Windows Görev Zamanlayıcı) bu betiği
 parametresiz çalıştırır.
 """
 
