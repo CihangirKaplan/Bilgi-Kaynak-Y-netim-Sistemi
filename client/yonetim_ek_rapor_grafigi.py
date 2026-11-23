@@ -24,7 +24,7 @@ def grafik_verisi(rapor, veriler):
         "Öğrenci Mevcudu": (
             "ogrenci_rapor", "tur_dagilimi", "etiket", "toplam"
         ),
-        "Faaliyet Onayları": (
+        "Faaliyetler": (
             "faaliyet_rapor", "faaliyetler", "faaliyet", "kayit_sayisi"
         ),
         "Bakım Gecikmeleri": (
@@ -64,7 +64,7 @@ GRAFIK_METINLERI = {
     "Cihaz Kullanımı": ("Cihazlara Göre Rezervasyon", "Rezervasyon sayısı · en çok kullanılan 10 cihaz", "Rezervasyon Sayısı"),
     "Yetkiler": ("Rollere Göre Kullanıcı Sayısı", "Güncel durum · dönemden bağımsız", "Toplam Kullanıcı"),
     "Öğrenci Mevcudu": ("Öğrenci Türlerine Göre Mevcut", "Güncel durum · dönemden bağımsız", "Öğrenci Sayısı"),
-    "Faaliyet Onayları": ("Faaliyet Türlerine Göre Kayıt", "Seçilen dönemdeki faaliyet kayıtları", "Faaliyet Kayıt Sayısı"),
+    "Faaliyetler": ("Faaliyet Türlerine Göre Kayıt", "Seçilen dönemdeki faaliyet kayıtları", "Faaliyet Kayıt Sayısı"),
     "Bakım Gecikmeleri": ("Cihazlara Göre Geciken Planlar", "Bugünkü durum · dönemden bağımsız", "Geciken Plan Sayısı"),
 }
 

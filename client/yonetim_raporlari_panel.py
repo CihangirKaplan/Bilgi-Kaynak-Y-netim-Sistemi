@@ -37,7 +37,7 @@ RAPOR_TURLERI = (
     "Genel Bakış", "Randevular", "Cihazlar",
     "Öğrenciler", "Proje / Deney",
     "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
-    "Öğrenci Mevcudu", "Faaliyet Onayları", "Bakım Gecikmeleri",
+    "Öğrenci Mevcudu", "Faaliyetler", "Bakım Gecikmeleri",
     "Bugün Merkezde",
 )
 
@@ -326,29 +326,31 @@ def ogrenci_mevcut_gorunumu(veri):
     return kartlar, tablolar
 
 
-def faaliyet_onay_gorunumu(veri):
-    """'Faaliyet Onayları' görünümü: 4 kart + 5 tablo (Faaliyet Raporu sayfasıyla aynı veri)."""
+def faaliyet_gorunumu(veri):
+    """'Faaliyetler' görünümü: 4 kart + 5 tablo (Faaliyet Raporu sayfasıyla aynı veri)."""
     if veri is None:
         return _veri_yok_gorunumu()
     ozet = veri["ozet"]
-    eski = ozet.get("en_eski_bekleyen_gun")
     kartlar = [
-        ("Faaliyet Kaydı", ozet["kayit_sayisi"], f"Toplam miktar: {ozet['faaliyet_miktari']}"),
-        ("Toplam Puan", sayi_metni(ozet["toplam_puan"]), f"Onaylı: {sayi_metni(ozet['onayli_puan'])} · Bekleyen: {sayi_metni(ozet['onay_bekleyen_puan'])}"),
-        ("Onay Bekleyen Kayıt", ozet["onay_bekleyen_kayit"], f"En eski {eski} gündür bekliyor" if eski is not None else "Bekleyen kayıt yok"),
+        ("Faaliyet Kaydı", ozet["kayit_sayisi"], "Seçilen dönem"),
+        ("Faaliyet Miktarı", ozet["faaliyet_miktari"], "Kayıtlardaki adetlerin toplamı"),
+        ("Toplam Puan", sayi_metni(ozet["toplam_puan"]), "Adet × kayıt puanı"),
         ("Faaliyet Yapan Öğrenci", ozet["faaliyet_yapan_ogrenci"],
          f"Kayıt başına ort. {sayi_metni(ozet['ortalama_puan_kayit'])} puan" if ozet.get("ortalama_puan_kayit") is not None else ""),
     ]
     tablolar = [
-        ("Faaliyet Türüne Göre", ["Faaliyet", "Kayıt", "Puan", "Bekleyen"],
-         [(f["faaliyet"], f["kayit_sayisi"], sayi_metni(f["puan"]), f["onay_bekleyen"]) for f in veri["faaliyetler"][:8]]),
+        ("Faaliyet Türüne Göre", ["Faaliyet", "Kayıt", "Puan"],
+         [(f["faaliyet"], f["kayit_sayisi"], sayi_metni(f["puan"])) for f in veri["faaliyetler"][:8]]),
         ("Birime Göre", ["Birim", "Kayıt", "Miktar"], [(b["birim"], b["kayit_sayisi"], b["miktar"]) for b in veri["birimler"][:8]]),
         ("Öğrenci Türüne Göre", ["Tür", "Öğrenci", "Puan"], [(t["etiket"], t["ogrenci_sayisi"], sayi_metni(t["puan"])) for t in veri["ogrenci_turleri"]]),
-        ("Onay Bekleyen Kayıtlar", ["Öğrenci", "Faaliyet", "Gün"],
-         [(b["ogrenci"], b["faaliyet"], b["bekleme_gun"]) for b in veri["onay_bekleyenler"][:8]] or [("Onay bekleyen kayıt yok.", "", "")]),
+        ("Dönem Özeti", ["Gösterge", "Değer"], [
+            ("Faaliyet kaydı", ozet["kayit_sayisi"]),
+            ("Faaliyet miktarı", ozet["faaliyet_miktari"]),
+            ("Toplam puan", sayi_metni(ozet["toplam_puan"])),
+            ("Faaliyet yapan öğrenci", ozet["faaliyet_yapan_ogrenci"]),
+        ]),
         ("Önemli Açıklamalar", ["Bilgi"], [
             ("Puan = adet × kaydın girildiği andaki faaliyet puanı.",),
-            ("Toplam puana onay bekleyen kayıtlar da dahildir.",),
             ("Sayılar Faaliyet Raporu sayfasıyla aynıdır.",),
         ]),
     ]
@@ -1157,7 +1159,7 @@ class YonetimRaporlariEkrani(QWidget):
 
         ek_raporlar = (
             "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
-            "Öğrenci Mevcudu", "Faaliyet Onayları",
+            "Öğrenci Mevcudu", "Faaliyetler",
             "Bakım Gecikmeleri",
         )
         self.ek_rapor_grafigi.setVisible(
@@ -1371,8 +1373,6 @@ class YonetimRaporlariEkrani(QWidget):
                 o["faaliyet_dagilimi"]
             )
             aktif = o["guncel_ogrenci"]["aktif"]
-            bekleyen_kayit = max(0, oo["kayit_sayisi"] - oo["onayli_kayit"])
-            bekleyen_puan = max(0, oo["toplam_puan"] - oo["onayli_puan"])
             katilim = (oo["faaliyet_yapan_ogrenci"] / aktif) if aktif else None
             kartlar = [
                 ("Aktif Öğrenci", aktif,
@@ -1381,17 +1381,16 @@ class YonetimRaporlariEkrani(QWidget):
                  f"Aktiflerin {yuzde_metni(katilim)}'i" if katilim is not None else "Seçilen dönem",
                  {"once": ore["faaliyet_yapan_ogrenci"], "yon": 1}),
                 ("Toplam Puan", oo["toplam_puan"],
-                 "Onay bekleyenler dahil",
+                 "Seçilen dönem",
                  {"once": ore["toplam_puan"], "yon": 1}),
-                ("Onay Bekleyen Puan", bekleyen_puan,
-                 f"{bekleyen_kayit} kayıt onay bekliyor" if bekleyen_kayit else "Bekleyen kayıt yok",
-                 {"uyari": bool(bekleyen_kayit)}),
+                ("Faaliyet Kaydı", oo["kayit_sayisi"],
+                 "Seçilen dönem",
+                 {"once": ore["kayit_sayisi"], "yon": 1}),
             ]
             alanlar = [
                 ("Faaliyet kaydı", "kayit_sayisi"),
                 ("Faaliyet miktarı", "faaliyet_miktari"),
                 ("Toplam puan", "toplam_puan"),
-                ("Onaylı puan", "onayli_puan"),
                 ("Faaliyet yapan öğrenci",
                  "faaliyet_yapan_ogrenci"),
             ]
@@ -1405,9 +1404,9 @@ class YonetimRaporlariEkrani(QWidget):
                  ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
                      (ad, oo[kod], ore[kod], degisim_metni(oo[kod], ore[kod])) for ad, kod in alanlar
                  ]),
-                ("Onay Durumu", ["Gösterge", "Kayıt", "Puan"], [
-                    ("Onaylanan", oo["onayli_kayit"], oo["onayli_puan"]),
-                    ("Onay bekleyen", bekleyen_kayit, bekleyen_puan),
+                ("Önemli Açıklamalar", ["Bilgi"], [
+                    ("Puan = adet × kaydın girildiği andaki faaliyet puanı.",),
+                    ("Öğrenci mevcudu günceldir; diğer sayılar seçilen döneme aittir.",),
                 ]),
                 ("Katılım", ["Gösterge", "Değer"], [
                     ("Aktif öğrenci (güncel)", aktif),
@@ -1433,8 +1432,8 @@ class YonetimRaporlariEkrani(QWidget):
         elif tur == "Öğrenci Mevcudu":
             kartlar, tablolar = ogrenci_mevcut_gorunumu(self.veriler.get("ogrenci_rapor"))
 
-        elif tur == "Faaliyet Onayları":
-            kartlar, tablolar = faaliyet_onay_gorunumu(self.veriler.get("faaliyet_rapor"))
+        elif tur == "Faaliyetler":
+            kartlar, tablolar = faaliyet_gorunumu(self.veriler.get("faaliyet_rapor"))
 
         elif tur == "Bakım Gecikmeleri":
             kartlar, tablolar = bakim_gecikme_gorunumu(self.veriler.get("bakim_plani"))
@@ -1493,7 +1492,7 @@ class YonetimRaporlariEkrani(QWidget):
 
         if tur in (
             "Oda Kullanımı", "Cihaz Kullanımı", "Yetkiler",
-            "Öğrenci Mevcudu", "Faaliyet Onayları",
+            "Öğrenci Mevcudu", "Faaliyetler",
             "Bakım Gecikmeleri",
         ):
             self.ek_rapor_grafigi.guncelle(tur, self.veriler)

@@ -1,14 +1,13 @@
 """Öğrenci ve faaliyet raporlarının veri hesapları (uç noktalardan ve ekrandan bağımsız).
 
 Öğrenci raporu mevcut durumu (anlık) gösterir; telefon raporda yer almaz. Faaliyet raporu seçilen dönemde (faaliyet tarihi) girilen
-faaliyet kayıtlarını, onay durumunu ve puanları özetler. Puan = adet x kaydın girildiği andaki faaliyet puanı (Puan Raporu ile aynı).
+faaliyet kayıtlarını ve puanları özetler. Puan = adet x kaydın girildiği andaki faaliyet puanı (Puan Raporu ile aynı).
 """
 from datetime import date
 
 SAKLAMA_YIL = 10                 # Gönüllü öğrenci kaydı saklama süresi (ogrenci_on_yil_sil kuralıyla aynı)
 YAKLASAN_AY = 12                 # "yaklaşan" saklama süresi eşiği
 FAALIYETSIZ_GUN = 90             # "faaliyetsiz aktif öğrenci" eşiği
-BEKLEYEN_LISTE_SINIRI = 20
 
 
 def ogrenci_raporu(cursor, etiketler: dict, tur: str | None = None, durum: str | None = None) -> dict:
@@ -98,46 +97,35 @@ def ogrenci_raporu(cursor, etiketler: dict, tur: str | None = None, durum: str |
 
 
 def faaliyet_raporu(cursor, etiketler: dict, baslangic: date, bitis: date, faaliyet_id: int | None = None,
-                    onay: str | None = None, detay: bool = False, en_cok: int = 5000) -> dict:
-    """Dönemdeki faaliyet kayıtları: faaliyet türü/birim/öğrenci türü dağılımı, onay durumu ve onay bekleyenler."""
+                    detay: bool = False, en_cok: int = 5000) -> dict:
+    """Dönemdeki faaliyet kayıtları: faaliyet türü, birim ve öğrenci türü dağılımı ile puanlar."""
     kosullar = ["t.faaliyet_tarihi >= %s", "t.faaliyet_tarihi <= %s"]
     parametreler = [baslangic, bitis]
     if faaliyet_id is not None:
         kosullar.append("t.faaliyet_id = %s")
         parametreler.append(faaliyet_id)
-    if onay in ("onayli", "bekleyen"):
-        kosullar.append("t.onaylandi_mi = %s")
-        parametreler.append(onay == "onayli")
     where = "WHERE " + " AND ".join(kosullar)
 
     cursor.execute(f"""
         SELECT COUNT(*), COALESCE(SUM(t.adet), 0), COALESCE(SUM(t.adet * t.kayit_puani), 0),
-               COUNT(*) FILTER (WHERE t.onaylandi_mi), COUNT(*) FILTER (WHERE NOT t.onaylandi_mi),
-               COALESCE(SUM(t.adet * t.kayit_puani) FILTER (WHERE t.onaylandi_mi), 0),
-               COALESCE(SUM(t.adet * t.kayit_puani) FILTER (WHERE NOT t.onaylandi_mi), 0),
-               COUNT(DISTINCT t.ogrenci_id), MIN(t.faaliyet_tarihi) FILTER (WHERE NOT t.onaylandi_mi)
+               COUNT(DISTINCT t.ogrenci_id)
         FROM ogrenci_faaliyet_takip t {where};
     """, parametreler)
     k = cursor.fetchone()
-    bugun = date.today()
     kayit = int(k[0])
     ozet = {
         "kayit_sayisi": kayit, "faaliyet_miktari": int(k[1]), "toplam_puan": float(k[2]),
-        "onayli_kayit": int(k[3]), "onay_bekleyen_kayit": int(k[4]),
-        "onayli_puan": float(k[5]), "onay_bekleyen_puan": float(k[6]),
-        "faaliyet_yapan_ogrenci": int(k[7]),
+        "faaliyet_yapan_ogrenci": int(k[3]),
         "ortalama_puan_kayit": round(float(k[2]) / kayit, 1) if kayit else None,
-        "en_eski_bekleyen_gun": (bugun - k[8]).days if k[8] else None,
     }
 
     cursor.execute(f"""
-        SELECT f.faaliyet_id, f.faaliyet_adi, COUNT(*), COALESCE(SUM(t.adet), 0), COALESCE(SUM(t.adet * t.kayit_puani), 0),
-               COUNT(*) FILTER (WHERE NOT t.onaylandi_mi)
+        SELECT f.faaliyet_id, f.faaliyet_adi, COUNT(*), COALESCE(SUM(t.adet), 0), COALESCE(SUM(t.adet * t.kayit_puani), 0)
         FROM ogrenci_faaliyet_takip t JOIN faaliyetler f ON f.faaliyet_id = t.faaliyet_id {where}
         GROUP BY f.faaliyet_id, f.faaliyet_adi ORDER BY 5 DESC, f.faaliyet_adi;
     """, parametreler)
-    faaliyetler = [{"faaliyet_id": r[0], "faaliyet": r[1], "kayit_sayisi": int(r[2]), "miktar": int(r[3]), "puan": float(r[4]),
-                    "onay_bekleyen": int(r[5])} for r in cursor.fetchall()]
+    faaliyetler = [{"faaliyet_id": r[0], "faaliyet": r[1], "kayit_sayisi": int(r[2]), "miktar": int(r[3]), "puan": float(r[4])}
+                  for r in cursor.fetchall()]
 
     cursor.execute(f"""
         SELECT COALESCE(b.birim_adi, 'Belirtilmemiş'), COUNT(*), COALESCE(SUM(t.adet), 0)
@@ -154,26 +142,16 @@ def faaliyet_raporu(cursor, etiketler: dict, baslangic: date, bitis: date, faali
     turler = [{"tur": r[0], "etiket": etiketler.get(r[0], r[0]), "ogrenci_sayisi": int(r[1]), "kayit_sayisi": int(r[2]), "puan": float(r[3])}
               for r in cursor.fetchall()]
 
-    cursor.execute(f"""
-        SELECT t.takip_id, o.ad_soyad, f.faaliyet_adi, t.faaliyet_tarihi, t.adet, t.adet * t.kayit_puani
-        FROM ogrenci_faaliyet_takip t
-        JOIN ogrenciler o ON o.ogrenci_id = t.ogrenci_id JOIN faaliyetler f ON f.faaliyet_id = t.faaliyet_id
-        {where} AND NOT t.onaylandi_mi
-        ORDER BY t.faaliyet_tarihi, t.takip_id LIMIT %s;
-    """, parametreler + [BEKLEYEN_LISTE_SINIRI])
-    bekleyenler = [{"takip_id": r[0], "ogrenci": r[1], "faaliyet": r[2], "tarih": r[3].isoformat(), "bekleme_gun": (bugun - r[3]).days,
-                    "adet": int(r[4]), "puan": float(r[5])} for r in cursor.fetchall()]
-
     cursor.execute("SELECT faaliyet_id, faaliyet_adi FROM faaliyetler ORDER BY faaliyet_adi, faaliyet_id;")
     sonuc = {
-        "ozet": ozet, "faaliyetler": faaliyetler, "birimler": birimler, "ogrenci_turleri": turler, "onay_bekleyenler": bekleyenler,
+        "ozet": ozet, "faaliyetler": faaliyetler, "birimler": birimler, "ogrenci_turleri": turler,
         "faaliyet_secenekleri": [{"faaliyet_id": r[0], "faaliyet_adi": r[1]} for r in cursor.fetchall()],
     }
 
     if detay:
         cursor.execute(f"""
             SELECT t.takip_id, o.ad_soyad, o.ogrenci_numarasi, o.tur::text, f.faaliyet_adi, COALESCE(b.birim_adi, ''),
-                   t.adet, t.kayit_puani, t.adet * t.kayit_puani, t.faaliyet_tarihi, t.onaylandi_mi
+                   t.adet, t.kayit_puani, t.adet * t.kayit_puani, t.faaliyet_tarihi
             FROM ogrenci_faaliyet_takip t
             JOIN ogrenciler o ON o.ogrenci_id = t.ogrenci_id JOIN faaliyetler f ON f.faaliyet_id = t.faaliyet_id
             LEFT JOIN faaliyet_birimleri b ON b.birim_id = t.birim_id
@@ -181,8 +159,7 @@ def faaliyet_raporu(cursor, etiketler: dict, baslangic: date, bitis: date, faali
         """, parametreler + [en_cok])
         sonuc["kayitlar"] = [
             {"takip_id": r[0], "ogrenci": r[1], "ogrenci_numarasi": r[2], "tur": etiketler.get(r[3], r[3]), "faaliyet": r[4], "birim": r[5],
-             "adet": int(r[6]), "birim_puan": float(r[7]), "toplam_puan": float(r[8]), "tarih": r[9].isoformat(),
-             "durum": "Onaylandı" if r[10] else "Onay bekliyor"}
+             "adet": int(r[6]), "birim_puan": float(r[7]), "toplam_puan": float(r[8]), "tarih": r[9].isoformat()}
             for r in cursor.fetchall()
         ]
     return sonuc
