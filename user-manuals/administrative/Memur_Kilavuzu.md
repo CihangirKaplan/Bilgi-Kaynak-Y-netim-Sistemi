@@ -112,11 +112,12 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
 # 3. Danışma masası işleri
 
 ## 3.1 Danışma Masası Yönetimi
-Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her görevin öğrencisini, başlangıç/bitişini, çalışma süresini ve **onay durumunu** gösterir; üstte onay bekleyen görev sayıları vardır.
+Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her görevin öğrencisini, başlangıç/bitişini, çalışma süresini ve **onay durumunu** gösterir; üstteki kartlarda tüm kayıtların sayıları (toplam, devam eden, onay bekleyen, onaylanan) vardır. Başlıklara tıklayarak listeyi sıralayabilirsiniz; sayfa kendini yenilediğinde seçtiğiniz sıralama ve seçili görev korunur. Çok sayıda kayıt varsa devam eden ve onay bekleyen görevlerin tümü ile en yeni görevler gösterilir; bunu listenin üstündeki not belirtir.
 - **✓ Seçilen Görevi Onayla:** Biten bir görevi onaylar. **Devam eden** görev onaylanamaz; **zaten onaylanmış** görev tekrar onaylanamaz.
-- **＋ Yeni Görev Ekle:** Öğrencinin görevini elle girersiniz (**Öğrenci**, **Başlangıç**, **Bitiş**). Öğrenci görevi başlatmayı/bitirmeyi unuttuysa bu yolla düzeltirsiniz. Aktif öğrenci yoksa sistem bunu söyler.
+- **↶ Onayı Geri Al:** Onaylanmış bir görevin onayını kaldırır; görev yeniden "Onay Bekliyor" olur ve düzenlenebilir. Yanlışlıkla onayladıysanız ya da onaylanmış görevin saatlerini düzeltmeniz gerekiyorsa kullanın. İşlem denetim kaydına yazılır. (Görevler silinemez.)
+- **＋ Yeni Görev Ekle:** Öğrencinin görevini elle girersiniz (**Öğrenci**, **Başlangıç**, **Bitiş**). Öğrenci listesinde yalnızca **danışma masası öğrencileri** bulunur. Öğrenci görevi başlatmayı/bitirmeyi unuttuysa bu yolla düzeltirsiniz. Aktif danışma masası öğrencisi yoksa sistem bunu söyler.
   **Bir görev en fazla 10 saat olabilir** (mesai süresi 08:00–18:00); daha uzun çalışmayı ayrı görevler olarak girin, aksi halde "Bir görev en fazla 10 saat olabilir" uyarısı çıkar.
-- **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir (aynı 10 saat sınırı geçerlidir). Düzeltmede **önceki ve yeni saatler denetim kaydına** yazılır.
+- **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir (aynı 10 saat sınırı geçerlidir). Düzeltmede **önceki ve yeni saatler denetim kaydına** yazılır. **Onaylanmış** görev düzenlenemez; önce **Onayı Geri Al**'ı kullanın.
 - **Uzun görev işareti:** Öğrenci görevi bitirmeyi unutmuşsa süre 10 saati aşar; listede böyle görevler işaretlenir ve üzerine gelince "öğrenci görevi bitirmeyi unutmuş olabilir; onaylamadan önce saatleri kontrol edin" ipucu çıkar. **Onaylamadan önce saatleri kontrol edip gerekirse Düzenle ile düzeltin.**
 - Onay bekleyen görevler **🔔 bildirim** olarak da size gelir; bildirime tıklayınca ilgili sayfa açılır.
 

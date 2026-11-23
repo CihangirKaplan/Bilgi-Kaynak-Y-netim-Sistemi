@@ -2216,16 +2216,6 @@ QLabel {
         # Sayfa başlığı ve açıklaması üst çubukta (TKYS › Sayfa adı) gösterilir; sayfada ayrıca büyük başlık kartı yoktur.
         yetkili = [a for a in oge["aksiyon"] if izin_var(rol, a[1])]
 
-        if oge["ad"] == "Danışma Masası Yönetimi":
-            danisma_islemleri = [
-                ("Görev Onaylama", "Danışma masası yönetimi"),
-                ("Görev Düzenleme", "Danışma masası yönetimi"),
-            ]
-            yetkili.extend(
-                a for a in danisma_islemleri
-                if izin_var(rol, a[1])
-            )
-
 
         # 2. Yetki Butonlarının Eklenmesi ve Routing Bağlantıları
         if yetkili and oge["ad"] not in ("Danışma Masası", "Danışma Masası Yönetimi"):

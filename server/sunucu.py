@@ -7784,6 +7784,11 @@ def danisma_gorevi_cok_uzun_mu(baslangic, bitis):
     return (bitis - baslangic).total_seconds() > DANISMA_GOREV_EN_UZUN_SAAT * 3600
 
 
+# Yönetim listesinde en yeni kaç görev gösterilir. Devam eden ve onay bekleyen görevler bu sınırdan bağımsız olarak her zaman gelir
+# (eski bir onay bekleyen görev listede kaybolup onaylanamaz hale gelmesin).
+DANISMA_LISTE_EN_FAZLA = 200
+
+
 @app.get("/api/danisma/yonetim/oturumlar")
 def danisma_yonetim_oturumlari(
     kullanici_id: int = Depends(
@@ -7797,6 +7802,17 @@ def danisma_yonetim_oturumlari(
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
+        # Kartlardaki sayılar listeden değil, tüm kayıtlardan hesaplanır.
+        cursor.execute("""
+            SELECT
+                COUNT(*),
+                COUNT(*) FILTER (WHERE bitis_zamani IS NULL),
+                COUNT(*) FILTER (WHERE bitis_zamani IS NOT NULL AND onaylandi_mi IS NOT TRUE),
+                COUNT(*) FILTER (WHERE onaylandi_mi IS TRUE)
+            FROM danisma_masasi_oturumlari;
+        """)
+        toplam, aktif, bekleyen, onaylanan = cursor.fetchone()
+
         cursor.execute("""
             SELECT
                 d.oturum_id,
@@ -7809,9 +7825,16 @@ def danisma_yonetim_oturumlari(
             FROM danisma_masasi_oturumlari d
             JOIN ogrenciler o
                 ON d.ogrenci_id = o.ogrenci_id
-            ORDER BY d.baslangic_zamani DESC
-            LIMIT 200;
-        """)
+            WHERE d.oturum_id IN (
+                    SELECT oturum_id
+                    FROM danisma_masasi_oturumlari
+                    ORDER BY baslangic_zamani DESC
+                    LIMIT %s
+                )
+               OR d.bitis_zamani IS NULL
+               OR d.onaylandi_mi IS NOT TRUE
+            ORDER BY d.baslangic_zamani DESC;
+        """, (DANISMA_LISTE_EN_FAZLA,))
 
         kayitlar = cursor.fetchall()
         oturumlar = []
@@ -7832,9 +7855,6 @@ def danisma_yonetim_oturumlari(
                 int((bitis_hesap - baslangic).total_seconds())
             )
 
-            saat, kalan = divmod(toplam_saniye, 3600)
-            dakika, saniye = divmod(kalan, 60)
-
             oturumlar.append({
                 "oturum_id": oturum_id,
                 "ogrenci_id": ogrenci_id,
@@ -7843,9 +7863,6 @@ def danisma_yonetim_oturumlari(
                 "baslangic_zamani": baslangic.isoformat(),
                 "bitis_zamani": bitis.isoformat() if bitis else None,
                 "toplam_saniye": toplam_saniye,
-                "calisilan_sure": (
-                    f"{saat} saat {dakika} dakika {saniye} saniye"
-                ),
                 "durum": "AKTIF" if bitis is None else "TAMAMLANDI",
                 "onaylandi_mi": onay,
                 # Mesai süresini aşan görev: öğrenci bitirmeyi unutmuş olabilir, onaylamadan önce saatler kontrol edilmeli.
@@ -7853,7 +7870,14 @@ def danisma_yonetim_oturumlari(
             })
 
         return {
-            "toplam_kayit": len(oturumlar),
+            "toplam_kayit": toplam,
+            "ozet": {
+                "toplam": toplam,
+                "aktif": aktif,
+                "bekleyen": bekleyen,
+                "onaylanan": onaylanan,
+            },
+            "kisaltildi": len(oturumlar) < toplam,
             "oturumlar": oturumlar
         }
 
@@ -7926,7 +7950,8 @@ def danisma_yonetim_oturum_onayla(
             kullanici_id=kullanici_id,
             hedef_tablo="danisma_masasi_oturumlari",
             hedef_kayit_id=oturum_id,
-            mevcut_cursor=cursor
+            mevcut_cursor=cursor,
+            ayrinti={"onceki": {"onaylandi_mi": False}, "yeni": {"onaylandi_mi": True}}
         )
 
         conn.commit()
@@ -7958,6 +7983,87 @@ def danisma_yonetim_oturum_onayla(
             conn.close()
 
 
+@app.patch("/api/danisma/yonetim/oturumlar/{oturum_id}/onay-geri-al")
+def danisma_yonetim_onay_geri_al(
+    oturum_id: int,
+    kullanici_id: int = Depends(
+        izin_kontrol("DANISMA_OTURUMU_YONETIM")
+    )
+):
+    """Onaylanmış görevin onayını kaldırır; görev yeniden onay bekler ve düzenlenebilir."""
+    conn = None
+    cursor = None
+
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT onaylandi_mi
+            FROM danisma_masasi_oturumlari
+            WHERE oturum_id = %s
+            FOR UPDATE;
+        """, (oturum_id,))
+
+        oturum = cursor.fetchone()
+
+        if oturum is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Görev kaydı bulunamadı."
+            )
+
+        if not oturum[0]:
+            raise HTTPException(
+                status_code=409,
+                detail="Bu görev onaylı değil."
+            )
+
+        cursor.execute("""
+            UPDATE danisma_masasi_oturumlari
+            SET onaylandi_mi = FALSE
+            WHERE oturum_id = %s;
+        """, (oturum_id,))
+
+        denetim_kaydi_olustur(
+            VT_AYARLARI,
+            olay_turu="UPDATE",
+            kullanici_id=kullanici_id,
+            hedef_tablo="danisma_masasi_oturumlari",
+            hedef_kayit_id=oturum_id,
+            mevcut_cursor=cursor,
+            ayrinti={"onceki": {"onaylandi_mi": True}, "yeni": {"onaylandi_mi": False}}
+        )
+
+        conn.commit()
+
+        return {
+            "durum": "basarili",
+            "mesaj": "Görevin onayı geri alındı.",
+            "oturum_id": oturum_id,
+            "onaylandi_mi": False
+        }
+
+    except HTTPException:
+        if conn is not None:
+            conn.rollback()
+        raise
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Görevin onayı geri alınırken bir hata oluştu."
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
 @app.get("/api/danisma/yonetim/ogrenciler")
 def danisma_yonetim_ogrencileri(
     kullanici_id: int = Depends(
@@ -7975,6 +8081,7 @@ def danisma_yonetim_ogrencileri(
             SELECT ogrenci_id, ad_soyad, ogrenci_numarasi, tur::text
             FROM ogrenciler
             WHERE aktif_mi = TRUE
+              AND tur::text = 'DANISMA_MASASI'
             ORDER BY ad_soyad, ogrenci_numarasi;
         """)
 
@@ -8039,19 +8146,20 @@ def danisma_yonetim_oturum_olustur(
         cursor = conn.cursor()
 
         # Öğrenci kaydını kilitleyerek eşzamanlı
-        # görev ekleme işlemlerini sıraya al.
+        # görev ekleme işlemlerini sıraya al. Görev yalnızca danışma masası öğrencisine girilebilir.
         cursor.execute("""
             SELECT ogrenci_id
             FROM ogrenciler
             WHERE ogrenci_id = %s
               AND aktif_mi = TRUE
+              AND tur::text = 'DANISMA_MASASI'
             FOR UPDATE;
         """, (veri.ogrenci_id,))
 
         if cursor.fetchone() is None:
             raise HTTPException(
                 status_code=404,
-                detail="Aktif öğrenci bulunamadı."
+                detail="Aktif danışma masası öğrencisi bulunamadı."
             )
 
         # Aynı öğrencinin görevleriyle zaman çakışması.
@@ -8103,7 +8211,14 @@ def danisma_yonetim_oturum_olustur(
             kullanici_id=kullanici_id,
             hedef_tablo="danisma_masasi_oturumlari",
             hedef_kayit_id=oturum_id,
-            mevcut_cursor=cursor
+            mevcut_cursor=cursor,
+            ayrinti={
+                "yeni": {
+                    "ogrenci_id": veri.ogrenci_id,
+                    "baslangic_zamani": veri.baslangic_zamani.isoformat(sep=" ", timespec="minutes"),
+                    "bitis_zamani": veri.bitis_zamani.isoformat(sep=" ", timespec="minutes"),
+                }
+            }
         )
 
         conn.commit()
@@ -8238,7 +8353,7 @@ def danisma_yonetim_oturum_duzenle(
         if onaylandi_mi:
             raise HTTPException(
                 status_code=409,
-                detail="Onaylanmış görev düzenlenemez."
+                detail="Onaylanmış görev düzenlenemez. Önce onayı geri alın."
             )
 
         # Diğer görevlerle çakışma var mı?
