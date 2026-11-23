@@ -355,10 +355,11 @@ class BakimPlanlariEkrani(QWidget):
 
     FILTRELER = (("Aktif planlar", True), ("Tüm planlar", None), ("Pasif planlar", False))
 
-    def __init__(self, api_url, token):
+    def __init__(self, api_url, token, yetkili_mi=True):
         super().__init__()
         self.api_url = api_url
         self.token = token
+        self.yetkili_mi = yetkili_mi            # False: yalnızca görüntüleme (düzenle/sil düğmeleri ve çift tıkla düzenleme yok)
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.planlar = {}
         self.arayuzu_olustur()
@@ -394,6 +395,7 @@ class BakimPlanlariEkrani(QWidget):
         baslik.setSectionResizeMode(5, QHeaderView.Fixed)              # genişlik rozetlere göre doldurmadan sonra verilir (hap_sutununu_sigdir)
         baslik.setSectionResizeMode(6, QHeaderView.Fixed)
         self.tablo.setColumnWidth(6, 110)
+        self.tablo.setColumnHidden(6, not self.yetkili_mi)
 
         cift_tikla_ac(self.tablo, self.plan_duzenle)                           # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("")
@@ -474,10 +476,11 @@ class BakimPlanlariEkrani(QWidget):
             renk, arka = DURUM_RENKLERI.get(durum, DURUM_RENKLERI["Planlı"])
             self.tablo.setCellWidget(i, 5, hap(f"{durum}  ·  {kalan_gun_metni(p['kalan_gun'], durum)}"
                                                if durum != "Pasif" else "Pasif", renk, arka))
-            self.tablo.setCellWidget(i, 6, islem_butonlari(
-                lambda _=False, pid=p["plan_id"]: self.plan_duzenle(pid),
-                lambda _=False, pid=p["plan_id"]: self.plan_sil(pid)))
-            satira_kimlik_ata(self.tablo, i, p["plan_id"])
+            if self.yetkili_mi:
+                self.tablo.setCellWidget(i, 6, islem_butonlari(
+                    lambda _=False, pid=p["plan_id"]: self.plan_duzenle(pid),
+                    lambda _=False, pid=p["plan_id"]: self.plan_sil(pid)))
+                satira_kimlik_ata(self.tablo, i, p["plan_id"])
             yaklasan += durum == "Yaklaşıyor"
             gecmis += durum == "Gecikmiş"
 
@@ -485,7 +488,8 @@ class BakimPlanlariEkrani(QWidget):
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} gecikmiş")
         self.bos_mesaj.setText(
-            "Henüz bakım/kalibrasyon planı yok. Üstteki “Yeni Plan” butonuyla ekleyebilirsiniz."
+            ("Henüz bakım/kalibrasyon planı yok. Üstteki “Yeni Plan” butonuyla ekleyebilirsiniz." if self.yetkili_mi
+             else "Henüz bakım/kalibrasyon planı yok.")
             if aktiflik is not False else "Pasif plan yok.")
         hap_sutununu_sigdir(self.tablo, 5, en_az=150)            # "Gecikmiş · 120 gün gecikti" rozeti kesilmesin
         hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın

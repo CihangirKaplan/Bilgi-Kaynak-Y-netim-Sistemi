@@ -16,7 +16,9 @@ UCLAR = [
     ("/api/dashboard/bugunku-randevular", "TAKVIM_GORUNTULE"),
     ("/api/dashboard/ozet", "CIHAZ_ENVANTER_YONET"),
     ("/api/dashboard/bugunku-rezervasyonlar", "CIHAZ_ENVANTER_YONET"),
-    ("/api/dashboard/yaklasan-islemler", "CIHAZ_ENVANTER_YONET"),
+    # Bildirim ucu: cihaz envanterini yönetenler VEYA bakım/kalibrasyon izni olanlar (her biri yalnızca kendi türünü görür)
+    ("/api/dashboard/yaklasan-islemler", ["CIHAZ_ENVANTER_YONET", "BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET",
+                                         "KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"]),
 ]
 
 

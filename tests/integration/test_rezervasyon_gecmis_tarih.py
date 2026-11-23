@@ -8,9 +8,11 @@ from server.modeller import RezervasyonOlusturModeli
 from server.sunucu import cihaz_rezervasyonu_yap
 
 
-@pytest.mark.parametrize("dakika", [1, 60, 1440])
-def test_gecmis_tarihli_rezervasyon_reddedilir(dakika):
-    baslangic = datetime.now() - timedelta(minutes=dakika)
+@pytest.mark.parametrize("gun", [1, 7, 30])
+def test_gecmis_tarihli_rezervasyon_reddedilir(gun):
+    # Saat mesai içinde sabit (10:00-12:00): test günün hangi saatinde çalışırsa çalışsın 08:00-18:00 kuralına değil,
+    # geçmiş tarih kuralına takılmalı.
+    baslangic = (datetime.now() - timedelta(days=gun)).replace(hour=10, minute=0, second=0, microsecond=0)
 
     veri = RezervasyonOlusturModeli(
         cihaz_id=1,

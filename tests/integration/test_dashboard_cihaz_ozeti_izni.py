@@ -17,7 +17,8 @@ class _GecikmeliModul:
 
 mw = _GecikmeliModul()
 
-DASHBOARD_UCLARI = ("dashboard_ozet_getir", "dashboard_bugunku_rezervasyonlar", "yaklasan_islemler_getir")
+DASHBOARD_UCLARI = ("dashboard_ozet_getir", "dashboard_bugunku_rezervasyonlar")           # yalnızca cihaz envanteri yöneticisine
+# Bildirim ucu daha geniştir: envanter yöneticisi VEYA bakım/kalibrasyon izni olan kullanıcı (her biri yalnızca kendi türünü görür).
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +33,8 @@ def test_istemci_izni_cihaz_ozeti_sunucu_uclariyla_ayni_izin_kodudur():
     assert mw.IZIN_KODLARI["Cihaz envanterini yönetme"] == ("CIHAZ_ENVANTER_YONET",)
     for ad in DASHBOARD_UCLARI:
         assert 'izin_kontrol("CIHAZ_ENVANTER_YONET")' in inspect.getsource(getattr(sunucu, ad)), ad
+    bildirim = inspect.getsource(sunucu.yaklasan_islemler_getir)
+    assert 'izin_kontrol_biri(' in bildirim and '"CIHAZ_ENVANTER_YONET"' in bildirim and "BAKIM_KAYITLARI_GORUNTULE" in bildirim
 
 
 def test_sunucu_yetkisi_yokken_eski_tabloya_donulur():
