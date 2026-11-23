@@ -179,3 +179,27 @@ def test_bes_gunluk_etkinlik_olusturma_cakisma_iptal():
                 conn.commit()
         finally:
             conn.close()
+
+
+def test_etkinlik_listesi_siniri_gercek_veritabaninda():
+    """Listeleme salt okunurdur: sınır, toplam ve kesildi alanları gerçek veritabanında tutarlıdır."""
+    assert os.environ.get("TKYS_PG_TEST_ONAY") == "EVET"
+    assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
+
+    uygulama = FastAPI()
+    uygulama.include_router(router_olustur(lambda izin: (lambda: 1), VT_AYARLARI))
+    istemci = TestClient(uygulama)
+
+    tumu = istemci.get("/api/oda-etkinlikleri")
+    assert tumu.status_code == 200
+    veri = tumu.json()
+    assert set(veri) == {"etkinlikler", "toplam", "kesildi"}
+    assert veri["toplam"] >= len(veri["etkinlikler"]) and veri["kesildi"] is (veri["toplam"] > len(veri["etkinlikler"]))
+
+    tek = istemci.get("/api/oda-etkinlikleri", params={"limit": 1}).json()
+    assert len(tek["etkinlikler"]) <= 1 and tek["toplam"] == veri["toplam"]
+    assert tek["kesildi"] is (tek["toplam"] > 1)
+    if tek["etkinlikler"] and veri["etkinlikler"]:
+        assert tek["etkinlikler"][0]["etkinlik_id"] == veri["etkinlikler"][0]["etkinlik_id"]      # en yeni etkinlik başta
+
+    assert istemci.get("/api/oda-etkinlikleri", params={"limit": 0}).status_code == 422

@@ -7,7 +7,7 @@ import psycopg2  # noqa: F401  (kullanılmıyor görünür ama testler bağlant�
 
 from server.vt_baglanti import vt_baglan
 from psycopg2.extras import RealDictCursor
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from server.denetim import ayrintili_kayit_yaz
 from server.oda_etkinlikleri_kurallari import oda_cakismasi_bul, oda_kilidini_al
@@ -23,6 +23,12 @@ from server.oda_etkinlikleri_modelleri import (
 DENETIME_YAZILAN_ALANLAR = (
     "oda_id", "organize_eden_personel_id", "katilimci_sayisi", "baslangic_zamani", "bitis_zamani",
 )
+
+
+# Tarih süzgeci verilmeyen listeleme (istemci böyle ister) tüm geçmişi, her etkinliğin gün listesiyle birlikte döndürürdü; etkinlik sayısı
+# arttıkça yavaşlar. En yeni etkinlikler bu sınıra kadar döner; kalan olduğunda yanıtta "kesildi" true olur (eski kayıtlar tarih süzgeciyle alınır).
+LISTE_VARSAYILAN_SINIR = 2000
+LISTE_EN_COK_SINIR = 10000
 
 
 def _denetim_ozeti(kayit):
@@ -231,6 +237,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
     def etkinlikleri_listele(
         baslangic: date | None = None,
         bitis: date | None = None,
+        limit: int = Query(LISTE_VARSAYILAN_SINIR, ge=1, le=LISTE_EN_COK_SINIR),
         kullanici_id: int = Depends(
             izin_kontrol("ODA_ETKINLIK_GORUNTULE")
         ),
@@ -263,6 +270,11 @@ def router_olustur(izin_kontrol, vt_ayarlari):
 
         with islem() as cursor:
             cursor.execute(
+                f"SELECT COUNT(*) AS toplam FROM oda_etkinlikleri e {where}",
+                tuple(parametreler),
+            )
+            toplam = cursor.fetchone()["toplam"]
+            cursor.execute(
                 f"""
                 SELECT e.*, o.oda_adi,
                        COALESCE(
@@ -285,10 +297,12 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 JOIN odalar o ON o.oda_id = e.oda_id
                 {where}
                 ORDER BY e.baslangic_zamani DESC, e.etkinlik_id DESC
+                LIMIT %s
                 """,
-                tuple(parametreler),
+                tuple(parametreler) + (limit,),
             )
-            return {"etkinlikler": [dict(r) for r in cursor.fetchall()]}
+            etkinlikler = [dict(r) for r in cursor.fetchall()]
+            return {"etkinlikler": etkinlikler, "toplam": toplam, "kesildi": toplam > len(etkinlikler)}
 
     @router.post("", status_code=201)
     def etkinlik_olustur(
