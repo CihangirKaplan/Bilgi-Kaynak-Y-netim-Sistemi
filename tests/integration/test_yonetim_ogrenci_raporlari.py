@@ -39,10 +39,10 @@ def istemci_ve_durum(monkeypatch):
             ilk = str(durum["parametreler"][0])
 
             if ilk == "2026-11-01":
-                return (10, 25, 150, 7, 110, 5)
+                return (10, 25, 150, 5)
 
             if ilk == "2026-10-01":
-                return (5, 12, 100, 4, 80, 3)
+                return (5, 12, 100, 3)
 
         raise AssertionError("Beklenmeyen SQL sorgusu")
 
@@ -95,8 +95,7 @@ def test_ogrenci_istatistikleri(istemci_ve_durum):
     assert veri["ozet"]["kayit_sayisi"] == 10
     assert veri["ozet"]["faaliyet_miktari"] == 25
     assert veri["ozet"]["toplam_puan"] == 150
-    assert veri["ozet"]["onayli_kayit"] == 7
-    assert veri["ozet"]["onayli_puan"] == 110
+    assert "onayli_kayit" not in veri["ozet"] and "onayli_puan" not in veri["ozet"]
     assert veri["ozet"]["faaliyet_yapan_ogrenci"] == 5
 
     assert veri["onceki_ozet"]["toplam_puan"] == 100

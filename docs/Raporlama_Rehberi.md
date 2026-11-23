@@ -73,10 +73,9 @@ sunucu da aynı izni her istekte ayrıca denetler (menüyü atlayarak doğrudan 
 - **Not:** rapor kayıt saklama süresini yalnızca listeler; kayıtları silmez. Silme işlemi ayrı ve onaylı bir süreçtir (bkz. 6).
 
 ### 3.5 Faaliyet Raporu
-- **Ne gösterir:** dönemdeki faaliyet kayıtları: faaliyet türü, birim ve öğrenci türüne göre dağılım; toplam, onaylı ve onay bekleyen puanlar; onay bekleyen
-  kayıtların listesi ve en eski bekleyen kaydın yaşı.
-- **Süzgeçler:** dönem (faaliyet tarihi), faaliyet türü, onay durumu.
-- **Excel sayfaları:** Özet, Faaliyet Türü, Birim, Öğrenci Türü, Onay Bekleyenler, Faaliyet Detayı.
+- **Ne gösterir:** dönemdeki faaliyet kayıtları: faaliyet türü, birim ve öğrenci türüne göre dağılım; kayıt sayısı, faaliyet miktarı ve toplam puan.
+- **Süzgeçler:** dönem (faaliyet tarihi), faaliyet türü.
+- **Excel sayfaları:** Özet, Faaliyet Türü, Birim, Öğrenci Türü, Faaliyet Detayı.
 
 ### 3.6 Danışma Masası Raporları
 - **Ne gösterir:** danışma masası görevleri: toplam, devam eden, tamamlanan, onay bekleyen ve onaylanan görev sayıları ile çalışma süreleri; öğrenci bazlı özet.
@@ -122,17 +121,17 @@ Merkez yöneticisi için dönemsel özet panelidir. Seçilen dönem, aynı uzunl
 | Genel Bakış | Randevu, bakım, kalibrasyon, arıza, rezervasyon, etkinlik ve öğrenci faaliyeti özeti |
 | Randevular | Durum sayıları, günlük eğilim, oda kullanımı |
 | Cihazlar | Bakım/kalibrasyon/arıza/rezervasyon sayıları, cihaz kullanımı |
-| Öğrenciler | Faaliyet türüne göre puanlar, onaylı puan |
+| Öğrenciler | Faaliyet türüne göre puanlar, toplam puan ve kayıt sayısı |
 | Proje / Deney | Proje türü rezervasyonları ve oda etkinlikleri (rezervasyon, tamamlanmış deney demek değildir) |
 | Oda Kullanımı | Oda Kullanım Raporu'nun özeti |
 | Cihaz Kullanımı | Cihaz Rezervasyon Raporu'nun özeti |
 | Yetkiler | Yetki Raporu'nun özeti (dönemden bağımsız) |
 | Öğrenci Mevcudu | Öğrenci Raporu'nun özeti |
-| Faaliyet Onayları | Faaliyet Raporu'nun özeti |
+| Faaliyetler | Faaliyet Raporu'nun özeti |
 | Bakım Gecikmeleri | Geciken Bakım Planı Raporu'nun özeti |
 | Bugün Merkezde | Seçilen günün zamanlı olayları ve günlük özeti |
 
-Oda Kullanımı, Cihaz Kullanımı, Yetkiler, Öğrenci Mevcudu, Faaliyet Onayları ve Bakım Gecikmeleri görünümleri, ayrıntılı sayfalarla **aynı uç
+Oda Kullanımı, Cihaz Kullanımı, Yetkiler, Öğrenci Mevcudu, Faaliyetler ve Bakım Gecikmeleri görünümleri, ayrıntılı sayfalarla **aynı uç
 noktalardan** beslenir; bu yüzden sayılar birebir aynıdır. Bu görünümlerin verisi başka bir izin gerektiriyorsa (örn. yönetici olup denetim izni
 olmayan bir rol) yalnızca o görünümde "Bu rapor alınamadı" yazar, diğer görünümler çalışmaya devam eder.
 
@@ -163,7 +162,7 @@ kayıt cihaz durumunu değiştirmemiş olsa bile "bakımda/kalibrasyonda" sayıl
 - **Puan** = adet × kaydın girildiği andaki faaliyet puanı. Faaliyetin puanı sonradan değişse bile eski kayıtların puanı, yöneticinin açıkça "geçmişi güncelle" demesi
   dışında değişmez. Puan Raporu, Faaliyet Raporu ve Yönetim Raporları aynı hesabı kullanır.
 - **Sıralama** eşit puanlılarda aynı sırayı verir (1, 2, 2, 4); puanı olmayanın sırası yoktur. Pasif öğrenciler listede kalır.
-- **Onaylı / onay bekleyen:** kaydın onay durumuna göredir. Toplam puana onay bekleyen kayıtlar da dahildir; onaylı puan ayrıca gösterilir.
+- Faaliyet kayıtlarında onay adımı yoktur; kayıt girildiği anda puana dahildir.
 - **Saklama süresi:** yalnızca **Gönüllü öğrenciler** için, kayıt tarihinden itibaren **10 yıl**. Süresi dolan ama ileri bir tarihe ertelenmiş kayıt "Ertelendi",
   önümüzdeki 12 ay içinde dolacak kayıt "12 ay içinde dolacak" olarak gösterilir.
 - **Faaliyetsiz aktif öğrenci:** aktif olup son 90 günde (ya da hiç) faaliyet kaydı olmayan öğrenci.
@@ -217,7 +216,7 @@ Aynı bilgi farklı raporlarda farklı sayı vermemelidir. Aşağıdaki eşleşm
 - Oda ve cihaz kullanım saatleri **planlanan süredir**; gerçekleşen kullanım süresi ölçülmez.
 - Mesai doluluk oranı **hafta içi günlük 8 saat** varsayımına dayanır (merkezin kararıdır, kodda sabit değerdir: `GUNLUK_MESAI_SAATI`). Psikolog randevuları ise 09:00-15:00 arasında saat başı, 1 saatliktir.
 - **PDF** çıktısı yalnızca Yönetim Raporları'ndadır; diğer raporlar Excel olarak alınır.
-- Excel detay sayfaları kayıt sayısıyla sınırlıdır (rezervasyon ve faaliyet detayı en çok 5.000 kayıt, audit en çok 20.000 kayıt, onay bekleyen listesi ilk 20).
+- Excel detay sayfaları kayıt sayısıyla sınırlıdır (rezervasyon ve faaliyet detayı en çok 5.000 kayıt, audit en çok 20.000 kayıt).
 - **Danışan bazlı devam raporu yoktur.** Danışan tarafı gizlilik açısından hassas olduğundan, ihtiyaç doğarsa yalnızca toplam sayılarla ve küçük gruplarda gizleme kuralıyla
   eklenmesi önerilir.
 - Randevu Raporları, takvimi görebilen her role açıktır (Danışma öğrencisi ve Proje asistanı dahil). Psikolog dışındaki roller tüm randevuların toplamını görür.

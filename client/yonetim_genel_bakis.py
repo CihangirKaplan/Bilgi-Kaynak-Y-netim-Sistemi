@@ -211,13 +211,13 @@ class YonetimGenelBakis(QWidget):
 
         faaliyet, faaliyet_lay = self.bolum_olustur(
             "Öğrenci Faaliyetleri",
-            "Toplam puan ve onaylanmış kayıtlar ayrıdır"
+            "Seçilen dönemde girilen faaliyet kayıtları"
         )
         self.bilgi_satiri(
             faaliyet_lay, "faaliyet_kaydi", "Faaliyet kaydı"
         )
         self.bilgi_satiri(
-            faaliyet_lay, "onayli_puan", "Onaylanan puan"
+            faaliyet_lay, "toplam_puan", "Toplam puan"
         )
         self.bilgi_satiri(
             faaliyet_lay, "faaliyet_ogrencisi",
@@ -262,7 +262,6 @@ class YonetimGenelBakis(QWidget):
 
         dipnot = self.etiket(
             "Bilgilendirme: Öğrenci mevcudu günceldir. "
-            "Faaliyet puanları onaylanmamış kayıtları da kapsar. "
             "Katılımcı toplamı benzersiz kişi sayısı değildir.",
             11, "#64748B"
         )
@@ -297,7 +296,7 @@ class YonetimGenelBakis(QWidget):
             "iptal": r["iptal_edildi"],
             "gelmedi": r["gelmedi"],
             "faaliyet_kaydi": o["ozet"]["kayit_sayisi"],
-            "onayli_puan": o["ozet"]["onayli_puan"],
+            "toplam_puan": o["ozet"]["toplam_puan"],
             "faaliyet_ogrencisi":
                 o["ozet"]["faaliyet_yapan_ogrenci"],
             "ariza": c["ariza"],

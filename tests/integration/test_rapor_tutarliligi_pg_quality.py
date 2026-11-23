@@ -71,7 +71,7 @@ def veri():
     c.execute("INSERT INTO cihaz_bakimlari (cihaz_id, bakim_yapan_kisi, maliyet, bakim_tarihi) VALUES (%s, 'x', 100, '2001-03-12')", (kimlikler["cihaz"],))
     c.execute("INSERT INTO cihaz_arizalari (cihaz_id, ariza_baslik, ariza_aciklamasi, bildirim_tarihi) VALUES (%s, 'b', 'a', '2001-03-13')", (kimlikler["cihaz"],))
 
-    # Öğrenci faaliyeti: puan 5 x adet 3 = 15 (onaysız), 2 x 2 = 4 (onaylı)
+    # Öğrenci faaliyeti: puan 5 x adet 3 = 15 ve 2 x 2 = 4 (toplam 19)
     c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, tur) VALUES (%s, %s, 'GONULLU') RETURNING ogrenci_id", (f"RT Ogr {etiket}", f"RT{etiket}"))
     kimlikler["ogrenci"] = c.fetchone()[0]
     c.execute("INSERT INTO faaliyetler (faaliyet_adi, puan) VALUES (%s, 5) RETURNING faaliyet_id", (f"rt faaliyet {etiket}",))
@@ -82,9 +82,9 @@ def veri():
         c.execute("INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id", (f"RT BIRIM {etiket}",))
         satir = c.fetchone()
         kimlikler["birim_olusturuldu"] = satir[0]
-    for adet, puan, onay, gun in [(3, 5, False, 8), (2, 2, True, 9)]:
-        c.execute("INSERT INTO ogrenci_faaliyet_takip (ogrenci_id, faaliyet_id, adet, birim_id, faaliyet_tarihi, onaylandi_mi, kayit_puani) "
-                  "VALUES (%s, %s, %s, %s, %s, %s, %s)", (kimlikler["ogrenci"], kimlikler["faaliyet"], adet, satir[0], date(2001, 3, gun), onay, puan))
+    for adet, puan, gun in [(3, 5, 8), (2, 2, 9)]:
+        c.execute("INSERT INTO ogrenci_faaliyet_takip (ogrenci_id, faaliyet_id, adet, birim_id, faaliyet_tarihi, kayit_puani) "
+                  "VALUES (%s, %s, %s, %s, %s, %s)", (kimlikler["ogrenci"], kimlikler["faaliyet"], adet, satir[0], date(2001, 3, gun), puan))
     yield kimlikler
 
     c.execute("DELETE FROM ogrenci_faaliyet_takip WHERE ogrenci_id = %s", (kimlikler["ogrenci"],))
@@ -131,7 +131,7 @@ def test_puan_toplamlari_puan_raporu_ve_yonetim_raporunda_ayni(veri):
     satir = next(o for o in rapor["ogrenciler"] if o["ogrenci_id"] == veri["ogrenci"])
     assert satir["toplam_puan"] == 3 * 5 + 2 * 2 == 19
     yonetim = yonetim_ogrenci_ozet(baslangic=BAS, bitis=BIT, kullanici_id=0)["ozet"]
-    assert yonetim["toplam_puan"] == 19 and yonetim["onayli_puan"] == 4
+    assert yonetim["toplam_puan"] == 19 and "onayli_puan" not in yonetim
     assert yonetim["kayit_sayisi"] == 2 and yonetim["faaliyet_yapan_ogrenci"] == 1
 
 
@@ -226,32 +226,32 @@ def test_yetki_raporu_kullanici_rol_ve_matris_parola_icermez(veri):
 
 
 # ------------------------------------------------------------------ öğrenci ve faaliyet raporları
-def test_faaliyet_raporu_puan_ve_onay_sayilari_diger_raporlarla_ayni(veri):
-    r = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=veri["faaliyet"], onay=None, detay=True, kullanici_id=0)
+def test_faaliyet_raporu_puan_sayilari_diger_raporlarla_ayni(veri):
+    r = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=veri["faaliyet"], detay=True, kullanici_id=0)
     o = r["ozet"]
     assert (o["kayit_sayisi"], o["faaliyet_miktari"], o["toplam_puan"]) == (2, 5, 19.0)          # 3x5 + 2x2
-    assert (o["onayli_kayit"], o["onay_bekleyen_kayit"], o["onayli_puan"], o["onay_bekleyen_puan"]) == (1, 1, 4.0, 15.0)
-    assert o["faaliyet_yapan_ogrenci"] == 1 and o["ortalama_puan_kayit"] == 9.5 and o["en_eski_bekleyen_gun"] > 0
-    assert [f["puan"] for f in r["faaliyetler"]] == [19.0] and r["faaliyetler"][0]["onay_bekleyen"] == 1
+    assert o["faaliyet_yapan_ogrenci"] == 1 and o["ortalama_puan_kayit"] == 9.5
+    assert not any(anahtar.startswith("onay") or anahtar.endswith("bekleyen_gun") for anahtar in o)       # onay kavramı kaldırıldı
+    assert [f["puan"] for f in r["faaliyetler"]] == [19.0] and "onay_bekleyen" not in r["faaliyetler"][0]
     assert r["ogrenci_turleri"][0]["tur"] == "GONULLU" and r["ogrenci_turleri"][0]["kayit_sayisi"] == 2
-    assert len(r["onay_bekleyenler"]) == 1 and r["onay_bekleyenler"][0]["puan"] == 15.0 and r["onay_bekleyenler"][0]["bekleme_gun"] > 0
-    assert sorted(k["durum"] for k in r["kayitlar"]) == ["Onay bekliyor", "Onaylandı"]
+    assert "onay_bekleyenler" not in r
+    assert len(r["kayitlar"]) == 2 and all("durum" not in k for k in r["kayitlar"])
     # Puan Raporu ve Yönetim öğrenci özetiyle aynı toplam
     puan = puan_raporu(baslangic=BAS, bitis=BIT, tur=None, durum=None, puansizlari_goster=False, detay=False, yetkili_id=0)
     assert next(x for x in puan["ogrenciler"] if x["ogrenci_id"] == veri["ogrenci"])["toplam_puan"] == o["toplam_puan"]
     assert yonetim_ogrenci_ozet(baslangic=BAS, bitis=BIT, kullanici_id=0)["ozet"]["toplam_puan"] == o["toplam_puan"]
 
 
-def test_faaliyet_raporu_onay_suzgeci_ve_dogrulama(veri):
+def test_faaliyet_raporu_ozet_secenekler_ve_dogrulama(veri):
     from fastapi import HTTPException
-    onayli = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=None, onay="onayli", detay=False, kullanici_id=0)
-    assert onayli["ozet"]["kayit_sayisi"] == 1 and onayli["ozet"]["toplam_puan"] == 4.0 and onayli["onay_bekleyenler"] == []
-    assert "kayitlar" not in onayli and any(x["faaliyet_id"] == veri["faaliyet"] for x in onayli["faaliyet_secenekleri"])
+    rapor = faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=None, detay=False, kullanici_id=0)
+    assert rapor["ozet"]["kayit_sayisi"] >= 2 and "kayitlar" not in rapor
+    assert any(x["faaliyet_id"] == veri["faaliyet"] for x in rapor["faaliyet_secenekleri"])
     with pytest.raises(HTTPException) as hata:
-        faaliyet_raporu_getir(baslangic=BIT, bitis=BAS, faaliyet_id=None, onay=None, detay=False, kullanici_id=0)
+        faaliyet_raporu_getir(baslangic=BIT, bitis=BAS, faaliyet_id=None, detay=False, kullanici_id=0)
     assert hata.value.status_code == 422
     with pytest.raises(HTTPException):
-        faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=0, onay=None, detay=False, kullanici_id=0)
+        faaliyet_raporu_getir(baslangic=BAS, bitis=BIT, faaliyet_id=0, detay=False, kullanici_id=0)
 
 
 def test_ogrenci_raporu_saklama_suresi_tur_bolum_ve_telefon_yok(veri):

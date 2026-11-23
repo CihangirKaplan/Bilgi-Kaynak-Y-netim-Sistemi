@@ -8,7 +8,7 @@ import pytest
 import client.main_window as ana
 from client.faaliyet_raporu_ekrani import FaaliyetRaporuEkrani
 from client.ogrenci_raporu_ekrani import OgrenciRaporuEkrani
-from client.yonetim_raporlari_panel import EK_KAYNAKLAR, RAPOR_TURLERI, faaliyet_onay_gorunumu, ogrenci_mevcut_gorunumu
+from client.yonetim_raporlari_panel import EK_KAYNAKLAR, RAPOR_TURLERI, faaliyet_gorunumu, ogrenci_mevcut_gorunumu
 from test_rapor_sayfalari import ekran_ac, yaz_ve_oku
 
 OGRENCI = {
@@ -30,15 +30,13 @@ OGRENCI = {
     "kurallar": {"saklama_yil": 10, "yaklasan_ay": 12, "faaliyetsiz_gun": 90},
 }
 FAALIYET = {
-    "ozet": {"kayit_sayisi": 2, "faaliyet_miktari": 5, "toplam_puan": 19.0, "onayli_kayit": 1, "onay_bekleyen_kayit": 1, "onayli_puan": 4.0,
-             "onay_bekleyen_puan": 15.0, "faaliyet_yapan_ogrenci": 1, "ortalama_puan_kayit": 9.5, "en_eski_bekleyen_gun": 12},
-    "faaliyetler": [{"faaliyet_id": 1, "faaliyet": "Seminer", "kayit_sayisi": 2, "miktar": 5, "puan": 19.0, "onay_bekleyen": 1}],
+    "ozet": {"kayit_sayisi": 2, "faaliyet_miktari": 5, "toplam_puan": 19.0, "faaliyet_yapan_ogrenci": 1, "ortalama_puan_kayit": 9.5},
+    "faaliyetler": [{"faaliyet_id": 1, "faaliyet": "Seminer", "kayit_sayisi": 2, "miktar": 5, "puan": 19.0}],
     "birimler": [{"birim": "SAAT", "kayit_sayisi": 2, "miktar": 5}],
     "ogrenci_turleri": [{"tur": "GONULLU", "etiket": "Gönüllü Öğrenci", "ogrenci_sayisi": 1, "kayit_sayisi": 2, "puan": 19.0}],
-    "onay_bekleyenler": [{"takip_id": 7, "ogrenci": "Ayşe Y", "faaliyet": "Seminer", "tarih": "2026-11-02", "bekleme_gun": 12, "adet": 3, "puan": 15.0}],
     "faaliyet_secenekleri": [{"faaliyet_id": 1, "faaliyet_adi": "Seminer"}],
     "kayitlar": [{"takip_id": 7, "ogrenci": "Ayşe Y", "ogrenci_numarasi": "N1", "tur": "Gönüllü Öğrenci", "faaliyet": "Seminer", "birim": "SAAT",
-                  "adet": 3, "birim_puan": 5.0, "toplam_puan": 15.0, "tarih": "2026-11-02", "durum": "Onay bekliyor"}],
+                  "adet": 3, "birim_puan": 5.0, "toplam_puan": 15.0, "tarih": "2026-11-02"}],
     "donem": {"baslangic": "2026-11-01", "bitis": "2026-11-30"},
 }
 
@@ -76,19 +74,14 @@ def test_faaliyet_raporu_sayfasi_kartlar_tablolar_ve_excel(tmp_path):
     assert {"baslangic", "bitis"} <= set(kayit[0][1])
     assert ekran.faaliyet_sec.count() == 2 and ekran.faaliyet_sec.itemText(1) == "Seminer"
     assert ekran.kartlar["kayit"][0].text() == "2" and ekran.kartlar["puan"][0].text() == "19"
-    assert "Onaylı: 4" in ekran.kartlar["puan"][1].text() and "12 gündür" in ekran.kartlar["bekleyen"][1].text()
-    assert ekran.tablolar["bekleyen"].item(0, 2).text() == "02.11.2026" and ekran.tablolar["bekleyen"].item(0, 3).text() == "12"
+    assert ekran.kartlar["ogrenci"][0].text() == "1" and "bekleyen" not in ekran.kartlar and "bekleyen" not in ekran.tablolar
+    assert ekran.tablolar["faaliyet"].columnCount() == 4 and ekran.tablolar["faaliyet"].item(0, 3).text() == "19"
+    assert not hasattr(ekran, "onay_sec")                                           # onay süzgeci yok
     ekran.goster(FAALIYET)
     assert ekran.faaliyet_sec.count() == 2                                          # liste çoğalmaz
     kitap = yaz_ve_oku(ekran, FAALIYET, tmp_path)
-    assert kitap.sheetnames == ["Özet", "Faaliyet Türü", "Birim", "Öğrenci Türü", "Onay Bekleyenler", "Faaliyet Detayı"]
-    assert [h.value for h in kitap["Faaliyet Detayı"][2]][-1] == "Onay bekliyor"
-
-
-def test_faaliyet_bekleyen_yokken_kart_yazisi():
-    veri = dict(FAALIYET, onay_bekleyenler=[], ozet=dict(FAALIYET["ozet"], onay_bekleyen_kayit=0, en_eski_bekleyen_gun=None))
-    ekran, _ = ekran_ac(FaaliyetRaporuEkrani, veri)
-    assert ekran.kartlar["bekleyen"][1].text() == "Bekleyen kayıt yok" and ekran.tablolar["bekleyen"].rowCount() == 0
+    assert kitap.sheetnames == ["Özet", "Faaliyet Türü", "Birim", "Öğrenci Türü", "Faaliyet Detayı"]
+    assert [h.value for h in kitap["Faaliyet Detayı"][1]][-1] == "Tarih" and kitap["Faaliyet Detayı"].max_column == 10
 
 
 def test_yeni_sayfalar_menude_ve_izinleri_tanimli():
@@ -98,18 +91,18 @@ def test_yeni_sayfalar_menude_ve_izinleri_tanimli():
         assert ad in ana.AnaPencere.SAYFA_YENILEME
 
 
-@pytest.mark.parametrize("gorunum,veri", [(ogrenci_mevcut_gorunumu, OGRENCI), (faaliyet_onay_gorunumu, FAALIYET)])
-def test_panel_gorunumleri_4_kart_5_tablo(gorunum, veri):
+@pytest.mark.parametrize("gorunum,veri,kart_sayisi,tablo_sayisi", [(ogrenci_mevcut_gorunumu, OGRENCI, 4, 5), (faaliyet_gorunumu, FAALIYET, 4, 5)])
+def test_panel_gorunumleri_kart_ve_tablo_sayisi(gorunum, veri, kart_sayisi, tablo_sayisi):
     kartlar, tablolar = gorunum(veri)
-    assert len(kartlar) == 4 and len(tablolar) == 5
+    assert len(kartlar) == kart_sayisi and len(tablolar) == tablo_sayisi
     for ad, sutunlar, satirlar in tablolar:
         assert all(len(satir) == len(sutunlar) for satir in satirlar), ad
     yok_kartlar, yok_tablolar = gorunum(None)
-    assert len(yok_kartlar) == 4 and len(yok_tablolar) == 5
+    assert len(yok_kartlar) == kart_sayisi and len(yok_tablolar) == tablo_sayisi
 
 
 def test_panel_ogrenci_gorunumu_saklama_ve_faaliyetsizleri_listeler():
     _, tablolar = ogrenci_mevcut_gorunumu(OGRENCI)
     assert tablolar[2][2] == [("Ayşe Y", "Süresi doldu")] and tablolar[3][2] == [("Ayşe Y", "Hiç yok")]
-    assert {"Öğrenci Mevcudu", "Faaliyet Onayları"} <= set(RAPOR_TURLERI)
+    assert {"Öğrenci Mevcudu", "Faaliyetler"} <= set(RAPOR_TURLERI) and "Faaliyet Onayları" not in RAPOR_TURLERI
     assert EK_KAYNAKLAR["ogrenci_rapor"][1] is False and EK_KAYNAKLAR["faaliyet_rapor"][1] is True

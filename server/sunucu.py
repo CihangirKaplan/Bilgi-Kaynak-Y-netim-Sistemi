@@ -9787,16 +9787,6 @@ def yonetim_ogrenci_ozet(
                     COALESCE(SUM(adet), 0) AS faaliyet_miktari,
                     COALESCE(SUM(adet * kayit_puani), 0)
                         AS toplam_puan,
-                    COUNT(*) FILTER (
-                        WHERE onaylandi_mi IS TRUE
-                    ) AS onayli_kayit,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN onaylandi_mi IS TRUE
-                            THEN adet * kayit_puani
-                            ELSE 0
-                        END
-                    ), 0) AS onayli_puan,
                     COUNT(DISTINCT ogrenci_id)
                         AS faaliyet_yapan_ogrenci
                 FROM ogrenci_faaliyet_takip
@@ -9810,8 +9800,6 @@ def yonetim_ogrenci_ozet(
                 "kayit_sayisi",
                 "faaliyet_miktari",
                 "toplam_puan",
-                "onayli_kayit",
-                "onayli_puan",
                 "faaliyet_yapan_ogrenci",
             )
 
@@ -9857,8 +9845,6 @@ def yonetim_ogrenci_ozet(
             "kayit_sayisi",
             "faaliyet_miktari",
             "toplam_puan",
-            "onayli_kayit",
-            "onayli_puan",
             "faaliyet_yapan_ogrenci",
         ):
             eski = onceki[alan]
@@ -10321,12 +10307,10 @@ def faaliyet_raporu_getir(
     baslangic: _yr_date,
     bitis: _yr_date,
     faaliyet_id: int | None = None,
-    onay: str | None = Query(None, pattern="^(onayli|bekleyen)$"),
     detay: bool = False,
     kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
 ):
-    """Faaliyet Raporu: dönemdeki (faaliyet tarihi) kayıtların faaliyet türü, birim ve öğrenci türü dağılımı, puanlar, onay durumu ve
-    onay bekleyen kayıtlar. Puan = adet x kaydın girildiği andaki puan (Puan Raporu ile aynı). detay=true ise tek tek kayıtlar da döner."""
+    """Faaliyet Raporu: dönemdeki (faaliyet tarihi) kayıtların faaliyet türü, birim ve öğrenci türü dağılımı ve puanlar. Puan = adet x kaydın girildiği andaki puan (Puan Raporu ile aynı). detay=true ise tek tek kayıtlar da döner."""
     _rapor_donemi_dogrula(baslangic, bitis)
     if faaliyet_id is not None and faaliyet_id <= 0:
         raise HTTPException(status_code=422, detail="Geçerli bir faaliyet seçilmelidir.")
@@ -10336,7 +10320,7 @@ def faaliyet_raporu_getir(
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
         sonuc = rapor_ogrenci_faaliyet.faaliyet_raporu(
-            cursor, OGRENCI_TUR_ETIKETLERI, baslangic, bitis, faaliyet_id, onay, detay,
+            cursor, OGRENCI_TUR_ETIKETLERI, baslangic, bitis, faaliyet_id, detay,
         )
         sonuc["donem"] = {"baslangic": baslangic.isoformat(), "bitis": bitis.isoformat()}
         return sonuc

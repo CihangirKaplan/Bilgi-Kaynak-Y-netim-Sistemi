@@ -240,7 +240,6 @@ erDiagram
         int birim_id FK
         date faaliyet_tarihi
         string aciklama
-        boolean onaylandi_mi
         timestamp olusturulma_tarihi
         int kayit_puani
     }
