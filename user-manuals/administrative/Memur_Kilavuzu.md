@@ -130,6 +130,11 @@ Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz;
 - **Oda Kullanımı:** Odaların saatlik doluluğu (randevu ve etkinlikler birlikte).
 - **Oda Etkinlikleri:** Odalardaki etkinlikler; **Durum** ve **Dönem** süzgeçleri vardır. Yetkiniz varsa **＋ Yeni Etkinlik**, **Düzenle**, **İptal Et** ve **Oturumları Gör** düğmeleri görünür (çok günlü etkinliklerin her günü ayrı "oturum"dur).
 - **Oda Yönetimi:** **＋ Yeni Oda Ekle**, **✎ Odayı Düzenle**, **✕ Odayı Pasife Al**. Pasife alınan oda yeni randevu ve rezervasyonlarda seçilemez; geçmiş kayıtlar korunur.
+  Liste sütunları: **Oda Adı, Kapasite, Durum, Psikologlar, Kullanım, Planlı kayıt.** Başlığa tıklayarak sıralayabilirsiniz.
+  - **Kullanım:** *Psikolog odası* (bir psikoloğa atanmış; **cihaz rezervasyonunda kullanılamaz**) ya da *Ortak oda*.
+  - **Planlı kayıt:** Odada henüz bitmemiş planlı randevu (bugün ve sonrası), cihaz rezervasyonu ve etkinliklerin toplamı; üzerine gelince dökümü görünür. Sayı 0'dan büyükse oda **pasife alınamaz**; önce randevuların sonucunu girin ya da iptal edin, rezervasyon ve etkinlikleri iptal edin.
+  - **Pasif odalar varsayılan olarak gizlidir** (oda silinmediği için zamanla birikir). Görmek ya da yeniden aktif etmek için sağ üstteki **Pasif odaları da göster** kutusunu işaretleyin; yeniden aktif etmek için odayı seçip **Odayı Düzenle** ile "Bu oda aktif olarak kullanılabilir" kutusunu işaretleyin.
+  - **Kapasite** bilgi amaçlıdır; randevu, rezervasyon ya da etkinlik katılımcı sayısıyla karşılaştırılmaz.
 
 ---
 

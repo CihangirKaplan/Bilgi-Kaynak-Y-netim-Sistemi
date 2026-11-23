@@ -671,3 +671,57 @@ def test_ariza_listesi_ust_sinirda_en_yeni_kayitlari_ve_gercek_toplami_verir_ger
         app.dependency_overrides.pop(mevcut_kullanici_id, None)
         c.execute("DELETE FROM cihaz_arizalari WHERE cihaz_id = %s", (cihaz,))
         c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Oda Yönetimi "Planlı randevu" sayıları (gerçek veritabanı): odayı pasife almayı engelleyen kuralla aynı tanım
+# ----------------------------------------------------------------------------------------------------------------------
+def test_oda_planli_randevu_sayilari_yalniz_bugun_ve_sonrasi_planlilari_sayar_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    simdi = datetime.now()
+    yarin = (simdi + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    _randevu(c, kod, personel, oda_a, yarin, "PLANLANDI")
+    _randevu(c, kod, personel, oda_a, yarin + timedelta(days=1), "PLANLANDI")
+    _randevu(c, kod, personel, oda_b, yarin, "IPTAL_EDILDI")                                   # iptal: sayılmaz
+    _randevu(c, kod, personel, oda_b, (simdi - timedelta(days=3)).replace(hour=10, minute=0, second=0, microsecond=0), "TAMAMLANDI")   # geçmiş: sayılmaz
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    yanit = istemci.get("/api/oda-planli-randevu-sayilari")
+    assert yanit.status_code == 200, yanit.text
+    sayilar = {k["oda_id"]: k["planli_randevu"] for k in yanit.json()}
+    assert sayilar.get(oda_a) == 2                                                             # yalnızca planlı ve gelecek
+    assert oda_b not in sayilar                                                                # iptal ve geçmiş sayılmaz, randevusuz oda listede yok
+    # Sütundaki sayı, pasife alma engeliyle tutarlı: sayı > 0 olan oda gerçekten pasife alınamaz.
+    yanit = istemci.patch(f"/api/odalar/{oda_a}", json={"aktif_mi": False})
+    assert yanit.status_code == 409 and "2 planlı randevu" in yanit.json()["detail"]
+
+
+def test_gelecekteki_cihaz_rezervasyonu_ve_etkinligi_olan_oda_pasife_alinamaz_gercek_veritabaninda(ortam):
+    c, admin, psikolog, personel, (oda_a, oda_b), kod, cihaz = ortam
+    yarin = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    c.execute("INSERT INTO cihaz_rezervasyonlari (cihaz_id, rezervasyonu_yapan_personel_id, baslangic_zamani, bitis_zamani, kullanilacak_oda_id) "
+              "VALUES (%s, %s, %s, %s, %s) RETURNING rezervasyon_id", (cihaz, personel, yarin, yarin + timedelta(hours=2), oda_b))
+    rezervasyon = c.fetchone()[0]
+    c.execute("INSERT INTO oda_etkinlikleri (oda_id, organize_eden_personel_id, etkinlik_adi, baslangic_zamani, bitis_zamani) "
+              "VALUES (%s, %s, 'pp_etkinlik', %s, %s) RETURNING etkinlik_id", (oda_b, personel, yarin, yarin + timedelta(hours=1)))
+    etkinlik = c.fetchone()[0]
+    c.execute("INSERT INTO oda_etkinlik_gunleri (etkinlik_id, baslangic_zamani, bitis_zamani) VALUES (%s, %s, %s)",
+              (etkinlik, yarin, yarin + timedelta(hours=1)))
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    try:
+        # Sütundaki sayılar ve pasife alma engeli aynı tanımı kullanır.
+        sayilar = {k["oda_id"]: k for k in istemci.get("/api/oda-planli-randevu-sayilari").json()}
+        assert sayilar[oda_b]["cihaz_rezervasyonu"] == 1 and sayilar[oda_b]["etkinlik"] == 1 and sayilar[oda_b]["planli_randevu"] == 0
+        yanit = istemci.patch(f"/api/odalar/{oda_b}", json={"aktif_mi": False})
+        assert yanit.status_code == 409 and "cihaz rezervasyonu" in yanit.json()["detail"]
+        c.execute("UPDATE cihaz_rezervasyonlari SET iptal_edildi_mi = TRUE WHERE rezervasyon_id = %s", (rezervasyon,))
+        yanit = istemci.patch(f"/api/odalar/{oda_b}", json={"aktif_mi": False})
+        assert yanit.status_code == 409 and "etkinlik" in yanit.json()["detail"]
+        c.execute("UPDATE oda_etkinlikleri SET iptal_edildi_mi = TRUE WHERE etkinlik_id = %s", (etkinlik,))
+        assert oda_b not in {k["oda_id"] for k in istemci.get("/api/oda-planli-randevu-sayilari").json()}
+        yanit = istemci.patch(f"/api/odalar/{oda_b}", json={"aktif_mi": False})
+        assert yanit.status_code == 200, yanit.text                                            # iptaller sonrası engel kalkar
+    finally:
+        c.execute("DELETE FROM oda_etkinlik_gunleri WHERE etkinlik_id = %s", (etkinlik,))
+        c.execute("DELETE FROM oda_etkinlikleri WHERE etkinlik_id = %s", (etkinlik,))

@@ -104,3 +104,101 @@ def test_psikologlar_sutunu_her_yenilemede_guncel_atamayi_gosterir():
         atamalar["simdiki"] = {}                                    # psikologluktan çıkarıldı
         mw.AnaPencere.odalari_getir(ana)
         assert psikolog_sutunu(ana) == ["-", "-"]
+
+
+# ------------------------------------------------------------------ Kullanım, Planlı randevu, pasifleri gizleme, sıralama
+def _odalar_ve_planlilar(odalar, planlilar):
+    def istek(yontem, url, **kwargs):
+        if url.endswith("/api/oda-planli-randevu-sayilari"):
+            return cevap(planlilar)
+        return cevap(odalar)
+    return istek
+
+
+def _yedi_sutunlu_pencere(atamalar, goster=False):
+    from PySide6.QtWidgets import QCheckBox
+    tablo = QTableWidget()
+    tablo.setColumnCount(7)
+    kutu = QCheckBox()
+    kutu.setChecked(goster)
+    return SimpleNamespace(oda_tablosu=tablo, api_url="http://testserver", token="TOKEN",
+                           oda_psikolog_atamalarini_getir=lambda: atamalar, oda_pasifleri_goster=kutu)
+
+
+ODALAR_PASIFLI = [
+    {"oda_id": 1, "oda_adi": "EEG Odası", "kapasite": 1, "aktif_mi": True},
+    {"oda_id": 2, "oda_adi": "Görüşme Odası-2", "kapasite": 1, "aktif_mi": True},
+    {"oda_id": 3, "oda_adi": "Deneme Odası", "kapasite": 1, "aktif_mi": False},
+]
+
+
+def test_kullanim_sutunu_psikolog_odasini_ortak_odadan_ayirir(tkys_qapplication):
+    ana = _yedi_sutunlu_pencere({2: "psikolog2"})
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=_odalar_ve_planlilar(ODALAR_PASIFLI, [])):
+        mw.AnaPencere.odalari_getir(ana)
+    assert [ana.oda_tablosu.item(i, 5).text() for i in range(3)] == ["Ortak oda", "Psikolog odası", "Ortak oda"]
+    assert "cihaz rezervasyonunda kullanılamaz" in ana.oda_tablosu.item(1, 5).toolTip()
+
+
+def test_planli_randevu_sutunu_sayiyi_gosterir_olmayana_tire_koyar(tkys_qapplication):
+    ana = _yedi_sutunlu_pencere({})
+    planlilar = [{"oda_id": 2, "planli_randevu": 3}]
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=_odalar_ve_planlilar(ODALAR_PASIFLI, planlilar)):
+        mw.AnaPencere.odalari_getir(ana)
+    assert [ana.oda_tablosu.item(i, 6).text() for i in range(3)] == ["-", "3", "-"]
+    assert "pasife alınamaz" in ana.oda_tablosu.item(1, 6).toolTip()
+
+
+def test_planli_kayit_sutunu_randevu_rezervasyon_ve_etkinligi_toplar(tkys_qapplication):
+    ana = _yedi_sutunlu_pencere({})
+    planlilar = [{"oda_id": 2, "planli_randevu": 1, "cihaz_rezervasyonu": 2, "etkinlik": 1}]
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=_odalar_ve_planlilar(ODALAR_PASIFLI, planlilar)):
+        mw.AnaPencere.odalari_getir(ana)
+    assert ana.oda_tablosu.item(1, 6).text() == "4"
+    ipucu = ana.oda_tablosu.item(1, 6).toolTip()
+    assert "1 planlı randevu" in ipucu and "2 cihaz rezervasyonu" in ipucu and "1 etkinlik" in ipucu
+
+
+def test_planli_randevu_sayilari_alinamazsa_tablo_yine_dolar(tkys_qapplication):
+    """Yetki ya da ağ sorunu yüzünden sayılar gelmezse sütun "-" gösterir; oda listesi bozulmaz."""
+    ana = _yedi_sutunlu_pencere({})
+
+    def istek(yontem, url, **kwargs):
+        if url.endswith("/api/oda-planli-randevu-sayilari"):
+            raise RuntimeError("ağ yok")
+        return cevap(ODALAR_PASIFLI)
+
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=istek):
+        mw.AnaPencere.odalari_getir(ana)
+    assert ana.oda_tablosu.rowCount() == 3 and ana.oda_tablosu.item(1, 6).text() == "-"
+
+
+def test_pasif_odalar_varsayilan_gizli_kutu_isaretlenince_gorunur(tkys_qapplication):
+    ana = _yedi_sutunlu_pencere({}, goster=False)
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=_odalar_ve_planlilar(ODALAR_PASIFLI, [])):
+        mw.AnaPencere.odalari_getir(ana)
+    assert [ana.oda_tablosu.isRowHidden(i) for i in range(3)] == [False, False, True]          # pasif oda gizli
+
+    ana.oda_pasifleri_goster.setChecked(True)
+    mw.AnaPencere.oda_pasif_gorunurlugu_uygula(ana)
+    assert [ana.oda_tablosu.isRowHidden(i) for i in range(3)] == [False, False, False]         # kutu işaretlenince görünür
+
+    ana.oda_pasifleri_goster.setChecked(False)
+    mw.AnaPencere.oda_pasif_gorunurlugu_uygula(ana)
+    assert ana.oda_tablosu.isRowHidden(2) is True
+
+
+def test_yenilemede_pasif_gizleme_kutunun_durumunu_korur(tkys_qapplication):
+    ana = _yedi_sutunlu_pencere({}, goster=True)
+    with patch.object(mw, "oturum_kontrollu_istek", side_effect=_odalar_ve_planlilar(ODALAR_PASIFLI, [])):
+        mw.AnaPencere.odalari_getir(ana)                                                       # kutu işaretliyken yenileme: pasifler görünür kalır
+    assert not any(ana.oda_tablosu.isRowHidden(i) for i in range(3))
+
+
+def test_oda_yonetimi_tablosu_kurulurken_id_sutunu_gizli_ve_siralama_bagli():
+    """Tablo yalnızca sayfa kurulurken oluşturulduğu için kurulum kodu kaynaktan denetlenir."""
+    import inspect
+    kaynak = inspect.getsource(mw.AnaPencere)
+    assert 'setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum", "Psikologlar", "Kullanım", "Planlı kayıt"])' in kaynak
+    assert "self.oda_tablosu.setColumnHidden(0, True)" in kaynak
+    assert "siralanabilir_yap(self.oda_tablosu)" in kaynak

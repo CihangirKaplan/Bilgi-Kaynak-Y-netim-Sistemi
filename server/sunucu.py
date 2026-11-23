@@ -3258,6 +3258,58 @@ def psikolog_oda_yetkilerini_guncelle(
         if conn is not None: conn.close()
 
 
+def oda_planli_kayit_sayilari(cursor, oda_id=None):
+    """Odayı pasife almayı engelleyen kayıtların sayıları: {oda_id: {"planli_randevu", "cihaz_rezervasyonu", "etkinlik"}}.
+
+    Tanımlar tek yerde durur (pasife alma kuralı ile Oda Yönetimi listesi aynı sayıyı görür):
+    - randevu: durum PLANLANDI ve başlangıç bugün ya da sonrası,
+    - cihaz rezervasyonu: iptal edilmemiş ve henüz bitmemiş (süren ya da gelecekteki) rezervasyonda kullanılacak oda,
+    - etkinlik: iptal edilmemiş ve en az bir günü henüz bitmemiş oda etkinliği.
+    Kaydı olmayan oda sonuçta yer almaz. oda_id verilirse yalnız o oda sorgulanır."""
+    filtre = " AND oda_id = %(oda)s" if oda_id is not None else ""
+    parametre = {"oda": oda_id}
+    sonuc = {}
+
+    def isle(anahtar, satirlar):
+        for satir_oda_id, sayi in satirlar:
+            sonuc.setdefault(satir_oda_id, {"planli_randevu": 0, "cihaz_rezervasyonu": 0, "etkinlik": 0})[anahtar] = sayi
+
+    cursor.execute(
+        "SELECT oda_id, COUNT(*) FROM randevular WHERE durum = 'PLANLANDI' AND baslangic_zamani >= CURRENT_DATE"
+        + filtre + " GROUP BY oda_id;", parametre)
+    isle("planli_randevu", cursor.fetchall())
+    cursor.execute(
+        "SELECT kullanilacak_oda_id AS oda_id, COUNT(*) FROM cihaz_rezervasyonlari "
+        "WHERE COALESCE(iptal_edildi_mi, FALSE) = FALSE AND bitis_zamani > NOW() AND kullanilacak_oda_id IS NOT NULL"
+        + filtre.replace("oda_id", "kullanilacak_oda_id") + " GROUP BY kullanilacak_oda_id;", parametre)
+    isle("cihaz_rezervasyonu", cursor.fetchall())
+    cursor.execute(
+        "SELECT e.oda_id, COUNT(DISTINCT e.etkinlik_id) FROM oda_etkinlikleri e "
+        "JOIN oda_etkinlik_gunleri g ON g.etkinlik_id = e.etkinlik_id "
+        "WHERE COALESCE(e.iptal_edildi_mi, FALSE) = FALSE AND g.bitis_zamani > NOW()"
+        + filtre.replace("oda_id", "e.oda_id") + " GROUP BY e.oda_id;", parametre)
+    isle("etkinlik", cursor.fetchall())
+    return sonuc
+
+
+@app.get("/api/oda-planli-randevu-sayilari")
+def oda_planli_randevu_sayilari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EKLE", "ODA_DUZENLE"))):
+    """Oda Yönetimi ekranındaki "Planlı kayıt" sütunu için: odayı pasife almayı engelleyen kayıtların oda başına sayıları.
+
+    Sayımlar pasife alma kuralıyla aynı yardımcıyı kullanır; kullanıcı pasife almayı denemeden önce engeli görür.
+    Kaydı olmayan odalar listede yoktur."""
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        sayilar = oda_planli_kayit_sayilari(cursor)
+        return [{"oda_id": oda, **sayilar[oda]} for oda in sorted(sayilar)]
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 @app.get("/api/oda-psikolog-atamalari")
 def oda_psikolog_atamalari(kullanici_id: int = Depends(izin_kontrol_tumu("ODA_EKLE", "ODA_DUZENLE"))):
     """Oda Yönetimi ekranındaki "Psikologlar" sütunu için (bilgi amaçlı). Ekranı görenler görebilir."""
@@ -3444,6 +3496,21 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int = Depend
                 raise HTTPException(
                     status_code=409,
                     detail=f"Bu odada bugün ve sonrası için {planli} planlı randevu var. Odayı pasife almadan önce {PLANLI_RANDEVU_COZUMU}",
+                )
+
+            # Gelecekteki cihaz rezervasyonu ya da oda etkinliği olan oda da pasife alınamaz.
+            kayit = oda_planli_kayit_sayilari(cursor, oda_id).get(oda_id, {})
+            if kayit.get("cihaz_rezervasyonu"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu odada henüz bitmemiş {kayit['cihaz_rezervasyonu']} cihaz rezervasyonu var. "
+                           "Odayı pasife almadan önce bu rezervasyonları iptal edin.",
+                )
+            if kayit.get("etkinlik"):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Bu odada henüz bitmemiş {kayit['etkinlik']} etkinlik var. "
+                           "Odayı pasife almadan önce bu etkinlikleri iptal edin.",
                 )
 
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)

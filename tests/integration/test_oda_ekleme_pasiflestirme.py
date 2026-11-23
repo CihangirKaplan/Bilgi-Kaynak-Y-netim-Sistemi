@@ -144,7 +144,7 @@ def test_oda_duzenleme_izni_yoksa_403_ve_hicbir_sey_yazilmaz():
 
 
 def test_oda_pasife_alinir_kayit_silinmez_ve_denetim_yazilir():
-    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 3, False)], fetchall=[[]])
+    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 3, False)], fetchall=[[], [], [], []])
     assert yanit.status_code == 200
     assert yanit.json()["oda"] == {"oda_id": 2, "oda_adi": "Oda 2", "kapasite": 3, "aktif_mi": False}
     guncelleme = next((s, p) for s, p in sorgular(cursor) if s.startswith("UPDATE odalar"))
@@ -164,7 +164,7 @@ def test_planli_randevusu_olan_oda_pasife_alinamaz_ve_sonuc_girme_uyarisi_doner(
 
 
 def test_oda_planli_randevu_sorgusu_bugun_ve_sonrasina_bakar():
-    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[]])
+    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[], [], [], []])
     sql, parametre = next((s, p) for s, p in sorgular(cursor) if "FROM randevular" in s)
     assert "durum = 'PLANLANDI'" in sql and "baslangic_zamani >= CURRENT_DATE" in sql and parametre == (2,)
 
@@ -177,7 +177,7 @@ def test_pasif_oda_yeniden_aktiflestirilebilir_ve_psikolog_kontrolu_yapilmaz():
 
 
 def test_pasiflestirmede_satir_kilitlenir_yaris_durumunu_onler():
-    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[]])
+    _, _, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,), (2, "Oda 2", 1, False)], fetchall=[[], [], [], []])
     assert any(s.startswith("SELECT oda_id FROM odalar WHERE oda_id = %s FOR UPDATE") for s, _ in sorgular(cursor))
 
 
@@ -265,3 +265,17 @@ def test_modeller_adi_dogrudan_kirpar_bos_adi_reddeder_none_ve_gonderilmeyen_deg
             sinif(oda_adi="    ")
     assert OdaGuncelleModeli(kapasite=3).model_dump(exclude_unset=True) == {"kapasite": 3}
     assert OdaGuncelleModeli(oda_adi=None).oda_adi is None          # None kabul edilir; "gönderilmeli" kuralı sunucuda 422 verir
+
+
+def test_gelecekteki_cihaz_rezervasyonu_olan_oda_pasife_alinamaz():
+    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,)], fetchall=[[], [], [(2, 2)], []])
+    assert yanit.status_code == 409 and "2 cihaz rezervasyonu" in yanit.json()["detail"]
+    assert not any(s.startswith("UPDATE odalar") for s, _ in sorgular(cursor))
+    conn.commit.assert_not_called()
+
+
+def test_gelecekteki_etkinligi_olan_oda_pasife_alinamaz():
+    yanit, conn, cursor = guncelle({"aktif_mi": False}, fetchone=[(1,), (2,), (0,)], fetchall=[[], [], [], [(2, 1)]])
+    assert yanit.status_code == 409 and "1 etkinlik" in yanit.json()["detail"]
+    assert not any(s.startswith("UPDATE odalar") for s, _ in sorgular(cursor))
+    conn.commit.assert_not_called()

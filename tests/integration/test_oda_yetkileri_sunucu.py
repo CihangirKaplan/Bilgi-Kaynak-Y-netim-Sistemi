@@ -353,7 +353,7 @@ def test_psikologun_tek_aktif_odasi_pasife_alinamaz():
 
 
 def test_baska_aktif_odasi_olan_psikologlar_icin_pasife_alinabilir():
-    conn, cursor, sonuc, hata = oda_guncelle_dene({"aktif_mi": False}, fetchall=[[]])
+    conn, cursor, sonuc, hata = oda_guncelle_dene({"aktif_mi": False}, fetchall=[[], [], [], []])
     assert hata is None and sonuc["durum"] == "basarili"
     kontrol = next(s for s in sorgular(cursor) if "FROM psikolog_odalar po" in s)
     assert "NOT EXISTS" in kontrol and "o2.aktif_mi = TRUE" in kontrol
