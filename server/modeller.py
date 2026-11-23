@@ -255,9 +255,17 @@ class RandevuModeli(BaseModel):
 
 # APT-API-001 / SEC-APT-002: Randevu Oluşturma Modeli
 
-# TKYS_RANDEVU_MESAI_0800_1800
+# TKYS_RANDEVU_SAAT_0900_1500
+# Randevu saatleri istemcideki saat listesiyle aynıdır (client/randevu_ekranlari.py SAAT_LISTESI): saat başı 09:00 … 15:00, her randevu tam 1 saat.
+RANDEVU_ILK_SAAT = 9
+RANDEVU_SON_BASLANGIC_SAATI = 15
+RANDEVU_SURESI = datetime.timedelta(hours=1)
+RANDEVU_SAAT_MESAJI = "Randevular yalnızca 09:00-15:00 arasında, saat başı (09:00, 10:00 … 15:00) başlatılabilir."
+RANDEVU_SURE_MESAJI = "Her randevu tam 1 saat sürer."
+
+
 def randevu_mesai_dogrula(baslangic, bitis):
-    """Randevular aynı gün 08:00-18:00 arasında olmalıdır."""
+    """Randevular aynı gün, saat başı 09:00-15:00 arasında başlar ve tam 1 saat sürer."""
     if baslangic.date() != bitis.date():
         raise ValueError(
             "Randevu aynı gün başlayıp bitmelidir."
@@ -268,25 +276,12 @@ def randevu_mesai_dogrula(baslangic, bitis):
             "Bitiş zamanı başlangıçtan sonra olmalıdır."
         )
 
-    bas_dakika = baslangic.hour * 60 + baslangic.minute
-    bit_dakika = bitis.hour * 60 + bitis.minute
+    saat_basi_mi = baslangic.minute == 0 and baslangic.second == 0 and baslangic.microsecond == 0
+    if not (RANDEVU_ILK_SAAT <= baslangic.hour <= RANDEVU_SON_BASLANGIC_SAATI and saat_basi_mi):
+        raise ValueError(RANDEVU_SAAT_MESAJI)
 
-    bas_gecerli = (
-        480 <= bas_dakika < 1080
-    )
-    bit_gecerli = (
-        480 < bit_dakika <= 1080
-        and not (
-            bit_dakika == 1080
-            and (bitis.second or bitis.microsecond)
-        )
-    )
-
-    if not bas_gecerli or not bit_gecerli:
-        raise ValueError(
-            "Randevular yalnızca 08:00-18:00 "
-            "saatleri arasında oluşturulabilir."
-        )
+    if bitis - baslangic != RANDEVU_SURESI:
+        raise ValueError(RANDEVU_SURE_MESAJI)
 
     return True
 
