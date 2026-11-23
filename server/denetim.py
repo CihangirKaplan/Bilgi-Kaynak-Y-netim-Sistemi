@@ -1,5 +1,7 @@
 import json
 
+import psycopg2  # noqa: F401  (kullanılmıyor görünür ama testler bağlantıyı server.denetim.psycopg2 üzerinden değiştirir)
+
 from server.vt_baglanti import vt_baglan
 from psycopg2 import sql
 from psycopg2.extras import Json

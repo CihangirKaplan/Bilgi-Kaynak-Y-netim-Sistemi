@@ -3,6 +3,8 @@
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 
+import psycopg2  # noqa: F401  (kullanılmıyor görünür ama testler bağlantıyı server.oda_etkinlikleri_api.psycopg2 üzerinden değiştirir)
+
 from server.vt_baglanti import vt_baglan
 from psycopg2.extras import RealDictCursor
 from fastapi import APIRouter, Depends, HTTPException
