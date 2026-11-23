@@ -13,7 +13,7 @@ import sys
 import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QMenu, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
+    QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
     QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem,
     QLineEdit
 )
@@ -119,8 +119,8 @@ IZIN_LISTESI.extend([
         _oda_etkinlik_kategori,
         "".join(
             "E" if rol in (
-                "ADMIN", "MUDUR", "MEMUR",
-                "PSIKOLOG", "DANISMA_OGRENCISI"
+                "admin", "mudur", "memur",
+                "psikolog", "ogrenci"
             ) else "H"
             for rol in ROLLER
         ),
@@ -129,7 +129,7 @@ IZIN_LISTESI.extend([
         "Oda etkinliklerini yönetme",
         _oda_etkinlik_kategori,
         "".join(
-            "E" if rol in ("ADMIN", "MUDUR", "MEMUR") else "H"
+            "E" if rol in ("admin", "mudur", "memur") else "H"
             for rol in ROLLER
         ),
     ),
@@ -694,7 +694,6 @@ class AnaPencere(QMainWindow):
         self.btn_yardim = QPushButton("ⓘ  Yardım")
         self.btn_yardim.setCursor(Qt.PointingHandCursor)
         self.btn_yardim.setToolTip("Hakkında, kısayollar ve yardım (F1)")
-        self.btn_yardim.setStyleSheet(self.btn_bildirim.styleSheet())
         self.btn_yardim.clicked.connect(lambda *_: self.yardim_ac())
         self.gezinme_cubugu.addWidget(self.btn_yardim)
 
@@ -763,6 +762,8 @@ QPushButton:pressed {
         self.btn_menu.setFixedSize(46, 40)
         self.btn_menu.setText("☰")
         self.btn_bildirim.setStyleSheet(ust_buton_stili)
+        self.btn_yardim.setStyleSheet(ust_buton_stili)
+        self.btn_yardim.setFixedHeight(40)
         # TKYS_UST_UCLU_KUTU_DOLU_ZIL_V1
         self.btn_ana_sayfa.setStyleSheet("""
             QPushButton {
@@ -982,7 +983,7 @@ QLabel {
 
         self._bildirim_timer = QTimer(self)
         self._bildirim_timer.setInterval(60000)
-        self._bildirim_timer.timeout.connect(self._bildirimleri_yenile)
+        self._bildirim_timer.timeout.connect(self._bildirimleri_zamanlayicidan_yenile)
         self._bildirim_timer.start()
 
         QTimer.singleShot(0, self._bildirimleri_yenile)
@@ -996,6 +997,18 @@ QLabel {
 
     # ------------------------------------------------------------------
 
+    # Sunucuya ulaşılamıyorsa her turda uzun süre beklenmez: zaman aşımı kısa tutulur, ağ hatasından sonra
+    # zamanlayıcı birkaç turu atlar. (Menüyü elle açmak ya da başka bir yenileme bu beklemeyi etkilemez.)
+    BILDIRIM_ISTEK_ZAMAN_ASIMI = 3
+    BILDIRIM_AG_HATASI_SONRASI_ATLANAN_TUR = 2
+
+    def _bildirimleri_zamanlayicidan_yenile(self):
+        atlanan = getattr(self, "_bildirim_atlanan_tur", 0)
+        if atlanan > 0:
+            self._bildirim_atlanan_tur = atlanan - 1
+            return
+        self._bildirimleri_yenile()
+
     def _bildirimleri_yenile(self):
         """Yalnizca erisilebilir bildirimleri yukler."""
         if getattr(self, "_oturum_kapatiliyor", False):
@@ -1005,13 +1018,18 @@ QLabel {
         self._bildirim_sayisi = 0
         self._bildirim_hata = False
 
+        ag_yok = []                     # sunucuya hiç ulaşılamadıysa kalan istekler denenmez (arayüz uzun süre donmasın)
+
         def getir(yol):
+            if ag_yok:
+                self._bildirim_hata = True
+                return None
             try:
                 yanit = oturum_kontrollu_istek(
                     "GET",
                     f"{self.api_url}{yol}",
                     headers={"Authorization": f"Bearer {self.token}"},
-                    timeout=5
+                    timeout=AnaPencere.BILDIRIM_ISTEK_ZAMAN_ASIMI
                 )
 
                 if oturum_hatasi_mi(yanit):
@@ -1024,8 +1042,10 @@ QLabel {
                 yanit.raise_for_status()
                 return yanit.json()
 
-            except (requests.RequestException, ValueError):
+            except (requests.RequestException, ValueError) as hata:
                 self._bildirim_hata = True
+                if isinstance(hata, (requests.ConnectionError, requests.Timeout)):
+                    ag_yok.append(True)
                 return None
 
         # Parola sıfırlama talepleri: yalnızca sıfırlama izni ve Kullanıcı & Personel sayfası olan yöneticiye.
@@ -1114,6 +1134,7 @@ QLabel {
                     ))
 
         sayi = self._bildirim_sayisi
+        self._bildirim_atlanan_tur = AnaPencere.BILDIRIM_AG_HATASI_SONRASI_ATLANAN_TUR if ag_yok else 0
 
         if self._bildirim_hata:
             self.btn_bildirim.setText(
@@ -1518,7 +1539,6 @@ QLabel {
             self.sayfa_ac(0)
         self.kisayollari_kur()
 
-        aktif = sum(1 for a in IZIN if izin_var(rol, a))
         self.statusBar().hide()
 
     def _api_token_reddedildi(self, token, neden):
@@ -2411,7 +2431,7 @@ QLabel {
             lay.addWidget(self.aktif_kalibrasyon_ekrani, 1)
 
         elif oge["ad"] == "Cihaz Rezervasyonu":
-            rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma") or izin_var(rol, "REZERVASYON_IPTAL")
+            rezervasyon_yetkisi = izin_var(rol, "Cihaz rezervasyonu yapma")
             self.aktif_rezervasyon_ekrani = RezervasyonYonetimEkrani(
                 api_url=self.api_url,
                 token=self.token,
@@ -2972,36 +2992,6 @@ QLabel {
         )
         if dialog.exec():
             self.rol_izin_sayfasi.verileri_yukle()
-
-    def rolleri_getir(self):
-        if not hasattr(self, 'rol_tablosu'):
-            return
-
-        import requests
-        from PySide6.QtWidgets import QTableWidgetItem
-        from PySide6.QtCore import Qt
-
-        self.rol_tablosu.setRowCount(0) # Önce tabloyu temizle
-        headers = {"Authorization": f"Bearer {self.token}"}
-        
-        try:
-            # Backend API endpoint'inin /api/roller olduğunu varsayıyoruz
-            cevap = requests.get(f"{self.api_url}/api/roller", headers=headers, timeout=5)
-            if cevap.status_code == 200:
-                roller = cevap.json()
-                self.rol_tablosu.setRowCount(len(roller))
-
-                for satir, rol_verisi in enumerate(roller):
-                    item_id = QTableWidgetItem(str(rol_verisi.get("rol_id", "")))
-                    item_ad = QTableWidgetItem(str(rol_verisi.get("rol_adi", "")))
-
-                    item_id.setTextAlignment(Qt.AlignCenter)
-                    item_ad.setTextAlignment(Qt.AlignCenter)
-
-                    self.rol_tablosu.setItem(satir, 0, item_id)
-                    self.rol_tablosu.setItem(satir, 1, item_ad)
-        except Exception as e:
-            print("Rol verileri çekilirken hata oluştu:", e)
 
 
 if __name__ == "__main__":
