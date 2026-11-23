@@ -1,4 +1,5 @@
-from client.api_yoneticisi import api_hata_mesaji
+import logging
+from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, api_hata_mesaji
 """Cihaz envanteri: liste ekranı, 'Cihaz ekle / durum güncelle' formu ve düzenleme listesi.
 
 Görünüm, bakım/kalibrasyon/arıza ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
@@ -17,6 +18,8 @@ from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugm
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
+
+logger = logging.getLogger(__name__)
 
 # Sunucu cihaz durumunu veritabanı değeriyle verir; ekranda okunaklı Türkçe adı gösterilir.
 # veritabanı değeri -> (görünen ad, yazı rengi, arka plan)
@@ -123,9 +126,9 @@ class CihazIslemFormu(QDialog):
                 basari_bildirimi(self, "Cihaz kullanım dışına alındı.")
                 self.accept()
             else:
-                QMessageBox.critical(self, "Hata", str(cevap.json().get("detail", "Bilinmeyen bir hata oluştu.")))
+                QMessageBox.critical(self, "Hata", hata_detayi_metni(cevap, "Bilinmeyen bir hata oluştu."))
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
 
     def formu_doldur(self):
         self.txt_envanter.setText(self.cihaz_veri.get("envanter_kodu", ""))
@@ -167,11 +170,11 @@ class CihazIslemFormu(QDialog):
                 basari_bildirimi(self, "İşlem başarıyla kaydedildi.")
                 self.accept()
             else:
-                # Gelen hatayı ne olursa olsun zorla düz metne (str) çeviriyoruz ki PySide6 çökmesin!
-                hata_detay = str(cevap.json().get('detail', 'Bilinmeyen bir hata oluştu.'))
+                # Sunucu hatası her zaman düz metin olarak gösterilir (liste gelirse mesaj kutusu hata vermesin).
+                hata_detay = hata_detayi_metni(cevap, "Bilinmeyen bir hata oluştu.")
                 QMessageBox.critical(self, "Hata", hata_detay)
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
 
 DURUM_ROLU = Qt.UserRole + 1      # tablo satırında cihazın veritabanı durumu (filtre için)
 
@@ -268,7 +271,7 @@ class CihazYonetimEkrani(QWidget):
             cevap.raise_for_status()
             cihazlar = cevap.json()
         except Exception as e:
-            print(f"Cihaz listesi yükleme hatası: {e}")
+            logger.warning("Cihaz listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Cihazlar yüklenemedi. Sunucu bağlantısını kontrol edin.")
             self.bos_mesaj.show()
             self.tablo.hide()

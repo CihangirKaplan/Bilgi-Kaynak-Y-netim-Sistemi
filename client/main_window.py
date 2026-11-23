@@ -1,8 +1,9 @@
+import logging
 import base64
 import json
 import time
 from PySide6.QtCore import QTimer
-from client.api_yoneticisi import oturum_olaylari
+from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, oturum_olaylari
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -14,8 +15,7 @@ import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QTableWidgetItem,
-    QLineEdit
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QLineEdit
 )
 from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent
@@ -27,14 +27,15 @@ from client.cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
 from client.cihaz_ariza_ekranlari import ArizaYonetimEkrani
 from client.cihaz_uygunluk_ekrani import CihazUygunlukEkrani
 from client.cihaz_kalibrasyon_ekranlari import KalibrasyonYonetimEkrani
-from client.cihaz_bakim_ekranlari import BakimYonetimEkrani # YENİ EKLENDİ!
+from client.cihaz_bakim_ekranlari import BakimYonetimEkrani
 from client.dashboard_ekrani import DashboardEkrani
 from client.k_personel_ekranlari import KullaniciPersonelEkrani
-from client.faaliyet_dialog import FaaliyetEkleDialog
 from client.sayfalar_rol_izin import RolIzinSayfasi
 from client.rol_izin_diyaloglari import RolOlusturDialog, IzinDuzenleDialog
 from client.tablo_siralama import siralanabilir_yap
 from client.tablo_tasarimi import ortak_liste_stili_uygula
+
+logger = logging.getLogger(__name__)
 
 # ======================================================================
 #  1. YETKİ MATRİSİ  (E = Evet, H = Hayır)
@@ -1648,7 +1649,7 @@ QLabel {
                     self._sunucu_rol_adi = veri.get("rol_adi")      # rol sonradan değişirse fark edilsin
                     return
         except Exception as e:
-            print("Yetkiler sunucudan alınamadı, yerel tablo kullanılacak:", e)
+            logger.warning("Yetkiler sunucudan alınamadı, yerel tablo kullanılacak: %s", e)
 
     # ------------------------------------------------------------------ açık oturumda yetki yenileme
     # Yönetici bir rolün izinlerini değiştirdiğinde ya da kullanıcının rolünü değiştirdiğinde, o kullanıcı
@@ -1860,7 +1861,6 @@ QLabel {
         if not hasattr(self, 'oda_tablosu'): return
 
         from PySide6.QtWidgets import QMessageBox
-        import requests
 
         secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
         if not secili_satirlar:
@@ -1895,15 +1895,11 @@ QLabel {
                     self.odalari_getir()
                 else:
                     if res.status_code == 409:
-                        try:
-                            mesaj = res.json().get("detail") or "Oda pasife alınamadı."
-                        except Exception:
-                            mesaj = "Oda pasife alınamadı."
-                        QMessageBox.warning(self, "Oda Pasife Alınamadı", mesaj)
+                        QMessageBox.warning(self, "Oda Pasife Alınamadı", hata_detayi_metni(res, "Oda pasife alınamadı."))
                     else:
                         QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
 
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
@@ -1956,7 +1952,7 @@ QLabel {
         try:
             yontem()
         except Exception as e:
-            print(f"Sayfa yenileme hatası ({ad}):", e)
+            logger.warning("Sayfa yenilenemedi (%s): %s", ad, e)
 
     # ------------------------------------------------------------------ klavye kısayolları
     def kisayollari_kur(self):
@@ -2085,7 +2081,6 @@ QLabel {
         if not hasattr(self, 'oda_tablosu'):
             return
 
-        import requests
         from PySide6.QtWidgets import QTableWidgetItem
         from PySide6.QtCore import Qt
 
@@ -2120,7 +2115,7 @@ QLabel {
                     item_psikolog.setTextAlignment(Qt.AlignCenter)
                     self.oda_tablosu.setItem(satir, 4, item_psikolog)
         except Exception as e:
-            print("Oda verileri çekilirken hata oluştu:", e)
+            logger.warning("Oda listesi yüklenemedi: %s", e)
 
     def kaydirmali(self, icerik):
         sc = QScrollArea()
@@ -2290,7 +2285,6 @@ QLabel {
                 elif izin_kodu == "Danışma masası oturumunu yönetme":
                     btn.clicked.connect(lambda: self.danisma_ekrani.yenile())
 
-                # --- YENİ EKLENEN BAKIM BUTONU ---
                 elif etiket == "＋  Bakım Kaydı":
                     btn.clicked.connect(self.yeni_bakim_ekrani_ac)
                 elif etiket == "＋  Yeni Plan":
@@ -2744,7 +2738,6 @@ QLabel {
         self.tablo_faaliyetler.setRowCount(0)
 
         try:
-            import requests
             from PySide6.QtWidgets import QTableWidgetItem, QMessageBox
 
             headers = {"Authorization": f"Bearer {self.token}"}
@@ -2789,7 +2782,7 @@ QLabel {
 
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{str(e)}")
+            QMessageBox.critical(self, "Arayüz Hatası", f"Tablo çizilirken hata oluştu:\n{istek_hatasi_metni(e)}")
 
     def yeni_faaliyet_ekrani_ac(self):
         from client.faaliyet_dialog import FaaliyetEkleDialog
@@ -2896,7 +2889,6 @@ QLabel {
         cevap = soru.exec()
 
         if cevap == QMessageBox.Yes:
-            import requests
             headers = {"Authorization": f"Bearer {self.token}"}
             hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}"
 
@@ -2921,13 +2913,9 @@ QLabel {
 
                     self.faaliyet_tablosunu_guncelle() # Tabloyu yenile ki kayıt ekrandan kaybolsun
                 else:
-                    try:
-                        hata_detayi = res.json().get("detail", res.text)
-                    except:
-                        hata_detayi = res.text
-                    QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+                    QMessageBox.critical(self, "Hata", f"Silme işlemi başarısız oldu.\n{hata_detayi_metni(res)}")
             except Exception as e:
-                QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+                QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
 
     def faaliyet_turleri_ekrani_ac(self):
         from client.faaliyet_turleri_dialog import FaaliyetTurleriDialog

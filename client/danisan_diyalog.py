@@ -1,10 +1,11 @@
-import re
-from datetime import datetime
+import logging
 from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
-from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
+from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, oturum_kontrollu_istek, oturum_hatasi_mi
 from client.siniflandirma import YAS_GRUPLARI
+
+logger = logging.getLogger(__name__)
 
 OKUNUR_STIL = "background-color: #F1F5F9; color: #64748B; font-weight: bold;"
 
@@ -135,7 +136,7 @@ class DanisanOlusturDialog(QDialog):
             for psikolog in cevap.json():
                 self.cmb_psikolog.addItem(psikolog["ad_soyad"], psikolog["personel_id"])
         except Exception as e:
-            print("Psikologlar çekilirken hata oluştu:", e)
+            logger.warning("Psikolog listesi yüklenemedi: %s", e)
             return
 
         kendisi = self.cmb_psikolog.findData(self.mevcut_psikolog_id)
@@ -174,10 +175,7 @@ class DanisanOlusturDialog(QDialog):
 
     @staticmethod
     def _detay(cevap):
-        try:
-            return str(cevap.json().get("detail", ""))
-        except ValueError:
-            return cevap.text[:200]
+        return hata_detayi_metni(cevap, "")
 
     def kaydet(self):
         # Sunucu bu değerleri sorgu parametresi olarak okur (JSON gövdesi yok sayılır; ücretsiz seçimi kaybolurdu).
@@ -222,6 +220,6 @@ class DanisanOlusturDialog(QDialog):
                     f"Danışan oluşturulamadı (Kod {cevap.status_code}).\n{self._detay(cevap)}",
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{e}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı:\n{istek_hatasi_metni(e)}")
         finally:
             self.btn_kaydet.setEnabled(True)

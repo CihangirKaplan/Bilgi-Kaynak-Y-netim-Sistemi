@@ -1,29 +1,10 @@
 import os
 
 import requests
+from PySide6.QtCore import QObject, Signal
 
 # Sunucunun ana adresi: diğer ekranlarla aynı ayarı (TKYS_API_URL) kullanır, yoksa yerel sunucu.
 BASE_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000").rstrip("/") + "/api"
-
-def personel_listesini_getir(token):
-    """Sunucudan personel verilerini çeker ve liste olarak döndürür."""
-    headers = {"Authorization": f"Bearer {token}"}
-    url = f"{BASE_URL}/personel"
-    
-    try:
-        cevap = requests.get(url, headers=headers, timeout=15)
-        
-        if cevap.status_code == 200:
-            return cevap.json()  # Veriyi başarıyla aldık, geri gönderiyoruz
-        else:
-            print("Sunucudan veri çekilemedi. Hata Kodu:", cevap.status_code)
-            return []  # Hata varsa boş liste dön
-            
-    except requests.exceptions.ConnectionError:
-        print("Sunucuya ulaşılamıyor. FastAPI'nin çalıştığından emin ol.")
-        return []  # Sunucu kapalıysa boş liste dön
-
-from PySide6.QtCore import QObject, Signal
 
 
 class OturumOlaylari(QObject):
@@ -34,6 +15,9 @@ oturum_olaylari = OturumOlaylari()
 
 
 SEMA_UYUMSUZ_KODU = "SEMA_UYUMSUZ"
+
+# Ekranın ayrıca süre vermediği istekler için (saniye).
+VARSAYILAN_ZAMAN_ASIMI = 15
 
 
 def sema_uyumsuz_detayi(yanit):
@@ -52,6 +36,8 @@ def sema_uyumsuz_detayi(yanit):
 def oturum_kontrollu_istek(method, url, **kwargs):
     """HTTP istegi gonderir ve token hatalarini bildirir."""
 
+    # Süre verilmeyen isteklerde sunucu takılırsa ekran donmasın.
+    kwargs.setdefault("timeout", VARSAYILAN_ZAMAN_ASIMI)
     yanit = requests.request(method, url, **kwargs)
 
     detay = sema_uyumsuz_detayi(yanit)

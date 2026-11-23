@@ -12,11 +12,11 @@ import textwrap
 from datetime import date, datetime, timedelta
 
 import requests
-from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.randevu_ekranlari import DURUM_ETIKETLERI, DURUM_RENKLERI
 from client.siniflandirma import gorusme_etiketi
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QComboBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -490,7 +490,7 @@ class OdaKullanimiEkrani(QWidget):
                 yanit.raise_for_status()
                 veri = yanit.json()
             except (requests.RequestException, ValueError) as hata:
-                QMessageBox.warning(self, "Oda Kullanımı", f"Oda kullanım bilgisi alınamadı:\n{hata}")
+                QMessageBox.warning(self, "Oda Kullanımı", f"Oda kullanım bilgisi alınamadı:\n{istek_hatasi_metni(hata)}")
                 return
         finally:
             self._yukleniyor = False

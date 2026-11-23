@@ -1,6 +1,5 @@
 """TKYS - Öğrenci Raporu: tür/bölüm dağılımı, aktif/pasif, kayıt saklama süresi (10 yıl) durumu ve öğrenci listesi (telefon yok)."""
 
-from client.cihaz_rezervasyon_raporu_ekrani import tarih_saat_metni
 from client.rapor_excel import TARIH_BICIMI, _tarih_degeri
 from client.rapor_excel_genel import excel_olustur
 from client.rapor_sayfasi_taban import RaporSayfasiTaban

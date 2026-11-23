@@ -2,13 +2,14 @@
 
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
+import logging
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.tablo_siralama import SIRALAMA_ROLU
-from client.api_yoneticisi import hata_detayi_metni
+from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QTextEdit, QVBoxLayout, QWidget,
+    QComboBox, QDialog, QFormLayout, QFrame, QHeaderView, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
@@ -18,6 +19,8 @@ from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+
+logger = logging.getLogger(__name__)
 
 # Ortak form stiline ek: kırmızı "bildir" butonu ve uyarı kutusu
 ARIZA_FORM_STIL = FORM_STIL + """
@@ -248,7 +251,7 @@ class ArizaYonetimEkrani(QWidget):
             cevap.raise_for_status()
             arizalar = cevap.json()
         except Exception as e:
-            print(f"Arıza listesi yükleme hatası: {e}")
+            logger.warning("Arıza listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Arıza kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
             self.bos_mesaj.show()
             self.tablo.hide()
@@ -458,4 +461,4 @@ class ArizaDuzenleFormu(QDialog):
             else:
                 QMessageBox.warning(self, "Hata", f"İşlem reddedildi. Kod: {cevap.status_code}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucuya bağlanılamadı: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucuya bağlanılamadı: {istek_hatasi_metni(e)}")

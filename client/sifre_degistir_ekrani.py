@@ -11,7 +11,7 @@ from client.api_yoneticisi import (
 )
 from pathlib import Path
 from client.parola_kurallari import EN_AZ_UZUNLUK, kural_durumlari, tum_kurallar_saglandi_mi, guc_hesapla
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QCheckBox, QMessageBox, QHBoxLayout, QSizePolicy
@@ -390,9 +390,6 @@ class SifreDegistirEkrani(QWidget):
         self._kaydet_butonunu_ayarla()
 
     def _kaydet_butonunu_ayarla(self):
-        hazir = tum_kurallar_saglandi_mi(
-            self.yeni_sifre.text().strip(), self.yeni_sifre_tekrar.text().strip(), self.eski_sifre.text().strip()
-        ) and bool(self.eski_sifre.text().strip())
         self.kaydet_btn.setEnabled(not self._oturum_kapatiliyor)
 
     def sifreleri_goster(self, goster):

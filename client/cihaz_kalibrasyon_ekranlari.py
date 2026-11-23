@@ -1,11 +1,11 @@
-from client.api_yoneticisi import hata_detayi_metni
+import logging
+from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
-    QFormLayout, QComboBox, QDateEdit, QLineEdit, QFrame
+    QWidget, QVBoxLayout, QPushButton, QLabel, QHeaderView,
+    QMessageBox, QDialog, QFormLayout, QComboBox, QDateEdit,
+    QLineEdit, QFrame
 )
 from PySide6.QtCore import Qt, QDate
-import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, cihaz_siralama_adi
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
@@ -18,11 +18,13 @@ from client.api_yoneticisi import (
 )
 from client.tablo_tasarimi import hap_sutununu_sigdir
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
-from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
-                            sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
-                            yenile_butonu_olustur, bos_mesaj_olustur)
+from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, islem_butonlari, sil_onayi, sayi_cipi,
+                            tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni, yenile_butonu_olustur,
+                            bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+
+logger = logging.getLogger(__name__)
 
 KALIBRASYON_CAKISMA_METINLERI = (
     "Bu tarihlerde rezervasyon var",
@@ -56,7 +58,7 @@ class YeniKalibrasyonFormu(QDialog):
         self.dt_gecerlilik = QDateEdit(QDate.currentDate().addYears(1))
         self.dt_gecerlilik.setCalendarPopup(True)
 
-        # --- YENİ EKLENEN TARİHLER ---
+        # Başlangıç ve bitiş tarihleri
         self.dt_baslangic = QDateEdit(QDate.currentDate())
         self.dt_baslangic.setCalendarPopup(True)
 
@@ -66,8 +68,8 @@ class YeniKalibrasyonFormu(QDialog):
         form.addRow("Cihaz (*):", self.cmb_cihaz)
         form.addRow("Yapan Kurum (*):", self.txt_kurum)
         form.addRow("Sertifika No (*):", self.txt_sertifika)
-        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
-        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
+        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)
 
         # Tekrar aralığı seçilince geçerlilik tarihi bitişe göre hesaplanır; uyarı süresi zil/dashboard içindir.
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Geçerlilik",
@@ -148,7 +150,6 @@ class YeniKalibrasyonFormu(QDialog):
             "kalibrasyon_yapan_kurum": self.txt_kurum.text().strip(),
             "sertifika_no": self.txt_sertifika.text().strip(),
             "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
-            # YENİ EKLENEN VERİLER
             "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
             "uyari_suresi_gun": self.tekrar.uyari_suresi()
@@ -167,11 +168,11 @@ class YeniKalibrasyonFormu(QDialog):
                 basari_bildirimi(self, "Kalibrasyon kaydı başarıyla eklendi.")
                 self.accept()
             else:
-                # Hatayı gizlemiyoruz, ekrana basıyoruz!
+                # Sunucunun verdiği neden kullanıcıya gösterilir.
                 hata_mesaji = hata_detayi_metni(res, "Kayıt yapılamadı.")
                 QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
 class KalibrasyonDuzenleFormu(QDialog):
     def __init__(self, api_url, token, veri, parent=None, sil_fn=None):
@@ -212,8 +213,8 @@ class KalibrasyonDuzenleFormu(QDialog):
         form.addRow("Cihaz:", self.txt_cihaz)
         form.addRow("Yapan Kurum (*):", self.txt_kurum)
         form.addRow("Sertifika No (*):", self.txt_sertifika)
-        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic) # YENİ
-        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)         # YENİ
+        form.addRow("Başlangıç Tarihi (*):", self.dt_baslangic)
+        form.addRow("Bitiş Tarihi (*):", self.dt_bitis)
 
         self.tekrar = TekrarUyariAlanlari(self.dt_bitis, self.dt_gecerlilik, "Geçerlilik",
                                           uyari_suresi=veri.get("uyari_suresi_gun", 30))
@@ -239,7 +240,6 @@ class KalibrasyonDuzenleFormu(QDialog):
             "kalibrasyon_yapan_kurum": self.txt_kurum.text().strip(),
             "sertifika_no": self.txt_sertifika.text().strip(),
             "gecerlilik_tarihi": self.dt_gecerlilik.date().toString("yyyy-MM-dd"),
-            # YENİ EKLENEN VERİLER
             "kalibrasyon_baslangic_tarihi": self.dt_baslangic.date().toString("yyyy-MM-dd"),
             "kalibrasyon_bitis_tarihi": self.dt_bitis.date().toString("yyyy-MM-dd"),
             "uyari_suresi_gun": self.tekrar.uyari_suresi()
@@ -259,7 +259,7 @@ class KalibrasyonDuzenleFormu(QDialog):
                 hata_mesaji = hata_detayi_metni(res, "Güncelleme yapılamadı.")
                 QMessageBox.warning(self, "Hata", f"Sebep: {hata_mesaji}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
 class KalibrasyonYonetimEkrani(QWidget):
     """Kalibrasyon kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
@@ -339,7 +339,7 @@ class KalibrasyonYonetimEkrani(QWidget):
             res.raise_for_status()
             kayitlar = res.json()
         except Exception as e:
-            print("Kalibrasyon listesi yükleme hatası:", e)
+            logger.warning("Kalibrasyon listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Kalibrasyon kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
             self.bos_mesaj.show()
             self.tablo.hide()
@@ -418,5 +418,5 @@ class KalibrasyonYonetimEkrani(QWidget):
             hata = hata_detayi_metni(res, "Bilinmeyen hata")
             QMessageBox.warning(self, "Silinemedi", hata)
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {e}")
+            QMessageBox.critical(self, "Hata", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
         return False

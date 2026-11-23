@@ -4,13 +4,14 @@ from datetime import datetime
 
 import requests
 from client.api_yoneticisi import (
+    hata_detayi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
     istek_hatasi_metni,
 )
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -748,11 +749,7 @@ class DanismaMasasiYonetimi(QWidget):
                 if oturum_hatasi_mi(yanit):
                     return
 
-                try:
-                    mesaj = yanit.json().get("detail", "Kayıt oluşturulamadı.")
-                except ValueError:
-                    mesaj = "Kayıt oluşturulamadı."
-                QMessageBox.warning(pencere, "Kayıt Hatası", str(mesaj))
+                QMessageBox.warning(pencere, "Kayıt Hatası", hata_detayi_metni(yanit, "Kayıt oluşturulamadı."))
                 return
             except requests.RequestException as hata:
                 if oturum_hatasi_mi(hata):

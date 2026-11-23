@@ -2,7 +2,7 @@
 
 Görünüm diğer cihaz sayfalarıyla (Arıza, Bakım, Kalibrasyon) aynı ortak bileşenleri kullanır (client/tablo_tasarimi.py).
 """
-from client.api_yoneticisi import hata_detayi_metni
+from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
     QFormLayout, QComboBox, QDateEdit, QLineEdit, QTextEdit, QFrame
@@ -270,7 +270,7 @@ class YeniRezervasyonFormu(QDialog):
             self.bolumleri_yukle()
             self.proje_turlerini_yukle()
 
-        except Exception as e:
+        except Exception:
             QMessageBox.warning(self, "Bağlantı Hatası", "Sunucuya bağlanırken bir sorun oluştu.")
 
     ACIKLAMA_EN_FAZLA = 255                 # veritabanı: cihaz_rezervasyonlari.proje_adi_aciklamasi VARCHAR(255)
@@ -451,7 +451,7 @@ class YeniRezervasyonFormu(QDialog):
                 hata_detay = hata_detayi_metni(res, "Bilinmeyen bir hata oluştu.")
                 QMessageBox.warning(self, "İşlem Başarısız", hata_detay)
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
 
 
     def _duzenlemeyi_gonder(self, veri):

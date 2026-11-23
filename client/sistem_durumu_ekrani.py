@@ -6,10 +6,9 @@ dosya yolu içermez.
 from datetime import datetime
 
 import requests
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
 
-from client.api_yoneticisi import api_hata_mesaji, oturum_hatasi_mi, oturum_kontrollu_istek
+from client.api_yoneticisi import istek_hatasi_metni, api_hata_mesaji, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.tablo_tasarimi import bos_mesaj_olustur, metin_item, tablo_olustur, yenile_butonu_olustur
 from client.surum import SURUM
 
@@ -135,7 +134,7 @@ class SistemDurumuEkrani(QWidget):
             cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/sistem-durumu",
                                            headers={"Authorization": f"Bearer {self.token}"}, timeout=15)
         except requests.RequestException as hata:
-            self.alt_baslik.setText(f"Sunucuya ulaşılamadı: {hata}")
+            self.alt_baslik.setText(f"Sunucuya ulaşılamadı: {istek_hatasi_metni(hata)}")
             return
         if oturum_hatasi_mi(cevap):
             return

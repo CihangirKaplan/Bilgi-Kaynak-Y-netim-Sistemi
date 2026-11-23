@@ -1,6 +1,8 @@
+import logging
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QSpinBox, QPushButton, QMessageBox
-import requests
 from client.api_yoneticisi import (
+    hata_detayi_metni,
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -9,10 +11,12 @@ from client.api_yoneticisi import (
 from PySide6.QtCore import QTimer
 from client.bildirim_toast import basari_bildirimi
 
+logger = logging.getLogger(__name__)
+
 class FaaliyetEkleDialog(QDialog):
     KISAYOL_GENISLIGI = 170       # "Yeni ... Ekle" düğmelerinin ortak genişliği (px)
 
-    # DİKKAT: __init__ içine mevcut_veri=None ekledik!
+    # mevcut_veri verilirse pencere düzenleme modunda açılır.
     def __init__(self, api_url, token, parent=None, mevcut_veri=None, birim_yonetebilir=False):
         super().__init__(parent)
         self.api_url = api_url
@@ -134,7 +138,7 @@ class FaaliyetEkleDialog(QDialog):
                 for ogr in res_ogr.json():
                     self.cb_ogrenci.addItem(ogr["metin"], ogr["id"])
         except Exception as e:
-            print("Öğrenciler yüklenemedi:", e)
+            logger.warning("Öğrenci listesi yüklenemedi: %s", e)
 
     def faaliyet_turlerini_yukle(self):
         """Faaliyet türü listesini yeniler. Oturum süresi dolduysa False döner."""
@@ -149,7 +153,7 @@ class FaaliyetEkleDialog(QDialog):
                 for f in res_faaliyet.json():
                     self.cb_faaliyet.addItem(f"{f['ad']} ({f['puan']} Puan)", f["id"])
         except Exception as e:
-            print("Faaliyetler yüklenemedi:", e)
+            logger.warning("Faaliyet türleri yüklenemedi: %s", e)
         return True
 
     def birimleri_yukle(self):
@@ -165,7 +169,7 @@ class FaaliyetEkleDialog(QDialog):
                 for b in res_birim.json():
                     self.cb_birim.addItem(b["ad"], b["id"])
         except Exception as e:
-            print("Birimler yüklenemedi:", e)
+            logger.warning("Faaliyet birimleri yüklenemedi: %s", e)
         return True
 
     @staticmethod
@@ -198,8 +202,6 @@ class FaaliyetEkleDialog(QDialog):
         self._listeyi_yenile_ve_yeniyi_sec(self.cb_birim, self.birimleri_yukle)
 
     def verileri_yukle(self):
-        headers = {"Authorization": f"Bearer {self.token}"}
-
         self.ogrencileri_yukle()
 
         if self.faaliyet_turlerini_yukle() is False:
@@ -277,8 +279,6 @@ class FaaliyetEkleDialog(QDialog):
                 takip_id = str(self.mevcut_veri["takip_id"]).strip() # Görünmez boşlukları temizle
                 hedef_url = f"{self.api_url.rstrip('/')}/api/faaliyet-kayitlari/{takip_id}" # Adresi güvenli hale getir
                 
-                print(f"--- GÜNCELLEME İSTEĞİ ATIYORUZ ---")
-                print(f"Gidilen Adres: {hedef_url}")
                 
                 res = oturum_kontrollu_istek("PUT", hedef_url, json=payload, headers=headers)
                 if oturum_hatasi_mi(res):
@@ -293,10 +293,6 @@ class FaaliyetEkleDialog(QDialog):
                 basari_bildirimi(self, res.json().get("mesaj", "İşlem başarıyla tamamlandı!"))
                 self.accept()
             else:
-                try:
-                    hata_detayi = res.json().get("detail", res.text)
-                except:
-                    hata_detayi = res.text
-                QMessageBox.critical(self, "Hata", f"İşlem başarısız oldu.\nSunucu Cevabı: {hata_detayi}")
+                QMessageBox.critical(self, "Hata", f"İşlem başarısız oldu.\n{hata_detayi_metni(res)}")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {str(e)}")
+            QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")

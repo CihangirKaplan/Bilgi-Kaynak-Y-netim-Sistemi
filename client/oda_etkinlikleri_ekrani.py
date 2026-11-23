@@ -3,14 +3,13 @@
 from datetime import datetime
 
 import requests
-from PySide6.QtCore import QDateTime, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout,
     QFormLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QComboBox, QLineEdit, QSpinBox,
-    QDateTimeEdit, QLabel, QPushButton, QMessageBox,
-    QDialogButtonBox, QAbstractItemView, QPlainTextEdit,
+    QHeaderView, QComboBox, QLineEdit, QLabel,
+    QPushButton, QMessageBox, QDialogButtonBox, QAbstractItemView,
 )
 
 from client.api_yoneticisi import (
@@ -31,7 +30,7 @@ def tarih_yaz(deger):
 
 
 from PySide6.QtCore import QDate, QTime
-from PySide6.QtWidgets import QDateEdit, QTimeEdit, QScrollArea, QFrame
+from PySide6.QtWidgets import QDateEdit, QTimeEdit, QScrollArea, QFrame, QGridLayout
 
 class OdaEtkinlikFormu(QDialog):
     """Tek etkinliğe birden fazla bağımsız oturum ekleme formu."""
@@ -398,13 +397,6 @@ class OdaEtkinlikFormu(QDialog):
             ),
             "gunler": self.oturum_verileri(),
         }
-
-
-
-
-
-from PySide6.QtCore import QDate
-from PySide6.QtWidgets import QFrame, QDateEdit, QGridLayout
 
 
 class OdaEtkinlikleriEkrani(QWidget):
@@ -1275,11 +1267,6 @@ class OdaEtkinlikleriEkrani(QWidget):
         return None
 
     def butonlari_guncelle(self):
-        secili = self.secili()
-        aktif = bool(
-            secili and not secili["iptal_edildi_mi"]
-        )
-
         self.ekle_btn.setVisible(self.yonetebilir)
         self.duzenle_btn.setVisible(self.yonetebilir)
         self.iptal_btn.setVisible(self.yonetebilir)

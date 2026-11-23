@@ -1,6 +1,6 @@
+import logging
 import datetime
 import time
-import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (QPushButton, QScrollArea, QWidget, QVBoxLayout, Q
                                QSizePolicy)
 from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QColor
+
+logger = logging.getLogger(__name__)
 
 AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
          "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
@@ -445,7 +447,7 @@ class DashboardEkrani(QWidget):
         try:
             randevular = self._getir("/api/dashboard/bugunku-randevular")
         except Exception as e:
-            print("Randevu listesi yükleme hatası:", e)
+            logger.warning("Randevu listesi yüklenemedi: %s", e)
             lbl_deger.setText("?")
             self.lbl_randevu_bos.setText("Randevular yüklenemedi.")
             self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, 0)
@@ -473,7 +475,7 @@ class DashboardEkrani(QWidget):
         try:
             rezervasyonlar = self._getir("/api/dashboard/bugunku-rezervasyonlar")
         except Exception as e:
-            print("Rezervasyon listesi yükleme hatası:", e)
+            logger.warning("Rezervasyon listesi yüklenemedi: %s", e)
             lbl_deger.setText("?")
             self.lbl_rez_bos.setText("Rezervasyonlar yüklenemedi.")
             self._liste_goster(self.tablo_rez, self.lbl_rez_bos, 0)
@@ -556,7 +558,7 @@ class DashboardEkrani(QWidget):
             talepler = self._getir("/api/parola-sifirlama-talepleri")
             self.parola_talepleri = talepler if isinstance(talepler, list) else []
         except Exception as e:
-            print("Parola talepleri yükleme hatası:", e)
+            logger.warning("Parola talepleri yüklenemedi: %s", e)
 
     # ------------------------------------------------------------------
     BILDIRIM_SINIRI = 5          # kaydırmadan görünen satır sayısı; fazlası kaydırma çubuğuyla görülür

@@ -8,6 +8,7 @@ from datetime import datetime
 
 import requests
 from client.api_yoneticisi import (
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -367,7 +368,7 @@ class PuanRaporuEkrani(QWidget):
                 yanit.raise_for_status()
                 veri = yanit.json()
             except (requests.RequestException, ValueError) as hata:
-                QMessageBox.warning(self, "Rapor Hatası", f"Puan raporu alınamadı:\n{hata}")
+                QMessageBox.warning(self, "Rapor Hatası", f"Puan raporu alınamadı:\n{istek_hatasi_metni(hata)}")
                 return
         finally:
             self._yukleniyor = False
@@ -521,7 +522,7 @@ class PuanRaporuEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{hata}")
+            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
             return
 
         try:

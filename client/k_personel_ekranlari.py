@@ -1,4 +1,5 @@
-from client.api_yoneticisi import api_hata_mesaji
+import logging
+from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, api_hata_mesaji
 import requests
 from client.gecici_parola_dialog import GeciciParolaDialog
 from datetime import datetime
@@ -13,12 +14,14 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt, QRegularExpression, QTimer
 from PySide6.QtGui import QRegularExpressionValidator
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
-                               QLineEdit, QComboBox, QPushButton, QMessageBox,
-                               QListWidget, QListWidgetItem, QLabel, QFrame,QScrollArea)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
+                               QComboBox, QPushButton, QMessageBox, QListWidget,
+                               QListWidgetItem, QLabel, QFrame, QScrollArea)
 from client.tablo_siralama import siralanabilir_yap
 from client.tablo_tasarimi import ortak_liste_stili_uygula
 from client.bildirim_toast import basari_bildirimi
+
+logger = logging.getLogger(__name__)
 
 
 def kayit_tarihi_bicimle(deger):
@@ -119,7 +122,7 @@ class KullaniciPersonelEkrani(QWidget):
 
                     item_id = QTableWidgetItem(str(p["personel_id"]))
                     item_ad = QTableWidgetItem(p["kullanici_adi"])
-                    item_ad.setData(Qt.UserRole, p["kullanici_id"])  # YENİ: ID'yi arka planda saklıyoruz
+                    item_ad.setData(Qt.UserRole, p["kullanici_id"])  # kullanıcı kimliği satırda gizli tutulur
                     item_kod = QTableWidgetItem(p["personel_kodu"])
                     item_rol = QTableWidgetItem(p.get("gorunen_ad") or p["rol_adi"])
                     item_rol.setData(Qt.UserRole, p["rol_adi"])  # karşılaştırmalar kodla yapılır, ekranda görünen ad gösterilir
@@ -186,7 +189,6 @@ class KullaniciPersonelEkrani(QWidget):
 
         if cevap == QMessageBox.Yes:
             headers = {"Authorization": f"Bearer {self.token}"}
-            # YENİ ENDPOINT'E GİDİYORUZ
             url = f"{self.api_url}/api/kullanicilar/{kullanici_id}/durum-degistir"
 
             # Psikolog pasife alınırken oda atamaları kaldırılır; aktifleştirirken görüşme odaları yeniden seçilir.
@@ -212,14 +214,14 @@ class KullaniciPersonelEkrani(QWidget):
                     basari_bildirimi(self, mesaj)
                     self.verileri_cek() 
                 elif res.status_code == 403:
-                    QMessageBox.warning(self, "Yetki Hatası", res.json().get("detail", "Bu işlem için yetkiniz yok."))
+                    QMessageBox.warning(self, "Yetki Hatası", hata_detayi_metni(res, "Bu işlem için yetkiniz yok."))
                 elif res.status_code in (409, 422):
                     # Örn. "Bu psikologun bugünden sonra N planlı randevusu var..." ya da cihaz rezervasyonlu oda uyarısı.
                     QMessageBox.warning(self, "İşlem Yapılamadı", sunucu_hata_mesaji(res, "İşlem tamamlanamadı."))
                 else:
                     QMessageBox.critical(self, "Hata", f"Sunucu hatası: {res.status_code}")
             except Exception as e:
-                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+                QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
     def secili_kullanici_rol_degistir(self):
         secili_satirlar = self.tablo.selectionModel().selectedRows()
         
@@ -241,7 +243,7 @@ class KullaniciPersonelEkrani(QWidget):
             return
 
         
-        # YENİ KONTROL: 4. sütundaki durumu (Aktif/Pasif) oku
+        # 4. sütundaki durum (Aktif/Pasif)
         durum = self.tablo.item(satir, 4).text()
         if "Pasif" in durum:
             QMessageBox.warning(self, "İşlem Reddedildi", "Pasif durumdaki bir kullanıcının rolü değiştirilemez.")
@@ -406,11 +408,7 @@ class KullaniciPersonelEkrani(QWidget):
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code != 200:
-                try:
-                    mesaj = cevap.json().get("detail", "Talep kapatılamadı.")
-                except ValueError:
-                    mesaj = "Talep kapatılamadı."
-                QMessageBox.warning(self, "İşlem Başarısız", str(mesaj))
+                QMessageBox.warning(self, "İşlem Başarısız", hata_detayi_metni(cevap, "Talep kapatılamadı."))
         except requests.RequestException:
             QMessageBox.critical(self, "Bağlantı Hatası", "Sunucudan yanıt alınamadı. Lütfen tekrar deneyin.")
         self.talepleri_yukle()
@@ -794,7 +792,7 @@ def musait_kullanici_adi(api_url, token, temel):
         if cevap.status_code == 200 and not oturum_hatasi_mi(cevap):
             return cevap.json().get("kullanici_adi") or temel
     except Exception as e:
-        print("Kullanıcı adı önerisi alınamadı:", e)
+        logger.warning("Kullanıcı adı önerisi alınamadı: %s", e)
     return temel
 
 
@@ -975,9 +973,8 @@ class KullaniciOlusturFormu(QDialog):
         self.setWindowTitle("👤 Yeni Sistem Kullanıcısı Oluştur")
         self.setMinimumWidth(460)
         
-        # SİZİN ORİJİNAL STİLİNİZ GERİ GELDİ!
-        if 'FORM_STIL' in globals():
-            self.setStyleSheet(FORM_STIL) 
+        # Form stili
+        self.setStyleSheet(FORM_STIL)
             
         self._yetki_onbellek = {}
         self.arayuzu_kur()
@@ -1005,16 +1002,13 @@ class KullaniciOlusturFormu(QDialog):
         self.yetki_karti.setMinimumWidth(420)   # SetFixedSize, pencere genişliğini içerikten alır
         layout.addWidget(self.yetki_karti)
 
-        # Yalnızca "Danışma Öğrencisi" seçilince görünür. (Sizin kodunuz)
-        try:
-             (self.ogrenci_kutusu, self.input_ad_soyad,
-              self.input_ogrenci_no, self.input_telefon) = ogrenci_alanlari_olustur()
-             layout.addWidget(self.ogrenci_kutusu)
-        except NameError:
-             pass # Eğer fonksiyon yoksa geç
+        # Yalnızca "Danışma Öğrencisi" seçilince görünür.
+        (self.ogrenci_kutusu, self.input_ad_soyad,
+         self.input_ogrenci_no, self.input_telefon) = ogrenci_alanlari_olustur()
+        layout.addWidget(self.ogrenci_kutusu)
 
         # =======================================================
-        # EKLENEN KISIM: ODA SEÇİM KUTUSU (PSİKOLOG İÇİN)
+        # Oda seçimi (yalnızca psikolog için)
         # =======================================================
         self.lbl_oda = QLabel("Kullanacağı Odaları Seçiniz:")
         self.lbl_oda.setObjectName("lbl_oda") # Stil eklenebilir diye isim verdik
@@ -1023,7 +1017,7 @@ class KullaniciOlusturFormu(QDialog):
 
         self.liste_odalar = QListWidget()
         self.liste_odalar.setObjectName("liste_odalar")
-        # ListWidget'ı sizin diğer inputlarınıza benzer bir görünüme sokalım
+        # Liste, formdaki diğer giriş alanlarıyla aynı görünümde
         self.liste_odalar.setStyleSheet("""
             QListWidget {
                 border: 1px solid #CBD5E1;
@@ -1038,7 +1032,7 @@ class KullaniciOlusturFormu(QDialog):
         layout.addWidget(self.liste_odalar)
         # =======================================================
 
-        # Kullanıcı adı (Sizin kodunuz)
+        # Kullanıcı adı
         layout.addWidget(QLabel("Kullanıcı Adı:"))
         self.input_kullanici_adi = QLineEdit()
         self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
@@ -1055,12 +1049,9 @@ class KullaniciOlusturFormu(QDialog):
         self._netlestirme_zamanlayici.setSingleShot(True)
         self._netlestirme_zamanlayici.setInterval(400)
         
-        try:
-            self._netlestirme_zamanlayici.timeout.connect(self._kullanici_adini_netlestir)
-            self.input_ad_soyad.textChanged.connect(self._kullanici_adi_oner)
-            self.input_ad_soyad.editingFinished.connect(self._kullanici_adini_netlestir)
-        except AttributeError:
-             pass
+        self._netlestirme_zamanlayici.timeout.connect(self._kullanici_adini_netlestir)
+        self.input_ad_soyad.textChanged.connect(self._kullanici_adi_oner)
+        self.input_ad_soyad.editingFinished.connect(self._kullanici_adini_netlestir)
         self.input_kullanici_adi.textEdited.connect(self._kullanici_adi_elle_yazildi)
 
         buton_layout = QHBoxLayout()
@@ -1079,7 +1070,7 @@ class KullaniciOlusturFormu(QDialog):
         buton_layout.addWidget(self.btn_kaydet)
         layout.addLayout(buton_layout)
 
-        # Hesap oluşturulduktan sonra görünür. (Sizin kodunuz)
+        # Hesap oluşturulduktan sonra görünür.
         self.sonuc_kutusu = QFrame()
         self.sonuc_kutusu.setObjectName("sonuc_kutusu")
         sonuc_lay = QVBoxLayout(self.sonuc_kutusu)
@@ -1108,7 +1099,7 @@ class KullaniciOlusturFormu(QDialog):
                         item.setCheckState(Qt.Unchecked)
                         self.liste_odalar.addItem(item)
         except Exception as e:
-            print("Odalar yüklenirken hata:", e)
+            logger.warning("Oda listesi yüklenemedi: %s", e)
 
     def secili_rol_adi(self):
         return self.combo_rol.currentText()
@@ -1116,33 +1107,26 @@ class KullaniciOlusturFormu(QDialog):
     def _kullanici_adi_elle_yazildi(self, _metin):
         self.kullanici_adi_elle_degisti = True
 
-    # SİZİN METOTLARINIZI KORUYORUM
     def _kullanici_adi_oner(self, ad_soyad):
         if self.kullanici_adi_elle_degisti or self.combo_rol.currentData() != 4:
             return
         self._son_kontrol_edilen_ad = None
         self.input_kullanici_adi.clear()
-        try:
-            if kullanici_adi_oner(ad_soyad):
-                self.input_kullanici_adi.setPlaceholderText("Kullanıcı adı kontrol ediliyor...")
-                self._netlestirme_zamanlayici.start()
-            else:
-                self._netlestirme_zamanlayici.stop()
-                self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
-        except NameError:
-             pass
+        if kullanici_adi_oner(ad_soyad):
+            self.input_kullanici_adi.setPlaceholderText("Kullanıcı adı kontrol ediliyor...")
+            self._netlestirme_zamanlayici.start()
+        else:
+            self._netlestirme_zamanlayici.stop()
+            self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
 
     def _kullanici_adini_netlestir(self):
         self._netlestirme_zamanlayici.stop()
         if self.kullanici_adi_elle_degisti or self.combo_rol.currentData() != 4:
             return
-        try:
-            temel = kullanici_adi_oner(self.input_ad_soyad.text())
-            if temel and temel != self._son_kontrol_edilen_ad:
-                self._son_kontrol_edilen_ad = temel
-                self.input_kullanici_adi.setText(musait_kullanici_adi(self.api_url, self.token, temel))
-        except NameError:
-             pass
+        temel = kullanici_adi_oner(self.input_ad_soyad.text())
+        if temel and temel != self._son_kontrol_edilen_ad:
+            self._son_kontrol_edilen_ad = temel
+            self.input_kullanici_adi.setText(musait_kullanici_adi(self.api_url, self.token, temel))
         self.input_kullanici_adi.setPlaceholderText("Kullanıcı adını giriniz...")
 
     def yetki_ozetini_guncelle(self):
@@ -1154,19 +1138,15 @@ class KullaniciOlusturFormu(QDialog):
             return
         if rol_id not in self._yetki_onbellek:
             self.yetki_karti.yukleniyor_goster()
-            try:
-                veri, hata = yetki_ozeti_getir(self.api_url, self.token, rol_id)
-                if veri is None:
-                    self.yetki_karti.hata_goster(hata)
-                    return
-                self._yetki_onbellek[rol_id] = veri
-            except NameError:
-                pass
+            veri, hata = yetki_ozeti_getir(self.api_url, self.token, rol_id)
+            if veri is None:
+                self.yetki_karti.hata_goster(hata)
+                return
+            self._yetki_onbellek[rol_id] = veri
         self.yetki_karti.ozet_goster(self._yetki_onbellek.get(rol_id, []))
 
     def rol_degisti(self, *_):
         self.yetki_ozetini_guncelle()
-        rol_adi = self.secili_rol_adi()
         
         if self.combo_rol.currentData() != 4:
             self._netlestirme_zamanlayici.stop()
@@ -1177,7 +1157,7 @@ class KullaniciOlusturFormu(QDialog):
             self.ogrenci_kutusu.setVisible(goster)
 
         # =======================================================
-        # EKLENEN KISIM: PSİKOLOG SEÇİLİRSE ODALARI GÖSTER
+        # Psikolog seçilirse oda seçimi gösterilir
         # =======================================================
         if self.combo_rol.currentData() == 1:
             if hasattr(self, 'yetki_karti'):
@@ -1206,22 +1186,18 @@ class KullaniciOlusturFormu(QDialog):
             QMessageBox.warning(self, "Uyarı", "Lütfen bir rol seçiniz.")
             return
 
-        rol_adi = self.secili_rol_adi()
         danisma_ogrencisi = (self.combo_rol.currentData() == 4)
         otomatik_ad = danisma_ogrencisi and not self.kullanici_adi_elle_degisti
         
         if danisma_ogrencisi:
-            try:
-                ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
-                hata = ogrenci_bilgisi_dogrula(ogrenci)
-                if hata:
-                    QMessageBox.warning(self, "Uyarı", hata)
-                    return
-            except NameError:
-                pass
+            ogrenci = ogrenci_bilgisi_oku(self.input_ad_soyad, self.input_ogrenci_no, self.input_telefon)
+            hata = ogrenci_bilgisi_dogrula(ogrenci)
+            if hata:
+                QMessageBox.warning(self, "Uyarı", hata)
+                return
 
         # =======================================================
-        # EKLENEN KISIM: PSİKOLOG ODA KONTROLÜ
+        # Psikolog için en az bir oda seçilmiş olmalı
         # =======================================================
         secilen_oda_idleri = []
         if self.combo_rol.currentData() == 1:
@@ -1237,13 +1213,10 @@ class KullaniciOlusturFormu(QDialog):
 
         if otomatik_ad:
             self._netlestirme_zamanlayici.stop()
-            try:
-                kullanici_adi = musait_kullanici_adi(
-                    self.api_url, self.token, kullanici_adi_oner(self.input_ad_soyad.text())
-                )
-                self.input_kullanici_adi.setText(kullanici_adi)
-            except NameError:
-                kullanici_adi = self.input_kullanici_adi.text().strip()
+            kullanici_adi = musait_kullanici_adi(
+                self.api_url, self.token, kullanici_adi_oner(self.input_ad_soyad.text())
+            )
+            self.input_kullanici_adi.setText(kullanici_adi)
         else:
             kullanici_adi = self.input_kullanici_adi.text().strip()
             
@@ -1346,7 +1319,7 @@ class KullaniciOlusturFormu(QDialog):
                  QMessageBox.critical(self, "Hata", f"Sunucu hatası: Kod {cevap.status_code}")
 
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
 
 
 class OdaYetkileriFormu(QDialog):
@@ -1432,7 +1405,7 @@ class OdaYetkileriFormu(QDialog):
                 self.liste_odalar.addItem(oge)
             self.btn_kaydet.setEnabled(True)
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {istek_hatasi_metni(e)}")
 
     def secilen_oda_idleri(self):
         return [
@@ -1459,7 +1432,7 @@ class OdaYetkileriFormu(QDialog):
             else:
                 QMessageBox.warning(self, "Hata", sunucu_hata_mesaji(cevap, f"Güncellenemedi: Kod {cevap.status_code}"))
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
 
 
 class AktiflestirmeOdaFormu(OdaYetkileriFormu):
@@ -1808,4 +1781,4 @@ class RolDegistirFormu(QDialog):
                     f"Sunucu hatası: {cevap.text}"
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{str(e)}")
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")

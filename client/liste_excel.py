@@ -9,7 +9,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton
 
-from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
+from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.rapor_excel_genel import excel_olustur
 
 EXCEL_DUGME_STILI = (
@@ -129,7 +129,7 @@ def _aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):
         if cevap.status_code != 200:
             uyari = f"Sunucu kaydı kabul etmedi ({cevap.status_code})."
     except Exception as hata:
-        uyari = f"Sunucuya ulaşılamadı: {hata}"
+        uyari = f"Sunucuya ulaşılamadı: {istek_hatasi_metni(hata)}"
     if uyari:
         QMessageBox.warning(
             pencere, "Denetim kaydı yazılamadı",

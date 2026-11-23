@@ -5,7 +5,6 @@ giriş yapan kullanıcıyı gösterir; "Destek bilgisini kopyala" ile hepsi tek 
 kısayolları ve kısa kullanım ipuçları burada listelenir. Parola, oturum anahtarı ya da kişisel veri içermez.
 """
 import platform
-import sys
 from datetime import datetime
 from pathlib import Path
 

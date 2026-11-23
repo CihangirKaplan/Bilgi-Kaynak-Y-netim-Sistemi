@@ -1,23 +1,22 @@
-import requests
-from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi, api_hata_mesaji
+import logging
+from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, oturum_kontrollu_istek, oturum_hatasi_mi, api_hata_mesaji
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
-                               QComboBox, QMessageBox, QDateTimeEdit, QDialog,
-                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
-                               QAbstractItemView, QPushButton, QLineEdit,
-                               QDateEdit)
-from PySide6.QtCore import QDateTime, Signal, Qt, QDate, QTimer, QPoint
+                               QComboBox, QMessageBox, QDialog, QLabel,
+                               QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
+                               QPushButton, QLineEdit, QDateEdit)
+from PySide6.QtCore import Signal, Qt, QDate, QTimer, QPoint
 from PySide6.QtGui import QColor, QTextCharFormat, QPixmap, QPainter, QIcon
 from PySide6.QtWidgets import QStyledItemDelegate, QMenu
 from PySide6.QtWidgets import QCheckBox
 from client.bildirim_toast import basari_bildirimi
 from datetime import datetime, timedelta
 
-from client.istemci_modelleri import IstemciRandevu
 from client.siniflandirma import (GORUSME_TIPLERI, gorusme_etiketi, terapi_etiketi, terapi_kutusunu_doldur)
 from client.iptal_nedeni_diyalog import IPTAL_NEDENLERI, IptalNedeniDialog
-from client.ui_components import StandartButon
 from client.tablo_siralama import siralanabilir_yap
 from client.tablo_tasarimi import ortak_liste_stili_uygula
+
+logger = logging.getLogger(__name__)
 
 # ======================================================================
 #  APT-002: YENİ RANDEVU OLUŞTURMA FORMU
@@ -180,7 +179,7 @@ class DolulukGosterimi:
                 veri = cevap.json()
                 if not isinstance(veri, list):
                     raise ValueError("Liste bekleniyordu")
-            except (ValueError, TypeError) as hata:
+            except (ValueError, TypeError):
                 self._form_hata_durumu(
                     url,
                     "Sunucudan beklenmeyen veri alındı. "
@@ -414,7 +413,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {istek_hatasi_metni(e)}")
 
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -445,7 +444,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
 
                 self.odalari_filtrele()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {istek_hatasi_metni(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
@@ -473,7 +472,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                     self.cmb_odalar.model().item(0).setEnabled(False)
 
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {istek_hatasi_metni(e)}")
 
     def danisan_kodlarini_yukle(self, *_):
         """Danışan listesi seçilen psikologun oluşturduğu danışanlarla sınırlanır.
@@ -503,7 +502,7 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
                     self.cmb_danisan_kodu.addItem(kod, kod)
                     self._danisan_siniflari[kod] = danisan.get("yas_grubu")
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Danışan kodları yüklenemedi: {istek_hatasi_metni(e)}")
 
         if onceki:
             index = self.cmb_danisan_kodu.findData(onceki)
@@ -583,10 +582,9 @@ class RandevuOlusturFormu(DolulukGosterimi, QWidget):
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", "Seçilen psikolog veya oda bu saatlerde dolu!")
             else:
-                hata_detay = cevap.json().get('detail', 'Bilinmeyen hata') if cevap.headers.get("content-type") == "application/json" else cevap.text
-                QMessageBox.warning(self, "Hata", f"İşlem başarısız: {hata_detay}")
+                QMessageBox.warning(self, "Hata", f"İşlem başarısız: {hata_detayi_metni(cevap, 'Bilinmeyen hata')}")
         except Exception as e:
-            QMessageBox.critical(self, "Bağlantı Hatası", str(e))
+            QMessageBox.critical(self, "Bağlantı Hatası", istek_hatasi_metni(e))
 
 # ======================================================================
 #  APT-003 & APT-004: MEVCUT RANDEVUYU DÜZENLEME VE İPTAL FORMU
@@ -706,7 +704,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             if cevap.status_code == 200:
                 self.tum_odalar = cevap.json()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Odalar yüklenemedi: {istek_hatasi_metni(e)}")
 
     def psikologlari_yukle(self):
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -723,7 +721,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
 
                 self.odalari_filtrele()
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikologlar yüklenemedi: {istek_hatasi_metni(e)}")
 
     def odalari_filtrele(self):
         self.cmb_odalar.clear()
@@ -751,7 +749,7 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
                     self.cmb_odalar.model().item(0).setEnabled(False)
 
         except Exception as e:
-            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {str(e)}")
+            QMessageBox.warning(self, "Ağ Uyarısı", f"Psikoloğun odaları yüklenemedi: {istek_hatasi_metni(e)}")
 
     def eski_verileri_arayuze_bas(self):
         self.txt_danisan_kodu.setText(self.eski_veriler["danisan_kod_id"])
@@ -847,9 +845,9 @@ class RandevuDuzenleFormu(DolulukGosterimi, QWidget):
             elif cevap.status_code == 409:
                 QMessageBox.warning(self, "Çakışma", "Seçilen saatte oda veya psikolog dolu!")
             else:
-                QMessageBox.warning(self, "Hata", f"Güncellenemedi: {cevap.json().get('detail')}")
+                QMessageBox.warning(self, "Hata", f"Güncellenemedi: {hata_detayi_metni(cevap)}")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", str(e))
+            QMessageBox.critical(self, "Hata", istek_hatasi_metni(e))
 
 
 # ======================================================================
@@ -1219,7 +1217,7 @@ class RandevuAnaEkrani(QWidget):
             if cevap.status_code == 200:
                 return {k[anahtar]: k[deger] for k in cevap.json()}
         except Exception as e:
-            print(f"{yol} çekilirken hata oluştu:", e)
+            logger.warning("%s yüklenemedi: %s", yol, e)
         return onceki
 
     def verileri_cek(self, *_):
@@ -1463,7 +1461,7 @@ class RandevuAnaEkrani(QWidget):
                     mesaj = None
                 QMessageBox.warning(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {istek_hatasi_metni(e)}")
 
     def iptal_et_secilen(self):
         randevu = self.secili_randevu()
@@ -1505,4 +1503,4 @@ class RandevuAnaEkrani(QWidget):
                     mesaj = None
                 QMessageBox.warning(self, "Hata", mesaj if isinstance(mesaj, str) and mesaj else "İşlem başarısız oldu.")
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası: {istek_hatasi_metni(e)}")

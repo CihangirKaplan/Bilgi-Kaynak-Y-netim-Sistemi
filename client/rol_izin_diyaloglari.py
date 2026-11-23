@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
                                QLabel, QLineEdit, QPushButton, QMessageBox, 
                                QGraphicsDropShadowEffect,QCheckBox, QScrollArea, 
-                               QGroupBox, QWidget)
+                               QWidget)
 from PySide6.QtCore import Qt, QPropertyAnimation, Property, QRect, QRectF
 import requests
 from PySide6.QtGui import QColor, QPainter, QPen
@@ -14,13 +14,6 @@ BAGLANTI_HATASI_METNI = (
     "Sunucuya ulaşılamadı. Sunucunun açık olduğunu ve ağ bağlantınızı kontrol edip tekrar deneyin."
 )
 
-
-def golge_ekle(widget, blur=20, alpha=30, dy=5):
-    eff = QGraphicsDropShadowEffect(widget)
-    eff.setBlurRadius(blur)
-    eff.setOffset(0, dy)
-    eff.setColor(QColor(10, 31, 92, alpha))
-    widget.setGraphicsEffect(eff)
 
 def enter_ile_kaydet(btn_kaydet, btn_iptal):
     """Pencerede Enter tuşu Kaydet'e basar. (Varsayılan düğme belirtilmezse Qt ilk düğmeye, yani İptal'e basar
