@@ -185,11 +185,12 @@ def test_duzenleme_formu_arizali_cihazi_arizali_gosterir_ve_ezmez(qt_app):
     """Eskiden sunucudaki 'Arizali' değeri listede bulunamayıp 'Kullanılabilir'e düşüyordu."""
     f = form_ac(CIHAZLAR[1])
     assert f.cmb_durum.currentText() == "Arızalı" and f.cmb_durum.currentData() == "Arizali"
+    assert not f.cmb_durum.isEnabled()                                                    # arızalı cihazın durumu elle değiştirilemez
     with patch.object(envanter, "oturum_kontrollu_istek", return_value=cevap(200, {})) as istek, \
          patch.object(envanter.QMessageBox, "information"):
         f.kaydet()
     assert istek.call_args.args[:2] == ("PATCH", "http://x/api/cihazlar/2")
-    assert istek.call_args.kwargs["json"]["durum"] == "Arizali"
+    assert "durum" not in istek.call_args.kwargs["json"]                                  # değişmeyen durum gönderilmez: arızalı cihaz ezilmez
     f.close()
 
 

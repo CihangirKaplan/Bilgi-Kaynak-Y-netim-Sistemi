@@ -3758,6 +3758,16 @@ def cihaz_guncelle(
 
         eski_durum = kayit[0]
 
+        # Açık arızası olan cihazın durumu elle değiştirilemez: etkin durum zaten arıza kaydından "Arızalı" çıkar ve elle girilen değer
+        # bir şeyi değiştirmeden başarılı görünürdü. Kullanım dışına alma (cihaz hizmetten çıkarılıyor) her zaman yapılabilir.
+        yeni_durum = degisiklikler.get("durum")
+        if yeni_durum is not None and yeni_durum != eski_durum and yeni_durum != "Kullanim_Disi" and cihazin_acik_arizasi_var_mi(cursor, cihaz_id):
+            raise HTTPException(
+                status_code=409,
+                detail="Bu cihazın çözülmemiş arıza kaydı var; durumu elle değiştirilemez. "
+                       "Önce Arıza Kayıtları sayfasından arızayı çözüldü olarak işaretleyin.",
+            )
+
         alanlar = ", ".join(f"{alan} = %s" for alan in degisiklikler)
         degerler = list(degisiklikler.values())
 
@@ -3809,11 +3819,17 @@ def cihaz_guncelle(
             conn.close()
 
 # Cihazın bugünkü ETKİN durumu: bakım/kalibrasyon kaydı kayıtlı durumu kendiliğinden değiştirmediğinden, bugün planlı bir bakım ya da
-# kalibrasyon aralığındaki cihaz "bakımda"/"kalibrasyonda" sayılır. Öncelik: arızalı/kullanım dışı > bakımda > kalibrasyonda.
-# Ana panel ve Cihaz Envanteri aynı tanımı kullanır; böylece iki ekranda aynı cihaz farklı durumda görünmez.
+# kalibrasyon aralığındaki cihaz "bakımda"/"kalibrasyonda" sayılır. Öncelik: kullanım dışı > arızalı > bakımda > kalibrasyonda.
+# "Arızalı", kayıtlı durum sütununa DEĞİL, çözülmemiş (açık) arıza kaydına bakılarak belirlenir: tek doğruluk kaynağı arıza kaydıdır.
+# (Sütun, bakımdaki cihaza arıza açılınca değişmediği ya da elle yanlış girildiği için güvenilir değildir.)
+# Ana panel, Cihaz Envanteri ve yönetim paneli aynı tanımı kullanır; böylece iki ekranda aynı cihaz farklı durumda görünmez.
 ETKIN_CIHAZ_DURUMU_SQL = """
     CASE
-        WHEN c.durum IN ('Arizali', 'Kullanim_Disi') THEN c.durum::text
+        WHEN c.durum = 'Kullanim_Disi' THEN 'Kullanim_Disi'
+        WHEN EXISTS (
+            SELECT 1 FROM cihaz_arizalari a
+            WHERE a.cihaz_id = c.cihaz_id AND a.cozuldu_mu IS NOT TRUE
+        ) THEN 'Arizali'
         WHEN c.durum = 'Bakimda' OR EXISTS (
             SELECT 1 FROM cihaz_bakimlari b
             WHERE b.cihaz_id = c.cihaz_id
@@ -3826,9 +3842,17 @@ ETKIN_CIHAZ_DURUMU_SQL = """
               AND k.kalibrasyon_baslangic_tarihi <= CURRENT_DATE
               AND k.kalibrasyon_bitis_tarihi >= CURRENT_DATE
         ) THEN 'Kalibrasyonda'
+        WHEN c.durum = 'Arizali' THEN 'Kullanima_Hazir'
         ELSE c.durum::text
     END
 """
+
+
+def cihazin_acik_arizasi_var_mi(cursor, cihaz_id) -> bool:
+    """Cihazın çözülmemiş (açık) arıza kaydı var mı? Cihaz durumunu elle değiştirmeden önce denetlenir."""
+    cursor.execute("SELECT EXISTS (SELECT 1 FROM cihaz_arizalari WHERE cihaz_id = %s AND cozuldu_mu IS NOT TRUE);", (cihaz_id,))
+    return bool(cursor.fetchone()[0])
+
 
 
 @app.get("/api/cihazlar")
@@ -4149,7 +4173,11 @@ def rezervasyon_uygunlugunu_denetle(cursor, rez, haric_rezervasyon_id=None):
     `haric_rezervasyon_id`: düzenlemede rezervasyonun KENDİSİ çakışma sayılmasın diye çakışma sorgularından çıkarılır."""
     haric_sql = " AND r.rezervasyon_id <> %s" if haric_rezervasyon_id is not None else ""
     haric_param = (haric_rezervasyon_id,) if haric_rezervasyon_id is not None else ()
-    cursor.execute("SELECT durum FROM cihazlar WHERE cihaz_id = %s;", (rez.cihaz_id,))
+    # Çözülmemiş arızası olan cihaz, kayıtlı durum sütunu ne derse desin "Arızalı" sayılır (tek doğruluk kaynağı: arıza kaydı).
+    cursor.execute(
+        "SELECT CASE WHEN durum::text <> 'Kullanim_Disi' AND EXISTS ("
+        "SELECT 1 FROM cihaz_arizalari a WHERE a.cihaz_id = cihazlar.cihaz_id AND a.cozuldu_mu IS NOT TRUE) "
+        "THEN 'Arizali' ELSE durum::text END FROM cihazlar WHERE cihaz_id = %s;", (rez.cihaz_id,))
     cihaz = cursor.fetchone()
     if cihaz is None:
         raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")

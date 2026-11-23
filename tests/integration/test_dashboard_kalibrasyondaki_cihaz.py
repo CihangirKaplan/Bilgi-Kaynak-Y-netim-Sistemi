@@ -40,8 +40,9 @@ def test_kalibrasyondaki_cihaz_yoksa_sifir_doner():
 def test_sorgu_bugun_planli_bakim_ve_kalibrasyondaki_cihazi_etkin_durumla_sayar():
     _, cursor = ozet_al([("Kullanima_Hazir", 1)])
     sorgu = " ".join(cursor.execute.call_args_list[0].args[0].split())
-    # Öncelik: arızalı/kullanım dışı > bakımda > kalibrasyonda
-    assert sorgu.index("'Arizali', 'Kullanim_Disi'") < sorgu.index("'Bakimda'") < sorgu.index("'Kalibrasyonda'")
+    # Öncelik: kullanım dışı > arızalı (açık arıza kaydı) > bakımda > kalibrasyonda
+    assert sorgu.index("THEN 'Kullanim_Disi'") < sorgu.index("THEN 'Arizali'") < sorgu.index("'Bakimda'") < sorgu.index("'Kalibrasyonda'")
+    assert "a.cozuldu_mu IS NOT TRUE" in sorgu
     # Bugün bakım/kalibrasyon aralığı içinde olan cihaz (başlangıç ve bitiş günü dahil)
     assert "COALESCE(b.bakim_baslangic_tarihi, b.bakim_tarihi::date) <= CURRENT_DATE" in sorgu
     assert "COALESCE(b.bakim_bitis_tarihi, b.bakim_tarihi::date) >= CURRENT_DATE" in sorgu
