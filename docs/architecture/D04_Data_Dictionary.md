@@ -171,7 +171,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | :--- | :--- | :--- | :--- |
 | `oda_id` | SERIAL (INTEGER) | PK; NOT NULL | Odanın benzersiz kimliği. |
 | `oda_adi` | VARCHAR(50) | UNIQUE (büyük/küçük harf duyarsız: `ux_odalar_oda_adi_ci`); NOT NULL | Odanın tabeladaki adı/numarası. |
-| `kapasite` | INTEGER | NULL; DEFAULT `1` | Maksimum kişi kapasitesi. |
+| `kapasite` | INTEGER | NULL; DEFAULT `1` | Odanın kişi kapasitesi. **Bilgi amaçlıdır:** etkinlik katılımcı sayısı, randevu ya da rezervasyonla karşılaştırılmaz (bkz. `oda_etkinlikleri.katilimci_sayisi`). |
 | `aktif_mi` | BOOLEAN | NOT NULL; DEFAULT `true` | Odanın kullanıma açıklık durumu. |
 
 ### Tablo: `randevular`
@@ -213,7 +213,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Etkinliğin yapılacağı oda. |
 | `organize_eden_personel_id` | INTEGER | FK → `kullanicilar(personel_id)`; NOT NULL | Düzenleyen yetkili. |
 | `etkinlik_adi` | VARCHAR(150) | NOT NULL | Toplantı veya eğitim adı. |
-| `katilimci_sayisi` | INTEGER | NULL | Beklenen kişi sayısı (Kapasite kontrolü için). |
+| `katilimci_sayisi` | INTEGER | NULL | Beklenen kişi sayısı. **Bilgi amaçlıdır:** oda kapasitesiyle karşılaştırılmaz, kapasiteyi aşabilir (kapasite kontrolü 19 Kasım 2026'da bilerek kaldırılmıştır). |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Etkinlik başlangıcı. |
 | `bitis_zamani` | TIMESTAMP | NOT NULL | Etkinlik bitişi. |
 | `iptal_edildi_mi` | BOOLEAN | NULL; DEFAULT `false` | Etkinliğin iptal durumu. |

@@ -42,7 +42,7 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 - Oda yönetimi; psikolog oda yetkileri (her psikologun en az bir odası).
 - Oda Kullanımı: gün/hafta görünümü, randevu, cihaz rezervasyonu ve etkinlik blokları, mesai doluluk oranı.
-- Oda Etkinlikleri: tek ya da çok günlü etkinlikler, çakışma denetimi, katılımcı sayısı.
+- Oda Etkinlikleri: tek ya da çok günlü etkinlikler, çakışma denetimi, katılımcı sayısı (bilgi amaçlıdır; oda kapasitesiyle karşılaştırılmaz).
 
 ### Cihaz yaşam döngüsü
 

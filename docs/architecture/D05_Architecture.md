@@ -561,7 +561,7 @@ Randevu oluşturulurken bitiş zamanının başlangıç zamanından sonra olmas�
 
 bu tablo üzerinden kaydedilebilir.
 
-`katilimci_sayisi`, etkinliğin oda kapasitesine uygunluğunun kontrolünde kullanılabilir.
+`katilimci_sayisi` **bilgi amaçlıdır**: oda kapasitesine karşı denetlenmez ve kapasiteyi aşabilir. Oda kapasiteleri çoğu zaman küçüktür (örn. psikolog odaları), toplantı ve eğitimler ise kalabalık olabildiği için kapasite kontrolü 19 Kasım 2026'da bilerek kaldırılmıştır (`test_oda_etkinlikleri_katilimci_kapasite.py` bu davranışı doğrular).
 
 ## 6.5. Randevu ve Cihaz Rezervasyonunun Ayrılması
 
