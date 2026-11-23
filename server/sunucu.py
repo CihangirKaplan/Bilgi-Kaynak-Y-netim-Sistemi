@@ -4582,7 +4582,7 @@ def proje_turu_olustur(tur: ProjeTuruOlusturModeli, kullanici_id: int = Depends(
         if conn is not None: conn.close()
 
 # ==========================================
-# ARIZA YÖNETİMİ MODÜLÜ (EFSANE YER)
+# ARIZA YÖNETİMİ MODÜLÜ
 # ==========================================
 
 # Arıza açılınca cihazın "Arızalı" olabileceği durumlar. Bakımda, kalibrasyonda veya kullanım
@@ -4953,7 +4953,7 @@ def bakim_kaydi_ekle(bakim: BakimOlusturModeli, kullanici_id: int = Depends(izin
             bakim.bakim_yapan_kisi,
             bakim.yapilan_islem,
             bakim.maliyet,
-            bakim.bakim_tarihi,           # Buradaki eşleşme düzeltildi
+            bakim.bakim_tarihi,
             bakim.bakim_baslangic_tarihi,
             bakim.bakim_bitis_tarihi,
             sonraki_bakim,
@@ -5837,7 +5837,7 @@ def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# --- YENİ EKLENEN: ÖĞRENCİ LİSTESİNİ GETİRİR ---
+# --- Faaliyet formundaki öğrenci listesi ---
 @app.get("/api/ogrenciler-liste")
 def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
@@ -7000,8 +7000,7 @@ def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(iz
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        # Doğrudan senin şemandaki "ogrenci_faaliyet_takip" tablosuna yazıyoruz.
-        # Not: Senin şemanda miktar sütununun adı "adet", o yüzden "adet" olarak ekliyoruz.
+        # Kayıt ogrenci_faaliyet_takip tablosuna yazılır (miktar "adet" sütununa gider).
         cursor.execute("""
             INSERT INTO ogrenci_faaliyet_takip
             (ogrenci_id, faaliyet_id, birim_id, adet,
@@ -7024,8 +7023,7 @@ def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(iz
 
         yeni_id = cursor.fetchone()[0]
 
-        # Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
-# Öğrenci C'nin Denetim (Audit) logunu tutuyoruz
+        # Denetim kaydı
         from server.denetim import denetim_kaydi_olustur
         denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id, mevcut_cursor=cursor)
 
@@ -7085,7 +7083,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# --- LİSTELEME İÇİN EKLENEN YENİ GET FONKSİYONU ---
+# --- Faaliyet kayıtları listesi ---
 @app.get("/api/faaliyet-kayitlari")
 def faaliyet_kayitlarini_getir(
     limit: Optional[int] = None,
@@ -7104,7 +7102,7 @@ def faaliyet_kayitlarini_getir(
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        # 4 tabloyu birleştirip, puanı (adet * faaliyet_puanı) olarak hesaplayan efsane SQL
+        # 4 tabloyu birleştirir; toplam puan = adet x kaydın puanı
         sorgu = """
         SELECT
             t.takip_id,
@@ -7114,7 +7112,10 @@ def faaliyet_kayitlarini_getir(
             t.adet,
             b.birim_adi,
             (t.adet * t.kayit_puani) AS toplam_puan,
-            t.faaliyet_tarihi
+            t.faaliyet_tarihi,
+            t.ogrenci_id,
+            t.faaliyet_id,
+            t.birim_id
         FROM ogrenci_faaliyet_takip t
         JOIN ogrenciler o ON t.ogrenci_id = o.ogrenci_id
         JOIN faaliyetler f ON t.faaliyet_id = f.faaliyet_id
@@ -7138,7 +7139,10 @@ def faaliyet_kayitlarini_getir(
                 "faaliyet_adi": row[3],
                 "miktar": f"{row[4]} {row[5]}", # Örn: "3 KISI" veya "5 SAAT"
                 "toplam_puan": row[6],
-                "tarih": row[7].strftime("%d.%m.%Y") if row[7] else ""
+                "tarih": row[7].strftime("%d.%m.%Y") if row[7] else "",
+                "ogrenci_id": row[8],
+                "faaliyet_id": row[9],
+                "birim_id": row[10],
             })
         return kayitlar
     except Exception:
@@ -7147,7 +7151,7 @@ def faaliyet_kayitlarini_getir(
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
-# --- YENİ: FAALİYET DÜZENLEME (PUT) ---
+# --- Faaliyet kaydı düzenleme (PUT) ---
 @app.put("/api/faaliyet-kayitlari/{takip_id}")
 def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
@@ -7233,7 +7237,7 @@ def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_i
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# --- YENİ: FAALİYET SİLME (DELETE) ---
+# --- Faaliyet kaydı silme (DELETE) ---
 @app.delete("/api/faaliyet-kayitlari/{takip_id}")
 def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
     conn = None
@@ -8487,6 +8491,9 @@ def danisma_raporlari(
             conn.close()
 
 
+BIRIM_ADI_KAYITLI_MESAJI = "Bu birim adı zaten mevcut (büyük/küçük harf farkı aynı ad sayılır)."
+
+
 @app.post("/api/faaliyet-birimleri")
 def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
     conn = None
@@ -8495,15 +8502,17 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        # 'ad' olan yer 'birim_adi' olarak düzeltildi
-        cursor.execute("SELECT birim_id FROM faaliyet_birimleri WHERE birim_adi = %s", (kayit.birim_adi.strip(),))
+        # Birim adları büyük harfle saklanır; tekrar kontrolü de aynı biçimle yapılır.
+        ad = kayit.birim_adi.strip().upper()
+        if not ad:
+            raise HTTPException(status_code=422, detail="Birim adı boş olamaz.")
+        cursor.execute("SELECT birim_id FROM faaliyet_birimleri WHERE birim_adi = %s", (ad,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Bu birim adı zaten mevcut!")
+            raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
 
-        # 'ad' olan yer 'birim_adi' olarak düzeltildi
         cursor.execute(
             "INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id;",
-            (kayit.birim_adi.strip().upper(),)
+            (ad,)
         )
         yeni_id = cursor.fetchone()[0]
 
@@ -8515,6 +8524,10 @@ def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depe
         return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
     except HTTPException:
         raise
+    except psycopg2.errors.UniqueViolation:
+        # Kontrol ile kayıt arasında aynı adı başka bir istek eklediyse.
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
     except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -8531,23 +8544,38 @@ def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yet
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM faaliyet_birimleri WHERE birim_id = %s", (birim_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Güncellenecek birim bulunamadı.")
+        ad = kayit.birim_adi.strip().upper()
+        if not ad:
+            raise HTTPException(status_code=422, detail="Birim adı boş olamaz.")
 
-        # 'ad' olan yer 'birim_adi' olarak düzeltildi
-        cursor.execute(
-            "UPDATE faaliyet_birimleri SET birim_adi = %s WHERE birim_id = %s;",
-            (kayit.birim_adi.strip().upper(), birim_id)
-        )
+        cursor.execute("SELECT birim_adi FROM faaliyet_birimleri WHERE birim_id = %s FOR UPDATE", (birim_id,))
+        eski = cursor.fetchone()
+        if not eski:
+            raise HTTPException(status_code=404, detail="Güncellenecek birim bulunamadı.")
+        eski_ad = eski[0]
+        if eski_ad == ad:
+            conn.commit()
+            return {"durum": "basarili", "mesaj": "Birimde değişiklik yapılmadı."}
+
+        cursor.execute("SELECT 1 FROM faaliyet_birimleri WHERE birim_adi = %s AND birim_id <> %s", (ad, birim_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
+
+        cursor.execute("UPDATE faaliyet_birimleri SET birim_adi = %s WHERE birim_id = %s;", (ad, birim_id))
 
         from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor)
+        denetim_kaydi_olustur(
+            VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor,
+            ayrinti={"onceki": {"birim_adi": eski_ad}, "yeni": {"birim_adi": ad}},
+        )
 
         conn.commit()
         return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
     except HTTPException:
         raise
+    except psycopg2.errors.UniqueViolation:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
     except Exception:
         if conn is not None: conn.rollback()
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -9137,12 +9165,16 @@ from pydantic import BaseModel as _FaaliyetBaseModel
 from pydantic import Field as _FaaliyetField
 
 
+# Faaliyet puanı üst sınırı: puan x miktar (en çok 10.000) çarpımı veritabanındaki INTEGER sınırını aşmasın.
+FAALIYET_PUANI_EN_FAZLA = 10_000
+
+
 class FaaliyetTuruEkleModeli(_FaaliyetBaseModel):
     faaliyet_adi: str = _FaaliyetField(
         min_length=1, max_length=100
     )
     puan: int = _FaaliyetField(
-        ge=0, strict=True
+        ge=0, le=FAALIYET_PUANI_EN_FAZLA, strict=True
     )
 
 
@@ -9249,7 +9281,7 @@ class FaaliyetTuruDuzenleModeli(_FaaliyetBaseModel):
         min_length=1, max_length=100
     )
     puan: int = _FaaliyetField(
-        ge=0, strict=True
+        ge=0, le=FAALIYET_PUANI_EN_FAZLA, strict=True
     )
     gecmis_puanlari_guncelle: bool = _FaaliyetField(
         strict=True

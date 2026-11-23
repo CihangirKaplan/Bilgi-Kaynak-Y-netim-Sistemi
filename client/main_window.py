@@ -189,10 +189,9 @@ IZIN_KODLARI = {
     "Rol oluşturma": ("ROL_OLUSTUR",),
     "Rol düzenleme": ("ROL_DUZENLE",),
     # İSTİSNA: bu düğme Faaliyet Kayıtları sayfasında durur ve yalnızca Admin içindir; bu amaçla
-    # tanımlı izne (FAALIYET_BIRIMI_DUZENLE, yalnızca Admin'de) eşleştirilir. Sunucudaki faaliyet
-    # birimi yazma uçları şu an daha geniş olan FAALIYET_KAYITLARI_DUZENLE'yi istiyor (Memur, Müdür
-    # ve Proje Asistanı da sahip); bu ayrı bir yetki tutarsızlığıdır. O koda eşleştirilseydi
-    # düğme bu rollere de görünürdü.
+    # Admin'e özel FAALIYET_BIRIMI_DUZENLE iznine eşleştirilir. Sunucudaki faaliyet birimi yazma
+    # uçları da aynı izni ister. Sayfanın izni (FAALIYET_KAYITLARI_DUZENLE) Memur, Müdür ve Proje
+    # Asistanı'nda da açık olduğundan, bu koda eşleştirilseydi düğme o rollere de görünürdü.
     "Faaliyet birimlerini yönetme": ("FAALIYET_BIRIMI_DUZENLE",),
 }
 
@@ -2749,7 +2748,12 @@ QLabel {
                 self.tablo_faaliyetler.setRowCount(len(kayitlar))
 
                 for satir_no, kayit in enumerate(kayitlar):
-                    self.tablo_faaliyetler.setItem(satir_no, 0, QTableWidgetItem(str(kayit.get("id", ""))))
+                    id_ogesi = QTableWidgetItem(str(kayit.get("id", "")))
+                    # Düzenleme penceresi öğrenci, faaliyet ve birimi ad yerine kimlikle seçer.
+                    id_ogesi.setData(Qt.UserRole, {
+                        alan: kayit.get(alan) for alan in ("ogrenci_id", "faaliyet_id", "birim_id")
+                    })
+                    self.tablo_faaliyetler.setItem(satir_no, 0, id_ogesi)
                     self.tablo_faaliyetler.setItem(satir_no, 1, QTableWidgetItem(str(kayit.get("ad_soyad", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 2, QTableWidgetItem(str(kayit.get("ogrenci_no", ""))))
                     self.tablo_faaliyetler.setItem(satir_no, 3, QTableWidgetItem(str(kayit.get("faaliyet_adi", ""))))
@@ -2809,12 +2813,17 @@ QLabel {
         miktar_rakam = miktar_hücresi[0]
         birim_adi = miktar_hücresi[1] if len(miktar_hücresi) > 1 else ""
 
+        kimlikler = self.tablo_faaliyetler.item(satir, 0).data(Qt.UserRole) or {}
         mevcut_veri = {
             "takip_id": takip_id,
             "ogrenci_adi": self.tablo_faaliyetler.item(satir, 1).text(),
+            "ogrenci_no": self.tablo_faaliyetler.item(satir, 2).text(),
             "faaliyet_adi": self.tablo_faaliyetler.item(satir, 3).text(),
             "miktar": miktar_rakam,
-            "birim_adi": birim_adi
+            "birim_adi": birim_adi,
+            "ogrenci_id": kimlikler.get("ogrenci_id"),
+            "faaliyet_id": kimlikler.get("faaliyet_id"),
+            "birim_id": kimlikler.get("birim_id"),
         }
 
         from client.faaliyet_dialog import FaaliyetEkleDialog
