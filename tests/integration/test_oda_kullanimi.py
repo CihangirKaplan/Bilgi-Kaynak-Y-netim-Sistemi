@@ -317,15 +317,16 @@ def test_hafta_gorunumu_secili_odanin_haftasini_gosterir(ekran_ac):
 
 def test_hafta_gezinme_veriyi_yeniden_ister_ve_bugune_doner(ekran_ac):
     ekran, sunucu = ekran_ac()
-    with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu), patch.object(modul, "date") as sahte_tarih:
-        sahte_tarih.today.return_value = PZT                                                  # "Bugün" düğmesi de sabit tarihi görsün
-        sahte_tarih.side_effect = lambda *a, **k: date(*a, **k)
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=sunucu):
         ekran.btn_ileri.click()
         assert sunucu.istekler[-1][1] == {"baslangic": "2026-11-23", "bitis": "2026-11-29"} and ekran.secili_gun == date(2026, 11, 23)
         ekran.btn_geri.click()
         ekran.btn_geri.click()
         assert sunucu.istekler[-1][1]["baslangic"] == "2026-11-09"
-        ekran.btn_bugun.click()
+        with patch.object(modul, "date") as sahte_tarih:                  # "Bugün" düğmesi gerçek tarihi okur; teste sabit tarih ver
+            sahte_tarih.today.return_value = PZT
+            sahte_tarih.side_effect = lambda *a, **k: date(*a, **k)
+            ekran.btn_bugun.click()
         assert sunucu.istekler[-1][1]["baslangic"] == "2026-11-16" and ekran.secili_gun == ekran.bugun
 
 
