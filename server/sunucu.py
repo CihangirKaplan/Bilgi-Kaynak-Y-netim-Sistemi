@@ -4472,8 +4472,21 @@ def rezervasyon_gorunen_durumu(iptal_edildi_mi, bitis_zamani, simdi=None):
     return "Aktif"
 
 
+# Zamanla büyüyen kayıt listeleri (rezervasyon, arıza, bakım, kalibrasyon) en yeni bu kadar kaydı döndürür. Normal kullanımda yıllarca sınıra
+# ulaşılmaz; ulaşılırsa gerçek toplam X-Toplam-Kayit başlığında gönderilir ve ekran "en yeni N / toplam M" der (randevu listesindeki gibi).
+LISTE_UST_SINIRI = 5000
+
+
+def liste_toplamini_bildir(cursor, response, gelen_satir_sayisi: int, sayim_sql: str) -> None:
+    """Liste üst sınıra ulaştıysa gerçek toplamı X-Toplam-Kayit başlığına yazar; ulaşmadıysa ek sorgu yapmaz."""
+    if response is None or gelen_satir_sayisi < LISTE_UST_SINIRI:
+        return
+    cursor.execute(sayim_sql)
+    response.headers["X-Toplam-Kayit"] = str(cursor.fetchone()[0])
+
+
 @app.get("/api/rezervasyonlar")
-def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
+def rezervasyonlari_listele(response: Response = None, kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZERVASYON"))):
     conn = None
     cursor = None
     try:
@@ -4482,8 +4495,9 @@ def rezervasyonlari_listele(kullanici_id: int = Depends(izin_kontrol("CIHAZ_REZE
         cursor.execute("SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi, r.baslangic_zamani, r.bitis_zamani, r.iptal_edildi_mi, o.oda_adi, r.proje_turu, r.proje_adi_aciklamasi, r.bolum_id, b.bolum_adi, "
                        "ky.kullanici_adi, " + REZERVASYON_YONETIM_YETKISI_SQL + ", r.cihaz_id, r.kullanilacak_oda_id "
                        "FROM cihaz_rezervasyonlari r JOIN cihazlar c ON r.cihaz_id = c.cihaz_id LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id LEFT JOIN bolumler b ON r.bolum_id = b.bolum_id "
-                       "LEFT JOIN kullanicilar ky ON ky.personel_id = r.rezervasyonu_yapan_personel_id ORDER BY r.baslangic_zamani DESC;", (kullanici_id, kullanici_id))
+                       "LEFT JOIN kullanicilar ky ON ky.personel_id = r.rezervasyonu_yapan_personel_id ORDER BY r.baslangic_zamani DESC LIMIT %s;", (kullanici_id, kullanici_id, LISTE_UST_SINIRI))
         kayitlar = cursor.fetchall()
+        liste_toplamini_bildir(cursor, response, len(kayitlar), "SELECT COUNT(*) FROM cihaz_rezervasyonlari;")
         return [{"rezervasyon_id": k[0], "cihaz_id": f"{k[1]} - {k[2]}", "baslangic_zamani": k[3].isoformat() if hasattr(k[3], 'isoformat') else str(k[3]), "bitis_zamani": k[4].isoformat() if hasattr(k[4], 'isoformat') else str(k[4]), "durum": rezervasyon_gorunen_durumu(k[5], k[4]), "envanter_kodu": k[1], "cihaz_adi": k[2], "oda_adi": k[6], "proje_turu": k[7], "proje_adi_aciklamasi": k[8], "bolum_id": k[9], "bolum_adi": k[10],
                  "rezerve_eden": k[11] if len(k) > 11 else None,
                  "yonetebilir": bool(k[12]) if len(k) > 12 else False,
@@ -4593,7 +4607,7 @@ def arizadan_sonra_cihaz_durumu(eski_durum, cozuldu_mu, baska_acik_ariza_var):
 
 
 @app.get("/api/arizalar")
-def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
+def arizalari_listele(response: Response = None, kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -4605,8 +4619,11 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
                    a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu, a.cozum_tarihi, a.cozum_notu
             FROM cihaz_arizalari a
             JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
-            ORDER BY a.bildirim_tarihi DESC;
-        """)
+            ORDER BY a.bildirim_tarihi DESC
+            LIMIT %s;
+        """, (LISTE_UST_SINIRI,))
+        satirlar = cursor.fetchall()
+        liste_toplamini_bildir(cursor, response, len(satirlar), "SELECT COUNT(*) FROM cihaz_arizalari;")
         return [
             {
                 "ariza_id": k[0],
@@ -4620,7 +4637,7 @@ def arizalari_listele(kullanici_id: int = Depends(izin_kontrol("ARIZA_KAYITLARI_
                 "cozum_tarihi": (k[8].isoformat() if hasattr(k[8], "isoformat") else k[8]) if len(k) > 8 else None,
                 "cozum_notu": k[9] if len(k) > 9 else None,
             }
-            for k in cursor.fetchall()
+            for k in satirlar
         ]
     except Exception:
         raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
@@ -4852,7 +4869,7 @@ def cakisan_rezervasyonlari_denetle(cursor, cihaz_id, baslangic, bitis):
 
 
 @app.get("/api/bakimlar")
-def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"))):
+def bakimlari_listele(response: Response = None, kullanici_id: int = Depends(izin_kontrol_biri("BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -4869,9 +4886,11 @@ def bakimlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("BAKIM_KAYIT
             FROM cihaz_bakimlari b
             JOIN cihazlar c ON b.cihaz_id = c.cihaz_id
             LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = b.plan_id
-            ORDER BY b.bakim_tarihi DESC;
-        """)
+            ORDER BY b.bakim_tarihi DESC
+            LIMIT %s;
+        """, (LISTE_UST_SINIRI,))
         kayitlar = cursor.fetchall()
+        liste_toplamini_bildir(cursor, response, len(kayitlar), "SELECT COUNT(*) FROM cihaz_bakimlari;")
 
         return [
             {
@@ -5055,7 +5074,7 @@ def bakim_kaydi_sil(bakim_id: int, kullanici_id: int = Depends(izin_kontrol("BAK
 # ==========================================
 
 @app.get("/api/kalibrasyonlar")
-def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"))):
+def kalibrasyonlari_listele(response: Response = None, kullanici_id: int = Depends(izin_kontrol_biri("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"))):
     conn = None
     cursor = None
     try:
@@ -5071,9 +5090,11 @@ def kalibrasyonlari_listele(kullanici_id: int = Depends(izin_kontrol_biri("KALIB
             FROM cihaz_kalibrasyonlari k
             JOIN cihazlar c ON k.cihaz_id = c.cihaz_id
             LEFT JOIN cihaz_bakim_planlari p ON p.plan_id = k.plan_id
-            ORDER BY k.islem_tarihi DESC;
-        """)
+            ORDER BY k.islem_tarihi DESC
+            LIMIT %s;
+        """, (LISTE_UST_SINIRI,))
         kayitlar = cursor.fetchall()
+        liste_toplamini_bildir(cursor, response, len(kayitlar), "SELECT COUNT(*) FROM cihaz_kalibrasyonlari;")
 
         return [
             {

@@ -23,6 +23,7 @@ from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, is
                             yenile_butonu_olustur, bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -405,6 +406,7 @@ class BakimYonetimEkrani(QWidget):
                 return
             res.raise_for_status()
             bakimlar = res.json()
+            toplam = liste_toplami(res, len(bakimlar))
         except Exception as e:
             logger.warning("Bakım listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Bakım kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
@@ -452,7 +454,8 @@ class BakimYonetimEkrani(QWidget):
                     lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
                 satira_kimlik_ata(self.tablo, i, b["bakim_id"])
 
-        self.cip_toplam.setText(f"{len(bakimlar)} kayıt")
+        self.cip_toplam.setText(toplam_etiketi(len(bakimlar), toplam))
+        self.cip_toplam.setToolTip(kisaltma_ipucu(len(bakimlar), toplam))
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} gecikmiş")
         self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")

@@ -82,7 +82,7 @@ def test_liste_ucu_sahip_yonetebilir_cihaz_ve_oda_bilgisini_dondurur():
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         satir = sunucu.rezervasyonlari_listele(kullanici_id=42)[0]
     assert satir["rezerve_eden"] == "ayse" and satir["yonetebilir"] is True and satir["cihaz_numarasi"] == 11 and satir["oda_id"] == 5
-    assert imlec.execute.call_args.args[1] == (42, 42)                       # yetki ifadesi kullanıcı kimliğiyle iki kez
+    assert imlec.execute.call_args.args[1] == (42, 42, sunucu.LISTE_UST_SINIRI)      # yetki ifadesi kullanıcı kimliğiyle iki kez, sonra liste üst sınırı (LIMIT)
 
 
 # ------------------------------------------------------------------ ekran

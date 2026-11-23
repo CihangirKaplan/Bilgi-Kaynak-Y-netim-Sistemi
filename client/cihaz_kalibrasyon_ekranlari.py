@@ -23,6 +23,7 @@ from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, islem_b
                             bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
+from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,7 @@ class KalibrasyonYonetimEkrani(QWidget):
                 return
             res.raise_for_status()
             kayitlar = res.json()
+            toplam = liste_toplami(res, len(kayitlar))
         except Exception as e:
             logger.warning("Kalibrasyon listesi yüklenemedi: %s", e)
             self.bos_mesaj.setText("Kalibrasyon kayıtları yüklenemedi. Sunucu bağlantısını kontrol edin.")
@@ -373,7 +375,8 @@ class KalibrasyonYonetimEkrani(QWidget):
                     lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
                 satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
 
-        self.cip_toplam.setText(f"{len(kayitlar)} kayıt")
+        self.cip_toplam.setText(toplam_etiketi(len(kayitlar), toplam))
+        self.cip_toplam.setToolTip(kisaltma_ipucu(len(kayitlar), toplam))
         self.cip_yaklasan.setText(f"{yaklasan} süresi yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} süresi dolmuş")
         self.bos_mesaj.setText("Henüz kalibrasyon kaydı yok. Üstteki “Kalibrasyon Kaydı” butonuyla ekleyebilirsiniz.")
