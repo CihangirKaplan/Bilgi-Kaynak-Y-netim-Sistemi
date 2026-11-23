@@ -121,8 +121,9 @@ class PuanRaporuEkrani(QWidget):
         ana.setContentsMargins(20, 16, 20, 20)
         ana.setSpacing(12)
 
-        # ---- 1. satır: dönem ve öğrenci filtreleri
+        # ---- 1. satır: dönem
         satir1 = QHBoxLayout()
+        satir1.setSpacing(8)
         satir1.addWidget(QLabel("Dönem:"))
         self.donem = QComboBox()
         self.donem.addItems(DONEMLER)
@@ -141,27 +142,34 @@ class PuanRaporuEkrani(QWidget):
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         satir1.addWidget(self.bitis)
 
-        satir1.addSpacing(10)
-        satir1.addWidget(QLabel("Öğrenci Türü:"))
-        self.tur_sec = QComboBox()
-        for etiket, deger in TURLER:
-            self.tur_sec.addItem(etiket, deger)
-        satir1.addWidget(self.tur_sec)
-
-        satir1.addWidget(QLabel("Durum:"))
-        self.durum_sec = QComboBox()
-        for etiket, deger in DURUMLAR:
-            self.durum_sec.addItem(etiket, deger)
-        satir1.addWidget(self.durum_sec)
-
-        self.puansiz_kutusu = QCheckBox("Puanı olmayanları da göster")
-        self.puansiz_kutusu.setChecked(True)
-        self.puansiz_kutusu.setToolTip("Seçilen dönemde hiç faaliyeti olmayan öğrenciler listenin en altında görünür.")
-        satir1.addWidget(self.puansiz_kutusu)
         satir1.addStretch(1)
         ana.addLayout(satir1)
 
-        # ---- 2. satır: arama ve düğmeler
+        # ---- 2. satır: öğrenci süzgeçleri (tek satıra sığmadığında yazılar birbirine giriyordu)
+        satir1b = QHBoxLayout()
+        satir1b.setSpacing(8)
+        satir1b.addWidget(QLabel("Öğrenci Türü:"))
+        self.tur_sec = QComboBox()
+        for etiket, deger in TURLER:
+            self.tur_sec.addItem(etiket, deger)
+        satir1b.addWidget(self.tur_sec)
+
+        satir1b.addSpacing(10)
+        satir1b.addWidget(QLabel("Durum:"))
+        self.durum_sec = QComboBox()
+        for etiket, deger in DURUMLAR:
+            self.durum_sec.addItem(etiket, deger)
+        satir1b.addWidget(self.durum_sec)
+
+        satir1b.addSpacing(10)
+        self.puansiz_kutusu = QCheckBox("Puanı olmayanları da göster")
+        self.puansiz_kutusu.setChecked(True)
+        self.puansiz_kutusu.setToolTip("Seçilen dönemde hiç faaliyeti olmayan öğrenciler listenin en altında görünür.")
+        satir1b.addWidget(self.puansiz_kutusu)
+        satir1b.addStretch(1)
+        ana.addLayout(satir1b)
+
+        # ---- 3. satır: arama ve düğmeler
         satir2 = QHBoxLayout()
         self.arama = QLineEdit()
         self.arama.setPlaceholderText("🔎  Öğrenci adı ya da numarası ara…")
