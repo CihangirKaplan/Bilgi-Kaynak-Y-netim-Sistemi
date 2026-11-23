@@ -3,19 +3,30 @@
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 
-import psycopg2
+import psycopg2  # noqa: F401  (kullanılmıyor görünür ama testler bağlantıyı server.oda_etkinlikleri_api.psycopg2 üzerinden değiştirir)
 
 from server.vt_baglanti import vt_baglan
 from psycopg2.extras import RealDictCursor
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.oda_etkinlikleri_kurallari import oda_cakismasi_bul
-from server.oda_etkinlikleri_modelleri import etkinlik_oturumlarini_dogrula
+from server.denetim import ayrintili_kayit_yaz
+from server.oda_etkinlikleri_kurallari import oda_cakismasi_bul, oda_kilidini_al
 from server.oda_etkinlikleri_modelleri import (
     OdaEtkinlikOlusturModeli,
     OdaEtkinlikGuncelleModeli,
     etkinlik_gunluk_araliklari,
+    etkinlik_oturumlarini_dogrula,
 )
+
+# Denetim kaydına yazılan etkinlik alanları: yalnızca kimlik, sayı ve zaman. Etkinlik adı serbest metindir (kişi adı içerebilir);
+# FR-008 gereği yazılmaz, yalnızca değişip değişmediği belirtilir.
+DENETIME_YAZILAN_ALANLAR = (
+    "oda_id", "organize_eden_personel_id", "katilimci_sayisi", "baslangic_zamani", "bitis_zamani",
+)
+
+
+def _denetim_ozeti(kayit):
+    return {alan: kayit.get(alan) for alan in DENETIME_YAZILAN_ALANLAR}
 
 
 def psikologa_atanmis_oda_kontrol(cursor, oda_id):
@@ -126,11 +137,9 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 )
 
     def oda_kilitle(cursor, oda_idleri):
+        # Kilitler küçük oda kimliğinden büyüğe alınır (kilitlenme/deadlock olmasın).
         for oda_id in sorted(set(oda_idleri)):
-            cursor.execute(
-                "SELECT pg_advisory_xact_lock(%s, %s)",
-                (391284, oda_id),
-            )
+            oda_kilidini_al(cursor, oda_id)
 
     def cakisma_kontrol(cursor, oda_id, baslangic, bitis, haric=None):
         cakisma = oda_cakismasi_bul(
@@ -158,15 +167,9 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 (etkinlik_id, ilk, son),
             )
 
-    def denetim(cursor, kullanici_id, olay, etkinlik_id):
-        cursor.execute(
-            """
-            INSERT INTO denetim_kayitlari
-                (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id)
-            VALUES (%s, %s, 'oda_etkinlikleri', %s)
-            """,
-            (kullanici_id, olay, etkinlik_id),
-        )
+    def denetim(cursor, kullanici_id, olay, etkinlik_id, **ayrinti):
+        """Denetim kaydı (aynı işlemde): ne yapıldığı ve etkilenen oda/zaman bilgisi."""
+        ayrintili_kayit_yaz(cursor, kullanici_id, olay, "oda_etkinlikleri", etkinlik_id, **ayrinti)
 
     @router.get("/secenekler")
     def etkinlik_secenekleri(
@@ -340,7 +343,14 @@ def router_olustur(izin_kontrol, vt_ayarlari):
             )
             etkinlik_id = cursor.fetchone()["etkinlik_id"]
             gunleri_kaydet(cursor, etkinlik_id, araliklar)
-            denetim(cursor, kullanici_id, "CREATE", etkinlik_id)
+            denetim(
+                cursor, kullanici_id, "CREATE", etkinlik_id,
+                yeni=_denetim_ozeti({
+                    "oda_id": veri.oda_id, "organize_eden_personel_id": veri.organize_eden_personel_id,
+                    "katilimci_sayisi": veri.katilimci_sayisi, "baslangic_zamani": genel_bas, "bitis_zamani": genel_bit,
+                }),
+                gun_sayisi=len(araliklar),
+            )
             return {"etkinlik_id": etkinlik_id, "durum": "basarili"}
 
     @router.patch("/{etkinlik_id}")
@@ -503,7 +513,12 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 )
                 gunleri_kaydet(cursor, etkinlik_id, araliklar)
 
-            denetim(cursor, kullanici_id, "UPDATE", etkinlik_id)
+            denetim(
+                cursor, kullanici_id, "UPDATE", etkinlik_id,
+                degisen_alanlar=sorted(set(degisiklikler) | ({"gunler"} if gunler_gonderildi else set())),
+                onceki=_denetim_ozeti(mevcut), yeni=_denetim_ozeti(yeni),
+                gun_sayisi=len(araliklar),
+            )
             return {"etkinlik_id": etkinlik_id, "durum": "basarili"}
 
     @router.patch("/{etkinlik_id}/iptal")
@@ -526,7 +541,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 """,
                 (etkinlik_id,),
             )
-            denetim(cursor, kullanici_id, "CANCEL", etkinlik_id)
+            denetim(cursor, kullanici_id, "CANCEL", etkinlik_id, onceki=_denetim_ozeti(mevcut))
             return {"etkinlik_id": etkinlik_id, "durum": "iptal_edildi"}
 
     return router

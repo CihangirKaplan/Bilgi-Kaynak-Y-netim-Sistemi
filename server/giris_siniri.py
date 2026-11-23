@@ -6,12 +6,19 @@ giriş denemelerini sayar; pencere içinde sınır aşılırsa o istemciden gele
 
 - Yalnızca başarısız denemeler sayılır: doğru giren kullanıcılar sınırdan etkilenmez, başarılı giriş sayacı sıfırlamaz.
 - IP adresi ham saklanmaz; SHA-256 özeti anahtar olur (kişisel veri tutulmaz).
-- Yalnızca doğrudan bağlanan istemci adresi kullanılır. X-Forwarded-For gibi başlıklara güvenilmez (istemci sahteleyebilir).
+- İstemci adresi, denetim kayıtlarındakiyle aynı kaynaktan alınır (server.vt_baglanti.mevcut_adres): varsayılan olarak doğrudan bağlanan adres;
+  yalnızca TKYS_GUVENILIR_VEKIL=1 ise vekilin eklediği X-Forwarded-For değeri. Böylece sunucu bir vekilin arkasındayken tüm istemciler
+  tek anahtarda toplanıp birbirini kilitlemez. Başlığa varsayılan olarak güvenilmez (istemci sahteleyebilir).
 - Sınırlayıcıda hata olursa giriş engellenmez (fail-open); veritabanı arızası herkesi dışarıda bırakmamalı.
 """
 import hashlib
+import logging
 
 import psycopg2
+
+from server.vt_baglanti import mevcut_adres
+
+GUNLUK = logging.getLogger("uvicorn.error")
 
 PENCERE_SANIYE = 300        # 5 dakikalık sayım penceresi
 EN_FAZLA_BASARISIZ = 20     # pencere içinde bir istemciden en fazla bu kadar başarısız deneme
@@ -20,8 +27,10 @@ TEMIZLIK_SAAT = 1           # bu süreden eski sayaçlar silinir
 
 def istemci_anahtari(request) -> str | None:
     """İsteğin geldiği istemci adresinin özeti; adres bilinmiyorsa None (sınır uygulanmaz)."""
-    istemci = getattr(request, "client", None)
-    adres = getattr(istemci, "host", None)
+    adres = mevcut_adres()                                  # istek ara katmanının belirlediği adres (vekil ayarına saygılı)
+    if not adres:
+        istemci = getattr(request, "client", None)
+        adres = getattr(istemci, "host", None)
     if not adres:
         return None
     return hashlib.sha256(str(adres).encode("utf-8")).hexdigest()
@@ -48,7 +57,7 @@ def engel_suresi(vt_ayarlari: dict, anahtar: str | None) -> int:
         satir = cursor.fetchone()
         return int(satir[0]) if satir else 0
     except Exception as hata:
-        print("GIRIS SINIRI OKUMA HATA:", str(hata))
+        GUNLUK.warning("Giriş sınırı okunamadı (sınır uygulanmadı): %s", hata)
         return 0
     finally:
         if conn is not None:
@@ -83,7 +92,7 @@ def basarisiz_girisi_kaydet(vt_ayarlari: dict, anahtar: str | None) -> None:
         )
         conn.commit()
     except Exception as hata:
-        print("GIRIS SINIRI YAZMA HATA:", str(hata))
+        GUNLUK.warning("Başarısız giriş sayılamadı: %s", hata)
         if conn is not None:
             conn.rollback()
     finally:

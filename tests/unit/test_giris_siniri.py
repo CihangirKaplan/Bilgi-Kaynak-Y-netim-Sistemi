@@ -71,3 +71,19 @@ def test_var_olmayan_kullanici_basarisiz_deneme_olarak_sayilir():
             giris_yap(GirisModeli(kullanici_adi="yok", parola="y"), istek())
     assert hata.value.status_code == 401
     kaydet.assert_called_once()
+
+
+def test_giris_siniri_istek_ara_katmaninin_belirledigi_adresi_kullanir():
+    """Sunucu vekil arkasındayken (TKYS_GUVENILIR_VEKIL=1) tüm istemciler tek anahtarda toplanıp birbirini kilitlemesin:
+    sayaç, denetim kayıtlarındakiyle aynı adres kaynağından (vt_baglanti.mevcut_adres) beslenir."""
+    from server.vt_baglanti import adresi_ayarla, adresi_sifirla
+    belirtec = adresi_ayarla("203.0.113.7")
+    try:
+        assert giris_siniri.istemci_anahtari(istek("10.0.0.1")) == giris_siniri.istemci_anahtari(istek("10.0.0.2"))
+        assert giris_siniri.istemci_anahtari(istek("10.0.0.1")) is not None
+    finally:
+        adresi_sifirla(belirtec)
+
+
+def test_giris_siniri_ara_katman_adresi_yoksa_dogrudan_adrese_doner():
+    assert giris_siniri.istemci_anahtari(istek("10.0.0.1")) != giris_siniri.istemci_anahtari(istek("10.0.0.2"))

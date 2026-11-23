@@ -4,6 +4,9 @@
   SON girişi (vekilin kendi gördüğü istemci; istemcinin gönderdiği önceki girişlere güvenilmez).
 
 - X-Content-Type-Options: nosniff  (her yanıtta)
+- X-Frame-Options: DENY ve Referrer-Policy: no-referrer  (her yanıtta; sayfa içine gömülme ve adres sızdırma yok)
+- Cache-Control: no-store  (/api yanıtlarında, uç ayrıca belirtmemişse): kişisel veri içeren yanıtlar ara sunucularda ya da tarayıcı
+  önbelleğinde saklanmaz.
 - Strict-Transport-Security        (yalnızca istek HTTPS ile geldiyse; tarayıcı/istemciye "bu adrese hep HTTPS ile bağlan" der).
   HTTPS sertifikası TLS sonlandıran bir ara sunucuda (ters vekil) ise vekil, isteği iletirken X-Forwarded-Proto: https ekliyorsa
   ve TKYS_GUVENILIR_VEKIL=1 verildiyse HTTPS sayılır. Aksi halde bu başlığa güvenilmez (istemci sahteleyebilir).
@@ -13,6 +16,7 @@ import os
 from server.vt_baglanti import adresi_ayarla, adresi_sifirla
 
 HSTS_DEGERI = b"max-age=31536000"
+API_ONEKI = "/api"
 
 
 def _https_mi(scope) -> bool:
@@ -42,12 +46,17 @@ class GuvenlikBasliklari:
             await self.app(scope, receive, send)
             return
         https = _https_mi(scope)
+        api_mi = scope.get("path", "").startswith(API_ONEKI)
         belirtec = adresi_ayarla(istemci_adresi(scope))
 
         async def gonder(mesaj):
             if mesaj["type"] == "http.response.start":
                 basliklar = list(mesaj.get("headers", []))
                 basliklar.append((b"x-content-type-options", b"nosniff"))
+                basliklar.append((b"x-frame-options", b"DENY"))
+                basliklar.append((b"referrer-policy", b"no-referrer"))
+                if api_mi and not any(ad.lower() == b"cache-control" for ad, _ in basliklar):
+                    basliklar.append((b"cache-control", b"no-store"))
                 if https:
                     basliklar.append((b"strict-transport-security", HSTS_DEGERI))
                 mesaj = {**mesaj, "headers": basliklar}

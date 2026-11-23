@@ -1,10 +1,15 @@
 import json
 
-import psycopg2
+import psycopg2  # noqa: F401  (kullanılmıyor görünür ama testler bağlantıyı server.denetim.psycopg2 üzerinden değiştirir)
 
 from server.vt_baglanti import vt_baglan
 from psycopg2 import sql
 from psycopg2.extras import Json
+
+
+def _json(ayrinti):
+    """Denetim kaydının ayrıntı sütunu için JSON (Türkçe karakterler korunur, tarih gibi türler metne çevrilir)."""
+    return Json(ayrinti, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str))
 
 # Kalıcı silinirken içeriği denetim kaydına yazılabilen tablolar -> birincil anahtar sütunu.
 SILINEBILIR_TABLOLAR = {
@@ -113,7 +118,7 @@ def denetim_kaydi_olustur(
                     olay_turu,
                     hedef_tablo,
                     hedef_kayit_id,
-                    Json(ayrinti, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str)),
+                    _json(ayrinti),
                 )
             )
 
@@ -157,8 +162,7 @@ def ayrintili_kayit_yaz(cursor, kullanici_id, olay_turu, hedef_tablo, hedef_kayi
     Yalnızca kod/durum/rol adı gibi kişisel olmayan değerler verilmelidir (FR-008); parola, ad soyad, telefon gibi alanlar YAZILMAZ."""
     cursor.execute(
         "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, ayrinti) VALUES (%s, %s, %s, %s, %s);",
-        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id,
-         Json(ayrinti, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str))),
+        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, _json(ayrinti)),
     )
 
 
@@ -168,6 +172,5 @@ def durum_degisikligi_yaz(cursor, kullanici_id, olay_turu, hedef_tablo, hedef_ka
     Yalnızca kod/durum gibi kişisel olmayan değerler verilmelidir (FR-008); danışan kodu da kişisel veri değildir."""
     cursor.execute(
         "INSERT INTO denetim_kayitlari (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, ayrinti) VALUES (%s, %s, %s, %s, %s);",
-        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id,
-         Json({"onceki": onceki, "yeni": yeni, **ek}, dumps=lambda nesne: json.dumps(nesne, ensure_ascii=False, default=str))),
+        (kullanici_id, olay_turu, hedef_tablo, hedef_kayit_id, _json({"onceki": onceki, "yeni": yeni, **ek})),
     )

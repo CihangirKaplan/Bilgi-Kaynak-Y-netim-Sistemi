@@ -2,8 +2,18 @@
 
 from datetime import datetime, timedelta, time
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from server.modeller import NaifZaman
+
+
+def _etkinlik_adini_temizle(deger):
+    """Etkinlik adının baş ve sonundaki boşlukları atar; yalnızca boşluktan oluşan ad reddedilir (önceden boş kayıt oluşabiliyordu)."""
+    if isinstance(deger, str):
+        deger = deger.strip()
+        if not deger:
+            raise ValueError("Etkinlik adı boş olamaz.")
+    return deger
 
 
 def etkinlik_gunluk_araliklari(baslangic, bitis):
@@ -92,8 +102,8 @@ def etkinlik_oturumlarini_dogrula(araliklar):
 class OdaEtkinlikGunModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    baslangic_zamani: datetime
-    bitis_zamani: datetime
+    baslangic_zamani: NaifZaman
+    bitis_zamani: NaifZaman
 
     @model_validator(mode="after")
     def saat_kontrolu(self):
@@ -110,11 +120,13 @@ class OdaEtkinlikOlusturModeli(BaseModel):
     organize_eden_personel_id: int = Field(gt=0)
     etkinlik_adi: str = Field(min_length=1, max_length=150)
     katilimci_sayisi: int | None = Field(default=None, ge=0)
-    baslangic_zamani: datetime | None = None
-    bitis_zamani: datetime | None = None
+    baslangic_zamani: NaifZaman | None = None
+    bitis_zamani: NaifZaman | None = None
     gunler: list[OdaEtkinlikGunModeli] | None = Field(
         default=None, min_length=1, max_length=366
     )
+
+    _etkinlik_adi = field_validator("etkinlik_adi", mode="before")(_etkinlik_adini_temizle)
 
     @model_validator(mode="after")
     def zaman_kontrolu(self):
@@ -149,5 +161,7 @@ class OdaEtkinlikGuncelleModeli(BaseModel):
     organize_eden_personel_id: int | None = Field(default=None, gt=0)
     etkinlik_adi: str | None = Field(default=None, min_length=1, max_length=150)
     katilimci_sayisi: int | None = Field(default=None, ge=0)
-    baslangic_zamani: datetime | None = None
-    bitis_zamani: datetime | None = None
+    baslangic_zamani: NaifZaman | None = None
+    bitis_zamani: NaifZaman | None = None
+
+    _etkinlik_adi = field_validator("etkinlik_adi", mode="before")(_etkinlik_adini_temizle)

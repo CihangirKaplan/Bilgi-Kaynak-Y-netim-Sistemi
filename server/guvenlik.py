@@ -24,20 +24,42 @@ if len(JWT_SECRET) < JWT_SECRET_ASGARI_UZUNLUK:
         "ve çıkan değeri .env dosyasındaki JWT_SECRET satırına yazın."
     )
 
+# Yalnızca ortak anahtarlı (HMAC) algoritmalara izin verilir: yanlış yazılmış ya da "none" gibi bir değer sessizce kabul edilmez.
+IZINLI_JWT_ALGORITMALARI = ("HS256", "HS384", "HS512")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "45"))
+if JWT_ALGORITHM not in IZINLI_JWT_ALGORITMALARI:
+    raise RuntimeError(
+        f"JWT_ALGORITHM geçersiz: '{JWT_ALGORITHM}'. İzin verilenler: {', '.join(IZINLI_JWT_ALGORITMALARI)}."
+    )
+
+# Oturum süresi (dakika). 0 ya da negatif değer her oturum anahtarını anında geçersiz kılar; bir günden uzunu güvenlik riskidir.
+JWT_EN_AZ_DAKIKA, JWT_EN_COK_DAKIKA = 1, 1440
+try:
+    JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "45"))
+except ValueError:
+    raise RuntimeError("JWT_EXPIRE_MINUTES bir tam sayı (dakika) olmalıdır.") from None
+if not JWT_EN_AZ_DAKIKA <= JWT_EXPIRE_MINUTES <= JWT_EN_COK_DAKIKA:
+    raise RuntimeError(
+        f"JWT_EXPIRE_MINUTES {JWT_EN_AZ_DAKIKA}-{JWT_EN_COK_DAKIKA} dakika arasında olmalıdır (şu an {JWT_EXPIRE_MINUTES})."
+    )
 
 # Yönetici ya da kurtarma aracıyla verilen GEÇİCİ parolanın geçerlilik süresi (saat). Süre dolunca kullanıcı giriş yapamaz ve
 # yeniden geçici parola ister. Süre bilgisi boş eski kayıtlar süresiz kalır. (SQL'e tam sayı olarak gömülür: kullanıcı girdisi değildir.)
 GECICI_PAROLA_GECERLILIK_SAAT = max(1, int(os.getenv("GECICI_PAROLA_GECERLILIK_SAAT", "48")))
 GECICI_PAROLA_BITIS_SQL = f"CURRENT_TIMESTAMP + INTERVAL '{GECICI_PAROLA_GECERLILIK_SAAT} hours'"
 
+GECICI_PAROLA_UZUNLUK = 16
+_GECICI_PAROLA_GRUPLARI = (string.ascii_lowercase, string.ascii_uppercase, string.digits, "!@#$%&*")
+
+
 def gecici_parola_uret() -> str:
-    karakterler = string.ascii_letters + string.digits + "!@#$%&*"
-    return "".join(
-        secrets.choice(karakterler)
-        for _ in range(16)
-    )
+    """Rastgele geçici parola. Her gruptan (küçük harf, büyük harf, rakam, simge) en az bir karakter içerir; böylece parola
+    politikasına (en az bir harf ve rakam) her zaman uyar. Önceden tamamen rastgele seçildiği için yaklaşık yüzde 8'inde rakam olmuyordu."""
+    tum = "".join(_GECICI_PAROLA_GRUPLARI)
+    karakterler = [secrets.choice(grup) for grup in _GECICI_PAROLA_GRUPLARI]
+    karakterler += [secrets.choice(tum) for _ in range(GECICI_PAROLA_UZUNLUK - len(karakterler))]
+    secrets.SystemRandom().shuffle(karakterler)
+    return "".join(karakterler)
 
 def parola_hashle(parola: str) -> str:
     parola_bytes = parola.encode("utf-8")
