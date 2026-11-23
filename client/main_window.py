@@ -233,6 +233,11 @@ def izin_var(rol, izin_adi):
             izin_var(rol, "Bakım kayıtlarını yönetme")
             or izin_var(rol, "Kalibrasyon kayıtlarını yönetme")
         )
+    if izin_adi == "Bakım/kalibrasyon planlarını görüntüleme":
+        # Planlar sayfası, bakım ya da kalibrasyon kayıtlarını görme/yönetme izinlerinden biriyle açılır (sunucu da aynısını ister).
+        return any(izin_var(rol, ad) for ad in (
+            "Bakım kayıtlarını görüntüleme", "Bakım kayıtlarını yönetme",
+            "Kalibrasyon kayıtlarını görüntüleme", "Kalibrasyon kayıtlarını yönetme"))
     if izin_adi not in IZIN:
         return False
     kodlar = _SUNUCU_YETKILERI.get(rol)
@@ -331,7 +336,7 @@ MENU = [
         dict(ikon="🛠️", ad="Bakım Kayıtları", izin="Bakım kayıtlarını görüntüleme",
              aciklama="Periyodik bakım kayıtları",
              aksiyon=[("＋  Bakım Kaydı", "Bakım kayıtlarını yönetme")]),
-        dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım/kalibrasyon planlarını yönetme",
+        dict(ikon="🗓️", ad="Bakım Planları", izin="Bakım/kalibrasyon planlarını görüntüleme",
              aciklama="Cihazların tekrar aralığı, uyarı süresi ve sonraki bakım/kalibrasyon tarihi",
              aksiyon=[("＋  Yeni Plan", "Bakım/kalibrasyon planlarını yönetme")]),
         dict(ikon="🎯", ad="Kalibrasyon", izin="Kalibrasyon kayıtlarını görüntüleme",
@@ -1052,6 +1057,9 @@ QLabel {
                     ))
                     self._bildirim_sayisi += 1
 
+        # Yaklaşan/geciken bakım ve kalibrasyon bildirimleri: envanter yönetme izni ŞART DEĞİL; bakım ya da kalibrasyon sayfasını görebilen
+        # kullanıcı da kendi türünün uyarılarını alır (sunucu listeyi izne göre süzer).
+        if any(sayfa in self.nav_btnler for sayfa in ("Cihaz Envanteri", "Bakım Kayıtları", "Kalibrasyon")):
             islemler = getir("/api/dashboard/yaklasan-islemler")
 
             if isinstance(islemler, list):
@@ -1888,6 +1896,7 @@ QLabel {
         "Kalibrasyon": ("aktif_kalibrasyon_ekrani", "yukle"),
         "Cihaz Rezervasyonu": ("aktif_rezervasyon_ekrani", "verileri_yukle"),
         "Bakım Planları": ("aktif_plan_ekrani", "verileri_yukle"),
+        "Cihaz Raporları": ("aktif_cihaz_rapor_ekrani", "sayfa_gosterildi"),
         "Kullanıcı & Personel": ("aktif_personel_ekrani", "verileri_cek"),
         "Arıza Kayıtları": ("aktif_ariza_ekrani", "verileri_yukle"),
         "Bakım Kayıtları": ("aktif_bakim_ekrani", "verileri_yukle"),
@@ -2444,7 +2453,8 @@ QLabel {
 
             self.aktif_plan_ekrani = BakimPlanlariEkrani(
                 api_url=self.api_url,
-                token=self.token
+                token=self.token,
+                yetkili_mi=izin_var(rol, "Bakım/kalibrasyon planlarını yönetme"),
             )
             lay.addWidget(self.aktif_plan_ekrani, 1)
         elif oge["ad"] == "Kullanıcı & Personel":

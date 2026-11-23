@@ -359,7 +359,7 @@ def test_menu_bakim_planlari_sayfasini_dogru_izinle_ve_ikonla_icerir():
     import client.tkys_sidebar_refined as yan
     kategori = dict(mw.MENU)["CİHAZ YAŞAM DÖNGÜSÜ"]
     oge = next(o for o in kategori if o["ad"] == "Bakım Planları")
-    assert oge["izin"] == "Bakım/kalibrasyon planlarını yönetme"
+    assert oge["izin"] == "Bakım/kalibrasyon planlarını görüntüleme"                         # sayfa görüntüleme ya da yönetme izniyle açılır
     assert ("＋  Yeni Plan", "Bakım/kalibrasyon planlarını yönetme") in oge["aksiyon"]
     assert yan.PAGE_ICONS["Bakım Planları"] in yan.PATHS
     assert mw.IZIN_KODLARI["Bakım kayıtlarını yönetme"] == ("BAKIM_KAYITLARI_YONET",)   # API izniyle aynı

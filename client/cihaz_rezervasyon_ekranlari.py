@@ -445,12 +445,7 @@ class YeniRezervasyonFormu(QDialog):
             if res is None or oturum_hatasi_mi(res):
                 return
             if res.status_code == 201:
-                basari = QMessageBox(self)
-                basari.setWindowTitle("Başarılı")
-                basari.setText("✅ Rezervasyon başarıyla oluşturuldu!")
-                basari.setStyleSheet("QMessageBox { background-color: #FFFFFF; } QLabel { color: #27AE60; font-size: 13px; font-weight: bold; } QPushButton { background-color: #27AE60; color: white; padding: 6px 15px; border-radius: 4px; font-weight: bold; }")
-                basari.setStandardButtons(QMessageBox.Ok)
-                basari.exec()
+                basari_bildirimi(self, "Rezervasyon oluşturuldu.")
                 self.accept()
             else:
                 hata_detay = hata_detayi_metni(res, "Bilinmeyen bir hata oluştu.")
