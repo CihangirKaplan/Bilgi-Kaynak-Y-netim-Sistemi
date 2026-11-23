@@ -96,6 +96,14 @@ def test_quality_audit_importerror_commit_engellenmeli(
     elif ad == "birim_delete":
         cursor.fetchone.return_value = None
 
+    # Faaliyet birimi guncellemede:
+    # Ilk SELECT: birimin mevcut adi; ikinci SELECT: ayni ada sahip baska birim yok.
+    elif ad == "birim_update":
+        cursor.fetchone.side_effect = [
+            ("ESKI_BIRIM_ADI",),
+            None,
+        ]
+
     # Digerlerinde kayit mevcut.
     else:
         cursor.fetchone.return_value = (501,)

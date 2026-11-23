@@ -209,28 +209,43 @@ class FaaliyetEkleDialog(QDialog):
         if self.birimleri_yukle() is False:
             return
 
-        # --- YENİ: EĞER DÜZENLEME MODUNDAYSAK COMBOKUTULARINI ESKİ VERİYLE DOLDUR ---
-        if hasattr(self, 'mevcut_veri') and self.mevcut_veri:
-            # 1. Öğrenciyi seç
-            for i in range(self.cb_ogrenci.count()):
-                if self.mevcut_veri["ogrenci_adi"] in self.cb_ogrenci.itemText(i):
-                    self.cb_ogrenci.setCurrentIndex(i)
-                    break
-            
-            # 2. Faaliyeti seç
-            for i in range(self.cb_faaliyet.count()):
-                if self.cb_faaliyet.itemText(i).startswith(self.mevcut_veri["faaliyet_adi"]):
-                    self.cb_faaliyet.setCurrentIndex(i)
-                    break
-                    
-            # 3. Birimi seç
-            for i in range(self.cb_birim.count()):
-                if self.mevcut_veri["birim_adi"] in self.cb_birim.itemText(i):
-                    self.cb_birim.setCurrentIndex(i)
-                    break
-                    
-            # 4. Miktarı yaz
-            self.sb_miktar.setValue(int(self.mevcut_veri["miktar"]))
+        # Düzenleme modunda açılır kutular kaydın mevcut değerleriyle doldurulur.
+        if self.mevcut_veri:
+            veri = self.mevcut_veri
+            self._mevcut_degeri_sec(
+                self.cb_ogrenci, veri.get("ogrenci_id"),
+                lambda metin: f"{veri.get('ogrenci_adi', '')} - [{veri.get('ogrenci_no', '')}]" in metin,
+                yedek_metin=f"{veri.get('ogrenci_adi', '')} - [{veri.get('ogrenci_no', '')}] (pasif)",
+            )
+            self._mevcut_degeri_sec(
+                self.cb_faaliyet, veri.get("faaliyet_id"),
+                lambda metin: metin.startswith(f"{veri.get('faaliyet_adi', '')} ("),
+            )
+            self._mevcut_degeri_sec(
+                self.cb_birim, veri.get("birim_id"),
+                lambda metin: metin == veri.get("birim_adi", ""),
+            )
+            self.sb_miktar.setValue(int(veri["miktar"]))
+
+    @staticmethod
+    def _mevcut_degeri_sec(combo, kimlik, ada_uyar, yedek_metin=None):
+        """Kaydın öğrenci/faaliyet/birim değerini açılır kutuda seçer.
+
+        Kimlik biliniyorsa onunla eşleşir (aynı ada sahip kayıtlar karışmaz). Kimlik listede yoksa (örn. pasife alınmış öğrenci)
+        ve yedek_metin verilmişse o kayıt listeye eklenip seçilir; böylece "Güncelle" kaydı başka birine kaydırmaz.
+        Kimlik hiç yoksa (eski veri) tam ad eşleşmesine bakılır."""
+        if kimlik is not None:
+            indeks = combo.findData(kimlik)
+            if indeks < 0 and yedek_metin:
+                combo.addItem(yedek_metin, kimlik)
+                indeks = combo.count() - 1
+            if indeks >= 0:
+                combo.setCurrentIndex(indeks)
+            return
+        for i in range(combo.count()):
+            if combo.itemData(i) is not None and ada_uyar(combo.itemText(i)):
+                combo.setCurrentIndex(i)
+                return
 
     def yeni_ogrenci_ekle_formunu_ac(self):
         ana_pencere = self.parent()

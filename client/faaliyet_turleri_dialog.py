@@ -13,6 +13,9 @@ from client.api_yoneticisi import (
 from client.bildirim_toast import basari_bildirimi
 
 
+# Sunucudaki FAALIYET_PUANI_EN_FAZLA ile aynı olmalıdır (puan x miktar çarpımı veritabanı sınırını aşmasın).
+FAALIYET_PUANI_EN_FAZLA = 10_000
+
 STIL = """
 QDialog {
     background-color: #F0F5FF;
@@ -145,7 +148,7 @@ class FaaliyetTurleriDialog(QDialog):
         )
 
         self.puan = QSpinBox()
-        self.puan.setRange(0, 1000000)
+        self.puan.setRange(0, FAALIYET_PUANI_EN_FAZLA)
         self.puan.setValue(0)
 
         form.addRow("Faaliyet Adı:", self.ad)
@@ -335,7 +338,7 @@ class FaaliyetTurleriDialog(QDialog):
         ad_alani.setMaxLength(100)
 
         puan_alani = QSpinBox()
-        puan_alani.setRange(0, 1000000)
+        puan_alani.setRange(0, FAALIYET_PUANI_EN_FAZLA)
         puan_alani.setValue(eski_puan)
 
         form.addRow("Faaliyet Adı:", ad_alani)

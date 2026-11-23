@@ -666,8 +666,8 @@ class KalibrasyonOlusturModeli(BaseModel):
     kalibrasyon_yapan_kurum: str = Field(min_length=1, max_length=100)
     gecerlilik_tarihi: date
     sertifika_no: str = Field(min_length=1, max_length=100)
-    kalibrasyon_baslangic_tarihi: date  # YENİ EKLENDİ
-    kalibrasyon_bitis_tarihi: date      # YENİ EKLENDİ
+    kalibrasyon_baslangic_tarihi: date
+    kalibrasyon_bitis_tarihi: date
     uyari_suresi_gun: int = Field(default=30, ge=0, le=365)  # sonraki tarihe kaç gün kala uyarılır
     plan_id: Optional[int] = Field(default=None, gt=0)       # bu kaydın yerine getirdiği kalibrasyon planı
 
@@ -683,8 +683,8 @@ class KalibrasyonGuncelleModeli(BaseModel):
     kalibrasyon_yapan_kurum: Optional[str] = Field(default=None, min_length=1, max_length=100)
     gecerlilik_tarihi: Optional[date] = None
     sertifika_no: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    kalibrasyon_baslangic_tarihi: Optional[date] = None # YENİ EKLENDİ
-    kalibrasyon_bitis_tarihi: Optional[date] = None     # YENİ EKLENDİ
+    kalibrasyon_baslangic_tarihi: Optional[date] = None
+    kalibrasyon_bitis_tarihi: Optional[date] = None
     uyari_suresi_gun: Optional[int] = Field(default=None, ge=0, le=365)
 
     @model_validator(mode="after")
