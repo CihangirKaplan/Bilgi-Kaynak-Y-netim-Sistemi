@@ -140,11 +140,11 @@ def test_cihaz_durum_degisince_audit_kaydi_olusur():
 
 def test_cihaz_durum_ayni_kalirsa_status_audit_olusmaz():
     conn, cursor = sahte_baglanti()
-    cursor.fetchone.side_effect = [("Arizali",)]
+    cursor.fetchone.side_effect = [("Bakimda",)]
 
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         cihaz_guncelle(
-            1, CihazGuncelleModeli(durum=CihazDurumu.ARIZALI), kullanici_id=3
+            1, CihazGuncelleModeli(durum=CihazDurumu.BAKIMDA), kullanici_id=3
         )
 
     assert not any(

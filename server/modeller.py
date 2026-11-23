@@ -459,9 +459,13 @@ def _cihaz_metni_temizle(deger):
 
 
 def _elle_secilebilir_durum(deger):
-    """'Rezerve' ve 'Kullanımda' durumları artık elle seçilemez: bugünkü rezervasyonlardan hesaplanır (yönetim panelinde)."""
+    """'Rezerve' ve 'Kullanımda' rezervasyonlardan, 'Arızalı' ise açık arıza kayıtlarından hesaplanır; elle seçilemez.
+
+    'Arızalı' elle seçilebilseydi arıza kaydı olmayan cihaz arızalı, açık arızası olan cihaz "hazır" görünebilirdi (iki sayfa çelişirdi)."""
     if deger in (CihazDurumu.REZERVE, CihazDurumu.KULLANIMDA):
         raise ValueError("'Rezerve' ve 'Kullanımda' durumları elle seçilemez; rezervasyonlardan kendiliğinden hesaplanır.")
+    if deger == CihazDurumu.ARIZALI:
+        raise ValueError("'Arızalı' durumu elle seçilemez; Arıza Kayıtları sayfasından arıza bildirildiğinde kendiliğinden belirlenir.")
     return deger
 
 

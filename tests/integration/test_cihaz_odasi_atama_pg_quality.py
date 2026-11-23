@@ -48,6 +48,8 @@ def ortam():
         app.dependency_overrides.pop(mevcut_kullanici_id, None)
         kullanicilar = [admin] + psikologlar
         c.execute("DELETE FROM cihaz_rezervasyonlari WHERE cihaz_id = ANY(%s)", (cihazlar,))
+        c.execute("DELETE FROM cihaz_arizalari WHERE cihaz_id = ANY(%s)", (cihazlar,))
+        c.execute("DELETE FROM denetim_kayitlari WHERE hedef_tablo = 'cihazlar' AND hedef_kayit_id = ANY(%s)", (cihazlar,))
         c.execute("DELETE FROM cihazlar WHERE cihaz_id = ANY(%s)", (cihazlar,))
         c.execute("DELETE FROM psikolog_odalar WHERE kullanici_id = ANY(%s)", (kullanicilar,))
         c.execute("DELETE FROM denetim_kayitlari WHERE kullanici_id = ANY(%s)", (kullanicilar,))
@@ -365,3 +367,61 @@ def test_planlar_ve_bildirimler_goruntuleme_iznine_gore_gercek_veritabaninda():
         c.execute("DELETE FROM rol_izinleri WHERE rol_id = %s", (rol,))
         c.execute("DELETE FROM roller WHERE rol_id = %s", (rol,))
         conn.close()
+
+
+def test_ariza_durumu_tek_kaynak_acik_ariza_kaydidir_gercek_veritabaninda(ortam):
+    """Arıza kaydı açık olduğu sürece cihaz HER ekranda arızalıdır; durum elle değiştirilemez, "Arızalı" elle verilemez, rezervasyon yapılamaz."""
+    c, admin, _psikologlar, odalar, cihazlar, etiket = ortam
+    arizali, temiz, kullanim_disi, _ = cihazlar
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    etkin = lambda cihaz: next(x["etkin_durum"] for x in istemci.get("/api/cihazlar").json() if x["cihaz_id"] == cihaz)
+    sutun = lambda cihaz: (c.execute("SELECT durum::text FROM cihazlar WHERE cihaz_id = %s", (cihaz,)), c.fetchone()[0])[1]
+    c.execute("INSERT INTO bolumler (bolum_adi, sorumlu_ad_soyad) VALUES (%s, 'x') RETURNING bolum_id", (f"ad_b_{etiket}",))
+    bolum = c.fetchone()[0]
+    g = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+    rezervasyon = lambda cihaz: istemci.post("/api/rezervasyonlar", json={"cihaz_id": cihaz, "bolum_id": bolum, "kullanilacak_oda_id": odalar["bos"],
+                                                                         "baslangic_zamani": g.isoformat(), "bitis_zamani": (g + timedelta(hours=1)).isoformat()})
+    try:
+        assert etkin(arizali) == "Kullanima_Hazir"
+        r = istemci.post("/api/arizalar", json={"cihaz_id": arizali, "ariza_baslik": "Sinyal yok", "ariza_aciklama": "Kayıt sırasında sinyal kesiliyor", "aciliyet": "Yüksek"})
+        assert r.status_code == 201
+        ariza_id = r.json()["ariza_id"]
+        assert etkin(arizali) == "Arizali" and sutun(arizali) == "Arizali"
+
+        # açık arıza varken durum elle "Hazır" yapılamaz; arıza kaydı bu yüzden çelişemez
+        r = istemci.patch(f"/api/cihazlar/{arizali}", json={"durum": "Kullanima_Hazir"})
+        assert r.status_code == 409 and "çözüldü olarak işaretleyin" in r.json()["detail"]
+        assert sutun(arizali) == "Arizali" and etkin(arizali) == "Arizali"
+        # ama cihazın diğer bilgileri düzenlenebilir (durum gönderilmeyen güncelleme)
+        assert istemci.patch(f"/api/cihazlar/{arizali}", json={"marka_model": "Yeni Model"}).status_code == 200
+
+        # arıza kaydı olmayan cihaza elle "Arızalı" verilemez
+        assert istemci.patch(f"/api/cihazlar/{temiz}", json={"durum": "Arizali"}).status_code == 422
+        assert etkin(temiz) == "Kullanima_Hazir"
+
+        # sütun arıza kaydından ayrışsa bile (eski veri / dışarıdan müdahale) etkin durum ve rezervasyon arıza kaydına uyar
+        c.execute("UPDATE cihazlar SET durum = 'Kullanima_Hazir' WHERE cihaz_id = %s", (arizali,))
+        assert etkin(arizali) == "Arizali"
+        r = rezervasyon(arizali)
+        assert r.status_code == 403 and "Arizali" in r.json()["detail"]
+        c.execute("UPDATE cihazlar SET durum = 'Arizali' WHERE cihaz_id = %s", (temiz,))                      # kayıtsız bayat sütun
+        assert etkin(temiz) == "Kullanima_Hazir"
+        c.execute("UPDATE cihazlar SET durum = 'Kullanima_Hazir' WHERE cihaz_id = %s", (temiz,))
+        assert rezervasyon(temiz).status_code == 201                                                          # arızasız cihaz rezerve edilebilir
+
+        # açık arızalı cihaz yine de hizmetten çıkarılabilir
+        assert istemci.post("/api/arizalar", json={"cihaz_id": kullanim_disi, "ariza_baslik": "Kırık", "ariza_aciklama": "Ekran kırıldı", "aciliyet": "Kritik"}).status_code == 201
+        assert istemci.patch(f"/api/cihazlar/{kullanim_disi}", json={"durum": "Kullanim_Disi"}).status_code == 200
+        assert etkin(kullanim_disi) == "Kullanim_Disi"
+
+        # arıza çözülünce cihaz hazır olur ve durumu yeniden elle değiştirilebilir
+        r = istemci.put(f"/api/arizalar/{ariza_id}", json={"ariza_baslik": "Sinyal yok", "ariza_aciklama": "Kayıt sırasında sinyal kesiliyor",
+                                                          "aciliyet": "Yüksek", "cozuldu_mu": True, "cozum_notu": "Kablo değişti"})
+        assert r.status_code == 200
+        assert etkin(arizali) == "Kullanima_Hazir"
+        assert istemci.patch(f"/api/cihazlar/{arizali}", json={"durum": "Bakimda"}).status_code == 200
+    finally:
+        c.execute("DELETE FROM cihaz_rezervasyonlari WHERE cihaz_id = ANY(%s)", (cihazlar,))
+        c.execute("DELETE FROM bolumler WHERE bolum_id = %s", (bolum,))
+

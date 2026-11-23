@@ -32,8 +32,9 @@ DURUMLAR = {
     "Arizali": ("Arızalı", "#991B1B", "#FEE2E2"),
     "Kullanim_Disi": ("Kullanım Dışı", "#475569", "#E2E8F0"),
 }
-# Elle seçilemeyen, rezervasyonlardan hesaplanan durumlar (eski kayıtlar için etiketleri DURUMLAR'da kalır).
-HESAPLANAN_DURUMLAR = ("Rezerve", "Kullanimda")
+# Elle seçilemeyen durumlar (etiketleri DURUMLAR'da kalır): "Rezerve"/"Kullanımda" rezervasyonlardan, "Arızalı" ise açık arıza kaydından hesaplanır.
+HESAPLANAN_DURUMLAR = ("Rezerve", "Kullanimda", "Arizali")
+ARIZA_DURUM_IPUCU = "Bu cihazın çözülmemiş arıza kaydı var; durumu elle değiştirilemez. Önce Arıza Kayıtları sayfasından arızayı çözüldü olarak işaretleyin."
 BILGI_KUTUSU_STILI = ("background: #FEF3C7; color: #854D0E; border: 1px solid #FDE68A; border-radius: 10px; "
                       "padding: 10px 12px; font-size: 12px; font-weight: 700;")
 
@@ -75,7 +76,7 @@ class CihazIslemFormu(QDialog):
         self.cmb_durum = QComboBox()
         for db_degeri, (ad, _renk, _arka) in DURUMLAR.items():
             if db_degeri in HESAPLANAN_DURUMLAR:
-                continue                                  # 'Rezerve' / 'Kullanımda' rezervasyonlardan hesaplanır, elle seçilmez
+                continue                                  # 'Rezerve' / 'Kullanımda' rezervasyonlardan, 'Arızalı' arıza kaydından hesaplanır
             self.cmb_durum.addItem(ad, db_degeri)         # gösterilen ad + sunucunun anladığı değer
 
 
@@ -135,9 +136,17 @@ class CihazIslemFormu(QDialog):
         self.txt_ad.setText(self.cihaz_veri.get("cihaz_adi", ""))
         self.txt_marka.setText(self.cihaz_veri.get("marka_model", ""))
         self.txt_seri.setText(self.cihaz_veri.get("seri_no", ""))
-        indeks = self.cmb_durum.findData(self.cihaz_veri.get("durum"))
+        arizali = etkin_durum(self.cihaz_veri) == "Arizali"      # sunucunun hesapladığı etkin durum (eski sunucuda kayıtlı durum)
+        indeks = self.cmb_durum.findData("Arizali" if arizali else self.cihaz_veri.get("durum"))
+        if indeks < 0 and arizali:                         # "Arızalı" seçenek olarak sunulmaz ama cihazın MEVCUT durumu olarak doğru gösterilir
+            self.cmb_durum.addItem(DURUMLAR["Arizali"][0], "Arizali")
+            indeks = self.cmb_durum.count() - 1
         if indeks >= 0:                                    # bilinmeyen değerde ilk seçeneğe sessizce düşme
             self.cmb_durum.setCurrentIndex(indeks)
+        self._ilk_durum = self.cmb_durum.currentData()     # kaydederken yalnızca kullanıcı DEĞİŞTİRDİYSE gönderilir (aşağıda)
+        if arizali:
+            self.cmb_durum.setEnabled(False)               # arızalı cihazın durumu elle değiştirilemez (arıza çözülünce kendiliğinden döner)
+            self.cmb_durum.setToolTip(ARIZA_DURUM_IPUCU)
 
     def kaydet(self):
         if not self.txt_envanter.text().strip() or not self.txt_ad.text().strip():
@@ -151,8 +160,13 @@ class CihazIslemFormu(QDialog):
             "cihaz_adi": self.txt_ad.text().strip(),
             "marka_model": self.txt_marka.text().strip() or None,
             "seri_no": self.txt_seri.text().strip() or None,
-            "durum": db_durumu if self.islem_turu == "GUNCELLE" else "Kullanima_Hazir"
         }
+        # Yeni cihaz her zaman "Kullanıma Hazır" başlar. Güncellemede durum yalnızca kullanıcı değiştirdiyse gönderilir: değişmemiş durumu
+        # göndermek, seçenek listesinde olmayan bir durumdaki (örn. "Arızalı") cihazı sessizce "Kullanıma Hazır"a çekerdi.
+        if self.islem_turu == "EKLE":
+            veri["durum"] = "Kullanima_Hazir"
+        elif db_durumu != getattr(self, "_ilk_durum", db_durumu):
+            veri["durum"] = db_durumu
         
         headers = {"Authorization": f"Bearer {self.token}"}
         

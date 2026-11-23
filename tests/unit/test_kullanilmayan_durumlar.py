@@ -29,7 +29,7 @@ def test_sunucu_elle_rezerve_ya_da_kullanimda_durumunu_reddeder(durum):
         CihazGuncelleModeli(durum=durum)
 
 
-@pytest.mark.parametrize("durum", ["Kullanima_Hazir", "Arizali", "Bakimda", "Kalibrasyonda", "Kullanim_Disi"])
+@pytest.mark.parametrize("durum", ["Kullanima_Hazir", "Bakimda", "Kalibrasyonda", "Kullanim_Disi"])      # "Arizali" arıza kaydından türer, elle seçilemez
 def test_diger_durumlar_secilebilir(durum):
     assert CihazOlusturModeli(envanter_kodu="E-1", cihaz_adi="EEG", durum=durum).durum == CihazDurumu(durum)
     assert CihazGuncelleModeli(durum=durum).durum == CihazDurumu(durum)
@@ -39,7 +39,7 @@ def test_diger_durumlar_secilebilir(durum):
 def test_envanter_formunda_hesaplanan_durumlar_secenek_degil_ama_etiketleri_kalir():
     f = envanter.CihazIslemFormu("http://x", "t", "GUNCELLE", {"cihaz_id": 1, "envanter_kodu": "E", "cihaz_adi": "A", "durum": "Kullanima_Hazir"})
     secenekler = [f.cmb_durum.itemData(i) for i in range(f.cmb_durum.count())]
-    assert "Rezerve" not in secenekler and "Kullanimda" not in secenekler and "Kullanima_Hazir" in secenekler and "Arizali" in secenekler
+    assert "Rezerve" not in secenekler and "Kullanimda" not in secenekler and "Kullanima_Hazir" in secenekler and "Arizali" not in secenekler
     assert "Rezerve" in envanter.DURUMLAR and "Kullanimda" in envanter.DURUMLAR            # eski kayıtların rozeti hâlâ çizilir
     f.close()
 

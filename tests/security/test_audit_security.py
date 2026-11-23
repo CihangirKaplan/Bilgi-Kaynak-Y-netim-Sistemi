@@ -83,6 +83,7 @@ def test_cihaz_durum_degisikligi_audit():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Kullanima_Hazir",),
+        (False,),                  # cihazın açık arıza kaydı yok: durum elle değiştirilebilir
         (10,)
     ]
 
@@ -131,6 +132,7 @@ def test_audit_hatasinda_cihaz_guncelleme_rollback():
     cursor = conn.cursor.return_value
     cursor.fetchone.side_effect = [
         ("Kullanima_Hazir",),
+        (False,),                  # cihazın açık arıza kaydı yok: durum elle değiştirilebilir
         (10,)
     ]
 
