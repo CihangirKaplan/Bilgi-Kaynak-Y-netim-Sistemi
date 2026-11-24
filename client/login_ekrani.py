@@ -39,7 +39,6 @@ API_URL = os.getenv("TKYS_API_URL", "http://127.0.0.1:8000") # Sunucu adresimiz
 # requests kütüphanesi bu sertifikayı REQUESTS_CA_BUNDLE üzerinden güvenilir sayar (doğrulama kapatılmaz).
 if os.getenv("TKYS_CA_BUNDLE"):
     os.environ["REQUESTS_CA_BUNDLE"] = os.environ["TKYS_CA_BUNDLE"]
-MAX_DENEME = 5
 
 STIL = """
 QWidget#kok {
@@ -130,12 +129,6 @@ QLineEdit:hover {
 QLineEdit:focus {
     background: white;
     border: 2px solid #2776DD;
-}
-
-QCheckBox {
-    color: #6B7FA8;
-    font-size: 12px;
-    background: transparent;
 }
 
 
@@ -230,8 +223,6 @@ class LoginEkrani(QWidget):
         ipuclarini_kapat()
         self.setStyleSheet(stil_olustur())
         self.ana_pencere = None
-        self.hatali_deneme = 0
-        self.kalan = 0
 
         kok = QVBoxLayout(self)
         kok.setContentsMargins(40, 40, 40, 40)
@@ -442,9 +433,6 @@ class LoginEkrani(QWidget):
         return f"rol_{rol_id}"
 
     def giris_yap(self):
-        if self.kalan > 0:
-            return
-
         kullanici = self.kullanici_input.text().strip()
         sifre = self.sifre_input.text()
 
@@ -460,7 +448,7 @@ class LoginEkrani(QWidget):
             )
             
             if not cevap.text.strip():
-                 self.hata_goster(f"Sunucu {cevap.status_code} kodu döndürdü ama içeriği bomboş!")
+                 self.hata_goster(f"Sunucudan beklenen yanıt alınamadı (kod {cevap.status_code}). Lütfen tekrar deneyin; sorun sürerse sistem sorumlusuna bildirin.")
                  return
                  
             veri = cevap.json()
@@ -485,7 +473,6 @@ class LoginEkrani(QWidget):
                     return
 
                 # 3. Hataları sıfırla ve ana pencereyi aç
-                self.hatali_deneme = 0
                 self.hata_lbl.hide()
 
                 dinamik_rol_tanimla(
@@ -518,12 +505,18 @@ class LoginEkrani(QWidget):
                 return
             else:
                 self.hata_goster(veri.get("detail", "Giriş başarısız."))
-                self.hatali_deneme += 1
                 self.sifre_input.clear()
                 self.sifre_input.setFocus()
 
+        except requests.exceptions.SSLError:
+            self.hata_goster(
+                f"Güvenli bağlantı kurulamadı: sunucu sertifikası doğrulanamadı ({API_URL}). "
+                "Sertifika dosyasını (TKYS_CA_BUNDLE) ve sunucu adresini kontrol edin; sorun sürerse sistem sorumlusuna bildirin."
+            )
         except requests.exceptions.ConnectionError:
-            self.hata_goster("Sunucuya bağlanılamadı. Ağ bağlantınızı kontrol edin; sorun sürerse sistem sorumlusuna bildirin.")
+            self.hata_goster(
+                f"Sunucuya bağlanılamadı ({API_URL}). Ağ bağlantınızı ve sunucu adresini kontrol edin; sorun sürerse sistem sorumlusuna bildirin."
+            )
         except requests.exceptions.Timeout:
             self.hata_goster(
                 "Sunucu yanıt vermedi. Lütfen tekrar deneyin."
@@ -544,6 +537,7 @@ class LoginEkrani(QWidget):
 
     def ilk_giris_iptal(self):
         self.sifre_input.clear()
+        self.goster.setChecked(False)
         self.show()
         self.sifre_input.setFocus()
 
@@ -571,7 +565,6 @@ class LoginEkrani(QWidget):
             self.zamanlayici.stop()
 
         self.kilit_bitis_monotonik = time.monotonic() + max(1, saniye)
-        self.hatali_deneme = 0
 
         self.giris_btn.setEnabled(False)
         self.kullanici_input.setEnabled(False)
