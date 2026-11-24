@@ -86,6 +86,44 @@ QLabel#bosMesaj {{ font-size: 15px; font-weight: 700; color: #8A9BC0; padding: 4
 """
 
 
+def dialog_stili():
+    """Ekleme/düzenleme pencereleri için stil metni (liste sayfasıyla aynı renk ve kutu dili).
+
+    Nesne adları: formBaslik, ipucu, hata (yazılar); oturumSatiri (beyaz satır kartı); birincil / tehlike (düğmeler).
+    Adsız düğme "hayalet" görünür; böylece yalnızca ana işlem (Kaydet, Ekle) öne çıkar.
+    """
+    return f"""
+QDialog {{ background: #F4F7FD; }}
+QLabel {{ color: {METIN}; font-size: 13px; background: transparent; }}
+QLabel#formBaslik {{ font-size: 16px; font-weight: 800; color: {LACIVERT}; }}
+QLabel#ipucu {{ font-size: 12px; color: {SOLUK}; }}
+QLabel#hata {{ font-size: 12px; font-weight: 700; color: #B91C1C; }}
+QLabel#onizleme {{ font-size: 13px; font-weight: 700; color: {MAVI}; background: #EEF4FF; border-radius: 10px; padding: 8px 12px; }}
+
+QLineEdit, QComboBox, QDateEdit, QTimeEdit {{
+    background: white; color: {METIN}; border: 1px solid #C7D9FB; border-radius: 10px; padding: 7px 12px; min-height: 22px;
+}}
+QLineEdit:hover, QComboBox:hover, QDateEdit:hover, QTimeEdit:hover {{ border: 1px solid #93B4F5; }}
+QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus {{ border: 2px solid #2563EB; padding: 6px 11px; }}
+QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: 26px; }}
+QComboBox QAbstractItemView {{ background: white; color: {METIN}; selection-background-color: #2563EB; selection-color: white;
+                               border: 1px solid #C7D9FB; outline: none; }}
+
+QFrame#oturumSatiri {{ background: white; border: 1px solid #E3EAF5; border-radius: 12px; }}
+QCheckBox {{ color: {METIN}; font-size: 13px; font-weight: 600; spacing: 6px; background: transparent; }}
+
+QPushButton {{ background: #F1F5FD; color: {LACIVERT}; border: 1px solid #D1DFF3; border-radius: 10px;
+               padding: 9px 16px; font-size: 13px; font-weight: 700; }}
+QPushButton:hover {{ background: #E3EDFF; border: 1px solid #93B4F5; }}
+QPushButton:disabled {{ background: #F4F6FA; color: #A3B1CE; border: 1px solid #E8EDF6; }}
+QPushButton#birincil {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1D4ED8, stop:1 #3B82F6); color: white; border: none; }}
+QPushButton#birincil:hover {{ background: #1E40AF; }}
+QPushButton#birincil:disabled {{ background: #C9D6EE; color: white; border: none; }}
+QPushButton#tehlike {{ background: white; color: #B91C1C; border: 1px solid #FECACA; }}
+QPushButton#tehlike:hover {{ background: #FEE2E2; border: 1px solid #F87171; }}
+"""
+
+
 def golge(widget, blur=26, alpha=26, dy=5):
     """Kartlara ana pencereyle aynı yumuşak gölgeyi verir."""
     etki = QGraphicsDropShadowEffect(widget)

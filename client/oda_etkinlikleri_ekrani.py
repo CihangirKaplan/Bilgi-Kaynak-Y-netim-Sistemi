@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QComboBox, QLineEdit, QLabel,
     QPushButton, QMessageBox, QDialogButtonBox, QAbstractItemView,
-    QDateEdit, QTimeEdit, QScrollArea, QFrame, QGridLayout,
+    QDateEdit, QTimeEdit, QScrollArea, QFrame, QGridLayout, QCheckBox,
 )
 
 from client.api_yoneticisi import (
@@ -22,7 +22,7 @@ from client.api_yoneticisi import (
 )
 from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, siralanabilir_yap
 from client.sayfa_tema import (
-    DurumRozetiDelegate, TABLO_STILI, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
+    DurumRozetiDelegate, TABLO_STILI, dialog_stili, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
 )
 from client.tablo_tasarimi import bos_mesaj_olustur
 
@@ -36,11 +36,167 @@ def tarih_yaz(deger):
         return str(deger)
 
 
+GUN_ADLARI = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+EN_FAZLA_OTURUM = 366
+
+
+def tekrar_tarihleri(baslangic, bitis, hafta_gunleri):
+    """baslangic..bitis (ikisi dahil) arasında, haftanın seçili günlerine (0=Pazartesi ... 6=Pazar) denk gelen tarihler."""
+    gunler = set(hafta_gunleri)
+    if bitis < baslangic or not gunler:
+        return []
+    sonuc = []
+    gun = baslangic
+    while gun <= bitis:
+        if gun.weekday() in gunler:
+            sonuc.append(gun)
+        gun += timedelta(days=1)
+    return sonuc
+
+
+class TekrarliOturumDialog(QDialog):
+    """Düzenli etkinlik için tarih aralığı + haftanın günleri + saat seçerek birçok oturumu tek seferde üretir."""
+
+    def __init__(self, parent=None, baslangic=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tekrarlı Oturum Ekle")
+        self.setMinimumWidth(560)
+        self.setStyleSheet(dialog_stili())
+
+        ana = QVBoxLayout(self)
+        ana.setContentsMargins(22, 20, 22, 18)
+        ana.setSpacing(12)
+
+        baslik = QLabel("Düzenli oturumları tek seferde ekleyin")
+        baslik.setObjectName("formBaslik")
+        bilgi = QLabel(
+            "Tarih aralığını, haftanın hangi günlerinde yapılacağını ve saati seçin. Oturumlar listeye eklenir; "
+            "istediğinizi sonra tek tek değiştirebilir ya da kaldırabilirsiniz."
+        )
+        bilgi.setObjectName("ipucu")
+        bilgi.setWordWrap(True)
+        ana.addWidget(baslik)
+        ana.addWidget(bilgi)
+
+        ilk = baslangic or QDate.currentDate()
+        self.bas_tarih = QDateEdit(ilk)
+        self.bas_tarih.setCalendarPopup(True)
+        self.bas_tarih.setDisplayFormat("dd.MM.yyyy")
+        self.bit_tarih = QDateEdit(ilk.addDays(27))                       # varsayılan: 4 hafta
+        self.bit_tarih.setCalendarPopup(True)
+        self.bit_tarih.setDisplayFormat("dd.MM.yyyy")
+
+        tarih_satiri = QHBoxLayout()
+        tarih_satiri.setSpacing(10)
+        tarih_satiri.addWidget(QLabel("İlk gün"))
+        tarih_satiri.addWidget(self.bas_tarih, 1)
+        tarih_satiri.addSpacing(8)
+        tarih_satiri.addWidget(QLabel("Son gün"))
+        tarih_satiri.addWidget(self.bit_tarih, 1)
+        ana.addLayout(tarih_satiri)
+
+        gun_satiri = QHBoxLayout()
+        gun_satiri.setSpacing(8)
+        gun_satiri.addWidget(QLabel("Günler"))
+        self.gun_kutulari = []
+        for sira, ad in enumerate(GUN_ADLARI):
+            kutu = QCheckBox(ad)
+            kutu.setChecked(sira == ilk.dayOfWeek() - 1)                    # Qt: Pazartesi=1 ... Pazar=7
+            kutu.toggled.connect(self.guncelle)
+            self.gun_kutulari.append(kutu)
+            gun_satiri.addWidget(kutu)
+        gun_satiri.addStretch()
+        self.hafta_ici_btn = QPushButton("Hafta içi")
+        self.hafta_ici_btn.setToolTip("Pazartesi–Cuma günlerini seç")
+        self.hafta_ici_btn.clicked.connect(lambda _=False: self.hafta_ici_sec())
+        gun_satiri.addWidget(self.hafta_ici_btn)
+        ana.addLayout(gun_satiri)
+
+        self.saat_bas = QTimeEdit(QTime(13, 0))
+        self.saat_bas.setDisplayFormat("HH:mm")
+        self.saat_bit = QTimeEdit(QTime(14, 0))
+        self.saat_bit.setDisplayFormat("HH:mm")
+        saat_satiri = QHBoxLayout()
+        saat_satiri.setSpacing(10)
+        saat_satiri.addWidget(QLabel("Saat"))
+        saat_satiri.addWidget(self.saat_bas, 1)
+        saat_satiri.addWidget(QLabel("–"))
+        saat_satiri.addWidget(self.saat_bit, 1)
+        saat_satiri.addStretch(2)
+        ana.addLayout(saat_satiri)
+
+        self.onizleme = QLabel("")
+        self.onizleme.setObjectName("onizleme")
+        self.hata = QLabel("")
+        self.hata.setObjectName("hata")
+        self.hata.setWordWrap(True)
+        ana.addWidget(self.onizleme)
+        ana.addWidget(self.hata)
+
+        dugmeler = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.ekle_btn = dugmeler.button(QDialogButtonBox.Ok)
+        self.ekle_btn.setText("Oturumları Ekle")
+        self.ekle_btn.setObjectName("birincil")
+        dugmeler.button(QDialogButtonBox.Cancel).setText("Vazgeç")
+        dugmeler.accepted.connect(self.accept)
+        dugmeler.rejected.connect(self.reject)
+        ana.addWidget(dugmeler)
+
+        for alan in (self.bas_tarih, self.bit_tarih):
+            alan.dateChanged.connect(self.guncelle)
+        for alan in (self.saat_bas, self.saat_bit):
+            alan.timeChanged.connect(self.guncelle)
+        self.guncelle()
+
+    def hafta_ici_sec(self):
+        for sira, kutu in enumerate(self.gun_kutulari):
+            kutu.setChecked(sira < 5)
+
+    def secili_gunler(self):
+        return [sira for sira, kutu in enumerate(self.gun_kutulari) if kutu.isChecked()]
+
+    def tarihler(self):
+        return tekrar_tarihleri(self.bas_tarih.date().toPython(), self.bit_tarih.date().toPython(), self.secili_gunler())
+
+    def denetle(self):
+        """(uygun_mu, hata_metni, tarihler)."""
+        bas, bit = self.bas_tarih.date().toPython(), self.bit_tarih.date().toPython()
+        if bit < bas:
+            return False, "Son gün, ilk günden önce olamaz.", []
+        if (bit - bas).days >= EN_FAZLA_OTURUM:
+            return False, f"İlk ve son gün arasında en fazla {EN_FAZLA_OTURUM} gün olabilir.", []
+        if not self.secili_gunler():
+            return False, "En az bir gün seçin.", []
+        if not (saat_tipi(8, 0) <= self.saat_bas.time().toPython() < self.saat_bit.time().toPython() <= saat_tipi(18, 0)):
+            return False, "Saatler 08.00–18.00 arasında olmalı ve bitiş başlangıçtan sonra gelmelidir.", []
+        tarihler = self.tarihler()
+        if not tarihler:
+            return False, "Seçtiğiniz aralıkta, seçtiğiniz günlere denk gelen tarih yok.", []
+        return True, "", tarihler
+
+    def guncelle(self, *_):
+        uygun, hata, tarihler = self.denetle()
+        self.hata.setText(hata)
+        self.hata.setVisible(bool(hata))
+        if uygun:
+            self.onizleme.setText(
+                f"{len(tarihler)} oturum eklenecek  ·  ilk: {tarihler[0].strftime('%d.%m.%Y')}  ·  son: {tarihler[-1].strftime('%d.%m.%Y')}"
+            )
+        else:
+            self.onizleme.setText("Eklenecek oturum yok")
+        self.ekle_btn.setEnabled(uygun)
+
+    def sonuc(self):
+        """(tarihler, başlangıç saati, bitiş saati)."""
+        return self.tarihler(), self.saat_bas.time(), self.saat_bit.time()
+
+
 class OdaEtkinlikFormu(QDialog):
     """Tek etkinliğe birden fazla bağımsız oturum ekleme formu."""
 
     def __init__(self, odalar, personeller, kayit=None, parent=None):
         super().__init__(parent)
+        self.kayit_modu = bool(kayit)
 
         self.setWindowTitle(
             "Etkinlik Düzenle" if kayit else "Yeni Oda Etkinliği"
@@ -48,41 +204,15 @@ class OdaEtkinlikFormu(QDialog):
         self.resize(720, 600)
         self.setMinimumWidth(640)
 
-        self.setStyleSheet("""
-            QDialog {
-                background: #F8FAFF;
-                color: #243653;
-            }
-            QLabel {
-                color: #243653;
-                font-size: 12px;
-            }
-            QLineEdit, QComboBox,
-            QDateEdit, QTimeEdit {
-                background: white;
-                color: #243653;
-                border: 1px solid #CBD7E8;
-                border-radius: 7px;
-                padding: 6px;
-                min-height: 24px;
-            }
-            QPushButton {
-                background: #EFF4FD;
-                color: #243653;
-                border: 1px solid #D1DDF0;
-                border-radius: 7px;
-                padding: 8px 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background: #DFEAFE;
-            }
-        """)
+        self.setStyleSheet(dialog_stili())
 
         ana = QVBoxLayout(self)
+        ana.setContentsMargins(22, 20, 22, 18)
         ana.setSpacing(12)
 
         form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(10)
 
         self.oda = QComboBox()
         for o in odalar:
@@ -116,9 +246,7 @@ class OdaEtkinlikFormu(QDialog):
         ana.addLayout(form)
 
         baslik = QLabel("Etkinlik Günleri ve Saatleri")
-        baslik.setStyleSheet(
-            "font-size: 15px; font-weight: 700; color: #203657;"
-        )
+        baslik.setObjectName("formBaslik")
         ana.addWidget(baslik)
 
         bilgi = QLabel(
@@ -127,6 +255,7 @@ class OdaEtkinlikFormu(QDialog):
             "Çalışma saatleri: 08.00–18.00."
         )
         bilgi.setWordWrap(True)
+        bilgi.setObjectName("ipucu")
         ana.addWidget(bilgi)
 
         self.kaydirma = QScrollArea()
@@ -147,9 +276,17 @@ class OdaEtkinlikFormu(QDialog):
 
         self.oturum_satirlari = []
 
-        ekle_btn = QPushButton("+ Gün / Saat Ekle")
-        ekle_btn.clicked.connect(self.oturum_ekle)
-        ana.addWidget(ekle_btn)
+        ekle_satiri = QHBoxLayout()
+        ekle_satiri.setSpacing(10)
+        self.gun_ekle_btn = QPushButton("＋  Gün / Saat Ekle")
+        self.gun_ekle_btn.setToolTip("Tek bir oturum satırı ekle")
+        self.gun_ekle_btn.clicked.connect(lambda _=False: self.oturum_ekle())
+        self.tekrarli_btn = QPushButton("⟳  Tekrarlı Ekle…")
+        self.tekrarli_btn.setToolTip("Tarih aralığı, haftanın günleri ve saati seçerek düzenli oturumları tek seferde ekle")
+        self.tekrarli_btn.clicked.connect(lambda _=False: self.tekrarli_ekle())
+        ekle_satiri.addWidget(self.gun_ekle_btn, 1)
+        ekle_satiri.addWidget(self.tekrarli_btn, 1)
+        ana.addLayout(ekle_satiri)
 
         if kayit:
             # Etkinliğin odası ya da düzenleyeni seçeneklerde yoksa (Admin düzenleyen, sonradan psikoloğa atanan oda)
@@ -187,30 +324,22 @@ class OdaEtkinlikFormu(QDialog):
             QDialogButtonBox.Save | QDialogButtonBox.Cancel
         )
         dugmeler.button(QDialogButtonBox.Save).setText("Kaydet")
+        dugmeler.button(QDialogButtonBox.Save).setObjectName("birincil")
         dugmeler.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         dugmeler.accepted.connect(self.kaydet)
         dugmeler.rejected.connect(self.reject)
         ana.addWidget(dugmeler)
 
     def oturum_ekle(self, baslangic=None, bitis=None):
-        if len(self.oturum_satirlari) >= 366:
+        if len(self.oturum_satirlari) >= EN_FAZLA_OTURUM:
             QMessageBox.warning(
                 self, "Oturum Sınırı",
-                "En fazla 366 oturum eklenebilir."
+                f"En fazla {EN_FAZLA_OTURUM} oturum eklenebilir."
             )
             return
 
         cerceve = QFrame()
-        cerceve.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #E3EAF5;
-                border-radius: 8px;
-            }
-            QFrame QLabel {
-                border: none;
-            }
-        """)
+        cerceve.setObjectName("oturumSatiri")
 
         duzen = QHBoxLayout(cerceve)
 
@@ -242,6 +371,7 @@ class OdaEtkinlikFormu(QDialog):
             )
 
         kaldir = QPushButton("Kaldır")
+        kaldir.setObjectName("tehlike")
         kaldir.setToolTip("Bu etkinlik oturumunu kaldır")
 
         duzen.addWidget(tarih, 3)
@@ -261,6 +391,50 @@ class OdaEtkinlikFormu(QDialog):
         self.oturum_duzeni.insertWidget(
             self.oturum_duzeni.count() - 1, cerceve
         )
+
+    def _varsayilan_satir_mi(self, satir):
+        """Yeni etkinlik formunun kendiliğinden açtığı, hiç değiştirilmemiş ilk satır mı (bugün 13:00–14:00)."""
+        _, tarih, saat_bas, saat_bit = satir
+        return (tarih.date() == QDate.currentDate() and saat_bas.time() == QTime(13, 0) and saat_bit.time() == QTime(14, 0))
+
+    def tekrarli_ekle(self):
+        pencere = TekrarliOturumDialog(self)
+        if pencere.exec() == QDialog.Accepted:
+            self.tekrarli_oturumlari_ekle(*pencere.sonuc())
+
+    def tekrarli_oturumlari_ekle(self, tarihler, saat_bas, saat_bit):
+        """Verilen günlerin her birine aynı saatlerde oturum ekler; aynı gün ve saatte zaten var olan oturum tekrar eklenmez.
+
+        Yeni formun kendiliğinden açtığı, değiştirilmemiş ilk satır (bugün 13:00–14:00) üretilen oturumlarla değiştirilir.
+        Döner: eklenen oturum sayısı."""
+        bas_metin = saat_bas.toString("HH:mm")
+        bit_metin = saat_bit.toString("HH:mm")
+        mevcut = {
+            (t.date().toPython(), sb.time().toString("HH:mm"), sbit.time().toString("HH:mm"))
+            for _, t, sb, sbit in self.oturum_satirlari
+        }
+        yeni = [gun for gun in tarihler if (gun, bas_metin, bit_metin) not in mevcut]
+        if not yeni:
+            QMessageBox.information(self, "Tekrarlı Oturum", "Seçilen oturumların hepsi listede zaten var.")
+            return 0
+
+        silinecek = None
+        if not self.kayit_modu and len(self.oturum_satirlari) == 1 and self._varsayilan_satir_mi(self.oturum_satirlari[0]):
+            silinecek = self.oturum_satirlari[0]
+        if len(self.oturum_satirlari) - (1 if silinecek else 0) + len(yeni) > EN_FAZLA_OTURUM:
+            QMessageBox.warning(
+                self, "Oturum Sınırı",
+                f"En fazla {EN_FAZLA_OTURUM} oturum eklenebilir; seçiminiz bu sınırı aşıyor."
+            )
+            return 0
+
+        if silinecek is not None:
+            self.oturum_satirlari.remove(silinecek)
+            self.oturum_duzeni.removeWidget(silinecek[0])
+            silinecek[0].deleteLater()
+        for gun in yeni:
+            self.oturum_ekle(f"{gun.isoformat()}T{bas_metin}:00", f"{gun.isoformat()}T{bit_metin}:00")
+        return len(yeni)
 
     def oturum_kaldir(self, satir):
         if len(self.oturum_satirlari) <= 1:
