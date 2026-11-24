@@ -181,7 +181,6 @@ class CokluIslemSecici(QPushButton):
                 background: #F7FAFF;
                 border: 1px solid #93B4F5;
             }
-            QPushButton::menu-indicator { subcontrol-position: right center; right: 10px; }
         """)
 
         menu = QMenu(self)
@@ -501,6 +500,7 @@ class AuditKayitlariEkrani(QWidget):
             deger_yazisi = QLabel(
                 "—" if deger is None else str(deger)
             )
+            deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             deger_yazisi.setTextFormat(Qt.PlainText)
             deger_yazisi.setWordWrap(True)
             deger_yazisi.setTextInteractionFlags(
@@ -530,6 +530,7 @@ class AuditKayitlariEkrani(QWidget):
                 ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
                 ad.setWordWrap(True)
                 deger_yazisi = QLabel(deger)
+                deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
                 deger_yazisi.setTextFormat(Qt.PlainText)
                 deger_yazisi.setWordWrap(True)
                 deger_yazisi.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

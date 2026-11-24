@@ -130,3 +130,40 @@ def test_ayrinti_penceresi_aciklanir_kapat_dugmesi_var(tkys_qapplication):
     assert acilan["baslik"] == ["Denetim Kaydı Detayları"]
     assert "Tarih / Saat" in acilan["alanlar"] and "İşlem Türü" in acilan["alanlar"]
     assert acilan["kapat"] == ["Kapat"]
+
+
+def test_islem_secici_yazisi_kenara_yapismaz(tkys_qapplication):
+    """Düğmenin iç boşluğu (padding) çalışmalıdır: menü oku için konulan bir alt-öğe kuralı bile boşluğu sıfırlayıp yazıyı sol kenara
+    yapıştırabiliyor (gerçek ekranda görüldü). Düğme çizdirilip ilk koyu (yazı) sütunu aranır; kenar çizgisi açık renktir."""
+    secici = modul.CokluIslemSecici()
+    secici.setStyleSheet(secici.styleSheet())
+    secici.kutular["LOGIN"].setChecked(True)
+    secici.kutular["VIEW"].setChecked(True)
+    secici.resize(300, 42)
+    secici.show()
+    tkys_qapplication.processEvents()
+    resim = secici.grab().toImage()
+    ilk_koyu = next(
+        x for x in range(resim.width())
+        if any(resim.pixelColor(x, y).red() < 90 and resim.pixelColor(x, y).blue() < 130 for y in range(resim.height()))
+    )
+    assert ilk_koyu >= 12, ilk_koyu                                                          # padding 14 px: yazı kenardan uzakta başlar
+    secici.close()
+
+
+def test_ayrinti_penceresinde_etiket_ve_deger_ayni_hizada(tkys_qapplication):
+    kayit = _kayit(1, "VIEW")
+    kayit["ayrinti"] = {"ne": "denetim kayıtları görüntülendi", "neden": "Uzun bir açıklama " * 12}
+    ekran = _ekran([kayit])
+    kontrol = {}
+
+    def sahte_exec(pencere):
+        etiketler = [e for e in pencere.findChildren(modul.QLabel) if e.objectName() != "formBaslik"]
+        kontrol["hepsi_ustten"] = all(e.alignment() & Qt.AlignTop for e in etiketler)
+        kontrol["sayi"] = len(etiketler)
+        return 0
+
+    with patch.object(modul.QDialog, "exec", sahte_exec):
+        ekran._ayrintiyi_ac(0)
+    assert kontrol["sayi"] >= 10 and kontrol["hepsi_ustten"]                                 # alan adı da değeri de üstten hizalı
+

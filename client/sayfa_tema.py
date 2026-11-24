@@ -102,7 +102,7 @@ QLabel {{ color: {METIN}; font-size: 13px; background: transparent; }}
 QLabel#formBaslik {{ font-size: 16px; font-weight: 800; color: {LACIVERT}; }}
 QLabel#ipucu {{ font-size: 12px; color: {SOLUK}; }}
 QLabel#hata {{ font-size: 12px; font-weight: 700; color: #B91C1C; }}
-QLabel#alanAdi {{ font-size: 12px; font-weight: 700; color: {SOLUK}; }}
+QLabel#alanAdi {{ font-size: 13px; font-weight: 700; color: {SOLUK}; }}
 QLabel#onizleme {{ font-size: 13px; font-weight: 700; color: {MAVI}; background: #EEF4FF; border-radius: 10px; padding: 8px 12px; }}
 
 QLineEdit, QComboBox, QDateEdit, QTimeEdit {{
