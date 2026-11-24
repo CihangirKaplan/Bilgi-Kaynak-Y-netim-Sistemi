@@ -202,3 +202,94 @@ def test_oda_yonetimi_tablosu_kurulurken_id_sutunu_gizli_ve_siralama_bagli():
     assert 'setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum", "Psikologlar", "Kullanım", "Planlı kayıt"])' in kaynak
     assert "self.oda_tablosu.setColumnHidden(0, True)" in kaynak
     assert "siralanabilir_yap(self.oda_tablosu)" in kaynak
+
+
+# ------------------------------------------------------------------ Oda formu (aktiflik onay kutusu yok) ve Pasife Al / Aktif Et düğmesi
+def _form(oda_id=None):
+    from client.oda_yonetimi import OdaFormu
+    eski = {"oda_adi": "Gözlem Odası", "kapasite": 1, "aktif_mi": False} if oda_id else None
+    return OdaFormu(api_url="http://testserver", token="TOKEN", oda_id=oda_id, eski_veriler=eski)
+
+
+def _etiketler(form):
+    from PySide6.QtWidgets import QCheckBox, QLabel
+    return [e.text() for e in form.findChildren(QLabel)], form.findChildren(QCheckBox)
+
+
+def test_yeni_oda_formunda_onay_kutusu_yok_aktif_bilgisi_yazi_olarak_var(tkys_qapplication):
+    yazilar, kutular = _etiketler(_form())
+    assert kutular == [] and "Bu oda aktif olarak kullanılabilir." in yazilar
+
+
+def test_oda_duzenle_formunda_ne_onay_kutusu_ne_aktiflik_yazisi_var(tkys_qapplication):
+    yazilar, kutular = _etiketler(_form(oda_id=8))
+    assert kutular == [] and "Bu oda aktif olarak kullanılabilir." not in yazilar
+
+
+def _gonderilen(form, ad="Gözlem Odası"):
+    form.in_oda_adi.setText(ad)
+    istek = MagicMock(return_value=cevap({}))
+    with patch("client.oda_yonetimi.oturum_kontrollu_istek", istek), patch("client.oda_yonetimi.basari_bildirimi"):
+        form.odayi_kaydet()
+    return istek.call_args
+
+
+def test_yeni_oda_aktif_olarak_kaydedilir_duzenleme_odanin_durumuna_dokunmaz(tkys_qapplication):
+    yeni = _gonderilen(_form())
+    assert yeni.args[0] == "POST" and yeni.kwargs["json"]["aktif_mi"] is True
+    duzenle = _gonderilen(_form(oda_id=8))
+    assert duzenle.args[0] == "PATCH" and "aktif_mi" not in duzenle.kwargs["json"]
+
+
+def _durum_penceresi(durum, secili=True):
+    from PySide6.QtWidgets import QAbstractItemView, QPushButton, QTableWidgetItem
+    tablo = QTableWidget(2, 4)
+    tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
+    for satir, (oda_id, ad, d) in enumerate([(7, "A Odası", "Aktif"), (8, "Gözlem Odası", durum)]):
+        for sutun, deger in enumerate([str(oda_id), ad, "1", d]):
+            tablo.setItem(satir, sutun, QTableWidgetItem(deger))
+    if secili:
+        tablo.selectRow(1)
+    dugme = QPushButton(mw.ODA_PASIFE_AL_ETIKETI)
+    ana = SimpleNamespace(oda_tablosu=tablo, oda_durum_butonu=dugme, api_url="http://testserver", token="TOKEN",
+                          odalari_getir=MagicMock())
+    return ana, dugme
+
+
+def test_dugme_pasif_odada_aktif_et_aktif_odada_pasife_al_olur(tkys_qapplication):
+    ana, dugme = _durum_penceresi("Pasif")
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    assert dugme.text() == mw.ODA_AKTIF_ET_ETIKETI
+    ana.oda_tablosu.selectRow(0)
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    assert dugme.text() == mw.ODA_PASIFE_AL_ETIKETI
+    ana.oda_tablosu.clearSelection()
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    assert dugme.text() == mw.ODA_PASIFE_AL_ETIKETI
+
+
+def _durumu_degistir(ana, onay=True):
+    from PySide6.QtWidgets import QMessageBox
+    istek = MagicMock(return_value=cevap({}))
+    bildirim = MagicMock()
+    with patch.object(mw, "oturum_kontrollu_istek", istek), patch.object(mw, "basari_bildirimi", bildirim), \
+            patch.object(QMessageBox, "question", return_value=QMessageBox.Yes if onay else QMessageBox.No):
+        mw.AnaPencere.oda_durumunu_degistir(ana)
+    return istek, bildirim
+
+
+def test_pasif_oda_secili_iken_dugme_odayi_yeniden_aktif_eder(tkys_qapplication):
+    ana, _ = _durum_penceresi("Pasif")
+    istek, bildirim = _durumu_degistir(ana)
+    assert istek.call_args.args[:2] == ("PATCH", "http://testserver/api/odalar/8") and istek.call_args.kwargs["json"] == {"aktif_mi": True}
+    assert "aktif edildi" in bildirim.call_args.args[1]
+    ana.odalari_getir.assert_called_once()
+
+
+def test_aktif_oda_secili_iken_dugme_odayi_pasife_alir_onay_verilmezse_hicbir_sey_yapmaz(tkys_qapplication):
+    ana, _ = _durum_penceresi("Aktif")
+    istek, bildirim = _durumu_degistir(ana)
+    assert istek.call_args.kwargs["json"] == {"aktif_mi": False} and "pasife alındı" in bildirim.call_args.args[1]
+    ana2, _ = _durum_penceresi("Aktif")
+    istek2, _ = _durumu_degistir(ana2, onay=False)
+    istek2.assert_not_called()
