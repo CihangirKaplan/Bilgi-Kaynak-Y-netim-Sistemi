@@ -118,3 +118,16 @@ def test_bos_sonuc_mesaji_ve_alt_bilgi_korunur(tkys_qapplication):
     assert not ekran.bos_mesaj.isHidden() and ekran.bos_mesaj.text() == "Aramaya ve süzgeçlere uyan etkinlik yok."
     assert ekran.durum.text().startswith("1 kayıttan 0 tanesi gösteriliyor")
     assert ekran.sayac_rozeti.text() == "0 etkinlik"
+
+
+def test_tarih_alani_dar_pencerede_ikinci_satirda_acilir_ust_satir_sikismaz(tkys_qapplication):
+    ekran = _ekran(tkys_qapplication, [_etkinlik(1, "A")])
+    ekran.resize(980, 700)
+    ekran.show()
+    ekran.donem.setCurrentText("Tarih Aralığı")
+    tkys_qapplication.processEvents()
+    assert ekran.tarih_alani.geometry().top() > ekran.arama.geometry().bottom()          # alt satırda, aramayla yan yana değil
+    assert ekran.tarih_bas.geometry().right() < ekran.tarih_bit.geometry().left()        # iki tarih kutusu üst üste binmez
+    assert ekran.arama.width() >= 220                                                    # arama kutusu sıkışıp daralmaz
+    ekran.close()
+
