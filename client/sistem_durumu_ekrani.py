@@ -6,13 +6,14 @@ dosya yolu içermez.
 from datetime import datetime
 
 import requests
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from client.api_yoneticisi import istek_hatasi_metni, api_hata_mesaji, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.tablo_tasarimi import bos_mesaj_olustur, metin_item, tablo_olustur, yenile_butonu_olustur
 from client.surum import SURUM
 
 IYI, UYARI, KOTU = ("#166534", "#DCFCE7"), ("#854D0E", "#FEF3C7"), ("#991B1B", "#FEE2E2")
+ALT_BASLIK = "Sürüm, veritabanı şeması, son yedek ve son girişler"
 
 
 def zaman_metni(deger):
@@ -66,7 +67,7 @@ class SistemDurumuEkrani(QWidget):
         metinler.setSpacing(0)
         baslik = QLabel("Sistem Durumu")
         baslik.setStyleSheet("font-size: 18px; font-weight: 800; color: #0A1F5C;")
-        self.alt_baslik = QLabel("Sürüm, veritabanı şeması, son yedek ve son girişler")
+        self.alt_baslik = QLabel(ALT_BASLIK)
         self.alt_baslik.setStyleSheet("font-size: 12px; color: #6B7FA8;")
         metinler.addWidget(baslik)
         metinler.addWidget(self.alt_baslik)
@@ -103,6 +104,13 @@ class SistemDurumuEkrani(QWidget):
         self.giris_basligi.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         kok.addWidget(self.giris_basligi)
         self.tablo = tablo_olustur(["KULLANICI", "ROL", "SON GİRİŞ"], ortali=True)
+        # Üç sütun tüm genişliği doldurur (önceden dar kalıp yazılar kesiliyor, yanda boş alan kalıyordu).
+        baslik_cubugu = self.tablo.horizontalHeader()
+        baslik_cubugu.setStretchLastSection(False)
+        baslik_cubugu.setSectionResizeMode(0, QHeaderView.Stretch)
+        baslik_cubugu.setSectionResizeMode(1, QHeaderView.Stretch)
+        baslik_cubugu.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        baslik_cubugu.setMinimumSectionSize(150)
         self.bos_mesaj = bos_mesaj_olustur("Bu süre içinde giriş yapan kullanıcı yok.")
         kart = QFrame()
         kart.setObjectName("kart")
@@ -144,6 +152,7 @@ class SistemDurumuEkrani(QWidget):
         self.goster(cevap.json())
 
     def goster(self, veri):
+        self.alt_baslik.setText(ALT_BASLIK)          # önceki bir bağlantı hatası mesajı kalmasın
         sunucu_surumu = veri.get("surum", "—")
         uyumlu = sunucu_surumu == SURUM
         self._kart_yaz("surum", sunucu_surumu,
