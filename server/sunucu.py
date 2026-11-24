@@ -4719,7 +4719,7 @@ def arizalari_listele(response: Response = None, limit: int | None = Query(None,
 
         cursor.execute("""
             SELECT a.ariza_id, c.cihaz_adi, a.ariza_baslik, a.ariza_aciklamasi, a.aciliyet,
-                   a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu, a.cozum_tarihi, a.cozum_notu
+                   a.cozuldu_mu, a.bildirim_tarihi, c.envanter_kodu, a.cozum_tarihi, a.cozum_notu, a.cihaz_id
             FROM cihaz_arizalari a
             JOIN cihazlar c ON a.cihaz_id = c.cihaz_id
             ORDER BY a.bildirim_tarihi DESC
@@ -4739,6 +4739,7 @@ def arizalari_listele(response: Response = None, limit: int | None = Query(None,
                 "envanter_kodu": k[7] if len(k) > 7 else None,
                 "cozum_tarihi": (k[8].isoformat() if hasattr(k[8], "isoformat") else k[8]) if len(k) > 8 else None,
                 "cozum_notu": k[9] if len(k) > 9 else None,
+                "cihaz_id": k[10] if len(k) > 10 else None,          # cihaz geçmişine bağlantı için
             }
             for k in satirlar
         ]

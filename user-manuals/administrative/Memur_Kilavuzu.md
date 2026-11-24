@@ -47,7 +47,7 @@ Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra
 aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla çakıştığını söyler) ya da oda bu iş için uygun değilse.
 **Düzenleme ve iptal:** Rezervasyonun ayrıntısını çift tıklayarak açın. **✎ Rezervasyonu düzenle** ile saat, oda, bölüm ve proje bilgisini değiştirebilirsiniz (**cihaz değişmez**; başka cihaz için yeni rezervasyon açın). Saat ya da oda değişirse çakışmalar yeniden denetlenir; rezervasyonun kendisi çakışma sayılmaz. **Başlamış** rezervasyonda başlangıç saati ve oda değiştirilemez; yalnızca bitiş saati, bölüm ve proje bilgileri düzenlenir. Biten ve iptal edilmiş rezervasyonlar düzenlenemez.
 **İptal** için ayrıntı penceresinde iptal düğmesine basın; kayıt silinmez, iptal edildi olarak kalır. Bir rezervasyonu **yalnızca oluşturan kişi ya da cihaz yöneticisi** (Memur, Müdür, Admin) düzenleyebilir ya da iptal edebilir; başkasının rezervasyonunda düğmeler görünmez. Biten (süresi dolmuş) rezervasyon iptal edilemez.
-**⬇ Excel'e Aktar:** Ekranda görünen rezervasyonları aktarır (Envanter Kodu, Cihaz Adı, Bölüm, Oda, Proje, Tarih ve Saat, Durum); aktarım denetim kaydına yazılır. Aynı düğme **Bakım Kayıtları, Kalibrasyon, Arıza Kayıtları ve Bakım Planları** sayfalarında da vardır.
+**⬇ Excel'e Aktar:** Ekranda görünen rezervasyonları aktarır (Envanter Kodu, Cihaz Adı, Bölüm, Oda, Proje, Tarih ve Saat, Rezerve Eden, Durum); aktarım denetim kaydına yazılır. Aynı düğme **Bakım Kayıtları, Kalibrasyon, Arıza Kayıtları ve Bakım Planları** sayfalarında da vardır.
 
 ## 1.4 Bakım Kayıtları
 Cihaza yapılan bakımın kaydı.
@@ -63,7 +63,7 @@ Cihaza yapılan bakımın kaydı.
 - **＋ Arıza Kaydı:** **Arızalı Cihaz \***, **Aciliyet Seviyesi \*** (*Düşük, Orta, Yüksek, Kritik*), **Sorun Başlığı \*** ve **Açıklama \*** girilir.
   Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur ve arıza çözülene kadar öyle kalır (cihaz rezerve edilemez). **Bakımda ya da kalibrasyondaki** cihaza da arıza bildirilebilir: cihaz arıza çözülene kadar yine **Arızalı** görünür, çözülünce bakım/kalibrasyon durumu geçerli olmaya devam eder. Zaten arızalı cihaza ikinci bir arıza da eklenebilir. Yalnızca *Kullanım Dışı* cihaza arıza açılmaz.
 - Arızayı düzeltirken **Mevcut Durum** alanında **Açık (devam ediyor)** ya da **Çözüldü (cihaz kullanıma açılır)** seçersiniz; *Çözüldü* cihazı yeniden kullanıma açar.
-- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Çözülmüş bir arızanın satırındaki **↺** düğmesiyle (ya da çift tıklayarak) arızayı **yeniden açabilirsiniz** (yanlışlıkla çözüldü işaretlendiyse): çözüm notu ve çözüm tarihi silinir, cihaz tekrar *Arızalı* görünür.
+- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. **◷ Cihaz geçmişini aç** (satırdaki mavi düğme; cihaz envanteri yönetme izni olanlara görünür): arızanın cihazının bakım, kalibrasyon, arıza ve rezervasyon geçmişini tek zaman çizgisinde açar. Çözülmüş bir arızanın satırındaki **↺** düğmesiyle (ya da çift tıklayarak) arızayı **yeniden açabilirsiniz** (yanlışlıkla çözüldü işaretlendiyse): çözüm notu ve çözüm tarihi silinir, cihaz tekrar *Arızalı* görünür.
 
 ## 1.7 Bakım Planları
 Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tarihe yaklaşınca ve tarih geçince sizi uyarır.
@@ -71,6 +71,7 @@ Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tari
   **Tekrar aralığı \*** (*Haftalık 7 gün, Aylık 30 gün, 3 aylık 90 gün, 6 aylık 180 gün, Yıllık 365 gün ya da Özel*), **Uyarı süresi** (kaç gün önceden uyarılsın), **Sonraki tarih** ve **Aktif** kutusu.
 - Liste sütunları: **Cihaz, Plan, Tekrar, Uyarı, Sonraki Tarih, Durum, İşlem.** **Durum** rozeti: *Planlı, Yaklaşıyor, Gecikmiş* ve pasif planlar için *Pasif*; yanında "5 gün kaldı" ya da "5 gün gecikti" yazar.
 - Satıra çift tıklayarak planı düzenleyebilir, satır sonundaki düğmelerle düzenleyip silebilirsiniz.
+- **▶ Bakım kaydı aç / Kalibrasyon kaydı aç** (aktif planın satırındaki mavi düğme): Planın cihazı ve planın kendisi seçili olarak yeni bakım (ya da *Kalibrasyon* planıysa kalibrasyon) kaydı formunu açar; **Yapılan işlem** alanına plan türü yazılır, siz kişiyi ve ayrıntıları tamamlarsınız. Kaydedince plan, sonraki tarihe kendiliğinden ilerler. Düğme, ilgili kaydı yönetme izniniz (bakım kayıtları / kalibrasyon kayıtları) varsa görünür.
 - Filtre: *Aktif planlar, Tüm planlar, Pasif planlar.*
 
 ## 1.8 Cihaz raporları

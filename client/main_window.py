@@ -2495,7 +2495,8 @@ QLabel {
             self.aktif_ariza_ekrani = ArizaYonetimEkrani(
                 api_url=self.api_url,
                 token=self.token,
-                yetkili_mi=ariza_yetkisi
+                yetkili_mi=ariza_yetkisi,
+                gecmis_yetkili_mi=izin_var(rol, "Cihaz envanterini yönetme"),      # cihaz geçmişi bu izinle açılır
             )
             lay.addWidget(self.aktif_ariza_ekrani, 1)
 
@@ -2526,6 +2527,8 @@ QLabel {
                 api_url=self.api_url,
                 token=self.token,
                 yetkili_mi=izin_var(rol, "Bakım/kalibrasyon planlarını yönetme"),
+                bakim_kaydi_yetkili_mi=izin_var(rol, "Bakım kayıtlarını yönetme"),
+                kalibrasyon_kaydi_yetkili_mi=izin_var(rol, "Kalibrasyon kayıtlarını yönetme"),
             )
             lay.addWidget(self.aktif_plan_ekrani, 1)
         elif oge["ad"] == "Kullanıcı & Personel":

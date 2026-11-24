@@ -266,6 +266,25 @@ def islem_butonlari(duzenle_fn, sil_fn, sil_simge="🗑", sil_ipucu="Sil"):
     return kap
 
 
+KAYIT_ACMA_RENGI = ("#1D4ED8", "#DBEAFE", "#BFDBFE")             # mavi: "kayıt aç", "geçmiş" gibi gezinme/kısayol düğmeleri
+
+
+def islem_dugmeleri(*dugmeler):
+    """Satır sonu için istenen sayıda ikon düğmesi. Her düğme: (fn, simge, ipucu) ya da (fn, simge, ipucu, renk, arka, hover);
+    renk verilmezse mavi kısayol düğmesi olur."""
+    kap = QWidget()
+    lay = QHBoxLayout(kap)
+    lay.setContentsMargins(6, 4, 6, 4)
+    lay.setSpacing(8)
+    lay.addStretch()
+    for dugme in dugmeler:
+        fn, simge, ipucu, *renkler = dugme
+        renk, arka, hover = renkler if renkler else KAYIT_ACMA_RENGI
+        lay.addWidget(_ikon_buton(simge, ipucu, renk, arka, hover, fn))
+    lay.addStretch()
+    return kap
+
+
 def tek_islem_butonu(fn, simge="✎", ipucu="Düzenle", renk="#B45309", arka="#FEF3C7", hover="#FDE68A"):
     """Satır sonu için tek ikon butonu (ör. sadece düzenle)."""
     kap = QWidget()
