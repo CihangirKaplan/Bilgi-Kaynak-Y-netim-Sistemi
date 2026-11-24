@@ -114,10 +114,10 @@ Engellenen işlemde "Kendi rolünüzle aynı ya da daha yüksek seviyedeki bir r
 Sistemde yapılan önemli işlemlerin **değiştirilemez** izidir (kim, ne zaman, ne yaptı). **Salt okunur**dur; kayıt silinemez ya da değiştirilemez.
 
 - **Süzgeçler:** **Dönem** (hazır ya da **Başlangıç / Bitiş** tarihi), **işlem türü** (aşağıdaki liste), **kullanıcı adı ara**; **Filtrele**, **Filtreleri Temizle**, **Yenile**.
-- Liste sayfalıdır (**← Önceki / Sonraki →**). Bir satırın **Görüntüle** düğmesi **Denetim Kaydı Detayları** penceresini açar; silme ve güncelleme kayıtlarında **silinen veri ya da önceki/yeni değerler** burada görünür (kişisel veri olduğu için bazı alanlar kaydedilmez ve "kaydedilmeyen alanlar" olarak belirtilir).
-- **⬇ Excel'e Aktar:** Süzgeçlerinize uyan kayıtları dosyaya yazar.
+- Liste sayfalıdır (**← Önceki / Sonraki →**); kartlardaki sayılar (toplam, başarısız giriş, değişiklik işlemleri, bugünkü kayıtlar) süzgeçli tüm kayıtları gösterir ve ilk sayfada hesaplanır. **Değişiklik İşlemleri** oluşturma, güncelleme, iptal, silme, rol değişikliği ve cihaz durum değişikliğini sayar. Kullanıcı adı aramasında `%` ve `_` düz karakterdir. Bir satırın **Görüntüle** düğmesi **Denetim Kaydı Detayları** penceresini açar; silme ve güncelleme kayıtlarında **silinen veri ya da önceki/yeni değerler** burada görünür (kişisel veri olduğu için bazı alanlar kaydedilmez ve "kaydedilmeyen alanlar" olarak belirtilir).
+- **⬇ Excel'e Aktar:** Süzgeçlerinize uyan kayıtları dosyaya yazar. Denetim kayıtlarının kendisi de hassas olduğu için bu aktarım da **Excel Aktarımı** olarak kaydedilir (kim, ne zaman, kaç satır).
 
-İşlem türleri: *Giriş Başarılı, Başarısız Giriş, Oluşturma, Güncelleme, İptal, Silme, Rol Değişikliği, Cihaz Durum Değişikliği, Parola Sıfırlama, Parola Değiştirme, Başarısız Parola Değiştirme, Çıkış, Görüntüleme* ve **Excel Aktarımı** (Cihaz, Öğrenci ve Danışan listelerinden Excel'e aktarım: kim, ne zaman, hangi liste, kaç satır).
+İşlem türleri: *Giriş Başarılı, Başarısız Giriş, Oluşturma, Güncelleme, İptal, Silme, Rol Değişikliği, Cihaz Durum Değişikliği, Parola Sıfırlama, Parola Değiştirme, Başarısız Parola Değiştirme, Çıkış, Görüntüleme* ve **Excel Aktarımı** (Cihaz, Öğrenci, Danışan ve Denetim Kayıtları listelerinden Excel'e aktarım: kim, ne zaman, hangi liste, kaç satır).
 **Görüntüleme**, denetim kayıtlarına **kimin baktığını** gösterir (ilk sayfa açıldığında, aynı kişi için 10 dakikada bir kaydedilir; sayfa yenilemeleri günlüğü doldurmaz).
 Her kaydın **Görüntüle** penceresinde ve Excel çıktısında işlemin hangi bilgisayardan yapıldığını gösteren **İstemci Adresi** vardır (eski kayıtlarda boş olabilir).
 

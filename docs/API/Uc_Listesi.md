@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **136** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **137** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -20,7 +20,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/audit-kayitlari` | AUDIT_KAYITLARI_INCELE | audit_kayitlarini_getir |
+| GET | `/api/audit-kayitlari` | AUDIT_KAYITLARI_INCELE | Denetim kayıtları (salt okunur, sayfalı; ozet=false ile sayım atlanır). |
 
 ## /api/bakim-plani-raporu
 
@@ -219,6 +219,12 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
 | GET | `/api/oda-kullanimi` | ODA_DURUMU_GORUNTULE | Oda Kullanımı sayfası: odalar, seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş rand |
+
+## /api/oda-planli-randevu-sayilari
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| GET | `/api/oda-planli-randevu-sayilari` | ODA_DUZENLE, ODA_EKLE | Oda Yönetimi ekranındaki "Planlı kayıt" sütunu için: odayı pasife almayı engelleyen kayıtların oda başına sayı |
 
 ## /api/oda-psikolog-atamalari
 

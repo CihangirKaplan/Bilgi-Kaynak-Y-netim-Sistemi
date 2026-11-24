@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QComboBox,
     QCheckBox, QDateEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFrame, QDialog,
-    QMenu, QWidgetAction,
+    QMenu, QWidgetAction, QApplication, QFileDialog, QMessageBox,
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle
 )
-from client.tablo_siralama import siralanabilir_yap
+from client.liste_excel import aktarimi_denetime_yaz
 
 
 
@@ -57,6 +57,17 @@ HEDEF_TABLO_ADLARI = {
     "ogrenci_faaliyet_takip": "Öğrenci Faaliyeti",
     "projeler": "Proje",
     "deneyler": "Deney",
+    "denetim_kayitlari": "Denetim Kayıtları",
+    "oda_etkinlikleri": "Oda Etkinliği",
+    "faaliyetler": "Faaliyet Türü",
+    "ogrenci_kayit_erteleme_gecmisi": "Öğrenci Kayıt Erteleme",
+    "parola_sifirlama_talepleri": "Parola Sıfırlama Talebi",
+}
+
+# Excel aktarım kaydındaki "liste" değerlerinin okunur adları.
+LISTE_ADLARI = {
+    "CIHAZ": "Cihaz", "OGRENCI": "Öğrenci", "DANISAN": "Danışan", "REZERVASYON": "Cihaz Rezervasyonu", "BAKIM": "Bakım",
+    "KALIBRASYON": "Kalibrasyon", "ARIZA": "Arıza", "BAKIM_PLANI": "Bakım Planı", "DENETIM": "Denetim Kayıtları",
 }
 
 OLAY_RENKLERI = {
@@ -88,6 +99,11 @@ AYRINTI_ETIKETLERI = {
     "gecmis_kayitlara_uygulandi": "Geçmiş kayıtlara uygulandı", "guncellenen_gecmis_kayit": "Güncellenen geçmiş kayıt",
     "etkilenen_kayit": "Etkilenen kayıt", "faaliyet_id": "Faaliyet türü no", "ogrenci_id": "Öğrenci no",
     "birim_id": "Birim no", "adet": "Miktar", "baslangic_zamani": "Başlangıç", "bitis_zamani": "Bitiş",
+    "degisen_alanlar": "Değişen alanlar", "gun_sayisi": "Gün sayısı", "tur": "Tür", "onaylandi_mi": "Onaylandı mı",
+    "oda_id": "Oda no", "organize_eden_personel_id": "Düzenleyen personel no", "katilimci_sayisi": "Katılımcı sayısı",
+    "etkinlik_adi": "Etkinlik adı", "gunler": "Günler", "silinen_faaliyet_kaydi_sayisi": "Silinen faaliyet kaydı",
+    "silinen_erteleme_kaydi_sayisi": "Silinen erteleme kaydı", "liste": "Liste", "satir_sayisi": "Satır sayısı",
+    "ne": "Ne", "yeni_uyari_tarihi": "Yeni uyarı tarihi",
 }
 
 
@@ -112,7 +128,11 @@ def ayrinti_satirlari(ayrinti):
 
     satirlar = []
     for anahtar, deger in ayrinti.items():
-        if anahtar == "silinen" and isinstance(deger, dict):
+        if anahtar == "liste" and isinstance(deger, str):
+            satirlar.append((alan_adi(anahtar), LISTE_ADLARI.get(deger, deger)))
+        elif anahtar == "degisen_alanlar" and isinstance(deger, (list, tuple)):
+            satirlar.append((alan_adi(anahtar), biçimle([alan_adi(a) for a in deger])))
+        elif anahtar == "silinen" and isinstance(deger, dict):
             satirlar.extend((alan_adi(a), biçimle(d)) for a, d in deger.items())
         elif anahtar == "maskelenen_alanlar":
             satirlar.append(("Kişisel veri olduğu için kaydedilmeyen alanlar", biçimle(deger)))
@@ -318,7 +338,7 @@ class AuditKayitlariEkrani(QWidget):
                 border: none;
             }
 
-            QLineEdit, QComboBox {
+            QLineEdit, QComboBox, QDateEdit {
                 background: #FFFFFF;
                 color: #183461;
                 border: 1px solid #D1DDED;
@@ -328,9 +348,14 @@ class AuditKayitlariEkrani(QWidget):
                 font-size: 13px;
             }
 
-            QLineEdit:focus, QComboBox:focus {
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
                 border: 1px solid #3778D8;
                 background: #FFFFFF;
+            }
+
+            QDateEdit:disabled {
+                background: #F3F6FB;
+                color: #8A99B0;
             }
 
             QLineEdit::placeholder {
@@ -442,23 +467,15 @@ class AuditKayitlariEkrani(QWidget):
             }
         """)
 
-        from PySide6.QtWidgets import QScrollArea, QSizePolicy
-        dis = QVBoxLayout(self)
-        dis.setContentsMargins(0, 0, 0, 0)
-        dis.setSpacing(0)
-        kaydirma = QScrollArea(self)
-        kaydirma.setWidgetResizable(True)
-        kaydirma.setFrameShape(QFrame.NoFrame)
-        kaydirma.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        kaydirma.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        govde = QWidget()
-        ana = QVBoxLayout(govde)
-        kaydirma.setWidget(govde)
-        dis.addWidget(kaydirma, 1)
-        ana.setContentsMargins(22, 16, 22, 19)
+        # Sayfa tek parça: yalnızca tablo kendi içinde kayar (önceden sayfa da ayrıca kayıyordu, iki kaydırma iç içe geçiyordu).
+        ana = QVBoxLayout(self)
+        ana.setContentsMargins(22, 16, 22, 12)
         ana.setSpacing(11)
 
-        # Özet kartları
+        # Süzgeçler (üstte) ve özet kartları
+        filtre_alani = QVBoxLayout()
+        ana.addLayout(filtre_alani)
+
         kartlar = QGridLayout()
         kartlar.setSpacing(12)
 
@@ -492,10 +509,6 @@ class AuditKayitlariEkrani(QWidget):
             kartlar.addWidget(kart, 0, sira)
 
         ana.addLayout(kartlar)
-
-        # Filtreler
-        filtre_alani = QVBoxLayout()
-        filtre_alani.setSpacing(6)
 
         arama_satiri = QHBoxLayout()
         arama_satiri.setSpacing(9)
@@ -586,12 +599,12 @@ class AuditKayitlariEkrani(QWidget):
         filtre_alani.addLayout(tarih_satiri)
         filtre_alani.setContentsMargins(0, 0, 0, 0)
         filtre_alani.setSpacing(9)
-        ana.insertLayout(0, filtre_alani)
 
         # Salt okunur kayıt tablosu
+        # Sunucu sayfalıdır ve kayıtları zamana göre (en yeni önce) verir; başlıktan sıralama yalnızca ekrandaki sayfayı sıralayıp
+        # yanıltacağı için bu tabloda yoktur.
         self.tablo = QTableWidget()
-        siralanabilir_yap(self.tablo)
-        self.tablo.setMinimumHeight(300)
+        self.tablo.setMinimumHeight(260)
         self.tablo.setColumnCount(5)
         self.tablo.setHorizontalHeaderLabels([
             "Tarih / Saat", "İşlemi Yapan",
@@ -615,7 +628,7 @@ class AuditKayitlariEkrani(QWidget):
         self.tablo.setColumnWidth(4, 115)
 
         self.tablo.setShowGrid(True)
-        self.tablo.verticalHeader().setDefaultSectionSize(42)
+        self.tablo.verticalHeader().setDefaultSectionSize(46)
         self.tablo.horizontalHeader().setFixedHeight(46)
 
         self.tablo.setItemDelegateForColumn(
@@ -688,12 +701,7 @@ class AuditKayitlariEkrani(QWidget):
         self.onceki_btn.setMinimumWidth(120)
         self.sonraki_btn.setMinimumWidth(120)
 
-        # Sayfalama bolumu kaydirilan alanin disinda kalir.
-        alt_kapsayici = QWidget(self)
-        alt.setContentsMargins(22, 18, 22, 4)
-        alt_kapsayici.setLayout(alt)
-        alt_kapsayici.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        dis.addWidget(alt_kapsayici)
+        ana.addLayout(alt)
 
         self.sayfalama_guncelle()
 
@@ -869,13 +877,13 @@ class AuditKayitlariEkrani(QWidget):
         while len(kayitlar) < en_fazla:
             yanit = oturum_kontrollu_istek(
                 "GET", f"{self.api_url}/api/audit-kayitlari", headers={"Authorization": f"Bearer {self.token}"},
-                params={**parametreler, "limit": 200, "offset": offset}, timeout=30,
+                params={**parametreler, "limit": 200, "offset": offset, **({"ozet": "false"} if offset else {})}, timeout=30,
             )
             if oturum_hatasi_mi(yanit):
                 return None
             yanit.raise_for_status()
             veri = yanit.json()
-            ozet = veri.get("ozet", ozet)
+            ozet = veri.get("ozet") or ozet
             sayfa = veri.get("kayitlar", [])
             kayitlar.extend(sayfa)
             offset += 200
@@ -886,8 +894,7 @@ class AuditKayitlariEkrani(QWidget):
 
     def excel_aktar(self):
         """Süzgece uyan denetim kayıtlarını (silinen verinin içeriğiyle birlikte) Excel dosyasına yazar."""
-        from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
-        from client.audit_excel import EN_FAZLA_KAYIT, audit_excel_olustur
+        from client.audit_excel import EN_FAZLA_KAYIT, audit_excel_olustur      # audit_excel bu modülden içe aktarır; döngüyü önlemek için burada
 
         try:
             parametreler = self._suzgec_parametreleri()
@@ -929,47 +936,22 @@ class AuditKayitlariEkrani(QWidget):
                 f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
             )
             return
+        # Denetim kayıtları en hassas listedir (silinen veri ayrıntıları, istemci adresleri): kimin aldığı da denetime yazılır.
+        aktarimi_denetime_yaz(self, {"api_url": self.api_url, "token": self.token, "liste": "DENETIM"}, len(kayitlar))
         uyari = f"\n\nNot: Dosya en yeni {EN_FAZLA_KAYIT} kayıtla sınırlandırıldı; süzgeçle daraltabilirsiniz." if kesildi else ""
         QMessageBox.information(self, "Excel'e Aktar", f"{len(kayitlar)} kayıt kaydedildi:\n{dosya_yolu}{uyari}")
 
     def kayitlari_getir(self):
-        self._donem_degisti()
-
-        if (
-            self.donem_secimi.currentText() == "Tarih Aralığı"
-            and self.baslangic.date() > self.bitis.date()
-        ):
-            self.durum.setText(
-                "Başlangıç tarihi bitiş tarihinden sonra olamaz."
-            )
+        try:
+            parametreler = self._suzgec_parametreleri()
+        except ValueError as hata:
+            self.durum.setText(str(hata))
             return
 
-        parametreler = {
-            "limit": self.limit,
-            "offset": self.offset
-        }
-
-        kullanici = self.kullanici_arama.text().strip()
-        if kullanici:
-            parametreler["kullanici"] = kullanici
-
-        olay = self.olay_secimi.secilenler()
-        if olay:
-            parametreler["olay_turu"] = olay
-
-        if (self.donem_secimi.currentIndex() != 0):
-            if self.baslangic.date() > self.bitis.date():
-                self.durum.setText(
-                    "Başlangıç tarihi bitiş tarihinden sonra olamaz."
-                )
-                return
-
-            parametreler["baslangic_tarihi"] = (
-                self.baslangic.date().toString("yyyy-MM-dd")
-            )
-            parametreler["bitis_tarihi"] = (
-                self.bitis.date().toString("yyyy-MM-dd")
-            )
+        parametreler["limit"] = self.limit
+        parametreler["offset"] = self.offset
+        if self.offset > 0:
+            parametreler["ozet"] = "false"      # kayıt sayımı yalnızca ilk sayfada yapılır; sonraki sayfalarda sunucu yeniden saymaz
 
         try:
             yanit = oturum_kontrollu_istek(
@@ -995,13 +977,13 @@ class AuditKayitlariEkrani(QWidget):
             )
             return
 
-        ozet = veri.get("ozet", {})
-
-        for anahtar, etiket in self.ozet_degerleri.items():
-            etiket.setText(str(ozet.get(anahtar, 0)))
+        ozet = veri.get("ozet")
+        if ozet:                                # ilk sayfa: kartlar ve toplam yenilenir; sonraki sayfalarda ilk sayfanınki korunur
+            for anahtar, etiket in self.ozet_degerleri.items():
+                etiket.setText(str(ozet.get(anahtar, 0)))
+            self.toplam = int(ozet.get("toplam_kayit", 0))
 
         kayitlar = veri.get("kayitlar", [])
-        self.toplam = int(ozet.get("toplam_kayit", 0))
 
         self.tablo.setRowCount(len(kayitlar))
 
@@ -1040,7 +1022,7 @@ class AuditKayitlariEkrani(QWidget):
 
             hucre_alani = QWidget()
             hucre_duzen = QHBoxLayout(hucre_alani)
-            hucre_duzen.setContentsMargins(5, 3, 5, 3)
+            hucre_duzen.setContentsMargins(4, 0, 4, 0)
 
             detay_btn = QPushButton("Görüntüle")
             detay_btn.setFixedSize(92, 30)
@@ -1052,6 +1034,8 @@ class AuditKayitlariEkrani(QWidget):
                     border: none;
                     border-radius: 7px;
                     font-weight: bold;
+                    padding: 0;
+                    min-height: 0;
                 }
                 QPushButton:hover {
                     background: #D4E5FF;

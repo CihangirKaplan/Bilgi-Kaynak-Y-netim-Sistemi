@@ -8989,10 +8989,15 @@ def audit_kayitlarini_getir(
     bitis_tarihi: date | None = None,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    ozet: bool = Query(True),
     kullanici_id: int = Depends(
         izin_kontrol("AUDIT_KAYITLARI_INCELE")
     )
 ):
+    """Denetim kayıtları (salt okunur, sayfalı; ozet=false ile sayım atlanır).
+
+    `ozet=false` ilk sayfadan sonraki sayfalarda verilir: süzgeçli kayıt sayımı yalnızca ilk sayfada yapılır, böylece her
+    sayfa geçişi tüm süzgeçli kayıtları yeniden saymaz (kayıt sayısı büyüdükçe yavaşlamaz)."""
     if (
         baslangic_tarihi is not None
         and bitis_tarihi is not None
@@ -9022,8 +9027,10 @@ def audit_kayitlarini_getir(
     parametreler = []
 
     if kullanici:
-        kosullar.append("k.kullanici_adi ILIKE %s")
-        parametreler.append(f"%{kullanici}%")
+        # % ve _ aramada joker değil, düz karakter sayılır (aksi halde "%" yazınca herkes listelenirdi).
+        kacisli = kullanici.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        kosullar.append("k.kullanici_adi ILIKE %s ESCAPE '\\'")
+        parametreler.append(f"%{kacisli}%")
 
     if olay_turu:
         kosullar.append("d.olay_turu::text = ANY(%s)")
@@ -9057,30 +9064,39 @@ def audit_kayitlarini_getir(
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
 
-        cursor.execute(
-            f"""
-            SELECT
-                COUNT(*),
-                COUNT(*) FILTER (
-                    WHERE d.olay_turu::text = 'LOGIN_FAILED'
-                ),
-                COUNT(*) FILTER (
-                    WHERE d.olay_turu::text IN (
-                        'CREATE', 'UPDATE', 'ROLE_CHANGE', 'DELETE'
+        ozet_verisi = None
+        if ozet:
+            cursor.execute(
+                f"""
+                SELECT
+                    COUNT(*),
+                    COUNT(*) FILTER (
+                        WHERE d.olay_turu::text = 'LOGIN_FAILED'
+                    ),
+                    COUNT(*) FILTER (
+                        WHERE d.olay_turu::text IN (
+                            'CREATE', 'UPDATE', 'ROLE_CHANGE', 'DELETE',
+                            'CANCEL', 'DEVICE_STATUS_CHANGE'
+                        )
+                    ),
+                    COUNT(*) FILTER (
+                        WHERE d.olusturulma_tarihi >= CURRENT_DATE
+                          AND d.olusturulma_tarihi <
+                              CURRENT_DATE + INTERVAL '1 day'
                     )
-                ),
-                COUNT(*) FILTER (
-                    WHERE d.olusturulma_tarihi >= CURRENT_DATE
-                      AND d.olusturulma_tarihi <
-                          CURRENT_DATE + INTERVAL '1 day'
-                )
-            {from_sql}
-            {where_sql}
-            """,
-            tuple(parametreler)
-        )
+                {from_sql}
+                {where_sql}
+                """,
+                tuple(parametreler)
+            )
 
-        toplam, basarisiz, islemler, bugun = cursor.fetchone()
+            toplam, basarisiz, islemler, bugun = cursor.fetchone()
+            ozet_verisi = {
+                "toplam_kayit": toplam,
+                "basarisiz_giris": basarisiz,
+                "kullanici_islemleri": islemler,
+                "bugunku_islemler": bugun
+            }
 
         cursor.execute(
             f"""
@@ -9118,9 +9134,9 @@ def audit_kayitlarini_getir(
                 "olay_turu": satir[3],
                 "hedef_tablo": satir[4],
                 "hedef_kayit_id": satir[5],
-                "hedef_kullanici_adi": satir[7] if len(satir) > 7 else None,
-                "ayrinti": satir[8] if len(satir) > 8 else None,
-                "istemci_adresi": satir[9] if len(satir) > 9 else None,
+                "hedef_kullanici_adi": satir[7],
+                "ayrinti": satir[8],
+                "istemci_adresi": satir[9],
                 "olusturulma_tarihi": (
                     satir[6].isoformat() if satir[6] else None
                 )
@@ -9143,12 +9159,7 @@ def audit_kayitlarini_getir(
             conn.commit()
 
         return {
-            "ozet": {
-                "toplam_kayit": toplam,
-                "basarisiz_giris": basarisiz,
-                "kullanici_islemleri": islemler,
-                "bugunku_islemler": bugun
-            },
+            "ozet": ozet_verisi,
             "kayitlar": kayitlar,
             "limit": limit,
             "offset": offset
@@ -11216,11 +11227,12 @@ LISTE_AKTARIM_HEDEFLERI = {
     "KALIBRASYON": (("KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"), "cihaz_kalibrasyonlari"),
     "ARIZA": ("ARIZA_KAYITLARI_YONET", "cihaz_arizalari"),
     "BAKIM_PLANI": (("BAKIM_KAYITLARI_YONET", "KALIBRASYON_KAYITLARI_YONET", "BAKIM_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_GORUNTULE"), "cihaz_bakim_planlari"),
+    "DENETIM": ("AUDIT_KAYITLARI_INCELE", "denetim_kayitlari"),
 }
 
 
 class ListeAktarimModeli(_DurumBaseModel):
-    liste: _Literal["CIHAZ", "OGRENCI", "DANISAN", "REZERVASYON", "BAKIM", "KALIBRASYON", "ARIZA", "BAKIM_PLANI"]
+    liste: _Literal["CIHAZ", "OGRENCI", "DANISAN", "REZERVASYON", "BAKIM", "KALIBRASYON", "ARIZA", "BAKIM_PLANI", "DENETIM"]
     satir_sayisi: int = _DurumField(ge=0, le=1_000_000)
 
 
