@@ -13,13 +13,13 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
-from client.tablo_tasarimi import hap_sutununu_sigdir
+from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
                             sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
-from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
+from client.liste_siniri import ListeSiniri, daha_fazla_guncelle, kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -206,11 +206,13 @@ class ArizaYonetimEkrani(QWidget):
         self.cip_toplam = sayi_cipi("0 kayıt")
         self.cip_acik = sayi_cipi("0 açık", "#991B1B", "#FEE2E2")
         self.cip_cozulen = sayi_cipi("0 çözüldü", "#166534", "#DCFCE7")
+        self.liste_siniri = ListeSiniri()
+        self.dahafazla_btn = daha_fazla_dugmesi(self.daha_fazla_yukle)
 
         layout.addWidget(sayfa_basligi(
             "Arıza Kayıtları", "Arıza bildirimi ve takibi",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_acik, self.cip_cozulen],
+            [self.cip_toplam, self.cip_acik, self.cip_cozulen, self.dahafazla_btn],
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["NO", "CİHAZ", "SORUN BAŞLIĞI", "ACİLİYET", "DURUM",
@@ -246,7 +248,7 @@ class ArizaYonetimEkrani(QWidget):
         self.tablo.setRowCount(0)
         self.ariza_detaylari = {}
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/arizalar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/arizalar", headers={"Authorization": f"Bearer {self.token}"}, params=self.liste_siniri.parametreler())
             if oturum_hatasi_mi(cevap):
                 return
             cevap.raise_for_status()
@@ -260,49 +262,51 @@ class ArizaYonetimEkrani(QWidget):
             return
 
         acik = cozulen = 0
-        self.tablo.setRowCount(len(arizalar))
-        for satir, ar in enumerate(arizalar):
-            ariza_id = ar.get("ariza_id")
-            self.ariza_detaylari[ariza_id] = ar
-            cozuldu = ar.get("durum") == "Çözüldü"
-            cozulen += cozuldu
-            acik += not cozuldu
+        with hizli_doldur(self.tablo):
+            self.tablo.setRowCount(len(arizalar))
+            for satir, ar in enumerate(arizalar):
+                ariza_id = ar.get("ariza_id")
+                self.ariza_detaylari[ariza_id] = ar
+                cozuldu = ar.get("durum") == "Çözüldü"
+                cozulen += cozuldu
+                acik += not cozuldu
 
-            self.tablo.setItem(satir, 0, metin_item(str(ariza_id if ariza_id is not None else ""), ortala=True))
-            cihaz_adi = str(ar.get("cihaz_adi") or "Bilinmeyen")
-            kod = ar.get("envanter_kodu")
-            cihaz_item = metin_item(f"{kod}  ·  {cihaz_adi}" if kod else cihaz_adi, kalin=True)      # ad üstte, envanter kodu altta (çizici)
-            cihaz_item.setToolTip(cihaz_ipucu(cihaz_item.text()))
-            cihaz_item.setData(SIRALAMA_ROLU, cihaz_adi)                                              # sıralama cihaz adına göre
-            self.tablo.setItem(satir, 1, cihaz_item)
-            baslik_item = metin_item(ar.get("ariza_baslik") or "")
-            baslik_item.setToolTip(ariza_ipucu(ar))                                                   # açıklama, çözüldüyse çözüm notu
-            self.tablo.setItem(satir, 2, baslik_item)
+                self.tablo.setItem(satir, 0, metin_item(str(ariza_id if ariza_id is not None else ""), ortala=True))
+                cihaz_adi = str(ar.get("cihaz_adi") or "Bilinmeyen")
+                kod = ar.get("envanter_kodu")
+                cihaz_item = metin_item(f"{kod}  ·  {cihaz_adi}" if kod else cihaz_adi, kalin=True)      # ad üstte, envanter kodu altta (çizici)
+                cihaz_item.setToolTip(cihaz_ipucu(cihaz_item.text()))
+                cihaz_item.setData(SIRALAMA_ROLU, cihaz_adi)                                              # sıralama cihaz adına göre
+                self.tablo.setItem(satir, 1, cihaz_item)
+                baslik_item = metin_item(ar.get("ariza_baslik") or "")
+                baslik_item.setToolTip(ariza_ipucu(ar))                                                   # açıklama, çözüldüyse çözüm notu
+                self.tablo.setItem(satir, 2, baslik_item)
 
-            aciliyet = ar.get("aciliyet") or "Belirtilmedi"
-            renk, arka = ACILIYET_RENKLERI.get(aciliyet, ("#6B7280", "#F3F4F6"))
-            self.tablo.setCellWidget(satir, 3, hap(aciliyet, renk, arka))
+                aciliyet = ar.get("aciliyet") or "Belirtilmedi"
+                renk, arka = ACILIYET_RENKLERI.get(aciliyet, ("#6B7280", "#F3F4F6"))
+                self.tablo.setCellWidget(satir, 3, hap(aciliyet, renk, arka))
 
-            if cozuldu:
-                self.tablo.setCellWidget(satir, 4, hap("Çözüldü", "#166534", "#DCFCE7"))
-            else:
-                self.tablo.setCellWidget(satir, 4, hap("Açık", "#991B1B", "#FEE2E2"))
-
-            tarih = str(ar.get("bildirim_tarihi") or "")[:16].replace("T", " ")
-            self.tablo.setItem(satir, 5, metin_item(tarih, ortala=True))
-
-            if self.yetkili_mi:
-                # Açık arıza düzenlenir/çözülür; çözülmüş arıza yanlışlıkla çözüldü işaretlendiyse yeniden açılabilir.
                 if cozuldu:
-                    dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "↺", "Düzenle / yeniden aç",
-                                             renk="#1D4ED8", arka="#DBEAFE", hover="#BFDBFE")
+                    self.tablo.setCellWidget(satir, 4, hap("Çözüldü", "#166534", "#DCFCE7"))
                 else:
-                    dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "✎", "Düzenle / Çöz")
-                self.tablo.setCellWidget(satir, 6, dugme)
-                satira_kimlik_ata(self.tablo, satir, ariza_id)      # yetkili kullanıcı için her satır (açık ya da çözülmüş) çift tıkla açılır
+                    self.tablo.setCellWidget(satir, 4, hap("Açık", "#991B1B", "#FEE2E2"))
+
+                tarih = str(ar.get("bildirim_tarihi") or "")[:16].replace("T", " ")
+                self.tablo.setItem(satir, 5, metin_item(tarih, ortala=True))
+
+                if self.yetkili_mi:
+                    # Açık arıza düzenlenir/çözülür; çözülmüş arıza yanlışlıkla çözüldü işaretlendiyse yeniden açılabilir.
+                    if cozuldu:
+                        dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "↺", "Düzenle / yeniden aç",
+                                                 renk="#1D4ED8", arka="#DBEAFE", hover="#BFDBFE")
+                    else:
+                        dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "✎", "Düzenle / Çöz")
+                    self.tablo.setCellWidget(satir, 6, dugme)
+                    satira_kimlik_ata(self.tablo, satir, ariza_id)      # yetkili kullanıcı için her satır (açık ya da çözülmüş) çift tıkla açılır
 
         self.cip_toplam.setText(toplam_etiketi(len(arizalar), toplam))
         self.cip_toplam.setToolTip(kisaltma_ipucu(len(arizalar), toplam))
+        daha_fazla_guncelle(self.dahafazla_btn, self.liste_siniri, len(arizalar), toplam)
         self.cip_acik.setText(f"{acik} açık")
         self.cip_cozulen.setText(f"{cozulen} çözüldü")
         self.bos_mesaj.setText("Henüz arıza kaydı yok.")
@@ -312,6 +316,11 @@ class ArizaYonetimEkrani(QWidget):
         self.bos_mesaj.setVisible(not arizalar)
         self.tablo.setVisible(bool(arizalar))
         self.filtrele(self.arama.text())
+
+    def daha_fazla_yukle(self):
+        """Listeyi, en yeni kayıtlardan başlayarak ADIM kadar daha uzatır (en çok sunucunun üst sınırına kadar)."""
+        self.liste_siniri.artir()
+        self.verileri_yukle()
 
     def filtrele(self, metin):
         """Cihaz adı ve sorun başlığında arama yapar."""
