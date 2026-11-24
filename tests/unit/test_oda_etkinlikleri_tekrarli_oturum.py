@@ -1,9 +1,11 @@
 """Etkinlik formunda "Tekrarlı Ekle": tarih aralığı + haftanın günleri + saat ile düzenli oturumları tek seferde üretme."""
+import gc
+import weakref
 from datetime import date
 from unittest.mock import patch
 
 from PySide6.QtCore import QDate, QTime
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QPushButton
 
 import client.oda_etkinlikleri_ekrani as modul
 from client.oda_etkinlikleri_ekrani import OdaEtkinlikFormu, TekrarliOturumDialog, tekrar_tarihleri
@@ -145,3 +147,45 @@ def test_dugmeler_formda_var_ve_pencereyi_acar(tkys_qapplication):
     assert len(form.oturum_satirlari) == 1                                                  # vazgeçilince hiçbir şey eklenmez
     form.gun_ekle_btn.click()
     assert len(form.oturum_satirlari) == 2
+
+
+def _temizlenir_mi(uret):
+    """Nesne silinince çöp toplayıcı onu gerçekten temizleyebiliyor mu (görünmez bir döngüde kalıp süreç sonuna yaşamıyor mu)."""
+    nesne = uret()
+    referans = weakref.ref(nesne)
+    del nesne
+    gc.collect()
+    return referans() is None
+
+
+def test_pencereler_silinince_temizlenir_cikista_qt_cokmez(tkys_qapplication):
+    """Düğme bağlantısında pencereyi tutan `lambda` kullanılırsa pencere çöp toplayıcıya görünmeyen bir döngüde kalır, süreç
+    kapanırken Qt'yi çökertir (çıkış kodu 139; CI'da yakalandı). Bu yüzden düğmeler bağlanırken lambda kullanılmaz."""
+    assert _temizlenir_mi(lambda: TekrarliOturumDialog(None, QDate(2049, 6, 9)))
+    assert _temizlenir_mi(_form)
+
+    def iki_satirli():
+        form = _form()
+        form.gun_ekle_btn.click()
+        return form
+
+    assert _temizlenir_mi(iki_satirli)
+
+
+def test_kaldir_dugmesi_kendi_satirini_siler_tek_satir_kalirsa_silmez(tkys_qapplication):
+    form = _form()
+    for gun in (9, 10, 11):
+        form.oturum_ekle(f"2049-06-{gun:02d}T13:00:00", f"2049-06-{gun:02d}T14:00:00")
+    assert len(form.oturum_satirlari) == 4                                                  # kendiliğinden açılan satır + 3
+
+    ikinci = form.oturum_satirlari[2]
+    ikinci[0].findChild(QPushButton).click()
+    assert len(form.oturum_satirlari) == 3 and ikinci not in form.oturum_satirlari
+
+    for satir in list(form.oturum_satirlari)[1:]:
+        satir[0].findChild(QPushButton).click()
+    assert len(form.oturum_satirlari) == 1
+    with patch.object(modul.QMessageBox, "warning") as uyari:
+        form.oturum_satirlari[0][0].findChild(QPushButton).click()
+    uyari.assert_called_once()                                                              # son satır silinemez
+    assert len(form.oturum_satirlari) == 1

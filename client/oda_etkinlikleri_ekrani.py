@@ -108,7 +108,7 @@ class TekrarliOturumDialog(QDialog):
         gun_satiri.addStretch()
         self.hafta_ici_btn = QPushButton("Hafta içi")
         self.hafta_ici_btn.setToolTip("Pazartesi–Cuma günlerini seç")
-        self.hafta_ici_btn.clicked.connect(lambda _=False: self.hafta_ici_sec())
+        self.hafta_ici_btn.clicked.connect(self.hafta_ici_sec)
         gun_satiri.addWidget(self.hafta_ici_btn)
         ana.addLayout(gun_satiri)
 
@@ -148,7 +148,7 @@ class TekrarliOturumDialog(QDialog):
             alan.timeChanged.connect(self.guncelle)
         self.guncelle()
 
-    def hafta_ici_sec(self):
+    def hafta_ici_sec(self, *_):
         for sira, kutu in enumerate(self.gun_kutulari):
             kutu.setChecked(sira < 5)
 
@@ -280,10 +280,10 @@ class OdaEtkinlikFormu(QDialog):
         ekle_satiri.setSpacing(10)
         self.gun_ekle_btn = QPushButton("＋  Gün / Saat Ekle")
         self.gun_ekle_btn.setToolTip("Tek bir oturum satırı ekle")
-        self.gun_ekle_btn.clicked.connect(lambda _=False: self.oturum_ekle())
+        self.gun_ekle_btn.clicked.connect(self.bos_oturum_ekle)
         self.tekrarli_btn = QPushButton("⟳  Tekrarlı Ekle…")
         self.tekrarli_btn.setToolTip("Tarih aralığı, haftanın günleri ve saati seçerek düzenli oturumları tek seferde ekle")
-        self.tekrarli_btn.clicked.connect(lambda _=False: self.tekrarli_ekle())
+        self.tekrarli_btn.clicked.connect(self.tekrarli_ekle)
         ekle_satiri.addWidget(self.gun_ekle_btn, 1)
         ekle_satiri.addWidget(self.tekrarli_btn, 1)
         ana.addLayout(ekle_satiri)
@@ -384,9 +384,7 @@ class OdaEtkinlikFormu(QDialog):
         satir = (cerceve, tarih, saat_bas, saat_bit)
         self.oturum_satirlari.append(satir)
 
-        kaldir.clicked.connect(
-            lambda checked=False, s=satir: self.oturum_kaldir(s)
-        )
+        kaldir.clicked.connect(self.kaldir_dugmesine_basildi)
 
         self.oturum_duzeni.insertWidget(
             self.oturum_duzeni.count() - 1, cerceve
@@ -397,7 +395,12 @@ class OdaEtkinlikFormu(QDialog):
         _, tarih, saat_bas, saat_bit = satir
         return (tarih.date() == QDate.currentDate() and saat_bas.time() == QTime(13, 0) and saat_bit.time() == QTime(14, 0))
 
-    def tekrarli_ekle(self):
+    def bos_oturum_ekle(self, *_):
+        """"Gün / Saat Ekle" düğmesi: varsayılan değerli tek satır. (Düğme bağlantısında lambda kullanılmaz: pencereyi tutan
+        lambda, çöp toplayıcının göremediği bir döngü kurar ve pencere süreç kapanana dek yaşayıp çıkışta Qt'yi çökertir.)"""
+        self.oturum_ekle()
+
+    def tekrarli_ekle(self, *_):
         pencere = TekrarliOturumDialog(self)
         if pencere.exec() == QDialog.Accepted:
             self.tekrarli_oturumlari_ekle(*pencere.sonuc())
@@ -435,6 +438,14 @@ class OdaEtkinlikFormu(QDialog):
         for gun in yeni:
             self.oturum_ekle(f"{gun.isoformat()}T{bas_metin}:00", f"{gun.isoformat()}T{bit_metin}:00")
         return len(yeni)
+
+    def kaldir_dugmesine_basildi(self, *_):
+        """Hangi satırın "Kaldır" düğmesine basıldığı gönderenden bulunur (satırı yakalayan lambda yerine: bkz. bos_oturum_ekle)."""
+        dugme = self.sender()
+        for satir in self.oturum_satirlari:
+            if satir[0].isAncestorOf(dugme):
+                self.oturum_kaldir(satir)
+                return
 
     def oturum_kaldir(self, satir):
         if len(self.oturum_satirlari) <= 1:
@@ -758,7 +769,7 @@ class OdaEtkinlikleriEkrani(QWidget):
         self.tarih_bas.dateChanged.connect(self.filtrele)
         self.tarih_bit.dateChanged.connect(self.filtrele)
         self.tablo.itemSelectionChanged.connect(self.butonlari_guncelle)
-        self.tablo.itemDoubleClicked.connect(lambda _oge: self.oturumlari_goster())
+        self.tablo.itemDoubleClicked.connect(self.satir_cift_tiklandi)
 
         self.yenile()
 
@@ -876,6 +887,9 @@ class OdaEtkinlikleriEkrani(QWidget):
         return "Planlandı"
 
 
+
+    def satir_cift_tiklandi(self, *_):
+        self.oturumlari_goster()
 
     def tarih_alanlarini_guncelle(self, *_):
         self.tarih_alani.setVisible(self.donem.currentText() == "Tarih Aralığı")
