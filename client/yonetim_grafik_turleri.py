@@ -13,9 +13,9 @@ lejantta yazılıdır (renk tek başına bilgi taşımaz).
 import math
 
 from PySide6.QtCore import Qt, QMargins, QPointF, QSize, Signal
-from PySide6.QtGui import QColor, QCursor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap, QGradient
+from PySide6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap, QGradient
 from PySide6.QtWidgets import (
-    QButtonGroup, QFrame, QGraphicsTextItem, QHBoxLayout, QLabel, QPushButton, QToolTip, QVBoxLayout, QWidget,
+    QButtonGroup, QFrame, QGraphicsTextItem, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 from PySide6.QtCharts import (
     QAbstractBarSeries, QAreaSeries, QBarCategoryAxis, QBarSeries, QBarSet, QCategoryAxis, QChart, QLineSeries,
@@ -145,10 +145,6 @@ def _lejant(chart, gorunur, hiza=Qt.AlignTop):
         lejant.setMarkerShape(lejant.MarkerShape.MarkerShapeCircle)
 
 
-def _ipucu(metin):
-    QToolTip.showText(QCursor.pos(), metin)
-
-
 def _tam_sayi_mi(seriler):
     return all(float(v).is_integer() for _, dizi in seriler for v in dizi)
 
@@ -191,8 +187,6 @@ def _pasta(chart, kategoriler, seriler):
     def uzerinde(dilim, durum):
         dilim.setExploded(durum)
         dilim.setExplodeDistanceFactor(0.06)
-        if durum:
-            _ipucu(f"{dilim.property('tam_ad')}\n{deger_metni(dilim.value())}  (%{dilim.property('oran'):.1f})")
 
     pasta.hovered.connect(uzerinde)
     chart.addSeries(pasta)
@@ -243,17 +237,12 @@ def _sutun(chart, kategoriler, seriler):
         kume.append([float(v) for v in sayilar])
         seri.append(kume)
 
-    # Az sütunda değerler sütunun üstünde yazılır; kalabalık grafikte değer ipucuyla görülür.
+    # Az sütunda değerler sütunun üstünde yazılır (ipucu kutusu kullanılmaz).
     seri.setLabelsVisible(len(kategoriler) * len(seriler) <= 16)
     seri.setLabelsPosition(QAbstractBarSeries.LabelsOutsideEnd)
     seri.setLabelsFormat("@value")
     seri.setLabelsPrecision(6)
 
-    def uzerinde(durum, sira, kume):
-        if durum and 0 <= sira < len(kategoriler):
-            _ipucu(f"{kisa_etiket(kategoriler[sira])}\n{kume.label()}: {deger_metni(kume.at(sira))}")
-
-    seri.hovered.connect(uzerinde)
     chart.addSeries(seri)
 
     etiketler = [_kisalt(k) for k in kategoriler]
@@ -350,12 +339,6 @@ def _cizgi(chart, kategoriler, seriler):
         for j, deger in enumerate(sayilar):
             cizgi.append(float(j), float(deger))
 
-        def uzerinde(nokta, durum, seri_adi=ad, dizi=sayilar):
-            sira = int(round(nokta.x()))
-            if durum and 0 <= sira < len(kategoriler):
-                _ipucu(f"{kisa_etiket(kategoriler[sira])}\n{seri_adi}: {deger_metni(dizi[sira])}")
-
-        cizgi.hovered.connect(uzerinde)
         chart.addSeries(cizgi)
         cizgi.attachAxis(x)
         cizgi.attachAxis(y)

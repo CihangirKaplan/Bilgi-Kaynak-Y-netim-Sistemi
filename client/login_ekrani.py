@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFrame, QPushButton, QCheckBox, QGraphicsDropShadowEffect, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPixmap
 from client.main_window import AnaPencere, dinamik_rol_tanimla
 from client.sifre_degistir_ekrani import SifreDegistirEkrani
 from client.parola_talebi_dialog import ParolaTalebiDialog
@@ -225,6 +225,9 @@ class LoginEkrani(QWidget):
         self.setObjectName("kok")
         self.setWindowTitle("TKYS — Güvenli Giriş")
         self.setFixedSize(980, 620)
+        self.setProperty("ortalama_kapali", True)    # ana pencere içerik alanına göre değil, ekranın ortasına açılır
+        from client.ipucu_kapat import ipuclarini_kapat
+        ipuclarini_kapat()
         self.setStyleSheet(stil_olustur())
         self.ana_pencere = None
         self.hatali_deneme = 0
@@ -544,9 +547,22 @@ class LoginEkrani(QWidget):
         self.show()
         self.sifre_input.setFocus()
 
+    def ekrana_ortala(self):
+        """Giriş penceresini bulunduğu (yoksa imlecin olduğu) ekranın çalışma alanının tam ortasına taşır."""
+        ekran = (self.screen() if self.isVisible() else None) or QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        if ekran is None:
+            return
+        alan = ekran.availableGeometry()
+        cerceve = self.frameGeometry()
+        sol = alan.center().x() - cerceve.width() // 2
+        ust = alan.center().y() - cerceve.height() // 2
+        self.move(max(alan.left(), sol), max(alan.top(), ust))
+
     def oturum_kapandi(self):
         self.kullanici_input.setFocus()
         self.show()
+        self.ekrana_ortala()
+        QTimer.singleShot(0, self.ekrana_ortala)    # çerçeve boyutu kesinleşince bir kez daha
 
     def kilitle(self, saniye):
         import time
