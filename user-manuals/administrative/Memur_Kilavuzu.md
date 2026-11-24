@@ -63,7 +63,7 @@ Cihaza yapılan bakımın kaydı.
 - **＋ Arıza Kaydı:** **Arızalı Cihaz \***, **Aciliyet Seviyesi \*** (*Düşük, Orta, Yüksek, Kritik*), **Sorun Başlığı \*** ve **Açıklama \*** girilir.
   Arıza bildirimi oluşturulunca **cihazın durumu otomatik olarak Arızalı** olur ve arıza çözülene kadar öyle kalır (cihaz rezerve edilemez). **Bakımda ya da kalibrasyondaki** cihaza da arıza bildirilebilir: cihaz arıza çözülene kadar yine **Arızalı** görünür, çözülünce bakım/kalibrasyon durumu geçerli olmaya devam eder. Zaten arızalı cihaza ikinci bir arıza da eklenebilir. Yalnızca *Kullanım Dışı* cihaza arıza açılmaz.
 - Arızayı düzeltirken **Mevcut Durum** alanında **Açık (devam ediyor)** ya da **Çözüldü (cihaz kullanıma açılır)** seçersiniz; *Çözüldü* cihazı yeniden kullanıma açar.
-- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, listede sorun başlığının üzerine gelince ve **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Çözülmüş bir arızanın satırındaki **↺** düğmesiyle (ya da çift tıklayarak) arızayı **yeniden açabilirsiniz** (yanlışlıkla çözüldü işaretlendiyse): çözüm notu ve çözüm tarihi silinir, cihaz tekrar *Arızalı* görünür.
+- **Çözüldü** seçince **Çözüm Notu \*** zorunlu olur: ne yapılarak çözüldüğünü kısaca yazın (en fazla 500 karakter). Not, **Cihaz geçmişi**'nde görünür; Excel aktarımında da yer alır. Çözülmüş bir arızanın satırındaki **↺** düğmesiyle (ya da çift tıklayarak) arızayı **yeniden açabilirsiniz** (yanlışlıkla çözüldü işaretlendiyse): çözüm notu ve çözüm tarihi silinir, cihaz tekrar *Arızalı* görünür.
 
 ## 1.7 Bakım Planları
 Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tarihe yaklaşınca ve tarih geçince sizi uyarır.
@@ -118,7 +118,7 @@ Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her g
 - **＋ Yeni Görev Ekle:** Öğrencinin görevini elle girersiniz (**Öğrenci**, **Başlangıç**, **Bitiş**). Öğrenci listesinde yalnızca **danışma masası öğrencileri** bulunur. Öğrenci görevi başlatmayı/bitirmeyi unuttuysa bu yolla düzeltirsiniz. Aktif danışma masası öğrencisi yoksa sistem bunu söyler.
   **Bir görev en fazla 10 saat olabilir** (mesai süresi 08:00–18:00); daha uzun çalışmayı ayrı görevler olarak girin, aksi halde "Bir görev en fazla 10 saat olabilir" uyarısı çıkar.
 - **✎ Seçilen Görevi Düzenle:** Başlangıç ve bitişi düzeltir (aynı 10 saat sınırı geçerlidir). Düzeltmede **önceki ve yeni saatler denetim kaydına** yazılır. **Onaylanmış** görev düzenlenemez; önce **Onayı Geri Al**'ı kullanın.
-- **Uzun görev işareti:** Öğrenci görevi bitirmeyi unutmuşsa süre 10 saati aşar; listede böyle görevler işaretlenir ve üzerine gelince "öğrenci görevi bitirmeyi unutmuş olabilir; onaylamadan önce saatleri kontrol edin" ipucu çıkar. **Onaylamadan önce saatleri kontrol edip gerekirse Düzenle ile düzeltin.**
+- **Uzun görev işareti:** Öğrenci görevi bitirmeyi unutmuşsa süre 10 saati aşar; listede böyle görevler işaretlenir (öğrenci görevi bitirmeyi unutmuş olabilir). **Onaylamadan önce saatleri kontrol edip gerekirse Düzenle ile düzeltin.**
 - Onay bekleyen görevler **🔔 bildirim** olarak da size gelir; bildirime tıklayınca ilgili sayfa açılır.
 
 ## 3.2 Danışma Masası Raporları
@@ -133,7 +133,7 @@ Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz;
 - **Oda Yönetimi:** **＋ Yeni Oda Ekle**, **✎ Odayı Düzenle**, **✕ Odayı Pasife Al / ✓ Odayı Aktif Et** (düğme, seçtiğiniz odanın durumuna göre değişir). Yeni oda her zaman aktif açılır; **Odayı Düzenle** yalnızca adı ve kapasiteyi değiştirir. Pasife alınan oda yeni randevu ve rezervasyonlarda seçilemez; geçmiş kayıtlar korunur.
   Liste sütunları: **Oda Adı, Kapasite, Durum, Psikologlar, Kullanım, Planlı kayıt.** Başlığa tıklayarak sıralayabilirsiniz.
   - **Kullanım:** *Psikolog odası* (bir psikoloğa atanmış; **cihaz rezervasyonunda kullanılamaz**) ya da *Ortak oda*.
-  - **Planlı kayıt:** Odada henüz bitmemiş planlı randevu (bugün ve sonrası), cihaz rezervasyonu ve etkinliklerin toplamı; üzerine gelince dökümü görünür. Sayı 0'dan büyükse oda **pasife alınamaz**; önce randevuların sonucunu girin ya da iptal edin, rezervasyon ve etkinlikleri iptal edin.
+  - **Planlı kayıt:** Odada henüz bitmemiş planlı randevu (bugün ve sonrası), cihaz rezervasyonu ve etkinliklerin toplamı. Sayı 0'dan büyükse oda **pasife alınamaz**; önce randevuların sonucunu girin ya da iptal edin, rezervasyon ve etkinlikleri iptal edin.
   - **Pasif odalar varsayılan olarak gizlidir** (oda silinmediği için zamanla birikir). Görmek için sağ üstteki **Pasif odaları da göster** kutusunu işaretleyin; yeniden aktif etmek için pasif odayı seçip **✓ Odayı Aktif Et** düğmesine basın.
   - **Kapasite** bilgi amaçlıdır; randevu, rezervasyon ya da etkinlik katılımcı sayısıyla karşılaştırılmaz.
 

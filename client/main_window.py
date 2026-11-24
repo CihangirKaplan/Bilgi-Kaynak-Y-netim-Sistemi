@@ -1006,6 +1006,8 @@ QLabel {
         # Açılan ikinci pencereler (form, uyarı, iletişim kutusu) sağ içerik alanının ortasında açılır.
         from client.pencere_konumu import ana_pencereyi_tanit
         ana_pencereyi_tanit(self, lambda: self.stack)
+        from client.ipucu_kapat import ipuclarini_kapat
+        ipuclarini_kapat()
 
         self.nav_grup = QButtonGroup(self)
         self.nav_grup.setExclusive(True)
