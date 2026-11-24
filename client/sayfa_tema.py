@@ -80,7 +80,11 @@ QPushButton#birincil:hover {{ background: #1E40AF; }}
 QPushButton#birincil:pressed {{ background: #172554; }}
 QPushButton#tehlike {{ background: white; color: #B91C1C; border: 1px solid #FECACA; }}
 QPushButton#tehlike:hover {{ background: #FEE2E2; border: 1px solid #F87171; }}
-QPushButton#hayalet:disabled, QPushButton#birincil:disabled, QPushButton#tehlike:disabled {{
+QPushButton#yesil {{ background: #16803C; color: white; border: none; }}
+QPushButton#yesil:hover {{ background: #126A31; }}
+QPushButton#kucuk {{ background: #E9F1FF; color: #2457A2; border: none; border-radius: 8px; padding: 0; min-height: 0; font-size: 12px; }}
+QPushButton#kucuk:hover {{ background: #D4E5FF; }}
+QPushButton#hayalet:disabled, QPushButton#birincil:disabled, QPushButton#tehlike:disabled, QPushButton#yesil:disabled {{
     background: #F4F6FA; color: #A3B1CE; border: 1px solid #E8EDF6; }}
 QLabel#bosMesaj {{ font-size: 15px; font-weight: 700; color: #8A9BC0; padding: 40px; }}
 """
@@ -98,6 +102,7 @@ QLabel {{ color: {METIN}; font-size: 13px; background: transparent; }}
 QLabel#formBaslik {{ font-size: 16px; font-weight: 800; color: {LACIVERT}; }}
 QLabel#ipucu {{ font-size: 12px; color: {SOLUK}; }}
 QLabel#hata {{ font-size: 12px; font-weight: 700; color: #B91C1C; }}
+QLabel#alanAdi {{ font-size: 12px; font-weight: 700; color: {SOLUK}; }}
 QLabel#onizleme {{ font-size: 13px; font-weight: 700; color: {MAVI}; background: #EEF4FF; border-radius: 10px; padding: 8px 12px; }}
 
 QLineEdit, QComboBox, QDateEdit, QTimeEdit {{
@@ -176,6 +181,10 @@ class DurumRozetiDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.renkler = renkler or DURUM_RENKLERI
 
+    def renk_bul(self, index, metin):
+        """(yazı rengi, zemin rengi). Alt sınıflar, rengi hücre metni yerine başka bir veriden (ör. işlem kodu) bulabilir."""
+        return self.renkler.get(metin, VARSAYILAN_DURUM_RENGI)
+
     def paint(self, painter, option, index):
         metin = str(index.data(Qt.DisplayRole) or "")
         secenek = QStyleOptionViewItem(option)
@@ -186,7 +195,7 @@ class DurumRozetiDelegate(QStyledItemDelegate):
         if not metin:
             return
 
-        yazi_rengi, zemin = self.renkler.get(metin, VARSAYILAN_DURUM_RENGI)
+        yazi_rengi, zemin = self.renk_bul(index, metin)
         yazi = QFont(option.font)
         yazi.setPixelSize(12)
         yazi.setBold(True)
