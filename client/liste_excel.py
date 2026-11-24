@@ -66,7 +66,7 @@ def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti
         )
         return None
     if kayit is not None:
-        _aktarimi_denetime_yaz(pencere, kayit, len(satirlar))
+        aktarimi_denetime_yaz(pencere, kayit, len(satirlar))
     QMessageBox.information(pencere, "Excel'e Aktar", f"{len(satirlar)} kayıt kaydedildi:\n{dosya_yolu}")
     return dosya_yolu
 
@@ -115,7 +115,7 @@ def tablodan_excele_aktar(pencere, tablo, baslik, onek, sutunlar, liste, api_url
     )
 
 
-def _aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):
+def aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):
     """Aktarımı denetim kaydına yazar. Yazılamazsa kullanıcıya açıkça söylenir (aktarım gizlice kayıtsız kalmaz)."""
     uyari = None
     try:

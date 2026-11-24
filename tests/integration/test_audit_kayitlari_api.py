@@ -19,8 +19,8 @@ class SahteCursor:
 
     def fetchall(self):
         return [
-            (1, 10, "test_user", "LOGIN", "kullanicilar", 10, None),
-            (2, 10, "test_user", "UPDATE", "kullanicilar", 10, None),
+            (1, 10, "test_user", "LOGIN", "kullanicilar", 10, None, None, None, None),
+            (2, 10, "test_user", "UPDATE", "kullanicilar", 10, None, None, None, None),
         ]
 
     def close(self):
