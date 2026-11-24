@@ -15,7 +15,7 @@ import requests
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGridLayout, QStackedWidget, QScrollArea, QComboBox,
-    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QLineEdit
+    QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QLineEdit, QCheckBox
 )
 from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent
@@ -460,6 +460,32 @@ def kart_olustur():
     k.setObjectName("kart")
     golge(k, 26, 28, 5)
     return k
+
+
+def oda_planli_randevu_sayilarini_getir(api_url, token):
+    """Oda Yönetimi "Planlı kayıt" sütunu için {oda_id: {randevu, cihaz rezervasyonu, etkinlik sayıları}}. Alınamazsa (yetki/ağ) boş sözlük döner, sütun "-" gösterir."""
+    try:
+        cevap = oturum_kontrollu_istek("GET", f"{api_url}/api/oda-planli-randevu-sayilari", headers={"Authorization": f"Bearer {token}"}, timeout=5)
+        if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+            return {}
+        sonuc = {}
+        for k in cevap.json():
+            if not isinstance(k, dict):
+                continue
+            sayilar = {alan: int(k.get(alan) or 0) for alan in ("planli_randevu", "cihaz_rezervasyonu", "etkinlik")}
+            if any(sayilar.values()):
+                sonuc[int(k["oda_id"])] = sayilar
+        return sonuc
+    except Exception:
+        return {}
+
+
+def oda_pasiflerini_gizle(tablo, pasifleri_goster):
+    """Oda tablosunda durumu Pasif olan satırları gizler (ya da gösterir). Durum, 3. sütundaki metinden okunur."""
+    for satir in range(tablo.rowCount()):
+        durum = tablo.item(satir, 3)
+        pasif = durum is not None and "Pasif" in durum.text()
+        tablo.setRowHidden(satir, pasif and not pasifleri_goster)
 
 # ======================================================================
 #  4. ANA PENCERE
@@ -2092,6 +2118,7 @@ QLabel {
                 odalar = cevap.json()
                 self.oda_tablosu.setRowCount(len(odalar))
                 atamalar = self.oda_psikolog_atamalarini_getir()
+                planlilar = oda_planli_randevu_sayilarini_getir(self.api_url, self.token)
 
                 for satir, oda in enumerate(odalar):
                     item_id = QTableWidgetItem(str(oda["oda_id"]))
@@ -2113,8 +2140,40 @@ QLabel {
                     item_psikolog = QTableWidgetItem(atamalar.get(oda["oda_id"], "-"))
                     item_psikolog.setTextAlignment(Qt.AlignCenter)
                     self.oda_tablosu.setItem(satir, 4, item_psikolog)
+
+                    psikolog_odasi = oda["oda_id"] in atamalar
+                    item_kullanim = QTableWidgetItem("Psikolog odası" if psikolog_odasi else "Ortak oda")
+                    item_kullanim.setTextAlignment(Qt.AlignCenter)
+                    item_kullanim.setToolTip(
+                        "Bir psikoloğa atanmış oda cihaz rezervasyonunda kullanılamaz." if psikolog_odasi
+                        else "Hiçbir psikoloğa atanmamış oda: cihaz rezervasyonu ve etkinlikler için kullanılabilir."
+                    )
+                    self.oda_tablosu.setItem(satir, 5, item_kullanim)
+
+                    sayilar = planlilar.get(oda["oda_id"], {})
+                    planli = sum(sayilar.values())
+                    item_planli = QTableWidgetItem(str(planli) if planli else "-")
+                    item_planli.setTextAlignment(Qt.AlignCenter)
+                    if planli:
+                        parcalar = [
+                            f"{sayilar[alan]} {ad}" for alan, ad in
+                            (("planli_randevu", "planlı randevu"), ("cihaz_rezervasyonu", "cihaz rezervasyonu"), ("etkinlik", "etkinlik"))
+                            if sayilar.get(alan)
+                        ]
+                        item_planli.setToolTip(
+                            "Bugün ve sonrası için " + ", ".join(parcalar)
+                            + " var; bunlar sonuçlanana ya da iptal edilene kadar oda pasife alınamaz."
+                        )
+                    self.oda_tablosu.setItem(satir, 6, item_planli)
+
+                pasifleri_goster = getattr(self, "oda_pasifleri_goster", None)
+                oda_pasiflerini_gizle(self.oda_tablosu, bool(pasifleri_goster and pasifleri_goster.isChecked()))
         except Exception as e:
             logger.warning("Oda listesi yüklenemedi: %s", e)
+
+    def oda_pasif_gorunurlugu_uygula(self, *_):
+        """"Pasif odaları da göster" kutusu değişince tabloyu yeniden çekmeden satırları gizler/gösterir."""
+        oda_pasiflerini_gizle(self.oda_tablosu, self.oda_pasifleri_goster.isChecked())
 
     def kaydirmali(self, icerik):
         sc = QScrollArea()
@@ -2469,14 +2528,22 @@ QLabel {
             ik.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             il = QVBoxLayout(ik)
 
+            # "Pasif odaları da göster" kutusu: varsayılan kapalı (oda silinmez, pasifler zamanla birikir).
+            self.oda_pasifleri_goster = QCheckBox("Pasif odaları da göster")
+            self.oda_pasifleri_goster.setCursor(Qt.PointingHandCursor)
+            self.oda_pasifleri_goster.stateChanged.connect(self.oda_pasif_gorunurlugu_uygula)
+            il.addWidget(self.oda_pasifleri_goster, alignment=Qt.AlignRight)
+
             self.oda_tablosu = QTableWidget()
-            self.oda_tablosu.setColumnCount(5)
-            self.oda_tablosu.setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum", "Psikologlar"])
+            self.oda_tablosu.setColumnCount(7)
+            self.oda_tablosu.setHorizontalHeaderLabels(["Oda ID", "Oda Adı", "Kapasite", "Durum", "Psikologlar", "Kullanım", "Planlı kayıt"])
             self.oda_tablosu.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.oda_tablosu.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.oda_tablosu.setSelectionBehavior(QAbstractItemView.SelectRows)
+            self.oda_tablosu.setColumnHidden(0, True)                  # veritabanı kimliği kullanıcı için anlamsız; kod yine 0. sütundan okur
 
             ortak_liste_stili_uygula(self.oda_tablosu)
+            siralanabilir_yap(self.oda_tablosu)                         # diğer listelerdeki gibi başlığa tıklayınca sıralama
             il.addWidget(self.oda_tablosu)
             self.odalari_getir()
             lay.addWidget(ik, 1)
