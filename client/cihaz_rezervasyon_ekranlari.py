@@ -18,7 +18,7 @@ from client.tablo_tasarimi import cihaz_hucresi_uygula, daha_fazla_dugmesi, hap_
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, cift_tikla_ac, hap, metin_item, satira_kimlik_ata, sayfa_basligi, sayi_cipi,
-    tablo_olustur, tehlike_dugmesi, tek_islem_butonu, yenile_butonu_olustur,
+    islem_butonlari, tablo_dolgusunu_daralt, tablo_olustur, tehlike_dugmesi, yenile_butonu_olustur,
 )
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
@@ -700,7 +700,7 @@ DURUM_RENKLERI = {
     "Tamamlandı": ("#475569", "#E2E8F0"),
     "İptal Edildi": ("#991B1B", "#FEE2E2"),
 }
-SUTUN_DURUM, SUTUN_ISLEM = 5, 6
+SUTUN_REZERVE_EDEN, SUTUN_DURUM, SUTUN_ISLEM = 5, 6, 7
 
 
 def zaman_araligi(baslangic, bitis):
@@ -751,17 +751,20 @@ class RezervasyonYonetimEkrani(QWidget):
             [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal, self.dahafazla_btn],
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
-        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"], ortali=True)
+        self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "REZERVE EDEN", "DURUM", "İŞLEM"], ortali=True)
+        tablo_dolgusunu_daralt(self.tablo, 14)                                 # 8 sütun: dar dolgu, 1366 px'te sütunların pencereye sığması için
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Stretch)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(3, QHeaderView.Stretch)
-        kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(4, QHeaderView.Fixed)                          # "05.11.2025  14:00 – 15:00" iki satıra sarılır: cihaz adına yer kalır
+        self.tablo.setColumnWidth(4, 135)
+        kb.setSectionResizeMode(SUTUN_REZERVE_EDEN, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(SUTUN_DURUM, QHeaderView.Fixed)               # genişlik rozetlere göre doldurmadan sonra ayarlanır
         kb.setSectionResizeMode(SUTUN_ISLEM, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(SUTUN_ISLEM, 90)
-        kb.setMinimumSectionSize(96)                                           # "Tamamlandı" / "İptal Edildi" rozeti sığsın
+        self.tablo.setColumnWidth(SUTUN_ISLEM, 110)
+        kb.setMinimumSectionSize(80)                                           # rozet sütununun genişliği hap_sutununu_sigdir ile ayrıca verilir
         cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
 
         cift_tikla_ac(self.tablo, self.rezervasyon_detay_ac)                   # satıra çift tıklayınca ayrıntı (ve iptal) açılır
@@ -824,7 +827,7 @@ class RezervasyonYonetimEkrani(QWidget):
         aranan = self.arama.text().strip().lower()
         gorunen = [r for r in self.rezervasyonlar if not aranan or aranan in " ".join(
             str(r.get(k) or "") for k in ("cihaz_id", "envanter_kodu", "cihaz_adi", "bolum_adi", "oda_adi", "proje_turu",
-                                          "proje_adi_aciklamasi")).lower()]
+                                          "proje_adi_aciklamasi", "rezerve_eden")).lower()]
         with hizli_doldur(self.tablo):
             self.tablo.setRowCount(0)
             self.tablo.setRowCount(len(gorunen))
@@ -842,18 +845,21 @@ class RezervasyonYonetimEkrani(QWidget):
                 self.tablo.setItem(satir, 3, proje_item)
                 self.tablo.setItem(satir, 4, metin_item(zaman_araligi(rez.get("baslangic_zamani"), rez.get("bitis_zamani"))))
 
+                self.tablo.setItem(satir, SUTUN_REZERVE_EDEN, metin_item(str(rez.get("rezerve_eden") or "—")))
+
                 durum = rez.get("durum", "Aktif")
                 renk, arka = DURUM_RENKLERI.get(durum, ("#6B7280", "#F3F4F6"))
                 self.tablo.setItem(satir, SUTUN_DURUM, metin_item(durum, renk="transparent"))   # metin hap'ın altında kalır; aramada/testte okunur
                 self.tablo.setCellWidget(satir, SUTUN_DURUM, hap(durum, renk, arka))
 
-                if durum == "Aktif" and self.yetkili_mi:
-                    r_id = rez.get("rezervasyon_id")
-                    self.tablo.setCellWidget(satir, SUTUN_ISLEM, tek_islem_butonu(
-                        lambda r_id=r_id: self.rezervasyon_iptal_et(r_id), "✕", "Rezervasyonu iptal et",
-                        "#B91C1C", "#FEE2E2", "#FECACA"))
+                if durum == "Aktif" and self.yetkili_mi and rez.get("yonetebilir", True):
+                    r_id = rez.get("rezervasyon_id")                            # ✎ düzenle (önceden yalnız çift tıklayınca açılıyordu) ve ✕ iptal
+                    self.tablo.setCellWidget(satir, SUTUN_ISLEM, islem_butonlari(
+                        lambda _=False, r=rez: self.rezervasyon_duzenle(r),
+                        lambda _=False, r_id=r_id: self.rezervasyon_iptal_et(r_id), "✕", "Rezervasyonu iptal et"))
 
         hap_sutununu_sigdir(self.tablo, SUTUN_DURUM)                           # "Tamamlandı" / "İptal Edildi" rozeti kesilmesin
+        hap_sutununu_sigdir(self.tablo, SUTUN_ISLEM, en_az=60)                 # ✎ / ✕ düğmeleri sağdan kırpılmasın
         bos = not gorunen
         self.bos_mesaj.setText("Aramaya uyan rezervasyon yok." if self.rezervasyonlar else "Henüz rezervasyon yok.")
         self.bos_mesaj.setVisible(bos)
@@ -875,7 +881,8 @@ class RezervasyonYonetimEkrani(QWidget):
         tablodan_excele_aktar(
             self, self.tablo, "Cihaz Rezervasyonları", "cihaz_rezervasyonlari",
             [("Envanter Kodu", 0, "cihaz_kodu"), ("Cihaz Adı", 0, "cihaz_adi"), ("Bölüm", 1, "metin"), ("Oda", 2, "metin"),
-             ("Proje", 3, "metin"), ("Tarih ve Saat", 4, "metin"), ("Durum", SUTUN_DURUM, "metin")],
+             ("Proje", 3, "metin"), ("Tarih ve Saat", 4, "metin"), ("Rezerve Eden", SUTUN_REZERVE_EDEN, "metin"),
+             ("Durum", SUTUN_DURUM, "metin")],
             "REZERVASYON", self.api_url, self.token,
             filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Rezervasyonlar",
             aciklama="Cihaz rezervasyonları (ekranda görünen kayıtlar).",

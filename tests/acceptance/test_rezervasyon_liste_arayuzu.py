@@ -111,14 +111,14 @@ def test_liste_bos_ise_bilgi_mesaji(ac):
 
 def test_iptal_dugmesi_yalniz_aktif_ve_yetkili_icin(ac):
     e = ac()
-    assert [e.tablo.cellWidget(i, 6) is not None for i in range(3)] == [True, False, False]
-    assert [e.tablo.cellWidget(i, 5) is not None for i in range(3)] == [True, True, True]          # durum etiketi hep var
-    assert ac(yetkili=False).tablo.cellWidget(0, 6) is None
+    assert [e.tablo.cellWidget(i, 7) is not None for i in range(3)] == [True, False, False]
+    assert [e.tablo.cellWidget(i, 6) is not None for i in range(3)] == [True, True, True]          # durum etiketi hep var
+    assert ac(yetkili=False).tablo.cellWidget(0, 7) is None
 
 
 def test_iptal_onaylanirsa_istek_gider_ve_liste_yenilenir(modul, ac):
     e = ac()
-    assert e.tablo.cellWidget(0, 6) is not None
+    assert e.tablo.cellWidget(0, 7) is not None
     istekler = []
 
     def sahte(yontem, url, **kw):

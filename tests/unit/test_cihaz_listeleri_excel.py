@@ -88,8 +88,8 @@ def test_rezervasyon_gorunen_satirlar_cihaz_iki_sutun(tmp_path):
     QApplication.processEvents()
     kitap, istekler = _aktar(e, tmp_path)
     satirlar = _tablo_satirlari(kitap)
-    assert satirlar[0] == ["Envanter Kodu", "Cihaz Adı", "Bölüm", "Oda", "Proje", "Tarih ve Saat", "Durum"]
-    assert len(satirlar) == 2 and satirlar[1][:3] == ["EEG-01", "Çok Kanallı EEG", "Nöroloji"] and satirlar[1][6] == "Aktif"
+    assert satirlar[0] == ["Envanter Kodu", "Cihaz Adı", "Bölüm", "Oda", "Proje", "Tarih ve Saat", "Rezerve Eden", "Durum"]
+    assert len(satirlar) == 2 and satirlar[1][:3] == ["EEG-01", "Çok Kanallı EEG", "Nöroloji"] and satirlar[1][7] == "Aktif"
     _denetim(istekler, "REZERVASYON", 1)
     e.close()
 
@@ -126,7 +126,7 @@ def test_ariza_cozum_bilgisi_de_aktarilir(tmp_path):
     satirlar = _tablo_satirlari(kitap)
     assert satirlar[0][-3:] == ["Açıklama", "Çözüm Tarihi", "Çözüm Notu"]
     ilk = [s for s in satirlar[1:] if s[0] == "5"][0]
-    assert ilk[1:3] == ["E-42", "Çok Kanallı EEG"] and ilk[5] == "Çözüldü" and ilk[-3:] == ["Ekran açılmıyor", "2026-11-19 09:30", "Kablo değişti"]
+    assert ilk[1:3] == ["E-42", "Çok Kanallı EEG"] and ilk[5] == "Çözüldü" and ilk[-3:] == ["Ekran açılmıyor", "19.11.2026 09:30", "Kablo değişti"]
     acik = [s for s in satirlar[1:] if s[0] == "4"][0]
     assert acik[5] == "Açık" and acik[-2:] == [None, None]                           # boş hücreler Excel'de boş
     _denetim(istekler, "ARIZA", 2)

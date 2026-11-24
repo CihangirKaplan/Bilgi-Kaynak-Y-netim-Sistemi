@@ -127,13 +127,13 @@ def test_tamamlanan_rezervasyonda_iptal_butonu_yok(qt_app):
 
     assert tablo.rowCount() == 3
 
-    assert tablo.item(0, 5).text() == "Tamamlandı"
-    assert tablo.cellWidget(0, 6) is None
+    assert tablo.item(0, 6).text() == "Tamamlandı"
+    assert tablo.cellWidget(0, 7) is None
 
-    assert tablo.item(1, 5).text() == "Aktif"
-    assert tablo.cellWidget(1, 6) is not None
+    assert tablo.item(1, 6).text() == "Aktif"
+    assert tablo.cellWidget(1, 7) is not None
 
-    assert tablo.item(2, 5).text() == "İptal Edildi"
-    assert tablo.cellWidget(2, 6) is None
+    assert tablo.item(2, 6).text() == "İptal Edildi"
+    assert tablo.cellWidget(2, 7) is None
 
     ekran.close()

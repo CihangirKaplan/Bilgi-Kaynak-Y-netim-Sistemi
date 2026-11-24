@@ -46,7 +46,7 @@ def test_ariza_listesi_satirlari_ve_cipleri(qt_app):
     assert e.cip_toplam.text() == "2 kayıt" and e.cip_acik.text() == "1 açık" and e.cip_cozulen.text() == "1 çözüldü"
     assert hap_metni(e.tablo, 0, 3) == "Kritik" and hap_metni(e.tablo, 0, 4) == "Açık"
     assert hap_metni(e.tablo, 1, 3) == "Belirtilmedi" and hap_metni(e.tablo, 1, 4) == "Çözüldü"
-    assert e.tablo.item(0, 5).text() == "2026-11-01 10:30"
+    assert e.tablo.item(0, 5).text() == "01.11.2026 10:30"
     assert e.tablo.item(1, 5).text() == ""                 # tarih boşsa çökmez
 
 

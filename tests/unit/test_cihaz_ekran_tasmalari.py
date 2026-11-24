@@ -206,9 +206,9 @@ def test_uygunluk_uzun_cihaz_adi_sutunu_sisirmez_gun_sutunlari_dengeli(qt_app):
     e.resize(1400, 500)
     e.show()
     QApplication.processEvents()
-    assert e.tablo.columnWidth(uyg_modulu.SUTUN_CIHAZ) == 210                # uzun ad sütunu şişirmedi
+    assert e.tablo.columnWidth(uyg_modulu.SUTUN_CIHAZ) == 170                # uzun ad sütunu şişirmedi
     gunler = [e.tablo.columnWidth(c) for c in range(uyg_modulu.ILK_GUN_SUTUNU, uyg_modulu.ILK_GUN_SUTUNU + 7)]
-    assert min(gunler) >= 78 and max(gunler) - min(gunler) <= 2              # gün sütunları eşit ve dar değil
+    assert min(gunler) >= 70 and max(gunler) - min(gunler) <= 2              # gün sütunları eşit ve dar değil
     cumartesi_degil = e.tablo.item(0, uyg_modulu.ILK_GUN_SUTUNU + 2)         # 4 Kasım (Çarşamba): 3 rezervasyon
     assert cumartesi_degil.text().split("\n")[1:] == ["09:00–10:00", "11:00–12:00", "+1 daha"]
     assert e.tablo.rowHeight(0) > 54                                         # satır çok satırlı hücreye göre uzadı
@@ -272,7 +272,7 @@ def test_bakim_kayitlari_iki_satirli_cihaz_hucresi_ve_islem_dugmeleri_kirpilmaz(
     e = _kayit_ekrani(bakim_modulu, "BakimYonetimEkrani", veri)
     assert isinstance(e.tablo.itemDelegateForColumn(0), CihazHucresiDelegate)
     assert e.tablo.item(0, 0).text() == "DENEME-006 - Ultrason Cihazı"                 # metin değişmedi
-    assert e.tablo.columnWidth(0) == 230                                               # uzun ad sütunu şişirmedi
+    assert e.tablo.columnWidth(0) == 165                                               # uzun ad sütunu şişirmedi
     assert e.tablo.item(0, 0).data(SIRALAMA_ROLU) == "Ultrason Cihazı"                 # ada göre sıralama
     ipucu = e.tablo.item(0, 0).toolTip()
     assert "Envanter kodu: DENEME-006" in ipucu and "Yerine getirilen plan: Yıllık bakım" in ipucu

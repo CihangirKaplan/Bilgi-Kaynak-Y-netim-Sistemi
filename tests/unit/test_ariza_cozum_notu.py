@@ -73,7 +73,7 @@ def test_ariza_ipucu_cozum_bilgisini_gosterir():
     assert ariza_modulu.ariza_ipucu(acik) == "Ekran açılmıyor"
     cozuldu = {"ariza_aciklama": "Ekran açılmıyor", "durum": "Çözüldü", "cozum_tarihi": "2026-11-02T09:00:00", "cozum_notu": "Kablo değişti"}
     metin = ariza_modulu.ariza_ipucu(cozuldu)
-    assert "Çözüm tarihi: 2026-11-02 09:00" in metin and "Çözüm: Kablo değişti" in metin
+    assert "Çözüm tarihi: 02.11.2026 09:00" in metin and "Çözüm: Kablo değişti" in metin
     assert "not girilmemiş" in ariza_modulu.ariza_ipucu({"durum": "Çözüldü"})                    # eski kayıt
 
 
