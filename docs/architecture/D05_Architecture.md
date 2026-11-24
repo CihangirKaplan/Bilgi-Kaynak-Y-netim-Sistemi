@@ -793,6 +793,7 @@ Roller:
 | Danışma masası oturumunu yönetme | Hayır | Evet | Evet | Evet | Hayır | Evet |
 | Cihaz ekleme | Hayır | Evet | Evet | Hayır | Hayır | Evet |
 | Faaliyet kayıtlarını düzenleme | Hayır | Evet | Evet | Hayır | Evet | Evet |
+| Öğrenci kaydını kalıcı silme | Hayır | Hayır | Evet | Hayır | Hayır | Evet |
 | Yeni izin tanımlama | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | İzin düzenleme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
 | Rol-izin yönetme | Hayır | Hayır | Hayır | Hayır | Hayır | Evet |
@@ -803,6 +804,8 @@ Roller:
 Sisteme giriş, `rol_izinleri` tablosunda ayrı bir işlem izni olarak tutulmaz. Giriş; doğru kimlik doğrulama bilgileri ve `kullanicilar.aktif_mi` alanı üzerinden kontrol edilir.
 
 `Faaliyet birimlerini yönetme` işlemi veritabanındaki `FAALIYET_BIRIMI_DUZENLE` iznine karşılık gelir ve yalnızca Admin rolüne verilmiştir.
+
+`Öğrenci kaydını kalıcı silme` işlemi `OGRENCI_KAYDI_SIL` iznine karşılık gelir (Müdür ve Admin). Geri alınamaz olduğu için öğrenci listeleme/ekleme iznine (`FAALIYET_KAYITLARI_DUZENLE`) bağlı değildir.
 
 ## 9.3. Yetkilendirme Prensibi
 

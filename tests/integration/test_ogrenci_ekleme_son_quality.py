@@ -80,7 +80,7 @@ def test_ogrenci_audit_hatasinda_rollback():
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
         patch(
-            "server.denetim.denetim_kaydi_olustur",
+            "server.sunucu.denetim_kaydi_olustur",
             side_effect=RuntimeError(
                 "QA001_AUDIT_ERROR"
             ),

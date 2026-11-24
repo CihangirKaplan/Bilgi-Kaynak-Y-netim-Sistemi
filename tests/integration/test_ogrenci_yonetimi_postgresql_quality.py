@@ -381,6 +381,35 @@ def test_on_yili_dolan_gonullu_guvenle_silinir(gecici_gonullu):
 
 
 
+def test_silinen_ogrencinin_erteleme_gecmisi_de_imha_edilir(gecici_gonullu):
+    """Erteleme geçmişi öğrenci numarasını taşır; öğrenciyle birlikte silinmezse kimlik bilgisi geride kalırdı."""
+    ogrenci_id = gecici_gonullu
+    conn = psycopg2.connect(**VT_AYARLARI)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ogrenci_numarasi FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))
+            numara = cur.fetchone()[0]
+            cur.execute("""
+                INSERT INTO ogrenci_kayit_erteleme_gecmisi (ogrenci_id, ogrenci_numarasi, yeni_uyari_tarihi)
+                VALUES (%s, %s, CURRENT_DATE - 1)
+            """, (ogrenci_id, numara))
+        conn.commit()
+
+        sunucu.ogrenci_on_yil_sil(ogrenci_id=ogrenci_id, veri=sunucu.OgrenciSilOnayModeli(onayla=True), yetkili_id=None)
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM ogrenci_kayit_erteleme_gecmisi WHERE ogrenci_numarasi = %s", (numara,))
+            assert cur.fetchone()[0] == 0
+            cur.execute("""
+                SELECT ayrinti->>'silinen_erteleme_kaydi_sayisi' FROM denetim_kayitlari
+                WHERE hedef_tablo = 'ogrenciler' AND hedef_kayit_id = %s AND olay_turu = 'DELETE'
+            """, (ogrenci_id,))
+            assert cur.fetchone()[0] == "1"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def faaliyet_kaydi_olustur(ogrenci_id):
     """Geçici öğrenciye yalnızca test DB'sinde faaliyet ekle."""
     conn = psycopg2.connect(**VT_AYARLARI)

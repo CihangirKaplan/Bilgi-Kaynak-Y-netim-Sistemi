@@ -24,22 +24,22 @@ class OgrenciEkleDialog(QDialog):
         self.setWindowTitle("Yeni Öğrenci Ekle")
         self.setMinimumWidth(400)
 
-        # Bembeyaz ve şık form tasarımı
+        # Öğrenciler sayfasıyla aynı renkler (mavi birincil düğme).
         self.setStyleSheet("""
-            QDialog { background-color: #F8F9FA; }
-            QLineEdit, QComboBox, QSpinBox {
+            QDialog { background-color: #F3F6FC; }
+            QLineEdit, QComboBox {
                 background-color: white;
-                color: #2C3E50;
+                color: #243653;
                 padding: 6px;
-                border: 1px solid #BDC3C7;
-                border-radius: 4px;
+                border: 1px solid #D1DDED;
+                border-radius: 6px;
             }
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
-                border: 1px solid #3498DB;
-                background-color: #FAFAFA;
+            QLineEdit:focus, QComboBox:focus {
+                border: 1px solid #3778D8;
             }
-            QPushButton { background-color: #27AE60; color: white; font-weight: bold; padding: 8px; border-radius: 4px; }
-            QPushButton:hover { background-color: #2ECC71; }
+            QPushButton { background-color: #285CE6; color: white; font-weight: bold; padding: 8px; border-radius: 6px; }
+            QPushButton:hover { background-color: #1E4BC5; }
+            QPushButton:disabled { background-color: #DCE6F5; color: #8192AD; }
         """)
 
         layout = QVBoxLayout(self)
@@ -59,7 +59,7 @@ class OgrenciEkleDialog(QDialog):
 
         self.le_telefon = QLineEdit()
         self.le_telefon.setMaxLength(11)
-        self.le_telefon.setPlaceholderText("Örn: 05551234567")
+        self.le_telefon.setPlaceholderText("Örn: 05551234567 (başına 0 yazmadan 10 hane de olur)")
 
         self.le_bolum = QLineEdit()
         self.le_bolum.setMaxLength(100)          # veritabanı: ogrenciler.bolum VARCHAR(100)
@@ -119,16 +119,19 @@ class OgrenciEkleDialog(QDialog):
             QMessageBox.warning(self, "Uyarı", "Öğrenci numarası sadece rakamlardan oluşmalıdır. Harf giremezsiniz!")
             return
 
-        # 3. Telefon Kontrolü (Eğer doldurulduysa kurallara uymak zorunda)
+        # 3. Telefon Kontrolü: sunucu ve "Kullanıcı & Personel" ekranıyla aynı kural. 10 hane (başında 0 olmadan) ya da 11 hane (0 ile);
+        #    kayıt her zaman 11 haneli gönderilir.
         if telefon:
             if not telefon.isdigit():
                 QMessageBox.warning(self, "Uyarı", "Telefon numarasına harf veya boşluk giremezsiniz. Sadece rakam olmalıdır!")
                 return
-            if len(telefon) != 11:
-                QMessageBox.warning(self, "Uyarı", "Telefon numarası tam 11 haneli olmalıdır.\n(Örn: 05551234567)")
-                return
-            if not telefon.startswith("0"):
-                QMessageBox.warning(self, "Uyarı", "Telefon numarası '0' ile başlamalıdır.")
+            if len(telefon) == 10 and not telefon.startswith("0"):
+                telefon = "0" + telefon
+            if len(telefon) != 11 or not telefon.startswith("0"):
+                QMessageBox.warning(
+                    self, "Uyarı",
+                    "Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez (örn. 555 123 45 67)."
+                )
                 return
 
         # Her şey kurallara uygunsa veritabanı için paketi hazırla
@@ -141,6 +144,7 @@ class OgrenciEkleDialog(QDialog):
             "sinif": self.le_sinif.text().strip()
         }
 
+        self.btn_kaydet.setEnabled(False)                # istek sürerken çift tıklama ikinci kayıt göndermesin
         try:
             headers = {"Authorization": f"Bearer {self.token}"}
             res = oturum_kontrollu_istek("POST", f"{self.api_url}/api/ogrenci-ekle", json=payload, headers=headers)
@@ -150,9 +154,10 @@ class OgrenciEkleDialog(QDialog):
             if res.status_code == 200:
                 basari_bildirimi(self, "Öğrenci sisteme başarıyla eklendi!")
                 self.accept()
-            elif res.status_code == 400:
-                QMessageBox.warning(self, "Hata", hata_detayi_metni(res, "Bu öğrenci numarası sistemde zaten var."))
             else:
-                QMessageBox.critical(self, "Hata", "Öğrenci kaydedilemedi.")
+                # Sunucunun açıklaması gösterilir (yinelenen numara, geçersiz alan, yetki...).
+                QMessageBox.warning(self, "Hata", hata_detayi_metni(res, "Öğrenci kaydedilemedi."))
         except Exception as e:
             QMessageBox.critical(self, "Bağlantı Hatası", f"Sunucuya ulaşılamadı: {istek_hatasi_metni(e)}")
+        finally:
+            self.btn_kaydet.setEnabled(True)

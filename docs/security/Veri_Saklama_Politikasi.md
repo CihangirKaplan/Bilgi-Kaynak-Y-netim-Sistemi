@@ -7,7 +7,7 @@ Hukuki uygunluğun merkezin KVKK sorumlusu tarafından da doğrulanması öneril
 
 | Veri | Kişisel veri içerir mi? | Saklama süresi | Süre dolunca |
 |---|---|---|---|
-| **Gönüllü öğrenci kayıtları** (ad, numara, telefon) | **Evet** | **10 yıl** (kayıt tarihinden) | Sistem uyarır (Öğrenciler sayfası, **Süresi Dolan Kayıtlar**). Yetkili kişi kaydı **erteler** ya da **siler**; silme kalıcıdır ve denetim kaydına yazılır |
+| **Gönüllü öğrenci kayıtları** (ad, numara, telefon) | **Evet** | **10 yıl** (kayıt tarihinden) | Sistem uyarır (Öğrenciler sayfası, **Süresi Dolan Kayıtlar**). Yetkili kişi kaydı **erteler**; **silme** yalnızca Müdür ve Admin'dedir (ayrı izin: `OGRENCI_KAYDI_SIL`). Silme kalıcıdır, öğrencinin faaliyet kayıtlarını ve erteleme geçmişini de siler; denetim kaydına kişisel veri yazılmadan işlenir |
 | **Danışan kodları ve randevular** (kodla tutulur) | Hayır: ad, telefon, tanı yoktur (FR-008) | **10 yıl** | Otomatik silme **yoktur**; süre dolunca silme ya da arşivleme kararı merkeze aittir |
 | **Cihaz, bakım, kalibrasyon, arıza, rezervasyon kayıtları** | Hayır (yalnızca işlemi yapan kullanıcının kullanıcı adı) | **10 yıl** | Otomatik silme yoktur |
 | **Kullanıcı hesapları** | Kullanıcı adı, personel kodu | Hesap **silinmez**, pasife alınır (geçmiş kayıtlar korunur) | — |
@@ -20,7 +20,7 @@ Hukuki uygunluğun merkezin KVKK sorumlusu tarafından da doğrulanması öneril
 ## 2. Uygulama notları
 
 - **"Saklanır" ile "ekranda görünür" aynı şey değildir.** Cihaz rezervasyon, arıza, bakım ve kalibrasyon listeleri ekranda **en yeni 5000 kaydı** gösterir (normal kullanımda yıllarca sınıra ulaşılmaz). Daha eski kayıtlar silinmez, veritabanında durur; sınıra ulaşılırsa ekran "en yeni 5000 / toplam N kayıt" yazar.
-- **Öğrenci kaydının silinmesi geri alınamaz.** Silmeden önce Excel dışa aktarımı ya da yedek gerekiyorsa alınmalıdır. Silme erteleme tarihi gelmeden reddedilir.
+- **Öğrenci kaydının silinmesi geri alınamaz.** Silmeden önce Excel dışa aktarımı ya da yedek gerekiyorsa alınmalıdır. Silme erteleme tarihi gelmeden reddedilir. Öğrenci numarasını taşıyan erteleme geçmişi de öğrenciyle birlikte silinir; geride kimlik bilgisi kalmaz.
 - Excel çıktıları kişisel veri içerebilir (öğrenci adı, telefon); aktarımlar denetim kaydına yazılır. Dosyalar kurum dışına verilmemelidir.
 - **Yedekler 14 gün tutulduğu için** silinen bir öğrenci kaydı, 14 güne kadar eski yedeklerde durur. Kalıcı silme istenen durumlarda bu süre göz önünde bulundurulmalıdır.
 

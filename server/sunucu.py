@@ -5875,7 +5875,10 @@ def ogrencileri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLA
         cursor = conn.cursor()
         # Ad Soyad, Öğrenci Numarası ve türü çek. Tüm öğrenciler listelenir;
         # her öğrencinin yanında türü (gönüllü, danışma masası, asistan) belirtilir.
-        cursor.execute("SELECT ogrenci_id, ad_soyad, ogrenci_numarasi, tur::text FROM ogrenciler WHERE aktif_mi = true;")
+        cursor.execute(
+            "SELECT ogrenci_id, ad_soyad, ogrenci_numarasi, tur::text FROM ogrenciler WHERE aktif_mi = true "
+            "ORDER BY ad_soyad, ogrenci_numarasi;"
+        )
 
         liste = []
         for r in cursor.fetchall():
@@ -5901,7 +5904,7 @@ class OgrenciAktiflikModeli(BaseModel):
 
 
 # ============================================================
-# ÖĞRENCİ YÖNETİMİ: LİSTE, PUAN, 5 YIL, ERTELEME, SİLME
+# ÖĞRENCİ YÖNETİMİ: LİSTE, PUAN, 10 YIL, ERTELEME, SİLME
 # ============================================================
 
 from datetime import date as _ogr_date
@@ -6654,7 +6657,8 @@ def ogrenci_on_yil_sil(
     ogrenci_id: int,
     veri: OgrenciSilOnayModeli,
     yetkili_id: int = Depends(
-        izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
+        # Kalıcı ve geri alınamaz işlem: öğrenci listeleme/ekleme iznine (FAALIYET_KAYITLARI_DUZENLE) değil, ayrı bir izne bağlıdır.
+        izin_kontrol("OGRENCI_KAYDI_SIL")
     )
 ):
     if not veri.onayla:
@@ -6767,11 +6771,20 @@ def ogrenci_on_yil_sil(
             )
             silinen_faaliyet_sayisi = cursor.rowcount
 
+            # Erteleme geçmişi öğrenci numarasını taşır (öğrenciye bağlı kimlik bilgisi). Öğrenciyle birlikte imha edilir;
+            # kimin ne zaman erteleme yaptığı denetim kayıtlarında (kimliksiz) zaten durur.
+            cursor.execute(
+                "DELETE FROM ogrenci_kayit_erteleme_gecmisi WHERE ogrenci_id = %s;",
+                (ogrenci_id,)
+            )
+            silinen_erteleme_sayisi = cursor.rowcount
+
             # 10 yıllık saklama süresi sonunda yapılan imha: denetim kaydına kişisel veri (ad, telefon...) YAZILMAZ;
             # yalnızca kimliksiz alanlar ve silinen faaliyet sayısı tutulur.
             silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenciler", ogrenci_id)
             if silinen is not None:
                 silinen["silinen_faaliyet_kaydi_sayisi"] = silinen_faaliyet_sayisi
+                silinen["silinen_erteleme_kaydi_sayisi"] = silinen_erteleme_sayisi
 
             denetim_kaydi_olustur(
                 VT_AYARLARI,
@@ -7088,14 +7101,15 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
 
         yeni_id = cursor.fetchone()[0]
 
-        from server.denetim import denetim_kaydi_olustur
+        # Ad, numara ve telefon kişisel veridir (FR-008): denetime yalnızca öğrencinin türü yazılır.
         denetim_kaydi_olustur(
             VT_AYARLARI,
             olay_turu="CREATE",
             kullanici_id=yetkili_id,
             hedef_tablo="ogrenciler",
             hedef_kayit_id=yeni_id,
-            mevcut_cursor=cursor
+            mevcut_cursor=cursor,
+            ayrinti={"yeni": {"tur": ogr.tur}}
         )
 
         conn.commit()
