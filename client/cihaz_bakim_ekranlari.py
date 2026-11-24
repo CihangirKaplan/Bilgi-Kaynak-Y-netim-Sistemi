@@ -50,10 +50,12 @@ def tarihleri_denetle(ust, baslangic, bitis, sonraki):
 
 
 class YeniBakimFormu(QDialog):
-    def __init__(self, api_url, token, parent=None):
+    def __init__(self, api_url, token, parent=None, cihaz_id=None, plan_id=None, islem_metni=None):
+        """cihaz_id / plan_id verilirse (plandan "kayıt aç" kısayolu) cihaz ve bağlı plan seçili açılır; islem_metni boş alanı doldurur."""
         super().__init__(parent)
         self.api_url = api_url
         self.token = token
+        self._on_cihaz_id, self._on_plan_id, self._on_islem = cihaz_id, plan_id, islem_metni
 
         self.setWindowTitle("Yeni Bakım Kaydı")
         self.setMinimumWidth(450)   # yükseklik içeriğe göre otomatik
@@ -112,6 +114,7 @@ class YeniBakimFormu(QDialog):
         layout.addWidget(self.btn_kaydet)
 
         self.cihazlari_yukle()
+        self.on_secimi_uygula()
 
     def cihazlari_yukle(self):
         self.btn_kaydet.setEnabled(False)
@@ -160,6 +163,19 @@ class YeniBakimFormu(QDialog):
                 api_hata_mesaji(hata=hata)
             )
             self.lbl_cihaz_hatasi.show()
+
+    def on_secimi_uygula(self):
+        """Plandan açılmışsa cihazı, bağlı planı ve yapılacak işlemi seçili getirir (kullanıcı değiştirebilir)."""
+        if self._on_cihaz_id is not None:
+            sira = self.cmb_cihaz.findData(self._on_cihaz_id)
+            if sira >= 0:
+                self.cmb_cihaz.setCurrentIndex(sira)                   # plan listesi kendiliğinden yenilenir
+                if self._on_plan_id is not None:
+                    plan_sira = self.plan_secimi.cmb_plan.findData(self._on_plan_id)
+                    if plan_sira >= 0:
+                        self.plan_secimi.cmb_plan.setCurrentIndex(plan_sira)
+        if self._on_islem and not self.txt_islem.toPlainText().strip():
+            self.txt_islem.setPlainText(self._on_islem)
 
 
     def kaydet(self):

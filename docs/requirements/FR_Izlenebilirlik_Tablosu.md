@@ -104,7 +104,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-035 | Personel tanımlama | ✅ | `POST /api/personel` (`PERSONEL_TANIMLA`) | `test_kullanici_personel_atomik_quality.py`, `test_kullanici_personel_tarih_rol_uyarisi.py` |
 | FR-036 | Rol atama | ✅ | `PATCH /api/kullanicilar/{id}/rol` (`ROL_ATAMA_DEGISTIRME`) | `test_adm_privilege_validation.py`, `test_kullanici_personel_tarih_rol_uyarisi.py` Not: ADMIN rolü atanamaz ve başka bir role dönüştürülemez; psikolog rolüne geçişte oda zorunludur (`test_rol_degistirme_oda_kurali.py`). |
 | FR-037 | Kullanıcı pasifleştirme | ✅ | `PATCH /api/kullanicilar/{id}/durum-degistir` | `test_kullanici_pasiflestirme.py`, `test_kullanici_durum_degistir.py` Not: ADMIN hesabının aktiflik durumu değiştirilemez (`test_admin_hesap_korumasi.py`). |
-| FR-038 | Bakım yapılandırması (tür, periyot, ayar) | ✅ | Bakım Planları sayfası, `/api/bakim-planlari`, `plan_secimi.py` | `test_bakim_planlari_api.py`, `test_bakim_plani_ekrani.py`, `test_bakim_plani_baglanti.py`, `test_plan_secimi.py`. Not: Planları Memur, Müdür ve Admin yönetir |
+| FR-038 | Bakım yapılandırması (tür, periyot, ayar) | ✅ | Bakım Planları sayfası, `/api/bakim-planlari`, `plan_secimi.py` | `test_bakim_planlari_api.py`, `test_bakim_plani_ekrani.py`, `test_bakim_plani_baglanti.py`, `test_plan_secimi.py`, `test_cihaz_kisayollari_adim4.py` (plandan ▶ ile bakım/kalibrasyon kaydı açma). Not: Planları Memur, Müdür ve Admin yönetir |
 | FR-039 | Kalibrasyon yapılandırması (periyot, ayar) | ✅ | Aynı sayfa; "Kalibrasyon" ile başlayan plan türü | FR-038 ile aynı testler |
 
 ### 5.8 Dashboard ve raporlama

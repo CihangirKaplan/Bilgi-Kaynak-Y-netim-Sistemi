@@ -3,7 +3,7 @@
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
 import logging
-from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, tarih_saat_goster
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, islem_dugmeleri, tablo_dolgusunu_daralt, tarih_saat_goster
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtCore import Qt
@@ -16,7 +16,7 @@ from client.api_yoneticisi import oturum_kontrollu_istek, oturum_hatasi_mi
 from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata
 from client.tablo_tasarimi import (FORM_STIL, bos_mesaj_olustur, hap, metin_item, sayfa_basligi,
-                            sayi_cipi, tablo_olustur, tek_islem_butonu, yenile_butonu_olustur)
+                            sayi_cipi, tablo_olustur, yenile_butonu_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
 from client.liste_siniri import ListeSiniri, daha_fazla_guncelle, kisaltma_ipucu, liste_toplami, toplam_etiketi
@@ -186,11 +186,12 @@ def ariza_ipucu(ar):
 
 class ArizaYonetimEkrani(QWidget):
     """Ana Arıza Kayıtları Listesi Ekranı"""
-    def __init__(self, api_url, token, yetkili_mi=False):
+    def __init__(self, api_url, token, yetkili_mi=False, gecmis_yetkili_mi=False):
         super().__init__()
         self.api_url = api_url
         self.token = token
         self.yetkili_mi = yetkili_mi
+        self.gecmis_yetkili_mi = gecmis_yetkili_mi        # cihaz geçmişini açma izni (cihaz envanteri yönetimi): satırda ◷ düğmesi
         self.ariza_detaylari = {}
         self.arayuzu_olustur()
 
@@ -217,10 +218,11 @@ class ArizaYonetimEkrani(QWidget):
 
         self.tablo = tablo_olustur(["NO", "CİHAZ", "SORUN BAŞLIĞI", "ACİLİYET", "DURUM",
                                     "BİLDİRİM TARİHİ", "İŞLEM"], ortali=True)
+        tablo_dolgusunu_daralt(self.tablo, 14)                                 # 1366 px'te "SORUN BAŞLIĞI" başlığı kesiliyordu
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(1, QHeaderView.Fixed)                          # uzun cihaz adı sütunu şişirmesin ("…" ile kısalır, ipucunda tam)
-        self.tablo.setColumnWidth(1, 230)
+        self.tablo.setColumnWidth(1, 190)
         cihaz_hucresi_uygula(self.tablo, 1)                                    # ad üstte (kalın), envanter kodu altta (gri)
         kb.setSectionResizeMode(2, QHeaderView.Stretch)
         kb.setSectionResizeMode(3, QHeaderView.Fixed)           # etiket (hap) sütunları: içerikten
@@ -293,15 +295,20 @@ class ArizaYonetimEkrani(QWidget):
 
                 self.tablo.setItem(satir, 5, metin_item(tarih_saat_goster(ar.get("bildirim_tarihi")), ortala=True))
 
+                dugmeler = []
+                if self.gecmis_yetkili_mi and ar.get("cihaz_id") is not None:
+                    dugmeler.append((lambda _=False, c_id=ar["cihaz_id"]: self.cihaz_gecmisi_ac(c_id), "◷", "Cihaz geçmişini aç"))
                 if self.yetkili_mi:
                     # Açık arıza düzenlenir/çözülür; çözülmüş arıza yanlışlıkla çözüldü işaretlendiyse yeniden açılabilir.
                     if cozuldu:
-                        dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "↺", "Düzenle / yeniden aç",
-                                                 renk="#1D4ED8", arka="#DBEAFE", hover="#BFDBFE")
+                        dugmeler.append((lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "↺", "Düzenle / yeniden aç",
+                                         "#1D4ED8", "#DBEAFE", "#BFDBFE"))
                     else:
-                        dugme = tek_islem_butonu(lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "✎", "Düzenle / Çöz")
-                    self.tablo.setCellWidget(satir, 6, dugme)
+                        dugmeler.append((lambda _=False, a_id=ariza_id: self.ariza_duzenle_form_ac(a_id), "✎", "Düzenle / Çöz",
+                                         "#B45309", "#FEF3C7", "#FDE68A"))
                     satira_kimlik_ata(self.tablo, satir, ariza_id)      # yetkili kullanıcı için her satır (açık ya da çözülmüş) çift tıkla açılır
+                if dugmeler:
+                    self.tablo.setCellWidget(satir, 6, islem_dugmeleri(*dugmeler))
 
         self.cip_toplam.setText(toplam_etiketi(len(arizalar), toplam))
         self.cip_toplam.setToolTip(kisaltma_ipucu(len(arizalar), toplam))
@@ -347,6 +354,11 @@ class ArizaYonetimEkrani(QWidget):
                          ("Çözüm Tarihi", lambda s: tarih_saat_goster(kayit(s, "cozum_tarihi"))),
                          ("Çözüm Notu", lambda s: kayit(s, "cozum_notu"))],
         )
+
+    def cihaz_gecmisi_ac(self, cihaz_id):
+        """Arızanın cihazının bakım, kalibrasyon, arıza ve rezervasyon geçmişini tek zaman çizgisinde açar."""
+        from client.cihaz_gecmisi_penceresi import CihazGecmisiPenceresi
+        CihazGecmisiPenceresi(self.api_url, self.token, cihaz_id, self).exec()
 
     def ariza_duzenle_form_ac(self, ariza_id):
         secili_ariza = self.ariza_detaylari.get(ariza_id)

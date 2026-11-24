@@ -19,9 +19,10 @@ from client.tablo_tasarimi import cihaz_hucresi_uygula
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (
-    FORM_STIL, bos_mesaj_olustur, hap, islem_butonlari, metin_item, sayfa_basligi, sayi_cipi,
-    sil_onayi, tablo_olustur, tarih_goster, yenile_butonu_olustur,
+    FORM_STIL, bos_mesaj_olustur, hap, islem_dugmeleri, metin_item, sayfa_basligi, sayi_cipi,
+    sil_onayi, tablo_dolgusunu_daralt, tablo_olustur, tarih_goster, yenile_butonu_olustur,
 )
+from client.plan_secimi import kalibrasyon_plani_mi
 
 # Sık kullanılan tekrar aralıkları: (görünen ad, gün). "Özel" her zaman en sonda durur.
 HAZIR_PERIYOTLAR = (
@@ -355,11 +356,14 @@ class BakimPlanlariEkrani(QWidget):
 
     FILTRELER = (("Aktif planlar", True), ("Tüm planlar", None), ("Pasif planlar", False))
 
-    def __init__(self, api_url, token, yetkili_mi=True):
+    def __init__(self, api_url, token, yetkili_mi=True, bakim_kaydi_yetkili_mi=False, kalibrasyon_kaydi_yetkili_mi=False):
         super().__init__()
         self.api_url = api_url
         self.token = token
         self.yetkili_mi = yetkili_mi            # False: yalnızca görüntüleme (düzenle/sil düğmeleri ve çift tıkla düzenleme yok)
+        # Plandan tek tıkla kayıt açma: bakım planı için bakım kaydı, kalibrasyon planı için kalibrasyon kaydı yönetme izni gerekir.
+        self.bakim_kaydi_yetkili_mi = bakim_kaydi_yetkili_mi
+        self.kalibrasyon_kaydi_yetkili_mi = kalibrasyon_kaydi_yetkili_mi
         self.basliklar = {"Authorization": f"Bearer {token}"}
         self.planlar = {}
         self.arayuzu_olustur()
@@ -385,6 +389,7 @@ class BakimPlanlariEkrani(QWidget):
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "PLAN", "TEKRAR", "UYARI", "SONRAKİ TARİH", "DURUM", "İŞLEM"], ortali=True)
+        tablo_dolgusunu_daralt(self.tablo, 14)                                 # ▶ ✎ 🗑 üç düğme: cihaz adına yer kalsın
         baslik = self.tablo.horizontalHeader()
         baslik.setSectionResizeMode(0, QHeaderView.Stretch)
         baslik.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -395,7 +400,7 @@ class BakimPlanlariEkrani(QWidget):
         baslik.setSectionResizeMode(5, QHeaderView.Fixed)              # genişlik rozetlere göre doldurmadan sonra verilir (hap_sutununu_sigdir)
         baslik.setSectionResizeMode(6, QHeaderView.Fixed)
         self.tablo.setColumnWidth(6, 110)
-        self.tablo.setColumnHidden(6, not self.yetkili_mi)
+        self.tablo.setColumnHidden(6, not (self.yetkili_mi or self.bakim_kaydi_yetkili_mi or self.kalibrasyon_kaydi_yetkili_mi))
 
         cift_tikla_ac(self.tablo, self.plan_duzenle)                           # satıra çift tıklayınca düzenleme açılır
         self.bos_mesaj = bos_mesaj_olustur("")
@@ -476,11 +481,17 @@ class BakimPlanlariEkrani(QWidget):
             renk, arka = DURUM_RENKLERI.get(durum, DURUM_RENKLERI["Planlı"])
             self.tablo.setCellWidget(i, 5, hap(f"{durum}  ·  {kalan_gun_metni(p['kalan_gun'], durum)}"
                                                if durum != "Pasif" else "Pasif", renk, arka))
+            dugmeler = []
+            if self.kayit_acilabilir_mi(p):
+                kalibrasyon = kalibrasyon_plani_mi(p["gorev_turu"])
+                dugmeler.append((lambda _=False, pid=p["plan_id"]: self.kayit_ac(pid), "▶",
+                                 "Kalibrasyon kaydı aç" if kalibrasyon else "Bakım kaydı aç"))
             if self.yetkili_mi:
-                self.tablo.setCellWidget(i, 6, islem_butonlari(
-                    lambda _=False, pid=p["plan_id"]: self.plan_duzenle(pid),
-                    lambda _=False, pid=p["plan_id"]: self.plan_sil(pid)))
+                dugmeler += [(lambda _=False, pid=p["plan_id"]: self.plan_duzenle(pid), "✎", "Düzenle", "#B45309", "#FEF3C7", "#FDE68A"),
+                             (lambda _=False, pid=p["plan_id"]: self.plan_sil(pid), "🗑", "Sil", "#B91C1C", "#FEE2E2", "#FECACA")]
                 satira_kimlik_ata(self.tablo, i, p["plan_id"])
+            if dugmeler:
+                self.tablo.setCellWidget(i, 6, islem_dugmeleri(*dugmeler))
             yaklasan += durum == "Yaklaşıyor"
             gecmis += durum == "Gecikmiş"
 
@@ -492,7 +503,7 @@ class BakimPlanlariEkrani(QWidget):
              else "Henüz bakım/kalibrasyon planı yok.")
             if aktiflik is not False else "Pasif plan yok.")
         hap_sutununu_sigdir(self.tablo, 5, en_az=150)            # "Gecikmiş · 120 gün gecikti" rozeti kesilmesin
-        hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın
+        hap_sutununu_sigdir(self.tablo, 6, en_az=60)             # ▶ / ✎ / 🗑 düğmeleri sağdan kırpılmasın
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())
@@ -506,6 +517,26 @@ class BakimPlanlariEkrani(QWidget):
             self.tablo.setRowHidden(satir, aranan not in icerik)
 
     # ----------------------------------------------------------------- eylemler
+    def kayit_acilabilir_mi(self, plan):
+        """Plan aktifse ve kullanıcı o türde (bakım / kalibrasyon) kayıt yönetebiliyorsa ▶ kısayolu gösterilir."""
+        if not plan.get("aktif_mi", True):
+            return False
+        return self.kalibrasyon_kaydi_yetkili_mi if kalibrasyon_plani_mi(plan["gorev_turu"]) else self.bakim_kaydi_yetkili_mi
+
+    def kayit_ac(self, plan_id):
+        """Planın cihazı ve kendisi seçili olarak bakım (ya da kalibrasyon) kaydı formunu açar; kayıt eklenince plan ilerler, liste yenilenir."""
+        plan = self.planlar.get(plan_id)
+        if not plan or not self.kayit_acilabilir_mi(plan):
+            return
+        if kalibrasyon_plani_mi(plan["gorev_turu"]):
+            from client.cihaz_kalibrasyon_ekranlari import YeniKalibrasyonFormu
+            form = YeniKalibrasyonFormu(self.api_url, self.token, self, cihaz_id=plan["cihaz_id"], plan_id=plan_id)
+        else:
+            from client.cihaz_bakim_ekranlari import YeniBakimFormu
+            form = YeniBakimFormu(self.api_url, self.token, self, cihaz_id=plan["cihaz_id"], plan_id=plan_id, islem_metni=plan["gorev_turu"])
+        if form.exec():
+            self.verileri_yukle()
+
     def yeni_plan_ekle(self):
         form = PlanFormu(self.api_url, self.token, None, self)
         if form.exec():
