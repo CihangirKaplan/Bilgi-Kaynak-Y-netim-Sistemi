@@ -118,6 +118,15 @@ class CihazRaporlariEkrani(QWidget):
             QWidget#cihazRaporlari {
                 background: #EAF0FA;
             }
+            /* Uygulama genelindeki "min-width: 170px" kutuları 226-248 px'e şişirip süzgeç satırını 1366 px'e sığmaz hâle getiriyordu
+               (Dönem kutusu "Başlangıç:" etiketinin, Cihaz kutusu "Raporu Getir" düğmesinin üstüne biniyordu). */
+            QComboBox {
+                min-width: 90px;
+                padding: 8px 10px;
+            }
+            QComboBox::drop-down {
+                width: 18px;
+            }
             QPushButton {
                 background: #285CE6;
                 color: white;
@@ -170,6 +179,8 @@ class CihazRaporlariEkrani(QWidget):
         filtre_satiri.addWidget(QLabel("Cihaz:"))
         self.cihaz_sec = QComboBox()
         self.cihaz_sec.addItem("Tüm Cihazlar", None)
+        self.cihaz_sec.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)   # uzun cihaz adı satırı şişirmesin (ad "…" ile kısalmaz, açılır listede tam)
+        self.cihaz_sec.setMinimumContentsLength(9)
         filtre_satiri.addWidget(self.cihaz_sec, 1)
 
         yenile_btn = QPushButton("↻ Raporu Getir")
