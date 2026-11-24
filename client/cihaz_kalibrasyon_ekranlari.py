@@ -16,14 +16,14 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
-from client.tablo_tasarimi import hap_sutununu_sigdir
+from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, islem_butonlari, sil_onayi, sayi_cipi,
                             tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni, yenile_butonu_olustur,
                             bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
-from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
+from client.liste_siniri import ListeSiniri, daha_fazla_guncelle, kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -283,11 +283,13 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.cip_toplam = sayi_cipi("0 kayıt")
         self.cip_yaklasan = sayi_cipi("0 süresi yaklaşan", "#854D0E", "#FEF3C7")
         self.cip_gecmis = sayi_cipi("0 süresi dolmuş", "#991B1B", "#FEE2E2")
+        self.liste_siniri = ListeSiniri()
+        self.dahafazla_btn = daha_fazla_dugmesi(self.daha_fazla_yukle)
 
         layout.addWidget(sayfa_basligi(
             "Cihaz Kalibrasyon Kayıtları", "Kalibrasyon sertifikaları ve geçerlilik süreleri",
             self.arama, yenile_butonu_olustur(self.yukle),
-            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis],
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis, self.dahafazla_btn],
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "KURUM", "SERTİFİKA NO", "KALİBRASYON TARİHİ",
@@ -334,7 +336,7 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.detaylar.clear()
         yaklasan = gecmis = 0
         try:
-            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/kalibrasyonlar", headers=self.basliklar, timeout=10)
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/kalibrasyonlar", headers=self.basliklar, params=self.liste_siniri.parametreler(), timeout=10)
             if oturum_hatasi_mi(res):
                 return
             res.raise_for_status()
@@ -347,36 +349,38 @@ class KalibrasyonYonetimEkrani(QWidget):
             self.tablo.hide()
             return
 
-        self.tablo.setRowCount(len(kayitlar))
-        for i, k in enumerate(kayitlar):
-            self.detaylar[k["kalibrasyon_id"]] = k
+        with hizli_doldur(self.tablo):
+            self.tablo.setRowCount(len(kayitlar))
+            for i, k in enumerate(kayitlar):
+                self.detaylar[k["kalibrasyon_id"]] = k
 
-            bas = tarih_goster(k.get("kalibrasyon_baslangic_tarihi") or k.get("islem_tarihi"))
-            bit = tarih_goster(k.get("kalibrasyon_bitis_tarihi"))
-            tarih_metni = bas if bas == bit else f"{bas} – {bit}"
+                bas = tarih_goster(k.get("kalibrasyon_baslangic_tarihi") or k.get("islem_tarihi"))
+                bit = tarih_goster(k.get("kalibrasyon_bitis_tarihi"))
+                tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
-            cihaz_item = metin_item(k.get("cihaz_adi", ""), kalin=True)
-            cihaz_item.setToolTip(cihaz_ipucu(k.get("cihaz_adi", ""), f"Yerine getirilen plan: {k['plan_adi']}" if k.get("plan_adi") else ""))
-            cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(k.get("cihaz_adi", "")))          # sıralama cihaz adına göre
-            self.tablo.setItem(i, 0, cihaz_item)
-            self.tablo.setItem(i, 1, metin_item(k.get("kalibrasyon_yapan_kurum", "")))
-            self.tablo.setItem(i, 2, metin_item(k.get("sertifika_no", ""), ortala=True))
-            self.tablo.setItem(i, 3, metin_item(tarih_metni, ortala=True))
+                cihaz_item = metin_item(k.get("cihaz_adi", ""), kalin=True)
+                cihaz_item.setToolTip(cihaz_ipucu(k.get("cihaz_adi", ""), f"Yerine getirilen plan: {k['plan_adi']}" if k.get("plan_adi") else ""))
+                cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(k.get("cihaz_adi", "")))          # sıralama cihaz adına göre
+                self.tablo.setItem(i, 0, cihaz_item)
+                self.tablo.setItem(i, 1, metin_item(k.get("kalibrasyon_yapan_kurum", "")))
+                self.tablo.setItem(i, 2, metin_item(k.get("sertifika_no", ""), ortala=True))
+                self.tablo.setItem(i, 3, metin_item(tarih_metni, ortala=True))
 
-            widget, durum = kalan_gun_hapi(k.get("gecerlilik_tarihi"), k.get("uyari_suresi_gun", 30))
-            yaklasan += durum == "yaklasiyor"
-            gecmis += durum == "gecmis"
-            self.tablo.setCellWidget(i, 4, widget)
-            self.tablo.setItem(i, 5, metin_item(hatirlatma_metni(k.get("uyari_suresi_gun")), ortala=True))
+                widget, durum = kalan_gun_hapi(k.get("gecerlilik_tarihi"), k.get("uyari_suresi_gun", 30))
+                yaklasan += durum == "yaklasiyor"
+                gecmis += durum == "gecmis"
+                self.tablo.setCellWidget(i, 4, widget)
+                self.tablo.setItem(i, 5, metin_item(hatirlatma_metni(k.get("uyari_suresi_gun")), ortala=True))
 
-            if self.yetkili_mi:
-                self.tablo.setCellWidget(i, 6, islem_butonlari(
-                    lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
-                    lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
-                satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
+                if self.yetkili_mi:
+                    self.tablo.setCellWidget(i, 6, islem_butonlari(
+                        lambda _=False, kid=k["kalibrasyon_id"]: self.duzenle(kid),
+                        lambda _=False, kid=k["kalibrasyon_id"]: self.sil(kid)))
+                    satira_kimlik_ata(self.tablo, i, k["kalibrasyon_id"])
 
         self.cip_toplam.setText(toplam_etiketi(len(kayitlar), toplam))
         self.cip_toplam.setToolTip(kisaltma_ipucu(len(kayitlar), toplam))
+        daha_fazla_guncelle(self.dahafazla_btn, self.liste_siniri, len(kayitlar), toplam)
         self.cip_yaklasan.setText(f"{yaklasan} süresi yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} süresi dolmuş")
         self.bos_mesaj.setText("Henüz kalibrasyon kaydı yok. Üstteki “Kalibrasyon Kaydı” butonuyla ekleyebilirsiniz.")
@@ -385,6 +389,11 @@ class KalibrasyonYonetimEkrani(QWidget):
         self.bos_mesaj.setVisible(not kayitlar)
         self.tablo.setVisible(bool(kayitlar))
         self.filtrele(self.arama.text())
+
+    def daha_fazla_yukle(self):
+        """Listeyi, en yeni kayıtlardan başlayarak ADIM kadar daha uzatır (en çok sunucunun üst sınırına kadar)."""
+        self.liste_siniri.artir()
+        self.yukle()
 
     def filtrele(self, metin):
         """Cihaz, kurum ve sertifika sütunlarında arama yapar."""

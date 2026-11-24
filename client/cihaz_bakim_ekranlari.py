@@ -16,14 +16,14 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
-from client.tablo_tasarimi import hap_sutununu_sigdir
+from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
                             yenile_butonu_olustur, bos_mesaj_olustur)
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
-from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
+from client.liste_siniri import ListeSiniri, daha_fazla_guncelle, kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 logger = logging.getLogger(__name__)
 
@@ -348,11 +348,13 @@ class BakimYonetimEkrani(QWidget):
         self.cip_toplam = sayi_cipi("0 kayıt")
         self.cip_yaklasan = sayi_cipi("0 yaklaşan", "#854D0E", "#FEF3C7")
         self.cip_gecmis = sayi_cipi("0 gecikmiş", "#991B1B", "#FEE2E2")
+        self.liste_siniri = ListeSiniri()
+        self.dahafazla_btn = daha_fazla_dugmesi(self.daha_fazla_yukle)
 
         layout.addWidget(sayfa_basligi(
             "Cihaz Bakım Geçmişi", "Yapılan bakımlar ve planlanan sonraki bakım tarihleri",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis],
+            [self.cip_toplam, self.cip_yaklasan, self.cip_gecmis, self.dahafazla_btn],
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
@@ -401,7 +403,7 @@ class BakimYonetimEkrani(QWidget):
         self.bakim_detaylari.clear()
         yaklasan = gecmis = 0
         try:
-            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/bakimlar", headers=self.basliklar, timeout=10)
+            res = oturum_kontrollu_istek("GET", f"{self.api_url}/api/bakimlar", headers=self.basliklar, params=self.liste_siniri.parametreler(), timeout=10)
             if oturum_hatasi_mi(res):
                 return
             res.raise_for_status()
@@ -414,48 +416,50 @@ class BakimYonetimEkrani(QWidget):
             self.tablo.hide()
             return
 
-        self.tablo.setRowCount(len(bakimlar))
-        for i, b in enumerate(bakimlar):
-            self.bakim_detaylari[b["bakim_id"]] = b
+        with hizli_doldur(self.tablo):
+            self.tablo.setRowCount(len(bakimlar))
+            for i, b in enumerate(bakimlar):
+                self.bakim_detaylari[b["bakim_id"]] = b
 
-            maliyet = float(b.get("maliyet") or 0.0)
-            maliyet_metni = f"{maliyet:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
+                maliyet = float(b.get("maliyet") or 0.0)
+                maliyet_metni = f"{maliyet:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " ₺"
 
-            bas = tarih_goster(b.get("bakim_baslangic_tarihi") or b.get("bakim_tarihi"))
-            bit = tarih_goster(b.get("bakim_bitis_tarihi"))
-            tarih_metni = bas if bas == bit else f"{bas} – {bit}"
+                bas = tarih_goster(b.get("bakim_baslangic_tarihi") or b.get("bakim_tarihi"))
+                bit = tarih_goster(b.get("bakim_bitis_tarihi"))
+                tarih_metni = bas if bas == bit else f"{bas} – {bit}"
 
-            cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
-            cihaz_item.setToolTip(cihaz_ipucu(b.get("cihaz_adi", ""), f"Yerine getirilen plan: {b['plan_adi']}" if b.get("plan_adi") else ""))
-            cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(b.get("cihaz_adi", "")))          # sıralama cihaz adına göre
-            cihaz_item.setData(Qt.UserRole, b["bakim_id"])
-            self.tablo.setItem(i, 0, cihaz_item)
-            self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
-            self.tablo.setItem(i, 2, metin_item(b.get("yapilan_islem", "")))
-            self.tablo.setItem(i, 3, metin_item(maliyet_metni, ortala=True))
-            self.tablo.setItem(i, 4, metin_item(tarih_metni, ortala=True))
+                cihaz_item = metin_item(b.get("cihaz_adi", ""), kalin=True)
+                cihaz_item.setToolTip(cihaz_ipucu(b.get("cihaz_adi", ""), f"Yerine getirilen plan: {b['plan_adi']}" if b.get("plan_adi") else ""))
+                cihaz_item.setData(SIRALAMA_ROLU, cihaz_siralama_adi(b.get("cihaz_adi", "")))          # sıralama cihaz adına göre
+                cihaz_item.setData(Qt.UserRole, b["bakim_id"])
+                self.tablo.setItem(i, 0, cihaz_item)
+                self.tablo.setItem(i, 1, metin_item(b.get("bakim_yapan_kisi", "")))
+                self.tablo.setItem(i, 2, metin_item(b.get("yapilan_islem", "")))
+                self.tablo.setItem(i, 3, metin_item(maliyet_metni, ortala=True))
+                self.tablo.setItem(i, 4, metin_item(tarih_metni, ortala=True))
 
-            sonraki = b.get("sonraki_bakim_tarihi")
-            if sonraki and sonraki != "Belirtilmedi":
-                widget, durum = kalan_gun_hapi(sonraki, b.get("uyari_suresi_gun", 30))
-                yaklasan += durum == "yaklasiyor"
-                gecmis += durum == "gecmis"
-            else:
-                widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
-            self.tablo.setCellWidget(i, 5, widget)
+                sonraki = b.get("sonraki_bakim_tarihi")
+                if sonraki and sonraki != "Belirtilmedi":
+                    widget, durum = kalan_gun_hapi(sonraki, b.get("uyari_suresi_gun", 30))
+                    yaklasan += durum == "yaklasiyor"
+                    gecmis += durum == "gecmis"
+                else:
+                    widget, durum = hap("Planlanmadı", "#6B7280", "#F3F4F6"), "yok"
+                self.tablo.setCellWidget(i, 5, widget)
 
-            # Sonraki bakım planlanmadıysa bildirim de anlamsızdır
-            hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
-            self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
+                # Sonraki bakım planlanmadıysa bildirim de anlamsızdır
+                hatirlatma = hatirlatma_metni(b.get("uyari_suresi_gun")) if durum != "yok" else "-"
+                self.tablo.setItem(i, 6, metin_item(hatirlatma, ortala=True))
 
-            if self.yetkili_mi:
-                self.tablo.setCellWidget(i, 7, islem_butonlari(
-                    lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
-                    lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
-                satira_kimlik_ata(self.tablo, i, b["bakim_id"])
+                if self.yetkili_mi:
+                    self.tablo.setCellWidget(i, 7, islem_butonlari(
+                        lambda _=False, b_id=b["bakim_id"]: self.bakim_duzenle_ac(b_id),
+                        lambda _=False, b_id=b["bakim_id"]: self.bakim_sil(b_id)))
+                    satira_kimlik_ata(self.tablo, i, b["bakim_id"])
 
         self.cip_toplam.setText(toplam_etiketi(len(bakimlar), toplam))
         self.cip_toplam.setToolTip(kisaltma_ipucu(len(bakimlar), toplam))
+        daha_fazla_guncelle(self.dahafazla_btn, self.liste_siniri, len(bakimlar), toplam)
         self.cip_yaklasan.setText(f"{yaklasan} yaklaşan")
         self.cip_gecmis.setText(f"{gecmis} gecikmiş")
         self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
@@ -464,6 +468,11 @@ class BakimYonetimEkrani(QWidget):
         self.bos_mesaj.setVisible(not bakimlar)
         self.tablo.setVisible(bool(bakimlar))
         self.filtrele(self.arama.text())
+
+    def daha_fazla_yukle(self):
+        """Listeyi, en yeni kayıtlardan başlayarak ADIM kadar daha uzatır (en çok sunucunun üst sınırına kadar)."""
+        self.liste_siniri.artir()
+        self.verileri_yukle()
 
     def filtrele(self, metin):
         """Cihaz, kişi ve işlem sütunlarında arama yapar."""

@@ -14,7 +14,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
-from client.tablo_tasarimi import cihaz_hucresi_uygula, hap_sutununu_sigdir
+from client.tablo_tasarimi import cihaz_hucresi_uygula, daha_fazla_dugmesi, hap_sutununu_sigdir, hizli_doldur
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.tablo_tasarimi import (
     FORM_STIL, bos_mesaj_olustur, cift_tikla_ac, hap, metin_item, satira_kimlik_ata, sayfa_basligi, sayi_cipi,
@@ -22,7 +22,7 @@ from client.tablo_tasarimi import (
 )
 from client.bildirim_toast import basari_bildirimi
 from client.liste_excel import excel_dugmesi_olustur, tablodan_excele_aktar
-from client.liste_siniri import kisaltma_ipucu, liste_toplami, toplam_etiketi
+from client.liste_siniri import ListeSiniri, daha_fazla_guncelle, kisaltma_ipucu, liste_toplami, toplam_etiketi
 
 REZERVASYON_CAKISMA_METINLERI = (
     "Bu saat dolu",
@@ -742,11 +742,13 @@ class RezervasyonYonetimEkrani(QWidget):
         self.cip_aktif = sayi_cipi("0 aktif", "#166534", "#DCFCE7")
         self.cip_tamam = sayi_cipi("0 tamamlandı", "#475569", "#E2E8F0")
         self.cip_iptal = sayi_cipi("0 iptal", "#991B1B", "#FEE2E2")
+        self.liste_siniri = ListeSiniri()
+        self.dahafazla_btn = daha_fazla_dugmesi(self.daha_fazla_yukle)
 
         layout.addWidget(sayfa_basligi(
             "Cihaz Rezervasyonu", "Cihaz rezervasyonlarını görüntüleyin, düzenleyin ve iptal edin",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal],
+            [self.cip_toplam, self.cip_aktif, self.cip_tamam, self.cip_iptal, self.dahafazla_btn],
             ek_butonlar=[excel_dugmesi_olustur(self.excele_aktar)]))
 
         self.tablo = tablo_olustur(["CİHAZ", "BÖLÜM", "ODA", "PROJE", "TARİH VE SAAT", "DURUM", "İŞLEM"], ortali=True)
@@ -777,7 +779,7 @@ class RezervasyonYonetimEkrani(QWidget):
 
     def verileri_yukle(self):
         try:
-            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/rezervasyonlar", headers={"Authorization": f"Bearer {self.token}"})
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}/api/rezervasyonlar", headers={"Authorization": f"Bearer {self.token}"}, params=self.liste_siniri.parametreler())
             if oturum_hatasi_mi(cevap):
                 return
             if cevap.status_code != 200:
@@ -801,6 +803,7 @@ class RezervasyonYonetimEkrani(QWidget):
         toplam = getattr(self, "_rezervasyon_toplami", len(durumlar))
         self.cip_toplam.setText(toplam_etiketi(len(durumlar), toplam, "rezervasyon"))
         self.cip_toplam.setToolTip(kisaltma_ipucu(len(durumlar), toplam))
+        daha_fazla_guncelle(self.dahafazla_btn, self.liste_siniri, len(durumlar), toplam)
         self.cip_aktif.setText(f"{durumlar.count('Aktif')} aktif")
         self.cip_tamam.setText(f"{durumlar.count('Tamamlandı')} tamamlandı")
         self.cip_iptal.setText(f"{durumlar.count('İptal Edildi')} iptal")
@@ -812,37 +815,43 @@ class RezervasyonYonetimEkrani(QWidget):
             return f"{kod} · {ad}" if kod and ad else str(kod or ad)
         return str(rez.get("cihaz_id", "Bilinmeyen Cihaz"))                    # eski sunucu: "KOD - Ad"
 
+    def daha_fazla_yukle(self):
+        """Listeyi, en yeni kayıtlardan başlayarak ADIM kadar daha uzatır (en çok sunucunun üst sınırına kadar)."""
+        self.liste_siniri.artir()
+        self.verileri_yukle()
+
     def filtrele(self, *_):
         aranan = self.arama.text().strip().lower()
         gorunen = [r for r in self.rezervasyonlar if not aranan or aranan in " ".join(
             str(r.get(k) or "") for k in ("cihaz_id", "envanter_kodu", "cihaz_adi", "bolum_adi", "oda_adi", "proje_turu",
                                           "proje_adi_aciklamasi")).lower()]
-        self.tablo.setRowCount(0)
-        self.tablo.setRowCount(len(gorunen))
-        for satir, rez in enumerate(gorunen):
-            cihaz_item = metin_item(self._cihaz_metni(rez), kalin=True)
-            cihaz_item.setToolTip(f"{rez.get('cihaz_adi') or ''}\nEnvanter kodu: {rez.get('envanter_kodu') or ''}".strip())
-            cihaz_item.setData(SIRALAMA_ROLU, rez.get("cihaz_adi") or "")           # sıralama cihaz adına göre
-            self.tablo.setItem(satir, 0, cihaz_item)
-            satira_kimlik_ata(self.tablo, satir, rez.get("rezervasyon_id"))
-            self.tablo.setItem(satir, 1, metin_item(str(rez.get("bolum_adi") or "—")))
-            self.tablo.setItem(satir, 2, metin_item(str(rez.get("oda_adi") or "—")))
-            proje = " – ".join(m for m in (rez.get("proje_turu"), rez.get("proje_adi_aciklamasi")) if m)
-            proje_item = metin_item(proje or "—")
-            proje_item.setToolTip(proje)
-            self.tablo.setItem(satir, 3, proje_item)
-            self.tablo.setItem(satir, 4, metin_item(zaman_araligi(rez.get("baslangic_zamani"), rez.get("bitis_zamani"))))
+        with hizli_doldur(self.tablo):
+            self.tablo.setRowCount(0)
+            self.tablo.setRowCount(len(gorunen))
+            for satir, rez in enumerate(gorunen):
+                cihaz_item = metin_item(self._cihaz_metni(rez), kalin=True)
+                cihaz_item.setToolTip(f"{rez.get('cihaz_adi') or ''}\nEnvanter kodu: {rez.get('envanter_kodu') or ''}".strip())
+                cihaz_item.setData(SIRALAMA_ROLU, rez.get("cihaz_adi") or "")           # sıralama cihaz adına göre
+                self.tablo.setItem(satir, 0, cihaz_item)
+                satira_kimlik_ata(self.tablo, satir, rez.get("rezervasyon_id"))
+                self.tablo.setItem(satir, 1, metin_item(str(rez.get("bolum_adi") or "—")))
+                self.tablo.setItem(satir, 2, metin_item(str(rez.get("oda_adi") or "—")))
+                proje = " – ".join(m for m in (rez.get("proje_turu"), rez.get("proje_adi_aciklamasi")) if m)
+                proje_item = metin_item(proje or "—")
+                proje_item.setToolTip(proje)
+                self.tablo.setItem(satir, 3, proje_item)
+                self.tablo.setItem(satir, 4, metin_item(zaman_araligi(rez.get("baslangic_zamani"), rez.get("bitis_zamani"))))
 
-            durum = rez.get("durum", "Aktif")
-            renk, arka = DURUM_RENKLERI.get(durum, ("#6B7280", "#F3F4F6"))
-            self.tablo.setItem(satir, SUTUN_DURUM, metin_item(durum, renk="transparent"))   # metin hap'ın altında kalır; aramada/testte okunur
-            self.tablo.setCellWidget(satir, SUTUN_DURUM, hap(durum, renk, arka))
+                durum = rez.get("durum", "Aktif")
+                renk, arka = DURUM_RENKLERI.get(durum, ("#6B7280", "#F3F4F6"))
+                self.tablo.setItem(satir, SUTUN_DURUM, metin_item(durum, renk="transparent"))   # metin hap'ın altında kalır; aramada/testte okunur
+                self.tablo.setCellWidget(satir, SUTUN_DURUM, hap(durum, renk, arka))
 
-            if durum == "Aktif" and self.yetkili_mi:
-                r_id = rez.get("rezervasyon_id")
-                self.tablo.setCellWidget(satir, SUTUN_ISLEM, tek_islem_butonu(
-                    lambda r_id=r_id: self.rezervasyon_iptal_et(r_id), "✕", "Rezervasyonu iptal et",
-                    "#B91C1C", "#FEE2E2", "#FECACA"))
+                if durum == "Aktif" and self.yetkili_mi:
+                    r_id = rez.get("rezervasyon_id")
+                    self.tablo.setCellWidget(satir, SUTUN_ISLEM, tek_islem_butonu(
+                        lambda r_id=r_id: self.rezervasyon_iptal_et(r_id), "✕", "Rezervasyonu iptal et",
+                        "#B91C1C", "#FEE2E2", "#FECACA"))
 
         hap_sutununu_sigdir(self.tablo, SUTUN_DURUM)                           # "Tamamlandı" / "İptal Edildi" rozeti kesilmesin
         bos = not gorunen

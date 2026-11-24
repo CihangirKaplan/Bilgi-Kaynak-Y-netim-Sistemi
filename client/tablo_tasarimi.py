@@ -1,6 +1,7 @@
 """Bakım / kalibrasyon gibi liste ekranlarının ortak görünümü ve yardımcı bileşenleri."""
 import datetime
 import re
+from contextlib import contextmanager
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame,
                                QTableWidget, QTableWidgetItem, QSizePolicy, QMessageBox,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QApplication)
@@ -401,6 +402,37 @@ def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler, ek_bu
     alt.addStretch()
     ana.addLayout(alt)
     return kart
+
+
+@contextmanager
+def hizli_doldur(tablo):
+    """Tabloyu doldururken çizimi ve yerleşimi geçici olarak kapatır.
+
+    Görünür bir tabloya satır satır hücre bileşeni (rozet, düğme) eklemek her satırda yeniden yerleşim ve stil hesabı yaptırır;
+    3000 satırlık bir listede bu 21 saniyeyi bulur, tablo gizliyken doldurulunca yaklaşık 3 kat kısalır. Çıkışta tablo, doldurmadan
+    önceki görünürlüğüne döner (zaten gizliyse gizli kalır); hata olsa bile çizim yeniden açılır."""
+    gorunur = tablo.isVisible()
+    tablo.setUpdatesEnabled(False)
+    if gorunur:
+        tablo.hide()
+    try:
+        yield tablo
+    finally:
+        if gorunur:
+            tablo.show()
+        tablo.setUpdatesEnabled(True)
+
+
+def daha_fazla_dugmesi(tikla):
+    """Liste kısaltıldığında (en yeni N kayıt) toplam etiketinin yanında görünen, başlangıçta gizli düğme."""
+    b = QPushButton("＋  Daha fazla yükle")
+    b.setCursor(Qt.PointingHandCursor)
+    b.setStyleSheet("QPushButton { background: #FFF7ED; color: #B45309; border: 1px solid #FED7AA; border-radius: 14px; "
+                    "padding: 5px 14px; font-size: 12px; font-weight: 800; } "
+                    "QPushButton:hover { background: #FFEDD5; }")
+    b.clicked.connect(lambda *_: tikla())
+    b.hide()
+    return b
 
 
 def yenile_butonu_olustur(tikla):
