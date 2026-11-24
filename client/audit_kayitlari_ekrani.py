@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle
 )
 from client.liste_excel import aktarimi_denetime_yaz
+from client.sayfa_tema import (
+    DurumRozetiDelegate, TABLO_STILI, VARSAYILAN_DURUM_RENGI, dialog_stili, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
+)
 
 
 
@@ -149,59 +152,11 @@ def kart_golgesi(widget):
     widget.setGraphicsEffect(efekt)
 
 
-class IslemEtiketiDelegate(QStyledItemDelegate):
-    """İşlem türünü, satır seçilse bile rengini koruyan rozet olarak çizer."""
+class IslemEtiketiDelegate(DurumRozetiDelegate):
+    """İşlem türünü, satır seçilse bile rengini koruyan rozet olarak çizer (rengi, görünen ada değil işlem koduna göre bulunur)."""
 
-    def paint(self, painter, option, index):
-        olay_kodu = index.data(Qt.UserRole)
-        etiket = str(index.data(Qt.DisplayRole) or "")
-        yazi_rengi, zemin_rengi = OLAY_RENKLERI.get(
-            olay_kodu, ("#334155", "#EEF2F7")
-        )
-
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        secili = bool(option.state & QStyle.State_Selected)
-        if secili:
-            satir_zemini = "#E6EEFC"
-        else:
-            satir_zemini = (
-                "#FFFFFF" if index.row() % 2 == 0 else "#F7F9FD"
-            )
-
-        painter.fillRect(option.rect, QColor(satir_zemini))
-
-        yazi_tipi = option.font
-        yazi_tipi.setBold(True)
-        painter.setFont(yazi_tipi)
-
-        olculer = QFontMetrics(yazi_tipi)
-        etiket_genisligi = min(
-            olculer.horizontalAdvance(etiket) + 28,
-            max(10, option.rect.width() - 20)
-        )
-
-        rozet = QRectF(
-            option.rect.x() + 10,
-            option.rect.y() + (option.rect.height() - 29) / 2,
-            etiket_genisligi,
-            29
-        )
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(zemin_rengi))
-        painter.drawRoundedRect(rozet, 9, 9)
-
-        painter.setPen(QColor(yazi_rengi))
-        painter.drawText(rozet, Qt.AlignCenter, etiket)
-        painter.restore()
-
-    def sizeHint(self, option, index):
-        boyut = super().sizeHint(option, index)
-        boyut.setHeight(max(boyut.height(), 42))
-        return boyut
-
+    def renk_bul(self, index, metin):
+        return OLAY_RENKLERI.get(index.data(Qt.UserRole), VARSAYILAN_DURUM_RENGI)
 
 
 class CokluIslemSecici(QPushButton):
@@ -214,16 +169,17 @@ class CokluIslemSecici(QPushButton):
         self.setStyleSheet("""
             QPushButton {
                 background: white;
-                color: #0A1F5C;
-                border: 1px solid #D1DDED;
-                border-radius: 8px;
+                color: #0F2552;
+                border: 1px solid #C7D9FB;
+                border-radius: 10px;
                 text-align: left;
-                padding: 7px 12px;
-                font-weight: bold;
+                padding: 8px 14px;
+                font-size: 13px;
+                font-weight: 700;
             }
             QPushButton:hover {
-                background: #F5F8FF;
-                border: 1px solid #95B5E3;
+                background: #F7FAFF;
+                border: 1px solid #93B4F5;
             }
         """)
 
@@ -231,8 +187,8 @@ class CokluIslemSecici(QPushButton):
         menu.setStyleSheet("""
             QMenu {
                 background: white;
-                border: 1px solid #DDE6F3;
-                border-radius: 8px;
+                border: 1px solid #C7D9FB;
+                border-radius: 10px;
                 padding: 6px;
             }
         """)
@@ -295,310 +251,126 @@ class AuditKayitlariEkrani(QWidget):
         self.kayitlari_getir()
 
     def arayuzu_olustur(self):
-        self.setStyleSheet("""
-            AuditKayitlariEkrani {
-                background: transparent;
-                color: #173263;
-            }
-
-            QFrame#ozetKart, QFrame#tabloKart {
-                background: #FFFFFF;
-                border: 1px solid #E3EAF5;
-                border-radius: 10px;
-            }
-
-            QLabel#ozetBaslik {
-                color: #697993;
-                font-size: 12px;
-                font-weight: 500;
-                border: none;
-                background: transparent;
-            }
-
-            QLabel#ozetDeger {
-                color: #16294B;
-                font-size: 24px;
-                font-weight: bold;
-                border: none;
-                background: transparent;
-            }
-
-            QLabel#tabloBaslik {
-                color: #0A1F5C;
-                font-size: 15px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-            }
-
-            QLabel#tabloAciklama {
-                color: #8090AA;
-                font-size: 12px;
-                background: transparent;
-                border: none;
-            }
-
-            QLineEdit, QComboBox, QDateEdit {
-                background: #FFFFFF;
-                color: #183461;
-                border: 1px solid #D1DDED;
-                border-radius: 8px;
-                padding: 4px 9px;
-                min-height: 25px;
-                font-size: 13px;
-            }
-
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
-                border: 1px solid #3778D8;
-                background: #FFFFFF;
-            }
-
-            QDateEdit:disabled {
-                background: #F3F6FB;
-                color: #8A99B0;
-            }
-
-            QLineEdit::placeholder {
-                color: #96A5B8;
-            }
-
-            QPushButton {
-                background: #285CE6;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 7px 12px;
-                min-height: 28px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-
-            QPushButton:hover {
-                background: #1E4BC5;
-            }
-
-            QPushButton#temizleBtn,
-            QPushButton#ikincilBtn {
-                background: #F5F8FF;
-                color: #0A1F5C;
-                border: 1px solid #D6E2F5;
-            }
-
-            QPushButton#temizleBtn:hover,
-            QPushButton#ikincilBtn:hover {
-                background: #E9F1FF;
-            }
-
-            QTableWidget {
-                background: #FFFFFF;
-                color: #243650;
-                border: 1px solid #E3EAF5;
-                border-radius: 7px;
-                alternate-background-color: #FFFFFF;
-                gridline-color: #E3EAF5;
-                font-size: 13px;
-                selection-background-color: #E6EEFC;
-                selection-color: #173263;
-            }
-
-            QTableWidget::item {
-                padding-left: 5px;
-                padding-right: 5px;
-                border-bottom: 1px solid #EDF1F7;
-            }
-
-            QTableWidget::item:selected {
-                background: #E6EEFC;
-                color: #173263;
-            }
-
-            QHeaderView::section {
-                background: #E8F0FF;
-                color: #16294B;
-                padding: 9px 5px;
-                font-size: 12px;
-                font-weight: bold;
-                border: none;
-                border-right: 1px solid #D6E2F3;
-                border-bottom: 1px solid #D6E2F3;
-            }
-
-            QCheckBox {
-                color: #284166;
-                spacing: 8px;
-                background: transparent;
-                font-size: 13px;
-                font-weight: 500;
-            }
-
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 1px solid #B7C7DE;
-                border-radius: 4px;
-                background: #FFFFFF;
-            }
-
-            QCheckBox::indicator:hover {
-                border: 1px solid #7E9DCC;
-            }
-
-            QCheckBox::indicator:checked {
-                background: #0A1F5C;
-                border: 1px solid #0A1F5C;
-            }
-
-            QScrollBar:vertical {
-                background: #F3F6FB;
-                width: 10px;
-                margin: 0;
-                border: none;
-            }
-
-            QScrollBar::handle:vertical {
-                background: #C3D0E4;
-                min-height: 35px;
-                border-radius: 5px;
-            }
-
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                height: 0;
-            }
-        """)
+        self.setStyleSheet(liste_sayfasi_stili())
 
         # Sayfa tek parça: yalnızca tablo kendi içinde kayar (önceden sayfa da ayrıca kayıyordu, iki kaydırma iç içe geçiyordu).
         ana = QVBoxLayout(self)
-        ana.setContentsMargins(22, 16, 22, 12)
-        ana.setSpacing(11)
+        ana.setContentsMargins(24, 20, 24, 18)
+        ana.setSpacing(16)
 
-        # Süzgeçler (üstte) ve özet kartları
-        filtre_alani = QVBoxLayout()
-        ana.addLayout(filtre_alani)
+        # Başlık ve ana işlem
+        ust = QHBoxLayout()
+        ust.setSpacing(16)
+        basliklar = QVBoxLayout()
+        basliklar.setSpacing(3)
+        sayfa_baslik = QLabel("Denetim Kayıtları")
+        sayfa_baslik.setObjectName("baslik")
+        sayfa_alt = QLabel("Sistemde yapılan giriş, değişiklik ve silme işlemlerinin salt okunur geçmişi.")
+        sayfa_alt.setObjectName("altBaslik")
+        basliklar.addWidget(sayfa_baslik)
+        basliklar.addWidget(sayfa_alt)
+        ust.addLayout(basliklar, 1)
 
-        kartlar = QGridLayout()
-        kartlar.setSpacing(12)
+        self.excel_btn = QPushButton("⬇  Excel'e Aktar")
+        self.excel_btn.setObjectName("yesil")
+        self.excel_btn.setMinimumHeight(40)
+        self.excel_btn.setToolTip("Süzgece uyan kayıtları (silinen verinin içeriğiyle birlikte) Excel dosyasına yaz")
+        self.excel_btn.clicked.connect(self.excel_aktar)
+        ust.addWidget(self.excel_btn, 0, Qt.AlignTop)
+        ana.addLayout(ust)
 
-        self.ozet_degerleri = {}
-
-        basliklar = [
-            ("toplam_kayit", "Toplam Kayıt", "#16294B"),
-            ("basarisiz_giris", "Başarısız Giriş", "#B03840"),
-            ("kullanici_islemleri", "Değişiklik İşlemleri", "#285CE6"),
-            ("bugunku_islemler", "Bugünkü Kayıtlar", "#16803C"),
-        ]
-
-        for sira, (anahtar, baslik, renk) in enumerate(basliklar):
-            kart = QFrame()
-            kart.setObjectName("ozetKart")
-
-            icerik = QVBoxLayout(kart)
-            icerik.setContentsMargins(15, 12, 15, 12)
-
-            baslik_etiketi = QLabel(baslik)
-            baslik_etiketi.setObjectName("ozetBaslik")
-
-            deger = QLabel("—")
-            deger.setObjectName("ozetDeger")
-            deger.setStyleSheet(f"color: {renk};")
-
-            self.ozet_degerleri[anahtar] = deger
-
-            icerik.addWidget(baslik_etiketi)
-            icerik.addWidget(deger)
-            kartlar.addWidget(kart, 0, sira)
-
-        ana.addLayout(kartlar)
-
+        # Süzgeçler
+        filtre_karti = kart_olustur()
+        filtre_duzen = QVBoxLayout(filtre_karti)
+        filtre_duzen.setContentsMargins(16, 12, 16, 12)
+        filtre_duzen.setSpacing(10)
         arama_satiri = QHBoxLayout()
-        arama_satiri.setSpacing(9)
+        arama_satiri.setSpacing(10)
+        filtre_duzen.addLayout(arama_satiri)
 
         self.kullanici_arama = QLineEdit()
         self.kullanici_arama.setPlaceholderText("Kullanıcı adı ara...")
+        self.kullanici_arama.setClearButtonEnabled(True)
+        self.kullanici_arama.setMinimumWidth(180)
         self.kullanici_arama.returnPressed.connect(self.filtrele)
         arama_satiri.addWidget(self.kullanici_arama, 3)
 
         self.olay_secimi = CokluIslemSecici()
         self.olay_secimi.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.olay_secimi.setMinimumWidth(170)
         arama_satiri.addWidget(self.olay_secimi, 2)
 
-        filtre_btn = QPushButton("Filtrele")
-        filtre_btn.clicked.connect(self.filtrele)
-        arama_satiri.addWidget(filtre_btn)
-
-        temizle_btn = QPushButton("Filtreleri Temizle")
-        temizle_btn.setObjectName("temizleBtn")
-        temizle_btn.clicked.connect(self.filtreleri_temizle)
-        arama_satiri.addWidget(temizle_btn)
-
-        yenile_btn = QPushButton("Yenile")
-        yenile_btn.setObjectName("ikincilBtn")
-        yenile_btn.clicked.connect(self.kayitlari_getir)
-        arama_satiri.addWidget(yenile_btn)
-
-        excel_btn = QPushButton("⬇ Excel'e Aktar")
-        excel_btn.setObjectName("excelBtn")
-        excel_btn.setStyleSheet(
-            "QPushButton#excelBtn { background: #16803C; color: white; border: none; border-radius: 9px; padding: 0 16px; font-weight: bold; }"
-            "QPushButton#excelBtn:hover { background: #126A31; }"
-        )
-        excel_btn.setFixedHeight(36)
-        excel_btn.clicked.connect(self.excel_aktar)
-        arama_satiri.addWidget(excel_btn)
-
-        for buton in (filtre_btn, temizle_btn, yenile_btn, excel_btn):
-            buton.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        filtre_alani.addLayout(arama_satiri)
-
-        tarih_satiri = QHBoxLayout()
-        tarih_satiri.setSpacing(9)
-
-        tarih_satiri.addWidget(QLabel("Dönem:"))
-
+        donem_etiketi = QLabel("Dönem")
+        donem_etiketi.setObjectName("etiket")
+        arama_satiri.addWidget(donem_etiketi)
         self.donem_secimi = QComboBox()
-        self.donem_secimi.setFixedWidth(185)
-        self.donem_secimi.setFixedHeight(36)
-        self.donem_secimi.addItems([
-            "Tümü",
-            "Bugün",
-            "Son 7 Gün",
-            "Son 30 Gün",
-            "Tarih Aralığı"
-        ])
-        self.donem_secimi.setCursor(
-            Qt.CursorShape.PointingHandCursor
-        )
-        tarih_satiri.addWidget(self.donem_secimi)
+        self.donem_secimi.addItems(["Tümü", "Bugün", "Son 7 Gün", "Son 30 Gün", "Tarih Aralığı"])
+        self.donem_secimi.setCursor(Qt.CursorShape.PointingHandCursor)
+        arama_satiri.addWidget(self.donem_secimi, 1)
 
-        tarih_satiri.addWidget(QLabel("Başlangıç:"))
+        self.filtre_btn = QPushButton("Filtrele")
+        self.filtre_btn.setObjectName("birincil")
+        self.filtre_btn.clicked.connect(self.filtrele)
+        self.temizle_btn = QPushButton("Temizle")
+        self.temizle_btn.setObjectName("hayalet")
+        self.temizle_btn.setToolTip("Arama ve süzgeçleri sıfırla")
+        self.temizle_btn.clicked.connect(self.filtreleri_temizle)
+        self.yenile_btn = QPushButton("⟳  Yenile")
+        self.yenile_btn.setObjectName("hayalet")
+        self.yenile_btn.setToolTip("Kayıtları sunucudan yeniden yükle")
+        self.yenile_btn.clicked.connect(self.kayitlari_getir)
+        for buton in (self.filtre_btn, self.temizle_btn, self.yenile_btn, self.excel_btn):
+            buton.setCursor(Qt.CursorShape.PointingHandCursor)
+            if buton is not self.excel_btn:
+                arama_satiri.addWidget(buton)
 
+        # Başlangıç/bitiş yalnızca "Tarih Aralığı" seçilince, kartın ikinci satırında görünür (üst satır sıkışmasın)
+        self.tarih_alani = QWidget()
+        tarih_satiri = QHBoxLayout(self.tarih_alani)
+        tarih_satiri.setContentsMargins(0, 0, 0, 0)
+        tarih_satiri.setSpacing(10)
         self.baslangic = QDateEdit()
-        self.baslangic.setFixedWidth(150)
+        self.baslangic.setMinimumWidth(160)
         self.baslangic.setCalendarPopup(True)
         self.baslangic.setDisplayFormat("dd.MM.yyyy")
         self.baslangic.setDate(QDate.currentDate().addDays(-7))
-        self.baslangic.setEnabled(False)
-        tarih_satiri.addWidget(self.baslangic)
-
-        tarih_satiri.addWidget(QLabel("Bitiş:"))
-
         self.bitis = QDateEdit()
-        self.bitis.setFixedWidth(150)
+        self.bitis.setMinimumWidth(160)
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         self.bitis.setDate(QDate.currentDate())
-        self.bitis.setEnabled(False)
+        bas_etiketi = QLabel("Başlangıç")
+        bas_etiketi.setObjectName("etiket")
+        bit_etiketi = QLabel("Bitiş")
+        bit_etiketi.setObjectName("etiket")
+        tarih_satiri.addWidget(bas_etiketi)
+        tarih_satiri.addWidget(self.baslangic)
+        tarih_satiri.addSpacing(8)
+        tarih_satiri.addWidget(bit_etiketi)
         tarih_satiri.addWidget(self.bitis)
-
-        self.donem_secimi.currentIndexChanged.connect(
-            self._donem_degisti
-        )
-
         tarih_satiri.addStretch()
-        filtre_alani.addLayout(tarih_satiri)
-        filtre_alani.setContentsMargins(0, 0, 0, 0)
-        filtre_alani.setSpacing(9)
+        self.tarih_alani.setVisible(False)
+        filtre_duzen.addWidget(self.tarih_alani)
+        self.donem_secimi.currentIndexChanged.connect(self._donem_degisti)
+        ana.addWidget(filtre_karti)
+
+        # Özet kartları
+        kartlar = QGridLayout()
+        kartlar.setSpacing(16)
+        self.ozet_degerleri = {}
+        ozetler = [
+            ("toplam_kayit", "Toplam Kayıt", "#1D4ED8"),
+            ("basarisiz_giris", "Başarısız Giriş", "#DC2626"),
+            ("kullanici_islemleri", "Değişiklik İşlemleri", "#D97706"),
+            ("bugunku_islemler", "Bugünkü Kayıtlar", "#0E9F6E"),
+        ]
+        for sutun, (anahtar, baslik, renk) in enumerate(ozetler):
+            kart, deger = ozet_karti_olustur(baslik, renk)
+            deger.setText("—")
+            kartlar.addWidget(kart, 0, sutun)
+            kartlar.setColumnStretch(sutun, 1)
+            self.ozet_degerleri[anahtar] = deger
+        ana.addLayout(kartlar)
 
         # Salt okunur kayıt tablosu
         # Sunucu sayfalıdır ve kayıtları zamana göre (en yeni önce) verir; başlıktan sıralama yalnızca ekrandaki sayfayı sıralayıp
@@ -606,102 +378,74 @@ class AuditKayitlariEkrani(QWidget):
         self.tablo = QTableWidget()
         self.tablo.setMinimumHeight(260)
         self.tablo.setColumnCount(5)
-        self.tablo.setHorizontalHeaderLabels([
-            "Tarih / Saat", "İşlemi Yapan",
-            "İşlem Türü", "İlgili Kayıt Türü",
-            "Detay"
-        ])
-
+        self.tablo.setHorizontalHeaderLabels(["TARİH / SAAT", "İŞLEMİ YAPAN", "İŞLEM TÜRÜ", "İLGİLİ KAYIT TÜRÜ", "DETAY"])
+        self.tablo.setStyleSheet(TABLO_STILI)
+        self.tablo.setShowGrid(False)
+        self.tablo.setFrameShape(QFrame.NoFrame)
         self.tablo.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tablo.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tablo.setAlternatingRowColors(False)
+        self.tablo.setFocusPolicy(Qt.NoFocus)
+        self.tablo.setWordWrap(False)
+        self.tablo.setMouseTracking(True)
         self.tablo.verticalHeader().setVisible(False)
+        self.tablo.verticalHeader().setDefaultSectionSize(52)
 
-        baslik = self.tablo.horizontalHeader()
-        baslik.setSectionResizeMode(0, QHeaderView.Fixed)
-        baslik.setSectionResizeMode(1, QHeaderView.Stretch)
-        baslik.setSectionResizeMode(2, QHeaderView.Stretch)
-        baslik.setSectionResizeMode(3, QHeaderView.Stretch)
-        baslik.setSectionResizeMode(4, QHeaderView.Fixed)
+        sutun_basliklari = self.tablo.horizontalHeader()
+        sutun_basliklari.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        sutun_basliklari.setSectionResizeMode(0, QHeaderView.Fixed)
+        sutun_basliklari.setSectionResizeMode(1, QHeaderView.Stretch)
+        sutun_basliklari.setSectionResizeMode(2, QHeaderView.Stretch)
+        sutun_basliklari.setSectionResizeMode(3, QHeaderView.Stretch)
+        sutun_basliklari.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.tablo.setColumnWidth(0, 190)
+        self.tablo.setColumnWidth(4, 130)
+        self.tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tablo.horizontalHeaderItem(4).setTextAlignment(Qt.AlignCenter)      # düğmeyle aynı hizada
+        self.tablo.setItemDelegateForColumn(2, IslemEtiketiDelegate(parent=self.tablo))
+        self.tablo.itemDoubleClicked.connect(self.satir_cift_tiklandi)
+        self._satir_kayitlari = []              # görünen her satırın (kayıt, tarih) bilgisi; "Görüntüle" düğmesi sırasını property olarak taşır
 
-        self.tablo.setColumnWidth(0, 175)
-        self.tablo.setColumnWidth(4, 115)
-
-        self.tablo.setShowGrid(True)
-        self.tablo.verticalHeader().setDefaultSectionSize(46)
-        self.tablo.horizontalHeader().setFixedHeight(46)
-
-        self.tablo.setItemDelegateForColumn(
-            2, IslemEtiketiDelegate(self.tablo)
-        )
-
-        tablo_kart = QFrame()
-        tablo_kart.setObjectName("tabloKart")
-
+        tablo_kart = kart_olustur()
         tablo_duzen = QVBoxLayout(tablo_kart)
-        tablo_duzen.setContentsMargins(14, 14, 14, 14)
-        tablo_duzen.setSpacing(10)
+        tablo_duzen.setContentsMargins(20, 18, 20, 14)
+        tablo_duzen.setSpacing(14)
 
         tablo_ust = QHBoxLayout()
-
+        tablo_ust.setSpacing(10)
         tablo_baslik = QLabel("Denetim Geçmişi")
-        tablo_baslik.setObjectName("tabloBaslik")
+        tablo_baslik.setObjectName("kartBaslik")
         tablo_ust.addWidget(tablo_baslik)
-
+        self.sayac_rozeti = QLabel("0 kayıt")
+        self.sayac_rozeti.setObjectName("rozet")
+        tablo_ust.addWidget(self.sayac_rozeti)
         tablo_ust.addStretch()
-
-        tablo_aciklama = QLabel("Salt okunur işlem geçmişi")
-        tablo_aciklama.setObjectName("tabloAciklama")
+        tablo_aciklama = QLabel("Salt okunur işlem geçmişi · ayrıntı için satıra çift tıklayın")
+        tablo_aciklama.setObjectName("altBilgi")
         tablo_ust.addWidget(tablo_aciklama)
-
         tablo_duzen.addLayout(tablo_ust)
-
         tablo_duzen.addWidget(self.tablo, 1)
 
-        ana.addWidget(tablo_kart, 1)
-
-        # Sayfalama ve durum bilgisi
+        # Sayfalama ve durum bilgisi (kartın altında)
         alt = QHBoxLayout()
-
+        alt.setSpacing(10)
         self.durum = QLabel("Kayıtlar yükleniyor...")
+        self.durum.setObjectName("altBilgi")
         self.durum.setTextFormat(Qt.PlainText)
-        alt.addWidget(self.durum)
-
-        alt.addStretch()
-
-        self.onceki_btn = QPushButton("← Önceki")
+        alt.addWidget(self.durum, 1)
+        self.onceki_btn = QPushButton("←  Önceki")
+        self.onceki_btn.setObjectName("hayalet")
         self.onceki_btn.clicked.connect(self.onceki_sayfa)
-        alt.addWidget(self.onceki_btn)
-
-        self.sonraki_btn = QPushButton("Sonraki →")
+        self.sonraki_btn = QPushButton("Sonraki  →")
+        self.sonraki_btn.setObjectName("hayalet")
         self.sonraki_btn.clicked.connect(self.sonraki_sayfa)
-        alt.addWidget(self.sonraki_btn)
-
-        # Sayfalama butonlari her durumda ayni lacivert renkte
         for buton in (self.onceki_btn, self.sonraki_btn):
             buton.setCursor(Qt.CursorShape.PointingHandCursor)
-            buton.setStyleSheet("""
-                QPushButton {
-                    background: #285CE6;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 9px 15px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background: #1E4BC5;
-                }
-                QPushButton:disabled {
-                    background: #DCE6F5;
-                    color: #8192AD;
-                }
-            """)
-
-        self.onceki_btn.setMinimumWidth(120)
-        self.sonraki_btn.setMinimumWidth(120)
-
-        ana.addLayout(alt)
+            buton.setMinimumWidth(110)
+            alt.addWidget(buton)
+        tablo_duzen.addLayout(alt)
+        ana.addWidget(tablo_kart, 1)
 
         self.sayfalama_guncelle()
 
@@ -709,19 +453,15 @@ class AuditKayitlariEkrani(QWidget):
         pencere = QDialog(self)
         pencere.setWindowTitle("Denetim Kaydı Detayları")
         pencere.setObjectName("auditDetayPenceresi")
-        pencere.setStyleSheet(
-            "QDialog#auditDetayPenceresi { background-color: #FFFFFF; }"
-        )
-        pencere.setMinimumWidth(450)
+        pencere.setStyleSheet(dialog_stili())
+        pencere.setMinimumWidth(480)
 
         duzen = QVBoxLayout(pencere)
         duzen.setContentsMargins(24, 22, 24, 20)
         duzen.setSpacing(16)
 
         baslik = QLabel("Denetim Kaydı Detayları")
-        baslik.setStyleSheet(
-            "font-size: 18px; font-weight: bold; color: #102D59;"
-        )
+        baslik.setObjectName("formBaslik")
         duzen.addWidget(baslik)
 
         bilgiler = [
@@ -753,14 +493,14 @@ class AuditKayitlariEkrani(QWidget):
         izgara.setVerticalSpacing(12)
 
         for sira, (alan, deger) in enumerate(bilgiler):
-            ad = QLabel(alan + ":")
-            ad.setStyleSheet(
-                "font-weight: bold; color: #31517D;"
-            )
+            ad = QLabel(alan)
+            ad.setObjectName("alanAdi")
+            ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
             deger_yazisi = QLabel(
                 "—" if deger is None else str(deger)
             )
+            deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             deger_yazisi.setTextFormat(Qt.PlainText)
             deger_yazisi.setWordWrap(True)
             deger_yazisi.setTextInteractionFlags(
@@ -778,17 +518,19 @@ class AuditKayitlariEkrani(QWidget):
             alt_baslik = QLabel(
                 {"DELETE": "Silinen Veri", "EXPORT": "Aktarım Ayrıntısı"}.get(kayit.get("olay_turu"), "Değişiklik Ayrıntısı")
             )
-            alt_baslik.setStyleSheet("font-size: 15px; font-weight: bold; color: #102D59;")
+            alt_baslik.setObjectName("formBaslik")
             duzen.addWidget(alt_baslik)
 
             ayrinti_izgara = QGridLayout()
             ayrinti_izgara.setHorizontalSpacing(20)
             ayrinti_izgara.setVerticalSpacing(8)
             for sira, (alan, deger) in enumerate(ayrinti):
-                ad = QLabel(alan + ":")
-                ad.setStyleSheet("font-weight: bold; color: #31517D;")
+                ad = QLabel(alan)
+                ad.setObjectName("alanAdi")
+                ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
                 ad.setWordWrap(True)
                 deger_yazisi = QLabel(deger)
+                deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
                 deger_yazisi.setTextFormat(Qt.PlainText)
                 deger_yazisi.setWordWrap(True)
                 deger_yazisi.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -798,12 +540,30 @@ class AuditKayitlariEkrani(QWidget):
             duzen.addLayout(ayrinti_izgara)
 
         kapat = QPushButton("Kapat")
+        kapat.setObjectName("birincil")
         kapat.setCursor(Qt.PointingHandCursor)
-        kapat.setMinimumWidth(100)
+        kapat.setMinimumWidth(110)
         kapat.clicked.connect(pencere.accept)
 
         duzen.addWidget(kapat, alignment=Qt.AlignRight)
         pencere.exec()
+
+    def detay_dugmesine_basildi(self, *_):
+        """"Görüntüle" düğmesi: hangi satırın olduğu düğmenin özelliğinden bulunur (düğmeyi lambda ile bağlamak pencereyi çöp
+        toplayıcının göremediği bir döngüde tutar ve süreç kapanırken Qt'yi çökertir)."""
+        dugme = self.sender()
+        sira = dugme.property("kayit_sirasi") if dugme is not None else None
+        if sira is not None:
+            self._ayrintiyi_ac(int(sira))
+
+    def satir_cift_tiklandi(self, oge=None, *_):
+        if oge is not None:
+            self._ayrintiyi_ac(oge.row())
+
+    def _ayrintiyi_ac(self, sira):
+        if 0 <= sira < len(self._satir_kayitlari):
+            kayit, tarih = self._satir_kayitlari[sira]
+            self._audit_detayini_goster(kayit, tarih)
 
     def _donem_degisti(self, *_):
         secim = self.donem_secimi.currentText()
@@ -821,9 +581,7 @@ class AuditKayitlariEkrani(QWidget):
             self.baslangic.setDate(bugun.addDays(-29))
             self.bitis.setDate(bugun)
 
-        manuel = secim == "Tarih Aralığı"
-        self.baslangic.setEnabled(manuel)
-        self.bitis.setEnabled(manuel)
+        self.tarih_alani.setVisible(secim == "Tarih Aralığı")
 
     def filtrele(self):
         self.offset = 0
@@ -970,7 +728,9 @@ class AuditKayitlariEkrani(QWidget):
 
         except requests.RequestException as hata:
             self.tablo.setRowCount(0)
+            self._satir_kayitlari = []
             self.toplam = 0
+            self.sayac_rozeti.setText("0 kayıt")
             self.sayfalama_guncelle()
             self.durum.setText(
                 f"Denetim kayıtları yüklenemedi: {istek_hatasi_metni(hata)}"
@@ -986,6 +746,7 @@ class AuditKayitlariEkrani(QWidget):
         kayitlar = veri.get("kayitlar", [])
 
         self.tablo.setRowCount(len(kayitlar))
+        self._satir_kayitlari = []
 
         for satir_no, kayit in enumerate(kayitlar):
             tarih = (kayit.get("olusturulma_tarihi") or "")
@@ -1018,34 +779,26 @@ class AuditKayitlariEkrani(QWidget):
                         Qt.UserRole, kayit.get("olay_turu")
                     )
 
+                hucre.setForeground(QColor("#0F2552" if sutun_no in (0, 1) else "#3B4C6B"))
+                if sutun_no == 0:
+                    yazi_tipi = hucre.font()
+                    yazi_tipi.setBold(True)
+                    hucre.setFont(yazi_tipi)                   # tarih satırın ana bilgisi
+                hucre.setToolTip(metin)
                 self.tablo.setItem(satir_no, sutun_no, hucre)
+
+            self._satir_kayitlari.append((dict(kayit), tarih))
 
             hucre_alani = QWidget()
             hucre_duzen = QHBoxLayout(hucre_alani)
             hucre_duzen.setContentsMargins(4, 0, 4, 0)
 
             detay_btn = QPushButton("Görüntüle")
-            detay_btn.setFixedSize(92, 30)
+            detay_btn.setObjectName("kucuk")
+            detay_btn.setFixedSize(92, 32)
             detay_btn.setCursor(Qt.PointingHandCursor)
-            detay_btn.setStyleSheet("""
-                QPushButton {
-                    background: #E9F1FF;
-                    color: #2457A2;
-                    border: none;
-                    border-radius: 7px;
-                    font-weight: bold;
-                    padding: 0;
-                    min-height: 0;
-                }
-                QPushButton:hover {
-                    background: #D4E5FF;
-                }
-            """)
-
-            detay_btn.clicked.connect(
-                lambda _checked=False, k=dict(kayit), t=tarih:
-                    self._audit_detayini_goster(k, t)
-            )
+            detay_btn.setProperty("kayit_sirasi", satir_no)
+            detay_btn.clicked.connect(self.detay_dugmesine_basildi)
 
             hucre_duzen.addStretch()
             hucre_duzen.addWidget(detay_btn)
@@ -1055,6 +808,7 @@ class AuditKayitlariEkrani(QWidget):
                 satir_no, 4, hucre_alani
             )
 
+        self.sayac_rozeti.setText(f"{self.toplam} kayıt")
         ilk = self.offset + 1 if kayitlar else 0
         son = self.offset + len(kayitlar)
 
