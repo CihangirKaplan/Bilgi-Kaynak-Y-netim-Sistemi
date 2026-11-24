@@ -83,8 +83,8 @@ Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tari
 
 ## 2.1 Öğrenciler
 Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Kayıt Tarihi, Durum.** Üstteki kartlar toplam, aktif, pasif ve **süresi dolan** öğrenci sayısını gösterir.
-- **Aramak ve süzmek:** Ad, numara ya da telefon yazın; **öğrenci grubunu** (*Tüm Öğrenciler, Gönüllü Öğrenci, Danışma Masası Öğrencisi, Asistan Öğrenci*) ve **durumu** (*Her Durum, Aktif, Pasif*) seçin. **Filtreleri Temizle** hepsini sıfırlar. Başlıklara tıklayarak listeyi sıralayabilirsiniz; arama yazarken ve **Yenile**'de sıralamanız ile seçili öğrenci korunur.
-- **＋ Öğrenci Ekle:** **Ad Soyad \***, **Öğrenci No \***, **Öğrenci Türü \*** (*Gönüllü Öğrenci* ya da *Asistan Öğrenci*), **Telefon** (10 hane ya da başında 0 ile 11 hane; örn. `555 123 45 67` ya da `05551234567`), **Bölüm** ve **Sınıf**.
+- **Aramak ve süzmek:** Ad, numara ya da telefon yazın; **öğrenci grubunu** (*Tüm Öğrenciler, Gönüllü Öğrenci, Danışma Masası Öğrencisi, Asistan Öğrenci*) ve **durumu** (*Her Durum, Aktif, Pasif*) seçin. Liste, siz yazdıkça ve seçtikçe anında süzülür; **Temizle** hepsini sıfırlar, **Yenile** listeyi sunucudan yeniden yükler. Durum, satırın sonunda renkli etiketle gösterilir; bir öğrenciye çift tıklayınca **Detay / Puanlar** açılır. Başlıklara tıklayarak listeyi sıralayabilirsiniz; arama yazarken ve **Yenile**'de sıralamanız ile seçili öğrenci korunur.
+- **＋ Öğrenci Ekle** (sayfanın sağ üstünde): **Ad Soyad \***, **Öğrenci No \***, **Öğrenci Türü \*** (*Gönüllü Öğrenci* ya da *Asistan Öğrenci*), **Telefon** (10 hane ya da başında 0 ile 11 hane; örn. `555 123 45 67` ya da `05551234567`), **Bölüm** ve **Sınıf**.
   **Danışma Masası öğrencileri bu pencereden eklenmez**: onlar giriş hesabı gerektirdiği için **Kullanıcı & Personel** üzerinden oluşturulur (pencere sizi yönlendirir).
 - **Aktiflik Düzenle:** Seçili öğrenciyi aktif ya da pasif yapar.
 - **Detay / Puanlar:** Seçili öğrencinin faaliyetlerini ve puanlarını gösterir. Dönem açılışta ayın ilk gününden bugüne ayarlıdır; tarihleri değiştirince sonuç kendiliğinden yenilenir.

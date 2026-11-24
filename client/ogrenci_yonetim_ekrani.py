@@ -40,6 +40,9 @@ from client.ogrenci_dialog import OgrenciEkleDialog
 from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, siralanabilir_yap
 from client.tablo_tasarimi import bos_mesaj_olustur
 from client.bildirim_toast import basari_bildirimi
+from client.sayfa_tema import (
+    DurumRozetiDelegate, TABLO_STILI, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
+)
 
 
 STIL = """
@@ -274,79 +277,19 @@ def tablo_hazirla(tablo, basliklar):
     )
 
 
-class EtiketDelegate(QStyledItemDelegate):
-    """Audit ekranındaki gibi renkli durum rozeti."""
+# Ana sayfadaki "Süresi Dolan Kayıtlar" düğmesi için sarı uyarı görünümü (ortak temada yok).
+UYARI_DUGMESI_STILI = """
+QPushButton#uyari { background: #FFF2DF; color: #96601B; border: 1px solid #F2D6AC; }
+QPushButton#uyari:hover { background: #FFE8C7; border: 1px solid #E6B877; }
+QPushButton#uyari:disabled { background: #F4F6FA; color: #A3B1CE; border: 1px solid #E8EDF6; }
+"""
 
-    RENKLER = {
-        "active": ("#17634F", "#E8F6EF"),
-        "passive": ("#9B3048", "#FCEBF0"),
-        "expired": ("#96601B", "#FFF2DF"),
-        "deferred": ("#285F88", "#E8F2FB"),
-        "normal": ("#55708E", "#EDF3FA"),
-    }
 
-    def paint(self, painter, option, index):
-        metin = str(
-            index.data(Qt.DisplayRole) or ""
-        )
+class EtiketDelegate(DurumRozetiDelegate):
+    """Durum hücresini renkli rozet olarak çizer (hücrenin metni değişmez; sıralama ve arama eskisi gibi çalışır)."""
 
-        durum = index.data(Qt.UserRole)
-
-        yazi_rengi, arka_plan = self.RENKLER.get(
-            durum,
-            self.RENKLER["normal"]
-        )
-
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        secili = bool(
-            option.state & QStyle.State_Selected
-        )
-
-        satir_rengi = (
-            "#E6EEFC" if secili
-            else "#FFFFFF" if index.row() % 2 == 0
-            else "#F7F9FD"
-        )
-
-        painter.fillRect(
-            option.rect,
-            QColor(satir_rengi)
-        )
-
-        font = option.font
-        font.setBold(True)
-        painter.setFont(font)
-
-        olcu = QFontMetrics(font)
-
-        genislik = min(
-            olcu.horizontalAdvance(metin) + 25,
-            max(20, option.rect.width() - 12)
-        )
-
-        rozet = QRectF(
-            option.rect.x()
-            + (option.rect.width() - genislik) / 2,
-            option.rect.y()
-            + (option.rect.height() - 29) / 2,
-            genislik,
-            29
-        )
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(arka_plan))
-        painter.drawRoundedRect(rozet, 9, 9)
-
-        painter.setPen(QColor(yazi_rengi))
-        painter.drawText(
-            rozet,
-            Qt.AlignCenter,
-            metin
-        )
-
-        painter.restore()
+    def __init__(self, parent=None):
+        super().__init__({"Aktif": ("#17634F", "#E8F6EF"), "Pasif": ("#9B3048", "#FCEBF0")}, parent)
 
 
 class OgrenciYonetimEkrani(QWidget):
@@ -364,258 +307,154 @@ class OgrenciYonetimEkrani(QWidget):
         self._on_yil_uyarisi_gosterildi = False
 
         self.setObjectName("ogrenciYonetimi")
-        self.setStyleSheet(STIL)
+        self.setStyleSheet(liste_sayfasi_stili() + UYARI_DUGMESI_STILI)
 
         ana = QVBoxLayout(self)
-        ana.setContentsMargins(4, 8, 4, 8)
-        ana.setSpacing(14)
+        ana.setContentsMargins(24, 20, 24, 18)
+        ana.setSpacing(16)
 
-        # FİLTRE ALANI
-        filtreler = QHBoxLayout()
-        filtreler.setSpacing(9)
+        # Başlık ve ana işlem
+        ust = QHBoxLayout()
+        ust.setSpacing(16)
+        basliklar = QVBoxLayout()
+        basliklar.setSpacing(3)
+        sayfa_baslik = QLabel("Öğrenciler")
+        sayfa_baslik.setObjectName("baslik")
+        sayfa_alt = QLabel("Öğrenci bilgileri, faaliyet puanları ve kayıt süreleri.")
+        sayfa_alt.setObjectName("altBaslik")
+        basliklar.addWidget(sayfa_baslik)
+        basliklar.addWidget(sayfa_alt)
+        ust.addLayout(basliklar, 1)
+
+        self.ekle_btn = buton_olustur("＋  Öğrenci Ekle", self.yeni_ogrenci_ekle, "birincil")
+        self.ekle_btn.setMinimumHeight(40)
+        ust.addWidget(self.ekle_btn, 0, Qt.AlignTop)
+        ana.addLayout(ust)
+
+        # Arama ve süzgeçler (değiştikçe liste anında süzülür)
+        filtre_karti = kart_olustur()
+        filtreler = QHBoxLayout(filtre_karti)
+        filtreler.setContentsMargins(16, 12, 16, 12)
+        filtreler.setSpacing(10)
 
         self.arama = QLineEdit()
-        self.arama.setPlaceholderText(
-            "Ad, öğrenci numarası veya telefon ara..."
-        )
+        self.arama.setPlaceholderText("Ad, numara veya telefon ara...")
         self.arama.setClearButtonEnabled(True)
+        self.arama.setMinimumWidth(200)
         self.arama.textChanged.connect(self.filtrele)
 
         self.grup = QComboBox()
-
-        self.grup.addItem(
-            "Tüm Öğrenciler", None
-        )
-        self.grup.addItem(
-            "Gönüllü Öğrenci", "GONULLU"
-        )
-        self.grup.addItem(
-            "Danışma Masası Öğrencisi",
-            "DANISMA_MASASI"
-        )
-        self.grup.addItem(
-            "Asistan Öğrenci", "ASISTAN"
-        )
-
+        self.grup.addItem("Tüm Öğrenciler", None)
+        self.grup.addItem("Gönüllü Öğrenci", "GONULLU")
+        self.grup.addItem("Danışma Masası Öğrencisi", "DANISMA_MASASI")
+        self.grup.addItem("Asistan Öğrenci", "ASISTAN")
         self.grup.setCursor(Qt.PointingHandCursor)
-
-        self.grup.currentIndexChanged.connect(
-            self.filtrele
-        )
+        self.grup.currentIndexChanged.connect(self.filtrele)
 
         self.durum_filtresi = QComboBox()
-        self.durum_filtresi.addItems([
-            "Her Durum",
-            "Aktif",
-            "Pasif",
-        ])
+        self.durum_filtresi.addItems(["Her Durum", "Aktif", "Pasif"])
+        self.durum_filtresi.setCursor(Qt.PointingHandCursor)
+        self.durum_filtresi.currentIndexChanged.connect(self.filtrele)
 
-        self.durum_filtresi.setCursor(
-            Qt.PointingHandCursor
-        )
-
-        self.durum_filtresi.currentIndexChanged.connect(
-            self.filtrele
-        )
-
-        temizle = buton_olustur(
-            "Filtreleri Temizle",
-            self.filtreleri_temizle,
-            "ikincil"
-        )
-
-        yenile = buton_olustur(
-            "Yenile",
-            self.yenile,
-            "ikincil"
-        )
+        temizle = buton_olustur("Temizle", self.filtreleri_temizle, "hayalet")
+        temizle.setToolTip("Arama ve süzgeçleri sıfırla")
+        yenile = buton_olustur("⟳  Yenile", self.yenile, "hayalet")
+        yenile.setToolTip("Öğrencileri sunucudan yeniden yükle")
 
         filtreler.addWidget(self.arama, 4)
         filtreler.addWidget(self.grup, 2)
         filtreler.addWidget(self.durum_filtresi, 1)
         filtreler.addWidget(temizle)
         filtreler.addWidget(yenile)
+        ana.addWidget(filtre_karti)
 
-        ana.addLayout(filtreler)
-
-        # ÖZET KARTLARI
+        # Özet kartları
         kartlar = QGridLayout()
-        kartlar.setSpacing(12)
-
+        kartlar.setSpacing(16)
         self.degerler = {}
-
         bilgiler = [
-            (
-                "total",
-                "Toplam Öğrenci",
-                "#16294B"
-            ),
-            (
-                "active",
-                "Aktif Öğrenci",
-                "#17634F"
-            ),
-            (
-                "passive",
-                "Pasif Öğrenci",
-                "#9B3048"
-            ),
-            (
-                "expired",
-                "Süresi Dolan (İşlem Bekleyen)",
-                "#96601B"
-            ),
+            ("total", "Toplam Öğrenci", "#1D4ED8"),
+            ("active", "Aktif Öğrenci", "#0E9F6E"),
+            ("passive", "Pasif Öğrenci", "#DC2626"),
+            ("expired", "Süresi Dolan (İşlem Bekleyen)", "#D97706"),
         ]
-
-        for sira, (anahtar, ad, renk) in enumerate(
-            bilgiler
-        ):
-            kart = QFrame()
-            kart.setObjectName("ozetKart")
-
-            icerik = QVBoxLayout(kart)
-            icerik.setContentsMargins(16, 12, 16, 12)
-            icerik.setSpacing(5)
-
-            baslik = QLabel(ad)
-            baslik.setObjectName("ozetBaslik")
-
-            deger = QLabel("0")
-            deger.setObjectName("ozetDeger")
-            deger.setStyleSheet(
-                f"color: {renk};"
-            )
-
-            icerik.addWidget(baslik)
-            icerik.addWidget(deger)
-
-            golge_ekle(kart)
-
+        for sira, (anahtar, ad, renk) in enumerate(bilgiler):
+            kart, deger = ozet_karti_olustur(ad, renk)
             kartlar.addWidget(kart, 0, sira)
+            kartlar.setColumnStretch(sira, 1)
             self.degerler[anahtar] = deger
-
         ana.addLayout(kartlar)
 
-        # TABLO KARTI
-        kart = QFrame()
-        kart.setObjectName("tabloKart")
-        golge_ekle(kart)
-
+        # Tablo kartı
+        kart = kart_olustur()
         yer = QVBoxLayout(kart)
-        yer.setContentsMargins(16, 14, 16, 13)
-        yer.setSpacing(12)
+        yer.setContentsMargins(20, 18, 20, 14)
+        yer.setSpacing(14)
 
-        ust = QHBoxLayout()
-        ust.setSpacing(9)
+        liste_ust = QHBoxLayout()
+        liste_ust.setSpacing(10)
+        liste_baslik = QLabel("Öğrenci Listesi")
+        liste_baslik.setObjectName("kartBaslik")
+        liste_ust.addWidget(liste_baslik)
+        self.sayac_rozeti = QLabel("0 öğrenci")
+        self.sayac_rozeti.setObjectName("rozet")
+        liste_ust.addWidget(self.sayac_rozeti)
+        liste_ust.addStretch()
 
-        baslik_alani = QVBoxLayout()
-        baslik_alani.setSpacing(4)
+        self.excel_btn = buton_olustur("⬇  Excel'e Aktar", self.excele_aktar, "hayalet")
+        self.aktiflik_btn = buton_olustur("Aktiflik Düzenle", self.aktiflik_duzenle, "hayalet")
+        self.detay_btn = buton_olustur("Detay / Puanlar", self.detay_ac, "hayalet")
+        self.sure_btn = buton_olustur("Süresi Dolan Kayıtlar", self.suresi_dolan_ac, "uyari")
+        for buton in (self.excel_btn, self.aktiflik_btn, self.detay_btn, self.sure_btn):
+            liste_ust.addWidget(buton)
+        yer.addLayout(liste_ust)
 
-        baslik = QLabel("Öğrenci Listesi")
-        baslik.setObjectName("tabloBaslik")
-
-        aciklama = QLabel(
-            "Öğrenci bilgileri, faaliyet puanları "
-            "ve kayıt süreleri"
-        )
-        aciklama.setObjectName("aciklama")
-
-        baslik_alani.addWidget(baslik)
-        baslik_alani.addWidget(aciklama)
-
-        ust.addLayout(baslik_alani)
-        ust.addStretch()
-
-        self.ekle_btn = buton_olustur(
-            "＋ Öğrenci Ekle",
-            self.yeni_ogrenci_ekle
-        )
-
-        self.aktiflik_btn = buton_olustur(
-            "Aktiflik Düzenle",
-            self.aktiflik_duzenle
-        )
-
-        self.detay_btn = buton_olustur(
-            "Detay / Puanlar",
-            self.detay_ac,
-            "ikincil"
-        )
-
-        self.sure_btn = buton_olustur(
-            "Süresi Dolan Kayıtlar",
-            self.suresi_dolan_ac,
-            "uyari"
-        )
-
-        self.excel_btn = buton_olustur(
-            "Excel'e Aktar",
-            self.excele_aktar,
-            "ikincil"
-        )
-
-        ust.addWidget(self.excel_btn)
-        ust.addWidget(self.ekle_btn)
-        ust.addWidget(self.aktiflik_btn)
-        ust.addWidget(self.detay_btn)
-        ust.addWidget(self.sure_btn)
-
-        yer.addLayout(ust)
-
-        # ÖĞRENCİ TABLOSU
+        # Öğrenci tablosu
         self.tablo = QTableWidget()
         siralanabilir_yap(self.tablo)
 
         tablo_hazirla(self.tablo, [
-            "Ad Soyad",
-            "Öğrenci No",
-            "Telefon",
-            "Öğrenci Grubu",
-            "Bağlı Hesap",
-            "Kayıt Tarihi",
-            "Durum",
+            "AD SOYAD",
+            "ÖĞRENCİ NO",
+            "TELEFON",
+            "ÖĞRENCİ GRUBU",
+            "BAĞLI HESAP",
+            "KAYIT TARİHİ",
+            "DURUM",
         ])
+        self.tablo.setStyleSheet(TABLO_STILI)
+        self.tablo.setFrameShape(QFrame.NoFrame)
+        self.tablo.setAlternatingRowColors(False)
+        self.tablo.setFocusPolicy(Qt.NoFocus)
+        self.tablo.setWordWrap(False)
+        self.tablo.setMouseTracking(True)
+        self.tablo.verticalHeader().setDefaultSectionSize(52)
 
         header = self.tablo.horizontalHeader()
-
-        sutunlar = {
-            1: 145,
-            2: 130,
-            5: 115,
-            6: 105,
-        }
-
+        header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        sutunlar = {1: 130, 2: 125, 5: 118, 6: 105}
         for sutun, genislik in sutunlar.items():
-            header.setSectionResizeMode(
-                sutun,
-                QHeaderView.Fixed
-            )
+            header.setSectionResizeMode(sutun, QHeaderView.Fixed)
+            self.tablo.setColumnWidth(sutun, genislik)
 
-            self.tablo.setColumnWidth(
-                sutun,
-                genislik
-            )
-
-        self.tablo.setItemDelegateForColumn(
-            6,
-            EtiketDelegate(self.tablo)
-        )
-
-        self.tablo.cellDoubleClicked.connect(
-            lambda *_: self.detay_ac()
-        )
+        self.tablo.setItemDelegateForColumn(6, EtiketDelegate(self.tablo))
+        self.tablo.cellDoubleClicked.connect(self.satir_cift_tiklandi)
 
         yer.addWidget(self.tablo, 1)
         self.bos_mesaj = bos_mesaj_olustur("Henüz öğrenci kaydı yok.")
-        yer.addWidget(self.bos_mesaj)
+        self.bos_mesaj.setObjectName("bosMesaj")
+        self.bos_mesaj.setStyleSheet("")                                  # ortak tema (liste_sayfasi_stili) belirler
+        yer.addWidget(self.bos_mesaj, 1)
 
-        self.ozet = QLabel(
-            "Öğrenciler yükleniyor..."
-        )
-        self.ozet.setObjectName("aciklama")
-
+        self.ozet = QLabel("Öğrenciler yükleniyor...")
+        self.ozet.setObjectName("altBilgi")
         yer.addWidget(self.ozet)
         ana.addWidget(kart, 1)
+
+    def satir_cift_tiklandi(self, *_):
+        """Satıra çift tıklayınca detay açılır. (Lambda ile bağlanmaz: sayfayı tutan lambda çöp toplayıcının göremediği bir
+        döngü kurar ve süreç kapanırken Qt'yi çökertir.)"""
+        self.detay_ac()
 
     def _istek(self, method, path, **kwargs):
         try:
@@ -794,10 +633,12 @@ class OgrenciYonetimEkrani(QWidget):
 
                 item.setToolTip(str(deger))
 
-                if sutun in (5, 6):
-                    item.setTextAlignment(
-                        Qt.AlignCenter
-                    )
+                if sutun == 0:
+                    yazi_tipi = item.font()
+                    yazi_tipi.setBold(True)
+                    item.setFont(yazi_tipi)                      # ad satırın ana bilgisi
+                elif sutun != 6:
+                    item.setForeground(QColor("#3B4C6B"))
 
                 self.tablo.setItem(
                     satir,
@@ -853,6 +694,7 @@ class OgrenciYonetimEkrani(QWidget):
             f"Toplam {toplam} öğrenci • "
             f"Görüntülenen {len(kayitlar)}"
         )
+        self.sayac_rozeti.setText(f"{len(kayitlar)} öğrenci")
 
     def secili_ogrenci(self):
         satir = self.tablo.currentRow()
