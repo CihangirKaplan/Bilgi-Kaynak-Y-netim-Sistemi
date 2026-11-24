@@ -74,8 +74,8 @@ class CihazRaporlariEkrani(QWidget):
             parca = datetime.fromisoformat(deger)
         except ValueError:
             return str(deger)
-        if len(str(deger)) <= 10:
-            return parca.strftime("%d.%m.%Y")
+        if len(str(deger)) <= 10 or (parca.hour, parca.minute, parca.second) == (0, 0, 0):
+            return parca.strftime("%d.%m.%Y")                # saat yoksa ya da gece yarısıysa (yalnız tarih tutulan alanlar) "00:00" yazılmaz
         return parca.strftime("%d.%m.%Y %H:%M")
 
     @staticmethod
@@ -148,7 +148,8 @@ class CihazRaporlariEkrani(QWidget):
         self.donem.currentIndexChanged.connect(self._donem_degisti)
         filtre_satiri.addWidget(self.donem)
 
-        filtre_satiri.addWidget(QLabel("Başlangıç:"))
+        self.baslangic_etiketi = QLabel("Başlangıç:")
+        filtre_satiri.addWidget(self.baslangic_etiketi)
         self.baslangic = QDateEdit()
         self.baslangic.setCalendarPopup(True)
         self.baslangic.setDisplayFormat("dd.MM.yyyy")
@@ -156,13 +157,15 @@ class CihazRaporlariEkrani(QWidget):
         self.baslangic.dateChanged.connect(self._tarih_degisti)
         filtre_satiri.addWidget(self.baslangic)
 
-        filtre_satiri.addWidget(QLabel("Bitiş:"))
+        self.bitis_etiketi = QLabel("Bitiş:")
+        filtre_satiri.addWidget(self.bitis_etiketi)
         self.bitis = QDateEdit()
         self.bitis.setCalendarPopup(True)
         self.bitis.setDisplayFormat("dd.MM.yyyy")
         self.bitis.setDate(QDate.currentDate())
         self.bitis.dateChanged.connect(self._tarih_degisti)
         filtre_satiri.addWidget(self.bitis)
+        self._tarih_kutularini_ayarla()                   # varsayılan dönem "Tümü": tarih kutuları süzgece etki etmediği için pasif
 
         filtre_satiri.addWidget(QLabel("Cihaz:"))
         self.cihaz_sec = QComboBox()
@@ -322,8 +325,15 @@ class CihazRaporlariEkrani(QWidget):
             return self.baslangic.date(), self.bitis.date()
         return None, None
 
+    def _tarih_kutularini_ayarla(self):
+        """Dönem "Tümü" iken tarih kutuları hiçbir şeyi süzmez; etkin ve dolu görünmesi yanıltıcıydı, bu yüzden pasif gösterilir."""
+        etkin = self.donem.currentText() != "Tümü"
+        for parca in (self.baslangic, self.bitis, self.baslangic_etiketi, self.bitis_etiketi):
+            parca.setEnabled(etkin)
+
     def _donem_degisti(self, *args):
         """Hazır bir dönem seçilince tarih kutuları o dönemin tarihlerini göstersin."""
+        self._tarih_kutularini_ayarla()
         bas, bit = self._donem_araligi()
         if bas is None or self.donem.currentText() == "Tarih Aralığı":
             return

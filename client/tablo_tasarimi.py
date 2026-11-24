@@ -141,6 +141,15 @@ ORTALI_TABLO_STIL = (TABLO_STIL.replace("padding: 6px 10px", "padding: 6px 22px"
                                .replace("padding: 12px 10px", "padding: 12px 22px"))
 
 
+def tablo_dolgusunu_daralt(tablo, yatay=12):
+    """Ortalı (cihaz yaşam döngüsü) tablosunun hücre ve başlık yatay dolgusunu 22 px'ten `yatay` px'e indirir.
+
+    Çok sütunlu tablolarda sütun başına 2x22 px boşluk, 1366 px genişlikli ekranda sağdaki sütunların (BİLDİRİM, İŞLEM) pencere
+    dışında kalmasına yol açıyordu. Genişlik hesapları (`hap_sutununu_sigdir`) dolguyu stil sayfasından okuduğu için bununla uyumludur."""
+    tablo.setStyleSheet(tablo.styleSheet().replace("padding: 6px 22px", f"padding: 6px {yatay}px")
+                                           .replace("padding: 12px 22px", f"padding: 12px {yatay}px"))
+
+
 class OrtaliTablo(QTableWidget):
     """Tabloya konan her metin hücresini otomatik ortalar (hücre widget'ları kendi hizasını yönetir)."""
 
@@ -244,15 +253,15 @@ def _ikon_buton(simge, ipucu, renk, arka, arka_hover, tikla):
     return b
 
 
-def islem_butonlari(duzenle_fn, sil_fn):
-    """Satır sonu için ✎ (düzenle) ve 🗑 (sil) ikon butonları."""
+def islem_butonlari(duzenle_fn, sil_fn, sil_simge="🗑", sil_ipucu="Sil"):
+    """Satır sonu için ✎ (düzenle) ve 🗑 (sil) ikon butonları. İkinci düğme başka bir işlem için de kullanılır (ör. ✕ iptal)."""
     kap = QWidget()
     lay = QHBoxLayout(kap)
     lay.setContentsMargins(6, 4, 6, 4)
     lay.setSpacing(8)
     lay.addStretch()
     lay.addWidget(_ikon_buton("✎", "Düzenle", "#B45309", "#FEF3C7", "#FDE68A", duzenle_fn))
-    lay.addWidget(_ikon_buton("🗑", "Sil", "#B91C1C", "#FEE2E2", "#FECACA", sil_fn))
+    lay.addWidget(_ikon_buton(sil_simge, sil_ipucu, "#B91C1C", "#FEE2E2", "#FECACA", sil_fn))
     lay.addStretch()
     return kap
 
@@ -338,6 +347,18 @@ def tarih_goster(deger):
         return datetime.date.fromisoformat(metin).strftime("%d.%m.%Y")
     except ValueError:
         return metin
+
+
+def tarih_saat_goster(deger):
+    """'2026-11-23T11:59:00' / '2026-11-23 11:59' -> '23.11.2026 11:59'. Saat yoksa yalnız tarih; boşsa ''. Ayrıştırılamazsa metin olduğu gibi."""
+    metin = str(deger or "").strip()
+    if not metin:
+        return ""
+    try:
+        an = datetime.datetime.fromisoformat(metin.replace(" ", "T")[:16])
+    except ValueError:
+        return metin
+    return an.strftime("%d.%m.%Y") if len(metin) <= 10 else an.strftime("%d.%m.%Y %H:%M")
 
 
 def kalan_gun_hapi(deger, uyari_gun=30):

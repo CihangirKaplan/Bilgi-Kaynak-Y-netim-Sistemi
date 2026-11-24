@@ -429,14 +429,14 @@ class CihazUygunlukEkrani(QWidget):
         kb = self.tablo.horizontalHeader()
         # Cihaz sütunu sabit genişlikte (uzun ad sütunu şişirip gün sütunlarını ezmesin; sığmayan ad "…" ile kısalır, tam hâli ipucunda).
         kb.setSectionResizeMode(SUTUN_CIHAZ, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(SUTUN_CIHAZ, 210)
+        self.tablo.setColumnWidth(SUTUN_CIHAZ, 170)
         kb.setSectionResizeMode(SUTUN_SU_AN, QHeaderView.Fixed)
         self.tablo.setColumnWidth(SUTUN_SU_AN, 104)
-        kb.setMinimumSectionSize(78)                                   # gün sütunu bundan dar olmaz (pencere dar ise yatay kaydırma çıkar)
+        kb.setMinimumSectionSize(70)                                   # gün sütunu bundan dar olmaz (pencere dar ise yatay kaydırma çıkar)
         for sutun in range(ILK_GUN_SUTUNU, ILK_GUN_SUTUNU + 7):
             kb.setSectionResizeMode(sutun, QHeaderView.Stretch)
         kb.setSectionResizeMode(UYARI_SUTUNU, QHeaderView.Fixed)
-        self.tablo.setColumnWidth(UYARI_SUTUNU, 240)
+        self.tablo.setColumnWidth(UYARI_SUTUNU, 170)
         self.tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         cihaz_hucresi_uygula(self.tablo, SUTUN_CIHAZ)
         self.cizici = DurumHucreCizici(self.tablo)

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QDialog, QFormLayout, QComboBox, QDateEdit,
     QLineEdit, QTextEdit, QFrame
 )
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QEvent
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, cihaz_siralama_adi
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.rezervasyon_cakisma_uyarisi import cakisma_cozumlu_istek
@@ -16,7 +16,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
     api_hata_mesaji,
 )
-from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi
+from client.tablo_tasarimi import hap_sutununu_sigdir, hizli_doldur, daha_fazla_dugmesi, tablo_dolgusunu_daralt
 from client.tablo_tasarimi import cift_tikla_ac, satira_kimlik_ata, tehlike_dugmesi
 from client.tablo_tasarimi import (FORM_STIL, tablo_olustur, metin_item, hap, islem_butonlari, sil_onayi,
                             sayi_cipi, tarih_goster, kalan_gun_hapi, sayfa_basligi, hatirlatma_metni,
@@ -325,6 +325,9 @@ class BakimDuzenleFormu(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
+YAPILAN_ISLEM_EN_AZ = 126                                                    # "YAPILAN İŞLEM" başlığı ve iki satırlık metin bu genişlikte kesilmeden okunur
+
+
 class BakimYonetimEkrani(QWidget):
     """Bakım kayıtlarının listelendiği, aranabilir ve silinebilir tablo ekranı."""
     def __init__(self, api_url, token, yetkili_mi=True):
@@ -359,20 +362,24 @@ class BakimYonetimEkrani(QWidget):
 
         self.tablo = tablo_olustur(["CİHAZ", "YAPAN KİŞİ", "YAPILAN İŞLEM", "MALİYET",
                                     "BAKIM TARİHİ", "SONRAKİ BAKIM", "BİLDİRİM", "İŞLEM"], ortali=True)
+        tablo_dolgusunu_daralt(self.tablo, 10)                                 # 8 sütun: dar dolgu olmadan 1366 px'te BİLDİRİM/İŞLEM pencere dışında kalıyordu
+        self.tablo.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)          # çok dar pencerede bile sağdaki sütunlara kaydırarak ulaşılır
         kb = self.tablo.horizontalHeader()
         kb.setSectionResizeMode(0, QHeaderView.Fixed)                          # uzun cihaz adı sütunu şişirmesin ("…" ile kısalır, ipucunda tam)
-        self.tablo.setColumnWidth(0, 230)
+        self.tablo.setColumnWidth(0, 165)
         cihaz_hucresi_uygula(self.tablo, 0)                                    # ad üstte (kalın), envanter kodu altta (gri)
         kb.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        kb.setSectionResizeMode(2, QHeaderView.Stretch)
+        kb.setSectionResizeMode(2, QHeaderView.Interactive)                    # genişliği islem_sutununu_ayarla belirler (en az YAPILAN_ISLEM_EN_AZ)
         kb.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        kb.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        kb.setSectionResizeMode(4, QHeaderView.Fixed)                          # "24.11.2026 – 25.11.2026" iki satıra sarılır; tek satır sütunu şişiriyordu
+        self.tablo.setColumnWidth(4, 128)
         kb.setSectionResizeMode(5, QHeaderView.Fixed)
         kb.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         kb.setSectionResizeMode(7, QHeaderView.Fixed)
         self.tablo.setColumnWidth(5, 230)
         self.tablo.setColumnWidth(7, 110)
 
+        self.tablo.viewport().installEventFilter(self)                         # tablo genişliği değişince YAPILAN İŞLEM sütunu yeniden ayarlanır
         cift_tikla_ac(self.tablo, self.bakim_duzenle_ac)                       # satıra çift tıklayınca düzenleme açılır (yalnızca yetkililer: satıra kimlik atanır)
         self.tablo.setColumnHidden(7, not self.yetkili_mi)
         self.bos_mesaj = bos_mesaj_olustur("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
@@ -465,6 +472,7 @@ class BakimYonetimEkrani(QWidget):
         self.bos_mesaj.setText("Henüz bakım kaydı yok. Üstteki “Bakım Kaydı” butonuyla ekleyebilirsiniz.")
         hap_sutununu_sigdir(self.tablo, 5, en_az=120)            # "Planlanmadı" / "tarih · N gün gecikti" rozeti kesilmesin
         hap_sutununu_sigdir(self.tablo, 7, en_az=60)             # ✎ / 🗑 düğmeleri sağdan kırpılmasın
+        self.islem_sutununu_ayarla()
         self.bos_mesaj.setVisible(not bakimlar)
         self.tablo.setVisible(bool(bakimlar))
         self.filtrele(self.arama.text())
@@ -473,6 +481,18 @@ class BakimYonetimEkrani(QWidget):
         """Listeyi, en yeni kayıtlardan başlayarak ADIM kadar daha uzatır (en çok sunucunun üst sınırına kadar)."""
         self.liste_siniri.artir()
         self.verileri_yukle()
+
+    def islem_sutununu_ayarla(self):
+        """YAPILAN İŞLEM sütunu kalan genişliği alır ama en az YAPILAN_ISLEM_EN_AZ olur (dar pencerede başlığı ezilip kesilmesin);
+        sığmazsa yatay kaydırma çubuğu çıkar ve sağdaki BİLDİRİM / İŞLEM sütunlarına kaydırarak ulaşılır."""
+        kb = self.tablo.horizontalHeader()
+        diger = sum(kb.sectionSize(i) for i in range(kb.count()) if i != 2 and not kb.isSectionHidden(i))
+        self.tablo.setColumnWidth(2, max(YAPILAN_ISLEM_EN_AZ, self.tablo.viewport().width() - diger))
+
+    def eventFilter(self, kaynak, olay):
+        if kaynak is self.tablo.viewport() and olay.type() == QEvent.Resize:
+            self.islem_sutununu_ayarla()
+        return super().eventFilter(kaynak, olay)
 
     def filtrele(self, metin):
         """Cihaz, kişi ve işlem sütunlarında arama yapar."""

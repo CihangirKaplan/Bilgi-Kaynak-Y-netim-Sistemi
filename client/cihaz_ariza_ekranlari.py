@@ -3,7 +3,7 @@
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
 import logging
-from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
+from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, tarih_saat_goster
 from client.tablo_siralama import SIRALAMA_ROLU
 from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtCore import Qt
@@ -177,7 +177,7 @@ def ariza_ipucu(ar):
     """Arıza satırının ipucu: açıklama; çözüldüyse çözüm tarihi ve çözüm notu da."""
     satirlar = [str(ar.get("ariza_aciklama") or "").strip()]
     if ar.get("durum") == "Çözüldü":
-        tarih = str(ar.get("cozum_tarihi") or "")[:16].replace("T", " ")
+        tarih = tarih_saat_goster(ar.get("cozum_tarihi"))
         if tarih:
             satirlar.append(f"Çözüm tarihi: {tarih}")
         satirlar.append(f"Çözüm: {ar.get('cozum_notu') or 'not girilmemiş'}")
@@ -291,8 +291,7 @@ class ArizaYonetimEkrani(QWidget):
                 else:
                     self.tablo.setCellWidget(satir, 4, hap("Açık", "#991B1B", "#FEE2E2"))
 
-                tarih = str(ar.get("bildirim_tarihi") or "")[:16].replace("T", " ")
-                self.tablo.setItem(satir, 5, metin_item(tarih, ortala=True))
+                self.tablo.setItem(satir, 5, metin_item(tarih_saat_goster(ar.get("bildirim_tarihi")), ortala=True))
 
                 if self.yetkili_mi:
                     # Açık arıza düzenlenir/çözülür; çözülmüş arıza yanlışlıkla çözüldü işaretlendiyse yeniden açılabilir.
@@ -345,7 +344,7 @@ class ArizaYonetimEkrani(QWidget):
             filtre_ozeti=[("Arama", self.arama.text().strip() or "Yok")], sayfa_adi="Arızalar",
             aciklama="Cihaz arıza kayıtları (ekranda görünen kayıtlar).",
             ek_sutunlar=[("Açıklama", lambda s: kayit(s, "ariza_aciklama")),
-                         ("Çözüm Tarihi", lambda s: str(kayit(s, "cozum_tarihi"))[:16].replace("T", " ")),
+                         ("Çözüm Tarihi", lambda s: tarih_saat_goster(kayit(s, "cozum_tarihi"))),
                          ("Çözüm Notu", lambda s: kayit(s, "cozum_notu"))],
         )
 
