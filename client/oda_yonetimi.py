@@ -3,8 +3,9 @@ import requests
 from client.api_yoneticisi import istek_hatasi_metni, oturum_kontrollu_istek, oturum_hatasi_mi
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QHBoxLayout, 
-    QMessageBox, QApplication, QCheckBox, QLabel, QFrame
+    QMessageBox, QApplication, QLabel, QFrame
 )
+from PySide6.QtCore import Qt
 from client.bildirim_toast import basari_bildirimi
 from client.ui_components import StandartButon, StandartGirdi
 
@@ -99,18 +100,13 @@ class OdaFormu(QWidget):
         self.in_kapasite.setText("1")
         form_layout.addRow(lbl_kapasite, self.in_kapasite)
         
-        # Checkbox
-        self.chk_aktif = QCheckBox("Bu oda aktif olarak kullanılabilir.")
-        self.chk_aktif.setChecked(True)
-        self.chk_aktif.setStyleSheet("""
-            QCheckBox {
-                color: #2C3E50;
-                font-size: 13px;
-                font-weight: bold;
-                border: none;
-            }
-        """)
-        form_layout.addRow("", self.chk_aktif) # Label boş bırakıldı ki hiza korunsun
+        # Yeni oda her zaman aktif açılır (bilgi notu). Aktif/pasif geçişi Oda Yönetimi'ndeki düğmeyle yapılır;
+        # düzenleme penceresi odanın durumuna dokunmaz.
+        if not self.oda_id:
+            lbl_aktif = QLabel("Bu oda aktif olarak kullanılabilir.")
+            lbl_aktif.setStyleSheet("color: #2C3E50; font-size: 13px; font-weight: bold; border: none;")
+            lbl_aktif.setAlignment(Qt.AlignCenter)
+            form_layout.addRow(lbl_aktif)
         
         kart_layout.addWidget(form_container)
         
@@ -171,7 +167,6 @@ class OdaFormu(QWidget):
     def eski_verileri_bas(self):
         self.in_oda_adi.setText(self.eski_veriler.get("oda_adi", ""))
         self.in_kapasite.setText(str(self.eski_veriler.get("kapasite", 1)))
-        self.chk_aktif.setChecked(self.eski_veriler.get("aktif_mi", True))
 
     def odayi_kaydet(self):
         oda_adi = self.in_oda_adi.text().strip()
@@ -188,8 +183,9 @@ class OdaFormu(QWidget):
         oda_verisi = {
             "oda_adi": oda_adi,
             "kapasite": int(kapasite_str),
-            "aktif_mi": self.chk_aktif.isChecked()
         }
+        if not self.oda_id:
+            oda_verisi["aktif_mi"] = True
 
         headers = {"Authorization": f"Bearer {self.token}"}
         

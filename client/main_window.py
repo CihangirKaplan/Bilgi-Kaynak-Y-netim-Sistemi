@@ -258,6 +258,9 @@ def izin_var(rol, izin_adi):
 # ======================================================================
 #  2. MENÜ TANIMI
 # ======================================================================
+ODA_PASIFE_AL_ETIKETI = "✕  Odayı Pasife Al"
+ODA_AKTIF_ET_ETIKETI = "✓  Odayı Aktif Et"
+
 MENU = [
     ("GENEL", [
         dict(ikon="📊", ad="Ana Kontrol Paneli", izin=None, dashboard=True),
@@ -373,7 +376,7 @@ MENU = [
              aciklama="Sistemdeki fiziksel odaların tanımlanması ve düzenlenmesi",
              aksiyon=[("＋  Yeni Oda Ekle", "Oda yönetimi"),
                       ("✎  Odayı Düzenle", "Oda yönetimi"),
-                      ("✕  Odayı Pasife Al", "Oda yönetimi")]),
+                      (ODA_PASIFE_AL_ETIKETI, "Oda yönetimi")]),
     ]),
     ("SİSTEM", [
         dict(ikon="🛡️", ad="Rol & İzin Yönetimi", izin="Rol-izin yönetme",
@@ -1884,23 +1887,39 @@ QLabel {
         self.oda_duzenle_penceresi.closeEvent = kapanma_yakala
         self.oda_duzenle_penceresi.show()
 
-    def odayi_pasife_al(self):
+    def oda_durum_butonunu_guncelle(self, *_):
+        """Aksiyon düğmesi seçili odanın durumuna göre "Odayı Pasife Al" ya da "Odayı Aktif Et" olur."""
+        dugme = getattr(self, "oda_durum_butonu", None)
+        tablo = getattr(self, "oda_tablosu", None)
+        if dugme is None or tablo is None:
+            return
+        secili = tablo.selectionModel().selectedRows()
+        durum = tablo.item(secili[0].row(), 3) if secili else None
+        dugme.setText(ODA_AKTIF_ET_ETIKETI if durum is not None and "Pasif" in durum.text() else ODA_PASIFE_AL_ETIKETI)
+
+    def oda_durumunu_degistir(self):
+        """Seçili odayı pasife alır; seçili oda zaten pasifse yeniden aktif eder."""
         if not hasattr(self, 'oda_tablosu'): return
 
         from PySide6.QtWidgets import QMessageBox
 
         secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
         if not secili_satirlar:
-            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen pasife almak istediğiniz odayı tablodan seçin.")
+            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen aktif ya da pasif yapmak istediğiniz odayı tablodan seçin.")
             return
 
         satir = secili_satirlar[0].row()
         oda_id = int(self.oda_tablosu.item(satir, 0).text())
         oda_adi = self.oda_tablosu.item(satir, 1).text()
+        durum = self.oda_tablosu.item(satir, 3)
+        aktif_edilecek = durum is not None and "Pasif" in durum.text()
 
+        if aktif_edilecek:
+            soru = f"'{oda_adi}' adlı odayı yeniden aktif etmek istediğinize emin misiniz?"
+        else:
+            soru = f"'{oda_adi}' adlı odayı pasife almak istediğinize emin misiniz?\nBu işlem randevu sistemini etkileyebilir."
         cevap = QMessageBox.question(
-            self, "Onay",
-            f"'{oda_adi}' adlı odayı pasife almak istediğinize emin misiniz?\nBu işlem randevu sistemini etkileyebilir.",
+            self, "Onay", soru,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1910,7 +1929,7 @@ QLabel {
             try:
                 res = oturum_kontrollu_istek("PATCH",
                     f"{self.api_url}/api/odalar/{oda_id}",
-                    json={"aktif_mi": False},
+                    json={"aktif_mi": aktif_edilecek},
                     headers=headers,
                     timeout=5
                 )
@@ -1918,11 +1937,13 @@ QLabel {
                     return
 
                 if res.status_code == 200:
-                    basari_bildirimi(self, "Oda başarıyla pasife alındı.")
+                    basari_bildirimi(self, "Oda başarıyla aktif edildi." if aktif_edilecek else "Oda başarıyla pasife alındı.")
                     self.odalari_getir()
                 else:
                     if res.status_code == 409:
-                        QMessageBox.warning(self, "Oda Pasife Alınamadı", hata_detayi_metni(res, "Oda pasife alınamadı."))
+                        QMessageBox.warning(
+                            self, "Oda Aktif Edilemedi" if aktif_edilecek else "Oda Pasife Alınamadı",
+                            hata_detayi_metni(res, "Oda aktif edilemedi." if aktif_edilecek else "Oda pasife alınamadı."))
                     else:
                         QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
             except Exception as e:
@@ -2170,6 +2191,7 @@ QLabel {
 
                 pasifleri_goster = getattr(self, "oda_pasifleri_goster", None)
                 oda_pasiflerini_gizle(self.oda_tablosu, bool(pasifleri_goster and pasifleri_goster.isChecked()))
+                AnaPencere.oda_durum_butonunu_guncelle(self)       # (testlerdeki sahte pencerelerde de çalışsın)
         except Exception as e:
             logger.warning("Oda listesi yüklenemedi: %s", e)
 
@@ -2310,8 +2332,9 @@ QLabel {
                     btn.clicked.connect(self.yeni_oda_formunu_ac)
                 elif etiket == "✎  Odayı Düzenle":
                     btn.clicked.connect(self.odayi_duzenle)
-                elif etiket == "✕  Odayı Pasife Al":
-                    btn.clicked.connect(self.odayi_pasife_al)
+                elif etiket == ODA_PASIFE_AL_ETIKETI:
+                    self.oda_durum_butonu = btn                      # seçili odaya göre "Pasife Al" / "Aktif Et" olur
+                    btn.clicked.connect(self.oda_durumunu_degistir)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
                 elif izin_kodu == "Danışma masası oturumunu yönetme":
@@ -2546,6 +2569,7 @@ QLabel {
 
             ortak_liste_stili_uygula(self.oda_tablosu)
             siralanabilir_yap(self.oda_tablosu)                         # diğer listelerdeki gibi başlığa tıklayınca sıralama
+            self.oda_tablosu.itemSelectionChanged.connect(self.oda_durum_butonunu_guncelle)
             il.addWidget(self.oda_tablosu)
             self.odalari_getir()
             lay.addWidget(ik, 1)
