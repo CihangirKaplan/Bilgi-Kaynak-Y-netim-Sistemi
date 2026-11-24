@@ -21,3 +21,9 @@ htmlcov/
 coverage.xml
 # Personel/kullanıcı geçiş kontrolü: geçiş öncesi sağlama özeti (yerel dosya)
 gecis_oncesi.json
+
+# TLS sertifika ve gizli anahtar dosyalari (bkz. docs/deployment/TLS_Kurulum_Rehberi.md); asla repoya girmemeli
+sertifika/
+*.pem
+*.key
+*.sifreli
