@@ -6,10 +6,10 @@ FAIL olan her satır için GitHub'da issue açılır ve numarası "Not" sütunun
 
 | Alan | Bilgi |
 |---|---|
-| Sunucu | Windows, `172.24.4.66:8000` (HTTPS yapılırsa `https://…`) |
+| Sunucu | Windows, `https://172.24.4.66:8443` (kendi imzalı sertifika, 23.11.2031'e kadar geçerli) |
 | Sürüm | `develop` — commit: f675e84 (sunucuda `git log -1 --format=%h`) |
 | Veritabanı | `tkys`, migration: f4c8a2e6b917 (`python -m alembic current`) |
-| İstemci | Bilgisayar adı: MacBook Air, `TKYS_API_URL` = `http://172.24.4.66:8000` |
+| İstemci | Bilgisayar adı: MacBook Air, `TKYS_API_URL` = `https://172.24.4.66:8443`, `TKYS_CA_BUNDLE` = sunucunun `sertifika.pem` dosyası |
 | Testi yapan | ________ |
 | Tarih | 24.11.2026 |
 
@@ -21,14 +21,15 @@ FAIL olan her satır için GitHub'da issue açılır ve numarası "Not" sütunun
 | H2 | Yeniden başlatma sonrası kendiliğinden açılıyor | Sunucuyu yeniden başlat, **oturum açmadan** istemciden `/api/saglik` | PASS | Açılış saati 24.11.2026 14:17:23 (`LastBootUpTime`); oturum açmadan Mac'ten `{"durum":"calisiyor"}` |
 | H3 | Şema güncel | `python scripts/sema_dogrula.py` → uyumlu | PASS | `ŞEMA UYUMLU` (sürüm `f4c8a2e6b917`) |
 | H4 | Test hesabı yok | Kullanıcılar ekranında `qa_`, `tarama_`, `test` ile başlayan hesap yok | | |
+| H5 | HTTPS | Sunucuda `python -c "import requests; r = requests.get('https://172.24.4.66:8443/api/saglik', verify=r'C:\TKYS\sertifika\sertifika.pem'); print(r.status_code, r.headers.get('strict-transport-security'))"` | PASS | `200 max-age=31536000`; `X-Content-Type-Options: nosniff`; sertifika doğrulaması açık |
 
 ## Smoke testleri (istemciden)
 
 | # | Başlık | Adımlar | Beklenen | Sonuç | Tarih | Kanıt | Not |
 |---|---|---|---|---|---|---|---|
-| S1 | API | Tarayıcıda `http://172.24.4.66:8000/api/saglik` | `{"durum":"calisiyor"}` | PASS | 24.11.2026 | Mac'ten `curl` çıktısı: `{"durum":"calisiyor"}` | |
+| S1 | API | İstemciden `https://172.24.4.66:8443/api/saglik` (sertifika doğrulamalı) | `{"durum":"calisiyor"}` | PASS | 24.11.2026 | Mac'te Python `requests` ile `200 {"durum":"calisiyor"}` | HTTP/8000 kapatıldı |
 | S2 | Login | Her rolle (yönetici, müdür, memur, psikolog, danışma öğrencisi) giriş | Ana sayfa açılır, rol adı doğru | | | | |
-| S3 | Login (hatalı) | Yanlış parolayla giriş | "Kullanıcı adı veya parola hatalı" | | | | |
+| S3 | Login (hatalı) | Yanlış parolayla giriş | "Kullanıcı adı veya parola hatalı" | PASS | 24.11.2026 | Giriş ekranında hata mesajı ekran görüntüsü; sunucu günlüğünde `POST /api/login 401` | |
 | S4 | DB | Yönetici → Sistem Durumu | Sürüm, şema ve veritabanı yeşil | PASS | 24.11.2026 | Sistem Durumu ekran görüntüsü: sürüm 1.0.0, şema `f4c8a2e6b917`, boyut 10.1 MB | |
 | S5 | Randevu | Psikolog: randevu oluştur → düzenle → iptal et | Her adım başarılı; listede doğru durum | | | | |
 | S6 | Randevu çakışması | Aynı psikolog/oda için aynı saate ikinci randevu | Reddedilir, anlaşılır mesaj | | | | |
@@ -41,6 +42,6 @@ FAIL olan her satır için GitHub'da issue açılır ve numarası "Not" sütunun
 
 ## Sonuç
 
-- PASS: ___ / 16  FAIL: ___
+- PASS: ___ / 17  FAIL: ___
 - Açılan issue'lar: ________
 - Karar: Pilot'a (Gün 3) geçilebilir ☐  Önce düzeltme gerekli ☐
