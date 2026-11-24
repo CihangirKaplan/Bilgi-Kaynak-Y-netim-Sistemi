@@ -211,7 +211,7 @@ Danışan kodları, odalar, psikolog atamaları, randevular ve oda etkinlikleri.
 | :--- | :--- | :--- | :--- |
 | `etkinlik_id` | SERIAL (INTEGER) | PK; NOT NULL | İdari toplantı/eğitim kimliği. |
 | `oda_id` | INTEGER | FK → `odalar(oda_id)`; NOT NULL | Etkinliğin yapılacağı oda. |
-| `organize_eden_personel_id` | INTEGER | FK → `kullanicilar(personel_id)`; NOT NULL | Düzenleyen yetkili. |
+| `organize_eden_personel_id` | INTEGER | FK → `personel(personel_id)`; NOT NULL | Düzenleyen yetkili. |
 | `etkinlik_adi` | VARCHAR(150) | NOT NULL | Toplantı veya eğitim adı. |
 | `katilimci_sayisi` | INTEGER | NULL | Beklenen kişi sayısı. **Bilgi amaçlıdır:** oda kapasitesiyle karşılaştırılmaz, kapasiteyi aşabilir (kapasite kontrolü 19 Kasım 2026'da bilerek kaldırılmıştır). |
 | `baslangic_zamani` | TIMESTAMP | NOT NULL | Etkinlik başlangıcı. |

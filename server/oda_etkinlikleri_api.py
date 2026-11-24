@@ -92,12 +92,13 @@ def router_olustur(izin_kontrol, vt_ayarlari):
         return dict(kayit)
 
     def oda_ve_personel_kontrol(
-        cursor, oda_id, personel_id, katilimci,
+        cursor, oda_id, personel_id,
         eski_personel_id=None,
     ):
+        # Katılımcı sayısı bilgi amaçlıdır; oda kapasitesiyle karşılaştırılmaz (bilerek kaldırıldı).
         cursor.execute(
             """
-            SELECT kapasite
+            SELECT 1
             FROM odalar
             WHERE oda_id = %s AND aktif_mi = TRUE
             """,
@@ -161,6 +162,21 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 409,
                 f"Seçilen oda bu saatlerde başka bir {tur} nedeniyle dolu.",
             )
+
+    def gunleri_oku(cursor, etkinlik_id):
+        cursor.execute(
+            """
+            SELECT baslangic_zamani, bitis_zamani
+            FROM oda_etkinlik_gunleri
+            WHERE etkinlik_id = %s
+            ORDER BY baslangic_zamani
+            """,
+            (etkinlik_id,),
+        )
+        return [
+            (r["baslangic_zamani"], r["bitis_zamani"])
+            for r in cursor.fetchall()
+        ]
 
     def gunleri_kaydet(cursor, etkinlik_id, araliklar):
         for ilk, son in araliklar:
@@ -277,6 +293,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
             cursor.execute(
                 f"""
                 SELECT e.*, o.oda_adi,
+                       k.kullanici_adi AS duzenleyen_adi,
                        COALESCE(
                            (
                                SELECT json_agg(
@@ -295,6 +312,8 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                        ) AS gunler
                 FROM oda_etkinlikleri e
                 JOIN odalar o ON o.oda_id = e.oda_id
+                LEFT JOIN personel p ON p.personel_id = e.organize_eden_personel_id
+                LEFT JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
                 {where}
                 ORDER BY e.baslangic_zamani DESC, e.etkinlik_id DESC
                 LIMIT %s
@@ -319,7 +338,6 @@ def router_olustur(izin_kontrol, vt_ayarlari):
             oda_ve_personel_kontrol(
                 cursor, veri.oda_id,
                 veri.organize_eden_personel_id,
-                veri.katilimci_sayisi,
             )
             if veri.gunler is not None:
                 araliklar = etkinlik_oturumlarini_dogrula([
@@ -465,19 +483,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 except ValueError as hata:
                     raise HTTPException(422, str(hata)) from hata
             else:
-                cursor.execute(
-                    """
-                    SELECT baslangic_zamani, bitis_zamani
-                    FROM oda_etkinlik_gunleri
-                    WHERE etkinlik_id = %s
-                    ORDER BY baslangic_zamani
-                    """,
-                    (etkinlik_id,),
-                )
-                araliklar = [
-                    (r["baslangic_zamani"], r["bitis_zamani"])
-                    for r in cursor.fetchall()
-                ]
+                araliklar = gunleri_oku(cursor, etkinlik_id)
                 if not araliklar:
                     raise HTTPException(
                         409,
@@ -491,14 +497,27 @@ def router_olustur(izin_kontrol, vt_ayarlari):
             oda_ve_personel_kontrol(
                 cursor, yeni["oda_id"],
                 yeni["organize_eden_personel_id"],
-                yeni["katilimci_sayisi"],
                 eski_personel_id=mevcut["organize_eden_personel_id"],
             )
-            for ilk, son in araliklar:
+            for gun_bas, gun_bit in araliklar:
                 cakisma_kontrol(
-                    cursor, yeni["oda_id"], ilk, son,
+                    cursor, yeni["oda_id"], gun_bas, gun_bit,
                     etkinlik_id,
                 )
+
+            # İstemci düzenlemede tüm alanları gönderir; denetime ve veritabanına yalnızca gerçekten değişenler yazılır.
+            yeni["etkinlik_adi"] = yeni["etkinlik_adi"].strip()
+            gercek_degisen = [
+                alan for alan in (
+                    "oda_id", "organize_eden_personel_id", "etkinlik_adi",
+                    "katilimci_sayisi", "baslangic_zamani", "bitis_zamani",
+                )
+                if yeni[alan] != mevcut[alan]
+            ]
+            gunler_degisti = zaman_degisti and araliklar != gunleri_oku(cursor, etkinlik_id)
+
+            if not gercek_degisen and not gunler_degisti:
+                return {"etkinlik_id": etkinlik_id, "durum": "degisiklik_yok"}
 
             cursor.execute(
                 """
@@ -513,13 +532,13 @@ def router_olustur(izin_kontrol, vt_ayarlari):
                 """,
                 (
                     yeni["oda_id"], yeni["organize_eden_personel_id"],
-                    yeni["etkinlik_adi"].strip(),
+                    yeni["etkinlik_adi"],
                     yeni["katilimci_sayisi"],
                     yeni["baslangic_zamani"], yeni["bitis_zamani"],
                     etkinlik_id,
                 ),
             )
-            if zaman_degisti:
+            if gunler_degisti:
                 cursor.execute(
                     "DELETE FROM oda_etkinlik_gunleri "
                     "WHERE etkinlik_id = %s",
@@ -529,7 +548,7 @@ def router_olustur(izin_kontrol, vt_ayarlari):
 
             denetim(
                 cursor, kullanici_id, "UPDATE", etkinlik_id,
-                degisen_alanlar=sorted(set(degisiklikler) | ({"gunler"} if gunler_gonderildi else set())),
+                degisen_alanlar=sorted(set(gercek_degisen) | ({"gunler"} if gunler_degisti else set())),
                 onceki=_denetim_ozeti(mevcut), yeni=_denetim_ozeti(yeni),
                 gun_sayisi=len(araliklar),
             )
