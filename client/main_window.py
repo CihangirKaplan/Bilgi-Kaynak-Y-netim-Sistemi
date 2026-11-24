@@ -92,6 +92,7 @@ IZIN_LISTESI = [
     ("Kalibrasyon kayıtlarını yönetme",      "Kayıt & Bakım",     "HEEHHE"),
     ("Arıza kayıtlarını yönetme",            "Kayıt & Bakım",     "HEEHHE"),
     ("Faaliyet kayıtlarını düzenleme",       "Kayıt & Bakım",     "HEEHEE"),
+    ("Öğrenci kaydını kalıcı silme",         "Kayıt & Bakım",     "HHEHHE"),
 
     ("Kullanıcı oluşturma",                  "Kullanıcı & Denetim","HHEHHE"),
     ("Personel tanımlama",                   "Kullanıcı & Denetim","HHEHHE"),
@@ -193,6 +194,7 @@ IZIN_KODLARI = {
     # uçları da aynı izni ister. Sayfanın izni (FAALIYET_KAYITLARI_DUZENLE) Memur, Müdür ve Proje
     # Asistanı'nda da açık olduğundan, bu koda eşleştirilseydi düğme o rollere de görünürdü.
     "Faaliyet birimlerini yönetme": ("FAALIYET_BIRIMI_DUZENLE",),
+    "Öğrenci kaydını kalıcı silme": ("OGRENCI_KAYDI_SIL",),
 }
 
 # Kişisel paneller: izin olsa bile yalnızca belirtilen roller için gösterilir. Danışma Masası
@@ -2600,6 +2602,7 @@ QLabel {
                 parent=self,
                 sayfaya_git=self._bildirimden_sayfaya_git,
                 kullanici_sayfasi_izinli=self._sayfa_izinli_mi("Kullanıcı & Personel"),
+                silebilir=izin_var(self.aktif_rol, "Öğrenci kaydını kalıcı silme"),
             )
             lay.addWidget(self.ogrenciler_ekrani, 1)
 

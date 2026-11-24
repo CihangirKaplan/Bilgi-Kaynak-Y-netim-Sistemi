@@ -412,7 +412,7 @@ Kullanıcı, personel, RBAC, oturum güvenliği ve parola sıfırlama süreçler
 | :--- | :--- | :--- | :--- |
 | `erteleme_id` | SERIAL (INTEGER) | PK; NOT NULL | Erteleme kaydının benzersiz kimliği. |
 | `ogrenci_id` | INTEGER | FK → `ogrenciler(ogrenci_id)`; NULL | Varsa ertelemenin ilişkili olduğu öğrenci. |
-| `ogrenci_numarasi` | VARCHAR(15) | NOT NULL | Erteleme kaydında saklanan öğrenci numarası. |
+| `ogrenci_numarasi` | VARCHAR(15) | NOT NULL | Erteleme kaydında saklanan öğrenci numarası. Öğrenci kalıcı silindiğinde bu öğrenciye ait erteleme kayıtları da silinir (numara geride kalmaz). |
 | `yeni_uyari_tarihi` | DATE | NOT NULL | Erteleme sonucunda belirlenen yeni uyarı tarihi. |
 | `erteleyen_kullanici_id` | INTEGER | FK → `kullanicilar(kullanici_id)`; NULL | Erteleme işlemini yapan kullanıcı. |
 | `olusturulma_tarihi` | TIMESTAMP | NOT NULL; DEFAULT `CURRENT_TIMESTAMP` | Erteleme kaydının oluşturulma zamanı. |

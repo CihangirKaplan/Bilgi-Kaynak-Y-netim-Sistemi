@@ -12,6 +12,27 @@ Base = declarative_base()
 LISTE_EN_FAZLA_ID = 200        # oda/rol kimliği listelerinde makul üst sınır (çok büyük listeyle sunucuyu yormayı engeller)
 
 
+def ogrenci_numarasini_dogrula(deger):
+    """Öğrenci numarası yalnızca ASCII rakamlardan oluşur (None geçer; zorunluluğu alan kendi tanımlar)."""
+    if deger is not None and not (deger.isascii() and deger.isdigit()):
+        raise ValueError("Öğrenci numarası yalnızca rakamlardan oluşmalıdır.")
+    return deger
+
+
+def telefonu_duzenle(deger):
+    """Telefon 10 haneli yazılabilir (başına 0 gerekmez): '555 123 45 67'.
+
+    Boşluklar yok sayılır; kayıt her zaman 11 haneli '05551234567' biçiminde saklanır (mevcut öğrenci kayıtlarıyla aynı)."""
+    if deger is None:
+        return None
+    rakamlar = deger.replace(" ", "")
+    if len(rakamlar) == 10 and not rakamlar.startswith("0"):
+        rakamlar = "0" + rakamlar
+    if not (rakamlar.isascii() and rakamlar.isdigit() and len(rakamlar) == 11 and rakamlar.startswith("0")):
+        raise ValueError("Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez (örn. 555 123 45 67).")
+    return rakamlar
+
+
 def _zaman_coz(deger):
     """Tarih-saat girdisini çözer. Yalnızca ISO 8601 metni (ör. 2026-11-17T10:00:00) ya da datetime kabul edilir.
 
@@ -85,26 +106,12 @@ class KullaniciOlusturModeli(BaseModel):
     @field_validator("ogrenci_numarasi")
     @classmethod
     def ogrenci_numarasi_kontrol(cls, deger):
-        if deger is not None and not (deger.isascii() and deger.isdigit()):
-            raise ValueError("Öğrenci numarası yalnızca rakamlardan oluşmalıdır.")
-        return deger
+        return ogrenci_numarasini_dogrula(deger)
 
     @field_validator("telefon")
     @classmethod
     def telefon_kontrol(cls, deger):
-        """Telefon 10 haneli yazılabilir (başına 0 gerekmez): '555 123 45 67'.
-
-        Boşluklar yok sayılır; kayıt her zaman 11 haneli '05551234567' biçiminde
-        saklanır (mevcut öğrenci kayıtlarıyla aynı).
-        """
-        if deger is None:
-            return None
-        rakamlar = deger.replace(" ", "")
-        if len(rakamlar) == 10 and not rakamlar.startswith("0"):
-            rakamlar = "0" + rakamlar
-        if not (rakamlar.isascii() and rakamlar.isdigit() and len(rakamlar) == 11 and rakamlar.startswith("0")):
-            raise ValueError("Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez (örn. 555 123 45 67).")
-        return rakamlar
+        return telefonu_duzenle(deger)
 
 # ADM-API-004: Personel Oluşturma İstek Modeli
 class PersonelOlusturModeli(BaseModel):
@@ -132,26 +139,12 @@ class PersonelOlusturModeli(BaseModel):
     @field_validator("ogrenci_numarasi")
     @classmethod
     def ogrenci_numarasi_kontrol(cls, deger):
-        if deger is not None and not (deger.isascii() and deger.isdigit()):
-            raise ValueError("Öğrenci numarası yalnızca rakamlardan oluşmalıdır.")
-        return deger
+        return ogrenci_numarasini_dogrula(deger)
 
     @field_validator("telefon")
     @classmethod
     def telefon_kontrol(cls, deger):
-        """Telefon 10 haneli yazılabilir (başına 0 gerekmez): '555 123 45 67'.
-
-        Boşluklar yok sayılır; kayıt her zaman 11 haneli '05551234567' biçiminde
-        saklanır (mevcut öğrenci kayıtlarıyla aynı).
-        """
-        if deger is None:
-            return None
-        rakamlar = deger.replace(" ", "")
-        if len(rakamlar) == 10 and not rakamlar.startswith("0"):
-            rakamlar = "0" + rakamlar
-        if not (rakamlar.isascii() and rakamlar.isdigit() and len(rakamlar) == 11 and rakamlar.startswith("0")):
-            raise ValueError("Telefon numarası 10 haneli olmalıdır, başına 0 yazmanız gerekmez (örn. 555 123 45 67).")
-        return rakamlar
+        return telefonu_duzenle(deger)
 
 # İlk girişte zorunlu şifre değiştirme ve mevcut şifreyi güncelleme modeli
 class SifreDegistirModeli(BaseModel):
@@ -829,6 +822,16 @@ class OgrenciEkleModeli(BaseModel):
         if isinstance(deger, str):
             return deger.strip() or None
         return deger
+
+    @field_validator("ogrenci_numarasi")
+    @classmethod
+    def ogrenci_numarasi_kontrol(cls, deger):
+        return ogrenci_numarasini_dogrula(deger)
+
+    @field_validator("telefon")
+    @classmethod
+    def telefon_kontrol(cls, deger):
+        return telefonu_duzenle(deger)
 
 # ==========================================
 # DANIŞMA MASASI YÖNETİMİ MODELLERİ

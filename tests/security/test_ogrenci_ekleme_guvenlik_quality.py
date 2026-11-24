@@ -42,7 +42,7 @@ def test_ogrenci_ekleme_audit_zorunlu():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.denetim.denetim_kaydi_olustur") as audit,
+        patch("server.sunucu.denetim_kaydi_olustur") as audit,
     ):
         sonuc = ogrenci_ekle(ogrenci, yetkili_id=1)
 

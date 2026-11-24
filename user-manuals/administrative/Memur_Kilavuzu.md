@@ -82,19 +82,19 @@ Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tari
 
 ## 2.1 Öğrenciler
 Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Kayıt Tarihi, Durum.** Üstteki kartlar toplam, aktif, pasif ve **süresi dolan** öğrenci sayısını gösterir.
-- **Aramak ve süzmek:** Ad, numara ya da telefon yazın; **öğrenci grubunu** (*Tüm Öğrenciler, Gönüllü Öğrenci, Danışma Masası Öğrencisi, Asistan Öğrenci*) ve **durumu** (*Her Durum, Aktif, Pasif*) seçin. **Filtreleri Temizle** hepsini sıfırlar.
-- **＋ Öğrenci Ekle:** **Ad Soyad \***, **Öğrenci No \***, **Öğrenci Türü \*** (*Gönüllü Öğrenci* ya da *Asistan Öğrenci*), **Telefon** (11 haneli, `05XX...` biçiminde), **Bölüm** ve **Sınıf**.
+- **Aramak ve süzmek:** Ad, numara ya da telefon yazın; **öğrenci grubunu** (*Tüm Öğrenciler, Gönüllü Öğrenci, Danışma Masası Öğrencisi, Asistan Öğrenci*) ve **durumu** (*Her Durum, Aktif, Pasif*) seçin. **Filtreleri Temizle** hepsini sıfırlar. Başlıklara tıklayarak listeyi sıralayabilirsiniz; arama yazarken ve **Yenile**'de sıralamanız ile seçili öğrenci korunur.
+- **＋ Öğrenci Ekle:** **Ad Soyad \***, **Öğrenci No \***, **Öğrenci Türü \*** (*Gönüllü Öğrenci* ya da *Asistan Öğrenci*), **Telefon** (10 hane ya da başında 0 ile 11 hane; örn. `555 123 45 67` ya da `05551234567`), **Bölüm** ve **Sınıf**.
   **Danışma Masası öğrencileri bu pencereden eklenmez**: onlar giriş hesabı gerektirdiği için **Kullanıcı & Personel** üzerinden oluşturulur (pencere sizi yönlendirir).
 - **Aktiflik Düzenle:** Seçili öğrenciyi aktif ya da pasif yapar.
-- **Detay / Puanlar:** Seçili öğrencinin faaliyetlerini ve puanlarını gösterir.
+- **Detay / Puanlar:** Seçili öğrencinin faaliyetlerini ve puanlarını gösterir. Dönem açılışta ayın ilk gününden bugüne ayarlıdır; tarihleri değiştirince sonuç kendiliğinden yenilenir.
 - **⬇ Excel'e Aktar:** Ekranda görünen öğrencileri (telefon dahil) yazar; aktarım denetim kaydına yazılır. Dosyayı paylaşırken dikkatli olun.
 
 ### 10 yıllık kayıt süresi
-**Gönüllü öğrencilerin** kaydı **10 yıl** saklanır. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi sayıyı gösterir.
+**Gönüllü öğrencilerin** kaydı **10 yıl** saklanır. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi **işlem bekleyen** (ertelenmemiş) kayıt sayısını gösterir; üstteki kart da aynı sayıdır.
 - Düğmeye basınca süresi dolan gönüllü öğrencilerin listesi açılır (**Ad Soyad, Öğrenci No, Kayıt Tarihi, Erteleme Tarihi, Durum**). Durum **İşlem Bekliyor** ya da **Ertelendi** olur.
 - Bir öğrenciyi seçince iki düğme açılır:
   - **Seçili Öğrenciyi Ertele:** Kayıt uyarısı için **yeni bir tarih** seçersiniz ve **Ertelemeyi Kaydet**'e basarsınız.
-  - **Seçili Kaydı Sil:** Kaydı siler. **Erteleme tarihi gelmeden kayıt silinemez**; sistem silmeyi reddeder. Silme **geri alınamaz** ve denetim kaydına yazılır; emin olmadan basmayın.
+  - **Seçili Kaydı Sil:** Kaydı siler (öğrencinin faaliyet kayıtları ve erteleme geçmişi de silinir). **Bu düğmeyi yalnızca Müdür ve Admin görür**; Memur ve diğer roller ertelemeyi kullanır, silmeyi yapamaz. **Erteleme tarihi gelmeden kayıt silinemez**; sistem silmeyi reddeder. Silme **geri alınamaz** ve denetim kaydına yazılır; emin olmadan basmayın.
 
 ## 2.2 Faaliyet Kayıtları
 Öğrencilerin yaptığı faaliyetlerin kaydı; **puanı** buradan hesaplanır.

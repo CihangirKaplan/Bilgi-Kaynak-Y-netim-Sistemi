@@ -1,5 +1,3 @@
-from client.api_yoneticisi import api_hata_mesaji
-
 """TKYS - Öğrenci Yönetimi."""
 
 from datetime import date
@@ -30,6 +28,8 @@ from PySide6.QtWidgets import (
 )
 
 from client.api_yoneticisi import (
+    api_hata_mesaji,
+    hata_detayi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
@@ -37,7 +37,8 @@ from client.api_yoneticisi import (
 from client.gorunum_bicimleri import telefon_goster
 from client.liste_excel import listeyi_excele_aktar
 from client.ogrenci_dialog import OgrenciEkleDialog
-from client.tablo_siralama import siralanabilir_yap
+from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, siralanabilir_yap
+from client.tablo_tasarimi import bos_mesaj_olustur
 from client.bildirim_toast import basari_bildirimi
 
 
@@ -350,14 +351,16 @@ class EtiketDelegate(QStyledItemDelegate):
 
 class OgrenciYonetimEkrani(QWidget):
 
-    def __init__(self, api_url, token, parent=None, sayfaya_git=None, kullanici_sayfasi_izinli=False):
+    def __init__(self, api_url, token, parent=None, sayfaya_git=None, kullanici_sayfasi_izinli=False, silebilir=False):
         super().__init__(parent)
 
         self.api_url = api_url.rstrip("/")
         self.token = token
         self._sayfaya_git = sayfaya_git                              # ana pencerenin sayfa açma işlevi
         self._kullanici_sayfasi_izinli = kullanici_sayfasi_izinli    # "Kullanıcı & Personel" sayfasına yetkisi var mı
+        self.silebilir = silebilir                                   # 10 yıl sonu kalıcı silme izni (Admin, Müdür)
         self.kayitlar = []
+        self.gorunen_kayitlar = []                                   # arama ve süzgeçlere uyanlar (Excel'e bunlar aktarılır)
         self._on_yil_uyarisi_gosterildi = False
 
         self.setObjectName("ogrenciYonetimi")
@@ -459,7 +462,7 @@ class OgrenciYonetimEkrani(QWidget):
             ),
             (
                 "expired",
-                "Süresi Dolan Öğrenciler",
+                "Süresi Dolan (İşlem Bekleyen)",
                 "#96601B"
             ),
         ]
@@ -603,6 +606,8 @@ class OgrenciYonetimEkrani(QWidget):
         )
 
         yer.addWidget(self.tablo, 1)
+        self.bos_mesaj = bos_mesaj_olustur("Henüz öğrenci kaydı yok.")
+        yer.addWidget(self.bos_mesaj)
 
         self.ozet = QLabel(
             "Öğrenciler yükleniyor..."
@@ -639,18 +644,17 @@ class OgrenciYonetimEkrani(QWidget):
 
     @staticmethod
     def hata(cevap):
-        try:
-            return str(
-                cevap.json().get(
-                    "detail",
-                    "İşlem tamamlanamadı."
-                )
-            )
-        except (ValueError, AttributeError):
-            return (
-                f"Sunucu hatası: HTTP "
-                f"{cevap.status_code}"
-            )
+        """Sunucunun Türkçe açıklaması; liste biçimli (422) ayrıntılar da okunur metne çevrilir."""
+        return hata_detayi_metni(cevap, f"İşlem tamamlanamadı (HTTP {cevap.status_code}).")
+
+    def _bekleyen_sayisi(self):
+        """10 yıllık süresi dolmuş, ertelenmemiş (işlem bekleyen) gönüllü öğrenci sayısı."""
+        return sum(
+            o.get("tur") == "GONULLU"
+            and bool(o.get("kayit_suresi_doldu"))
+            and not o.get("ertelendi_mi")
+            for o in self.kayitlar
+        )
 
     def yenile(self):
         cevap = self._istek(
@@ -672,12 +676,7 @@ class OgrenciYonetimEkrani(QWidget):
         self.kayitlar = cevap.json()
         self.filtrele()
 
-        bekleyen = sum(
-            o.get("tur") == "GONULLU"
-            and o.get("kayit_suresi_doldu")
-            and not o.get("ertelendi_mi")
-            for o in self.kayitlar
-        )
+        bekleyen = self._bekleyen_sayisi()
 
         if (
             bekleyen > 0
@@ -697,9 +696,7 @@ class OgrenciYonetimEkrani(QWidget):
 
     def excele_aktar(self):
         """Ekranda görünen öğrencileri (arama ve süzgeçlere uyanları) Excel'e aktarır."""
-        kayitlar = getattr(self, "gorunen_kayitlar", None)
-        if kayitlar is None:
-            kayitlar = self.kayitlar
+        kayitlar = self.gorunen_kayitlar
         filtre = [
             ("Arama", self.arama.text().strip() or "Yok"),
             ("Öğrenci grubu", self.grup.currentText()),
@@ -727,6 +724,11 @@ class OgrenciYonetimEkrani(QWidget):
         aranan = self.arama.text().strip().casefold()
         grup = self.grup.currentData()
         durum = self.durum_filtresi.currentIndex()
+
+        # Arama/süzgeç/yenileme tabloyu yeniden doldurur; kullanıcının sıralaması ve seçili öğrencisi korunur.
+        siralama = siralama_durumunu_al(self.tablo)
+        onceki_satir = self.tablo.item(self.tablo.currentRow(), 0)
+        secili_id = onceki_satir.data(Qt.UserRole) if onceki_satir is not None else None
 
         kayitlar = []
 
@@ -803,6 +805,21 @@ class OgrenciYonetimEkrani(QWidget):
                     item
                 )
 
+        siralamayi_geri_yukle(self.tablo, siralama)
+        if secili_id is not None:
+            for satir in range(self.tablo.rowCount()):
+                hucre = self.tablo.item(satir, 0)
+                if hucre is not None and hucre.data(Qt.UserRole) == secili_id:
+                    self.tablo.selectRow(satir)
+                    break
+
+        bos = not kayitlar
+        self.tablo.setVisible(not bos)
+        self.bos_mesaj.setVisible(bos)
+        self.bos_mesaj.setText(
+            "Henüz öğrenci kaydı yok." if not self.kayitlar else "Aramaya ve süzgeçlere uyan öğrenci yok."
+        )
+
         toplam = len(self.kayitlar)
 
         aktif = sum(
@@ -810,12 +827,7 @@ class OgrenciYonetimEkrani(QWidget):
             for o in self.kayitlar
         )
 
-        bekleyen = sum(
-            o["tur"] == "GONULLU"
-            and o.get("kayit_suresi_doldu")
-            and not o.get("ertelendi_mi")
-            for o in self.kayitlar
-        )
+        bekleyen = self._bekleyen_sayisi()
 
         self.degerler["total"].setText(
             str(toplam)
@@ -878,13 +890,6 @@ class OgrenciYonetimEkrani(QWidget):
 
         # Gönüllü ve Asistan buradan eklenir; Danışma Masası öğrencisi "Kullanıcı & Personel" sayfasından oluşturulur.
         dialog.cb_tur.setCurrentIndex(0)
-        dialog.cb_tur.setCursor(
-            Qt.PointingHandCursor
-        )
-
-        dialog.btn_kaydet.setCursor(
-            Qt.PointingHandCursor
-        )
 
         if dialog.exec():
             self.yenile()
@@ -995,7 +1000,7 @@ class OgrenciYonetimEkrani(QWidget):
         baslangic.setObjectName("auditTarih")
         baslangic.setFixedWidth(155)
         baslangic.setDate(
-            QDate.currentDate()
+            QDate.currentDate().addDays(1 - QDate.currentDate().day())      # ayın ilk günü
         )
 
         bitis = QDateEdit()
@@ -1050,12 +1055,13 @@ class OgrenciYonetimEkrani(QWidget):
         ana.addWidget(bos_faaliyet)
 
         def tarih_degisti(*_):
-            toplam.setText("Toplam Puan: —")
-            tablo.setRowCount(0)
-            bos_faaliyet.setVisible(False)
-
-        baslangic.dateChanged.connect(tarih_degisti)
-        bitis.dateChanged.connect(tarih_degisti)
+            """Tarih değişince sonuç kendiliğinden yenilenir; aralık henüz geçersizse (yazarken) yalnızca temizlenir."""
+            if baslangic.date() > bitis.date():
+                toplam.setText("Toplam Puan: —")
+                tablo.setRowCount(0)
+                bos_faaliyet.setVisible(False)
+                return
+            puanlari_hesapla()
 
         def puanlari_hesapla():
             if baslangic.date() > bitis.date():
@@ -1125,6 +1131,9 @@ class OgrenciYonetimEkrani(QWidget):
                         QTableWidgetItem(deger)
                     )
 
+        baslangic.dateChanged.connect(tarih_degisti)
+        bitis.dateChanged.connect(tarih_degisti)
+
         alt = QHBoxLayout()
 
         alt.addWidget(
@@ -1177,6 +1186,10 @@ class OgrenciYonetimEkrani(QWidget):
 
         ana.addWidget(aciklama)
 
+        ozet_etiketi = QLabel("")
+        ozet_etiketi.setObjectName("aciklama")
+        ana.addWidget(ozet_etiketi)
+
         tablo = QTableWidget()
 
         tablo_hazirla(tablo, [
@@ -1216,6 +1229,10 @@ class OgrenciYonetimEkrani(QWidget):
             tablo.setCurrentCell(-1, -1)
             tablo.setRowCount(len(kayitlar))
             bos_kayit.setVisible(not kayitlar)
+            bekleyen = sum(1 for o in kayitlar if not o.get("ertelendi_mi"))
+            ozet_etiketi.setText(
+                f"{bekleyen} kayıt işlem bekliyor, {len(kayitlar) - bekleyen} kayıt ertelenmiş." if kayitlar else ""
+            )
             ertele_btn.setEnabled(False)
             sil_btn.setEnabled(False)
 
@@ -1397,6 +1414,7 @@ class OgrenciYonetimEkrani(QWidget):
 
         ertele_btn.setEnabled(False)
         sil_btn.setEnabled(False)
+        sil_btn.setVisible(self.silebilir)              # kalıcı silme ayrı bir izne bağlıdır (Admin, Müdür)
 
         alt.addWidget(ertele_btn)
         alt.addWidget(sil_btn)
@@ -1416,7 +1434,7 @@ class OgrenciYonetimEkrani(QWidget):
             ertele_btn.setEnabled(True)
 
             sil_btn.setEnabled(
-                not kayitlar[satir].get("ertelendi_mi")
+                self.silebilir and not kayitlar[satir].get("ertelendi_mi")
             )
 
         tablo.itemSelectionChanged.connect(secim_degisti)

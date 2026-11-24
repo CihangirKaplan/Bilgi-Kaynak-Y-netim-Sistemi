@@ -252,7 +252,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
 | PATCH | `/api/ogrenciler/{ogrenci_id}/aktiflik` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_aktiflik_duzenle |
-| DELETE | `/api/ogrenciler/{ogrenci_id}/on-yil-sil` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_on_yil_sil |
+| DELETE | `/api/ogrenciler/{ogrenci_id}/on-yil-sil` | OGRENCI_KAYDI_SIL | ogrenci_on_yil_sil |
 | GET | `/api/ogrenciler/{ogrenci_id}/puanlar` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_puan_detayi |
 | PATCH | `/api/ogrenciler/{ogrenci_id}/silme-ertele` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_silme_ertele |
 
