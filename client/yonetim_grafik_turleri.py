@@ -25,7 +25,7 @@ from PySide6.QtCharts import (
 GRAFIK_TURLERI = ("Sütun", "Çizgi", "Pasta")
 
 # Doğrulanmış kategorik palet (sıra sabittir, döngüyle yeni renk üretilmez).
-PALET = ("#2A78D6", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948")
+PALET = ("#1D4ED8", "#EB6834", "#1BAF7A", "#EDA100", "#E87BA4", "#008300", "#6250D6", "#E34948")
 RENKLER = (PALET[0], PALET[1])          # seçilen dönem, önceki dönem
 DIGER_RENGI = "#A3AEBD"
 PASTA_EN_FAZLA_DILIM = 7
@@ -464,7 +464,7 @@ class GrafikTuruSecici(QFrame):
             dugme.setIcon(_tur_ikonu(tur, "#5B6B82"))
             dugme.setIconSize(QSize(15, 15))
             dugme.setToolTip(f"{tur} grafiği")
-            dugme.toggled.connect(lambda secili, t=tur: self._degisti(t, secili))
+            dugme.toggled.connect(self._dugme_degisti)      # lambda değil: self'i yakalayan lambda çıkışta çökme döngüsü yaratır
             self._grup.addButton(dugme)
             self._duzen.addWidget(dugme)
             self._dugmeler[tur] = dugme
@@ -472,6 +472,11 @@ class GrafikTuruSecici(QFrame):
             gecmis = self.blockSignals(True)
             next(iter(self._dugmeler.values())).setChecked(True)
             self.blockSignals(gecmis)
+
+    def _dugme_degisti(self, secili):
+        dugme = self.sender()
+        if dugme is not None:
+            self._degisti(dugme.text(), secili)
 
     def _degisti(self, tur, secili):
         dugme = self._dugmeler.get(tur)
@@ -506,8 +511,8 @@ class GrafikTuruSecici(QFrame):
 KART_STILI = """
 QFrame#%(ad)s {
     background: #FFFFFF;
-    border: 1px solid #E1E8F2;
-    border-radius: 12px;
+    border: none;
+    border-radius: 16px;
 }
 QFrame#%(ad)s QLabel { background: transparent; border: none; }
 """
@@ -586,11 +591,17 @@ def haftanin_gunlerine_gore(tarihler, seriler):
     return list(GUN_ADLARI), [(seriler[0][0], toplamlar)]
 
 
-def grafik_secimi_ekle(widget, rapor, varsayilan):
-    """Var olan grafik kartına üç düğmeli seçici ekler ve çizimi ortak grafik_olustur'a bağlar."""
+def grafik_secimi_ekle(widget, rapor, varsayilan, turler=GRAFIK_TURLERI):
+    """Var olan grafik kartına tür seçici ekler ve çizimi ortak grafik_olustur'a bağlar.
+
+    `turler`: kartta sunulacak türler. Kategorileri karşılaştıran grafikte Çizgi (süreklilik ima eder) ve Pasta (iki dönemi
+    karşılaştırmaz) anlamsızdır; tek türe indirilince seçici gizlenir."""
     grafik_kartini_bicimlendir(widget)
-    secici = GrafikTuruSecici(widget, varsayilan=varsayilan if varsayilan in GRAFIK_TURLERI else "Sütun")
+    turler = tuple(t for t in turler if t in GRAFIK_TURLERI) or GRAFIK_TURLERI
+    secici = GrafikTuruSecici(widget, turler=turler, varsayilan=varsayilan if varsayilan in turler else turler[0])
     grafik_karti_baslik_satiri(widget, secici)
+    if len(turler) == 1:
+        secici.hide()
     widget.grafik_turu = secici
 
     eski_bos = getattr(widget, "bos", None)

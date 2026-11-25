@@ -4,6 +4,7 @@ import requests
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
+    QGridLayout,
     QWidget, QFrame, QLabel, QPushButton, QComboBox,
     QDateEdit, QFileDialog, QMessageBox, QScrollArea,
     QVBoxLayout, QHBoxLayout, QTableWidget,
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from client.tablo_tasarimi import cihaz_hucresi_uygula
+from client.sayfa_tema import TABLO_STILI, golge, kart_olustur, liste_sayfasi_stili
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     api_hata_mesaji,
@@ -393,6 +395,9 @@ def metin(deger):
     return "—" if deger is None else str(deger)
 
 
+GENIS_ALT_SIRA = 1180      # bu genişliğin altında alt sıradaki 3. tablo ikinci satıra iner
+
+
 class YonetimRaporlariEkrani(QWidget):
 
     def __init__(self, api_url, token, parent=None):
@@ -415,65 +420,31 @@ class YonetimRaporlariEkrani(QWidget):
             YonetimKarsilastirmaGrafigi
         )
         self.setObjectName("YonetimRaporPaneli")
-        self.setStyleSheet("""
+        self.setStyleSheet(liste_sayfasi_stili() + """
             QWidget#YonetimRaporPaneli {
                 background: #EAF0FA;
             }
             QFrame#YonetimAnaPanel {
-                background: white;
+                background: transparent;
                 border: none;
-                border-radius: 17px;
             }
             QFrame#YonetimKpiKarti {
                 background: #FFFFFF;
-                border: 1px solid #DCE6F3;
-                border-radius: 10px;
+                border: none;
+                border-radius: 16px;
             }
             QFrame#YonetimKpiKarti QLabel {
                 border: none;
                 background: transparent;
             }
-            QComboBox, QDateEdit {
-                background: white;
-                border: 1px solid #CBDCF0;
-                border-radius: 6px;
-                padding: 6px 9px;
-                color: #243653;
-                min-height: 17px;
-            }
-            QPushButton#YonetimYenile {
-                background: #E7F0FB;
-                color: #123E72;
-                border: 1px solid #CBDEF4;
-                border-radius: 7px;
-                padding: 9px 12px;
-                font-weight: bold;
-            }
             QPushButton#YonetimPdf {
-                background: #087C54;
+                background: #16803C;
                 color: white;
                 border: none;
-                border-radius: 7px;
-                padding: 9px 15px;
-                font-weight: bold;
             }
-            QTableWidget {
-                background: white;
-                color: #243653;
-                gridline-color: #E3EAF5;
-                border: 1px solid #DCE6F3;
-                border-radius: 8px;
-            }
-            QTableWidget::item {
-                padding: 5px 8px;
-            }
-            QHeaderView::section {
-                background: #E5EFFD;
-                color: #193657;
-                border: none;
-                border-right: 1px solid #D3E1F2;
-                padding: 8px 5px;
-                font-weight: bold;
+            QLabel#donemOzeti {
+                font-size: 12px;
+                color: #6B7FA8;
             }
         """)
 
@@ -494,20 +465,24 @@ class YonetimRaporlariEkrani(QWidget):
             }
         """)
         govde_lay = QVBoxLayout(govde)
-        govde_lay.setContentsMargins(5, 5, 5, 5)
+        govde_lay.setContentsMargins(12, 10, 12, 10)
 
         panel = QFrame()
         panel.setObjectName("YonetimAnaPanel")
-        panel.setStyleSheet("""
-            QFrame#YonetimAnaPanel {
-                background-color: #FFFFFF;
-                border: none;
-                border-radius: 17px;
-            }
-        """)
         panel_lay = QVBoxLayout(panel)
-        panel_lay.setContentsMargins(26, 23, 26, 23)
-        panel_lay.setSpacing(15)
+        panel_lay.setContentsMargins(12, 10, 12, 10)
+        panel_lay.setSpacing(16)
+
+        # Sayfa başlığı
+        baslik_blogu = QVBoxLayout()
+        baslik_blogu.setSpacing(3)
+        sayfa_baslik = QLabel("Yönetim Raporları ve İstatistikler")
+        sayfa_baslik.setObjectName("baslik")
+        sayfa_alt = QLabel("Randevu, cihaz, öğrenci ve proje göstergelerinin dönem karşılaştırması.")
+        sayfa_alt.setObjectName("altBaslik")
+        baslik_blogu.addWidget(sayfa_baslik)
+        baslik_blogu.addWidget(sayfa_alt)
+        panel_lay.addLayout(baslik_blogu)
 
         self.filtreleri_olustur(panel_lay)
 
@@ -517,7 +492,7 @@ class YonetimRaporlariEkrani(QWidget):
         self.analiz_alani = QWidget()
         self.analiz_layout = QVBoxLayout(self.analiz_alani)
         self.analiz_layout.setContentsMargins(0, 0, 0, 0)
-        self.analiz_layout.setSpacing(15)
+        self.analiz_layout.setSpacing(16)
 
         self.kartlari_olustur(self.analiz_layout)
 
@@ -525,18 +500,12 @@ class YonetimRaporlariEkrani(QWidget):
             baslik_metni="Dönem Karşılaştırması",
             aciklama_metni="İşlem sayıları (iptaller hariç) · Seçilen dönem (mavi) ile önceki dönem (turuncu)"
         )
-        self.analiz_layout.addWidget(
-            self.karsilastirma_grafigi
-        )
 
         self.ogrenci_donem_grafigi = YonetimKarsilastirmaGrafigi(
             baslik_metni="Öğrenci Faaliyet Puanı",
             aciklama_metni=(
-                "Toplam puan · Seçilen dönem ile önceki dönem · Onay bekleyen kayıtlar dahil"
+                "Faaliyet türüne göre puan dağılımı · Seçilen dönem · Onay bekleyen kayıtlar dahil"
             )
-        )
-        self.analiz_layout.addWidget(
-            self.ogrenci_donem_grafigi
         )
 
         from client.yonetim_genel_bakis_ozet_widget import (
@@ -546,12 +515,16 @@ class YonetimRaporlariEkrani(QWidget):
         self.operasyon_ozeti = OperasyonelOzet()
         self.ogrenci_ozeti = OgrenciFaaliyetOzeti()
 
-        self.analiz_layout.insertWidget(
-            1, self.operasyon_ozeti
-        )
-        self.analiz_layout.insertWidget(
-            2, self.ogrenci_ozeti
-        )
+        # Genel Bakış: sayılar solda, görseli sağda (iki sütun); sayfa tek ekrana yakın kalır.
+        for sol, sag in (
+            (self.operasyon_ozeti, self.karsilastirma_grafigi),
+            (self.ogrenci_ozeti, self.ogrenci_donem_grafigi),
+        ):
+            yan_yana = QHBoxLayout()
+            yan_yana.setSpacing(16)
+            yan_yana.addWidget(sol, 5)
+            yan_yana.addWidget(sag, 6)
+            self.analiz_layout.addLayout(yan_yana)
 
         self.randevu_grafigi = YonetimRandevuGrafigi()
         self.analiz_layout.addWidget(self.randevu_grafigi)
@@ -565,17 +538,19 @@ class YonetimRaporlariEkrani(QWidget):
         self.proje_grafigi = YonetimProjeGrafigi()
         self.analiz_layout.addWidget(self.proje_grafigi)
 
-        from client.yonetim_grafik_turleri import grafik_secimi_ekle
+        from client.yonetim_grafik_turleri import GRAFIK_TURLERI, grafik_secimi_ekle
 
-        for widget, rapor, varsayilan in (
-            (self.karsilastirma_grafigi, "karsilastirma", "Sütun"),
-            (self.ogrenci_donem_grafigi, "karsilastirma", "Sütun"),
-            (self.randevu_grafigi, "randevu", "Çizgi"),
-            (self.cihaz_grafigi, "karsilastirma", "Sütun"),
-            (self.ogrenci_puan_grafigi, "ogrenci", "Yatay Çubuk"),
-            (self.proje_grafigi, "proje", "Yatay Çubuk"),
+        # Kategorileri karşılaştıran grafiklerde yalnızca Sütun anlamlıdır (Çizgi süreklilik, Pasta dönem kıyası ima eder);
+        # puanın faaliyet türüne göre dağılımı ise en iyi Pasta ile okunur.
+        for widget, rapor, varsayilan, turler in (
+            (self.karsilastirma_grafigi, "karsilastirma", "Sütun", ("Sütun",)),
+            (self.ogrenci_donem_grafigi, "ogrenci", "Pasta", ("Pasta", "Sütun")),
+            (self.randevu_grafigi, "randevu", "Çizgi", GRAFIK_TURLERI),
+            (self.cihaz_grafigi, "karsilastirma", "Sütun", ("Sütun",)),
+            (self.ogrenci_puan_grafigi, "ogrenci", "Yatay Çubuk", GRAFIK_TURLERI),
+            (self.proje_grafigi, "proje", "Yatay Çubuk", GRAFIK_TURLERI),
         ):
-            grafik_secimi_ekle(widget, rapor, varsayilan)
+            grafik_secimi_ekle(widget, rapor, varsayilan, turler)
 
         from client.yonetim_ek_rapor_grafigi import EkRaporGrafigi
 
@@ -592,7 +567,7 @@ class YonetimRaporlariEkrani(QWidget):
         )
         self.durum.setWordWrap(True)
         self.durum.setStyleSheet(
-            "color: #697993; font-size: 11px;"
+            "color: #6B7FA8; font-size: 12px;"
             "background: transparent; border: none;"
         )
         panel_lay.addWidget(self.durum)
@@ -606,15 +581,18 @@ class YonetimRaporlariEkrani(QWidget):
 
 
     def filtreleri_olustur(self, panel_lay):
+        # Süzgeçler tek beyaz kartta: üstte dönem/rapor seçimi, altta dönemin gerçek tarihleri, "Tarih Aralığı"nda tarih seçiciler.
+        filtre_karti = kart_olustur()
+        filtre_duzen = QVBoxLayout(filtre_karti)
+        filtre_duzen.setContentsMargins(16, 12, 16, 12)
+        filtre_duzen.setSpacing(10)
         filtre = QHBoxLayout()
-        filtre.setSpacing(7)
+        filtre.setSpacing(10)
+        filtre_duzen.addLayout(filtre)
 
         def kucuk_etiket(yazi):
             lbl = QLabel(yazi)
-            lbl.setStyleSheet(
-                "color: #344963; font-size: 11px;"
-                "background: transparent; border: none;"
-            )
+            lbl.setObjectName("etiket")
             return lbl
 
         self.donem_etiketi = kucuk_etiket("Dönem")
@@ -626,15 +604,42 @@ class YonetimRaporlariEkrani(QWidget):
             "Geçen Ay", "Tarih Aralığı"
         ])
         self.donem.setCurrentText("Bu Ay")
-        self.donem.setFixedWidth(120)
+        self.donem.setMinimumWidth(140)
         filtre.addWidget(self.donem)
 
         filtre.addWidget(kucuk_etiket("Rapor"))
 
         self.rapor_turu = QComboBox()
         self.rapor_turu.addItems(RAPOR_TURLERI)
-        self.rapor_turu.setFixedWidth(145)
+        self.rapor_turu.setMinimumWidth(180)
         filtre.addWidget(self.rapor_turu)
+
+        filtre.addStretch(1)
+
+        self.donem_bilgi_btn = QPushButton("ⓘ  Dönemler Hakkında")
+        self.donem_bilgi_btn.setObjectName("hayalet")
+        self.donem_bilgi_btn.setToolTip(
+            "Seçilen ve önceki dönemin ne anlama geldiğini gösterir."
+        )
+        filtre.addWidget(self.donem_bilgi_btn)
+        self.donem_bilgi_btn.clicked.connect(
+            self.donem_bilgisi_goster
+        )
+
+        self.yenile_btn = QPushButton("⟳  Yenile")
+        self.yenile_btn.setObjectName("hayalet")
+        filtre.addWidget(self.yenile_btn)
+
+        self.pdf_btn = QPushButton("PDF Kaydet")
+        self.pdf_btn.setObjectName("YonetimPdf")
+        filtre.addWidget(self.pdf_btn)
+        self.pdf_btn.hide()  # PDF özelliği şimdilik gizli
+
+        # Başlangıç/bitiş yalnızca "Tarih Aralığı" seçilince görünür (hazır dönemlerde tarihler alttaki satırda yazılıdır).
+        self.tarih_alani = QWidget()
+        tarih_satiri = QHBoxLayout(self.tarih_alani)
+        tarih_satiri.setContentsMargins(0, 0, 0, 0)
+        tarih_satiri.setSpacing(10)
 
         self.baslangic = QDateEdit()
         self.bitis = QDateEdit()
@@ -643,51 +648,25 @@ class YonetimRaporlariEkrani(QWidget):
             alan.setCalendarPopup(True)
             alan.setDisplayFormat("dd.MM.yyyy")
             alan.setDate(QDate.currentDate())
-            alan.setFixedWidth(112)
+            alan.setMinimumWidth(160)
             alan.setEnabled(False)
 
         self.baslangic_etiketi = kucuk_etiket("Başlangıç")
-        filtre.addWidget(self.baslangic_etiketi)
-        filtre.addWidget(self.baslangic)
+        tarih_satiri.addWidget(self.baslangic_etiketi)
+        tarih_satiri.addWidget(self.baslangic)
+        tarih_satiri.addSpacing(8)
         self.bitis_etiketi = kucuk_etiket("Bitiş")
-        filtre.addWidget(self.bitis_etiketi)
-        filtre.addWidget(self.bitis)
+        tarih_satiri.addWidget(self.bitis_etiketi)
+        tarih_satiri.addWidget(self.bitis)
+        tarih_satiri.addStretch(1)
+        self.tarih_alani.setVisible(False)
 
-        filtre.addStretch(1)
+        self.donem_ozeti = QLabel("Karşılaştırılan dönemler, rapor yüklenince burada görünür.")
+        self.donem_ozeti.setObjectName("donemOzeti")
+        filtre_duzen.addWidget(self.donem_ozeti)
+        filtre_duzen.addWidget(self.tarih_alani)
 
-        self.donem_bilgi_btn = QPushButton("ⓘ Dönemler Hakkında")
-        self.donem_bilgi_btn.setToolTip(
-            "Seçilen ve önceki dönemin ne anlama geldiğini gösterir."
-        )
-        self.donem_bilgi_btn.setStyleSheet("""
-            QPushButton {
-                color: #245586;
-                background: #E7F0FB;
-                border: 1px solid #CBDEF4;
-                border-radius: 7px;
-                padding: 9px 10px;
-            }
-            QPushButton:hover {
-                background: #D8E9FA;
-            }
-        """)
-        filtre.addWidget(self.donem_bilgi_btn)
-        self.donem_bilgi_btn.clicked.connect(
-            self.donem_bilgisi_goster
-        )
-
-        self.yenile_btn = QPushButton("Yenile")
-        self.yenile_btn.setObjectName("YonetimYenile")
-        self.yenile_btn.setFixedWidth(78)
-        filtre.addWidget(self.yenile_btn)
-
-        self.pdf_btn = QPushButton("PDF Kaydet")
-        self.pdf_btn.setObjectName("YonetimPdf")
-        self.pdf_btn.setFixedWidth(105)
-        filtre.addWidget(self.pdf_btn)
-        self.pdf_btn.hide()  # PDF özelliği şimdilik gizli
-
-        panel_lay.addLayout(filtre)
+        panel_lay.addWidget(filtre_karti)
 
         # Seçilen hazır dönemin gerçek tarihlerini de göster.
         self.donem.currentTextChanged.connect(
@@ -776,25 +755,33 @@ class YonetimRaporlariEkrani(QWidget):
 
     def kartlari_olustur(self, panel_lay):
         satir = QHBoxLayout()
-        satir.setSpacing(12)
+        satir.setSpacing(16)
         self.kartlar = []
 
-        for _ in range(4):
+        for serit_rengi in ("#1D4ED8", "#D97706", "#DC2626", "#0E9F6E"):
             kart = QFrame()
             kart.setObjectName("YonetimKpiKarti")
-            kl = QVBoxLayout(kart)
-            kl.setContentsMargins(16, 12, 16, 12)
-            kl.setSpacing(5)
+            golge(kart)
+            kart_duzen = QHBoxLayout(kart)
+            kart_duzen.setContentsMargins(16, 14, 18, 14)
+            kart_duzen.setSpacing(14)
+            serit = QFrame()
+            serit.setFixedWidth(4)
+            serit.setStyleSheet(f"background: {serit_rengi}; border: none; border-radius: 2px;")
+            kart_duzen.addWidget(serit)
+            kl = QVBoxLayout()
+            kl.setSpacing(4)
+            kart_duzen.addLayout(kl, 1)
 
             baslik = QLabel("—")
             baslik.setStyleSheet(
-                "color: #697993; font-size: 12px;"
+                "color: #6B7FA8; font-size: 12px; font-weight: 700;"
             )
 
             deger = QLabel("—")
             deger.setStyleSheet(
-                "color: #203B61; font-size: 25px;"
-                "font-weight: bold;"
+                "color: #0F2552; font-size: 28px;"
+                "font-weight: 800;"
             )
 
             alt = QLabel("")
@@ -833,7 +820,7 @@ class YonetimRaporlariEkrani(QWidget):
         uyari = bool(ek.get("uyari"))
         uyari_notu = uyari or bool(ek.get("uyari_notu"))
         deger_lbl.setStyleSheet(
-            f"color: {'#B45309' if uyari else '#203B61'}; font-size: 25px; font-weight: bold;"
+            f"color: {'#B45309' if uyari else '#0F2552'}; font-size: 28px; font-weight: 800;"
         )
         alt_lbl.setStyleSheet(f"color: {'#B45309' if uyari_notu else '#8A98B0'}; font-size: 11px;")
 
@@ -854,36 +841,20 @@ class YonetimRaporlariEkrani(QWidget):
         rozet.show()
 
     def tablo_olustur(self, yukseklik):
-        bolum = QWidget()
+        bolum = kart_olustur()
         lay = QVBoxLayout(bolum)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(7)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(8)
 
         baslik = QLabel("—")
-        baslik.setStyleSheet(
-            "color: #16294B; font-size: 13px;"
-            "font-weight: bold;"
-        )
+        baslik.setObjectName("kartBaslik")
         lay.addWidget(baslik)
 
         tablo = QTableWidget()
-        tablo.setStyleSheet("""
-            QTableWidget {
-                background-color: #FFFFFF;
-                color: #243653;
-                border: 1px solid #DCE6F3;
-                border-radius: 8px;
-                gridline-color: #E3EAF5;
-            }
-            QHeaderView::section {
-                background-color: #E5EFFD;
-                color: #193657;
-                border: none;
-                border-right: 1px solid #D3E1F2;
-                padding: 7px;
-                font-weight: bold;
-            }
-        """)
+        tablo.setStyleSheet(TABLO_STILI + "QTableWidget::item { padding: 3px 10px; }")
+        tablo.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        tablo.setShowGrid(False)
+        tablo.setFrameShape(QFrame.NoFrame)
         tablo.setMinimumHeight(yukseklik)
         tablo.setMaximumHeight(yukseklik)
         tablo.verticalHeader().setVisible(False)
@@ -896,6 +867,7 @@ class YonetimRaporlariEkrani(QWidget):
         tablo.setWordWrap(True)                          # uzun açıklamalar "…" ile kesilmez, alt satıra geçer
         tablo.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         lay.addWidget(tablo)
+        lay.addStretch(1)                                # kart yüksekliği farklıysa başlık/tablo üstte kalır
 
         return bolum, baslik, tablo
 
@@ -904,28 +876,54 @@ class YonetimRaporlariEkrani(QWidget):
 
         ust = QHBoxLayout()
         ust.setSpacing(14)
+        ust.setAlignment(Qt.AlignTop)
 
         for i in range(2):
-            bolum, baslik, tablo = self.tablo_olustur(238)      # 6 satır kaydırmadan görünsün
+            bolum, baslik, tablo = self.tablo_olustur(300)      # 7 satır kaydırmadan görünsün
             ust.addWidget(bolum, 3 if i == 0 else 2)
             self.tablolar.append((baslik, tablo))
 
         panel_lay.addLayout(ust)
 
-        alt = QHBoxLayout()
-        alt.setSpacing(14)
+        # Alt sıra: geniş pencerede 3 tablo yan yana, dar pencerede 2 + 1 (tablolar sıkışıp yatay kaydırma çıkarmasın).
+        self.alt_izgara = QGridLayout()
+        self.alt_izgara.setSpacing(14)
+        self.alt_izgara.setAlignment(Qt.AlignTop)
+        self.alt_kartlar = []
+        self.alt_sutun_sayisi = 0
 
         for _ in range(3):
-            bolum, baslik, tablo = self.tablo_olustur(208)      # 5 satır kaydırmadan görünsün
-            alt.addWidget(bolum, 1)
+            bolum, baslik, tablo = self.tablo_olustur(250)      # 5 satır kaydırmadan görünsün
+            self.alt_kartlar.append(bolum)
             self.tablolar.append((baslik, tablo))
 
-        panel_lay.addLayout(alt)
+        panel_lay.addLayout(self.alt_izgara)
+        self.alt_sirayi_diz(GENIS_ALT_SIRA)
+
+    def alt_sirayi_diz(self, genislik):
+        sutun = 3 if genislik >= GENIS_ALT_SIRA else 2
+        if sutun == self.alt_sutun_sayisi:
+            return
+        self.alt_sutun_sayisi = sutun
+        for kart in self.alt_kartlar:
+            self.alt_izgara.removeWidget(kart)
+        for sira, kart in enumerate(self.alt_kartlar):
+            if sutun == 3 or sira < 2:
+                self.alt_izgara.addWidget(kart, 0, sira)
+            else:
+                self.alt_izgara.addWidget(kart, 1, 0, 1, 2)
+        for sira in range(3):
+            self.alt_izgara.setColumnStretch(sira, 1 if sira < sutun else 0)
+
+    def resizeEvent(self, olay):
+        super().resizeEvent(olay)
+        self.alt_sirayi_diz(olay.size().width())
 
     def tarih_alanlarini_guncelle(self, secim):
         ozel = secim == "Tarih Aralığı"
         self.baslangic.setEnabled(ozel)
         self.bitis.setEnabled(ozel)
+        self.tarih_alani.setVisible(ozel and self.rapor_turu.currentText() != "Bugün Merkezde")
 
         if not ozel:
             ilk, son = self.secili_tarihler()
@@ -1092,6 +1090,31 @@ class YonetimRaporlariEkrani(QWidget):
                 widget.horizontalHeader().setSectionResizeMode(
                     sutun, QHeaderView.ResizeToContents
                 )
+        self._tablo_yuksekligini_ayarla(widget, len(satirlar))
+
+    def _tablo_yuksekligini_ayarla(self, widget, satir_sayisi):
+        """Tablo, satırları kaydırma çubuğu olmadan gösterecek kadar yüksek olur (en az 7, en çok 12 satırlık yükseklik)."""
+        widget.resizeRowsToContents()
+        satir_yuksekligi = max(30, widget.verticalHeader().defaultSectionSize() // 2 * 2)
+        gerekli = widget.horizontalHeader().height() + sum(widget.rowHeight(i) for i in range(satir_sayisi)) + 6
+        yukseklik = max(7 * satir_yuksekligi, min(gerekli, 12 * satir_yuksekligi + 60))
+        widget.setMinimumHeight(int(yukseklik))
+        widget.setMaximumHeight(int(yukseklik))
+
+    def donem_ozetini_yaz(self, randevu):
+        """Süzgeç kartının altındaki satıra, karşılaştırılan iki dönemin gerçek tarihlerini yazar (her rapor türünde)."""
+        from datetime import date
+
+        try:
+            def aralik(donem):
+                ilk, son = date.fromisoformat(donem["baslangic"]), date.fromisoformat(donem["bitis"])
+                return f"{ilk:%d.%m.%Y} – {son:%d.%m.%Y}"
+
+            self.donem_ozeti.setText(
+                f"Seçilen dönem: {aralik(randevu['donem'])}    ·    Önceki dönem: {aralik(randevu['onceki_donem'])}"
+            )
+        except (KeyError, TypeError, ValueError):
+            self.donem_ozeti.setText("Karşılaştırılan dönemler, rapor yüklenince burada görünür.")
 
     def verileri_goster(self, veriler):
         self.veriler = veriler
@@ -1121,12 +1144,12 @@ class YonetimRaporlariEkrani(QWidget):
         for kontrol in (
             self.donem_etiketi,
             self.donem,
-            self.baslangic_etiketi,
-            self.baslangic,
-            self.bitis_etiketi,
-            self.bitis,
+            self.donem_ozeti,
         ):
             kontrol.setVisible(not gunluk)
+        self.tarih_alani.setVisible(
+            not gunluk and self.donem.currentText() == "Tarih Aralığı"
+        )
 
         if gunluk:
             return
@@ -1181,6 +1204,7 @@ class YonetimRaporlariEkrani(QWidget):
             return
 
         r = self.veriler["randevu"]
+        self.donem_ozetini_yaz(r)
         c = self.veriler["cihaz"]
         o = self.veriler["ogrenci"]
         p = self.veriler["proje"]
@@ -1229,18 +1253,14 @@ class YonetimRaporlariEkrani(QWidget):
             self.karsilastirma_grafigi.guncelle(
                 [
                     "Randevu", "Bakım", "Kalibrasyon",
-                    "Arıza", "Cihaz rezervasyonu",
+                    "Arıza", "Rezervasyon",
                     "Oda etkinliği",
                 ],
                 secilen,
                 onceki,
             )
 
-            self.ogrenci_donem_grafigi.guncelle(
-                ["Faaliyet puanı"],
-                [oo["toplam_puan"]],
-                [ore["toplam_puan"]],
-            )
+            self.ogrenci_donem_grafigi.guncelle(o["faaliyet_dagilimi"])
             kartlar = [
                 ("Randevu", ro_gercek,
                  f"İptal hariç · {ro['iptal_edildi']} iptal ayrıca",
@@ -1262,29 +1282,12 @@ class YonetimRaporlariEkrani(QWidget):
                      (f["faaliyet"], f["kayit_sayisi"], f["toplam_puan"])
                      for f in o["faaliyet_dagilimi"]
                  ] or [("Dönemde faaliyet kaydı yok.", "", "")]),
-                ("Cihaz İşlemleri", ["İşlem", "Sayı"], [
-                    ("Bakım", co["bakim"]),
-                    ("Kalibrasyon", co["kalibrasyon"]),
-                    ("Arıza", co["ariza"]),
-                    ("Rezervasyon (iptal hariç)", co["rezervasyon"]),
-                ]),
                 ("Proje / Etkinlik", ["Gösterge", "Sayı"], [
                     ("Cihaz rezervasyonu (iptal hariç)", po["rezervasyon_iptal_edilmemis"]),
                     ("İptal edilen rezervasyon", po["rezervasyon_iptal"]),
                     ("Oda etkinliği (iptal hariç)", po["etkinlik_iptal_edilmemis"]),
                     ("Kayıtlı katılımcı", po["kayitli_katilimci_toplami"]),
                 ]),
-                ("Dönem Karşılaştırması",
-                 ["Gösterge", "Seçilen", "Önceki", "Değişim"], [
-                     ("Randevu", ro_gercek, rr_gercek, degisim_metni(ro_gercek, rr_gercek)),
-                     ("Gelmeme oranı", yuzde_metni(ro_gelmeme), yuzde_metni(rr_gelmeme),
-                      degisim_metni(ro_gelmeme, rr_gelmeme, oran=True)),
-                     ("Faaliyet puanı", oo["toplam_puan"], ore["toplam_puan"],
-                      degisim_metni(oo["toplam_puan"], ore["toplam_puan"])),
-                     ("Arıza", co["ariza"], cr["ariza"], degisim_metni(co["ariza"], cr["ariza"])),
-                     ("Oda etkinliği", po["etkinlik_iptal_edilmemis"], pr["etkinlik_iptal_edilmemis"],
-                      degisim_metni(po["etkinlik_iptal_edilmemis"], pr["etkinlik_iptal_edilmemis"])),
-                 ]),
             ]
 
         elif tur == "Randevular":
@@ -1502,12 +1505,16 @@ class YonetimRaporlariEkrani(QWidget):
             ek = kart[3] if len(kart) > 3 else {}
             self.karti_doldur(widgetlar, ad, deger, alt, ek)
 
-        for widgetlar, (ad, sutunlar, satirlar) in zip(
-            self.tablolar, tablolar
-        ):
+        # Genel Bakış'ın üç tablosu tek satırda (alttaki üç yuva); diğer görünümler yuvaları sırayla kullanır.
+        yuvalar = [2, 3, 4] if tur == "Genel Bakış" else list(range(len(tablolar)))
+        for yuva, (ad, sutunlar, satirlar) in zip(yuvalar, tablolar):
             self.tabloyu_doldur(
-                widgetlar, ad, sutunlar, satirlar
+                self.tablolar[yuva], ad, sutunlar, satirlar
             )
+
+        # Bu görünümde kullanılmayan tablo kartları gizlenir (eski içerik boş kartta kalmasın).
+        for sira, (_, tablo_widget) in enumerate(self.tablolar):
+            tablo_widget.parentWidget().setVisible(sira in yuvalar)
 
         if self.yuklenen_donem is not None:
             try:
