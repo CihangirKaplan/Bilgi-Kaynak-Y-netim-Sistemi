@@ -69,7 +69,7 @@ ekranından doğrulayın (izin farklı ayarlanmışsa o senaryoyu çıkarın ya 
 | P2, P3 | Randevu oluşturma, düzenleme, iptal etme (`RANDEVU_OLUSTUR`, `RANDEVU_DUZENLE`, `RANDEVU_IPTAL`) | Psikolog |
 | P4 | `RANDEVU_DUZENLE` | Psikolog |
 | P5 | `CIHAZ_UYGUNLUK_GORUNTULE` | Psikolog, Memur, Müdür |
-| P6 | `TAKVIM_GORUNTULE`, `CIHAZ_UYGUNLUK_GORUNTULE`, `ODA_ETKINLIK_GORUNTULE` | Psikolog, Memur, Müdür |
+| P6 | `TAKVIM_GORUNTULE`, `CIHAZ_UYGUNLUK_GORUNTULE` (etkinlik listesi izin istemez) | Psikolog, Memur, Müdür |
 | M2 | `CIHAZ_ENVANTER_YONET` | Memur, Müdür |
 | M3 | `BAKIM_KAYITLARI_YONET`, `KALIBRASYON_KAYITLARI_YONET` | Memur, Müdür |
 | M4 | `ARIZA_KAYITLARI_YONET` | Memur, Müdür |

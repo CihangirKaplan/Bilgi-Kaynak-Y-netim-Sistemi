@@ -14,8 +14,8 @@ from client import main_window as mw
 def test_oda_etkinligi_yedek_maskesi_rol_kodlariyla_eslesir():
     gor = mw.IZIN["Oda etkinliklerini görüntüleme"][1]
     yon = mw.IZIN["Oda etkinliklerini yönetme"][1]
-    beklenen_gor = {"psikolog": "E", "memur": "E", "mudur": "E", "ogrenci": "E", "asistan": "H", "admin": "E"}
-    beklenen_yon = {"psikolog": "H", "memur": "E", "mudur": "E", "ogrenci": "H", "asistan": "H", "admin": "E"}
+    beklenen_gor = {"psikolog": "E", "memur": "E", "mudur": "E", "ogrenci": "E", "asistan": "E", "admin": "E"}
+    beklenen_yon = {"psikolog": "H", "memur": "E", "mudur": "E", "ogrenci": "H", "asistan": "E", "admin": "E"}      # Proje Asistanı: migration a7c3e5b9d014
     for rol in mw.ROLLER[:6]:
         assert gor[mw.ROLLER.index(rol)] == beklenen_gor[rol], rol
         assert yon[mw.ROLLER.index(rol)] == beklenen_yon[rol], rol

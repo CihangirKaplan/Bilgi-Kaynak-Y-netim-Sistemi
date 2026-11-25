@@ -30,7 +30,7 @@ yetkileri değiştirebilir; bu durumda menünüz farklı olabilir. Menüde göre
 | Randevu Yönetimi | ✔ (kendi) | ✔ (oluştur/düzenle/iptal) | ✔ (görüntüle) | ✔ (görüntüle) | ✔ (görüntüle) | ✔ (tam) |
 | Danışanlar | ✔ | ✔ | – | – | – | ✔ |
 | Oda Kullanımı | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Oda Etkinlikleri | ✔ | ✔ | – | ✔ | ✔ | ✔ |
+| Oda Etkinlikleri | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Randevu Raporları | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Oda Kullanım Raporu | – | – | – | – | ✔ | ✔ |
 | Öğrenciler | – | – | ✔ | ✔ | ✔ | ✔ |

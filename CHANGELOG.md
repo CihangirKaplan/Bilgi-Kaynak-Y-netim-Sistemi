@@ -43,6 +43,7 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 - Oda yönetimi; psikolog oda yetkileri (her psikologun en az bir odası).
 - Oda Kullanımı: gün/hafta görünümü, randevu, cihaz rezervasyonu ve etkinlik blokları, mesai doluluk oranı.
 - Oda Etkinlikleri: tek ya da çok günlü etkinlikler, çakışma denetimi, katılımcı sayısı (bilgi amaçlıdır; oda kapasitesiyle karşılaştırılmaz).
+  Proje Asistanı da etkinlikleri görüntüleyip ekleyebilir, düzenleyebilir ve iptal edebilir (varsayılan izin; migration `a7c3e5b9d014`, yükseltmede otomatik gelir).
 
 ### Cihaz yaşam döngüsü
 
@@ -58,7 +59,7 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
   (5000 kayıtlı denemede ekran açılışı 12–99 saniyeden 1 saniyenin altına indi). Arama yüklü kayıtlarda çalışır.
 - Ana panelde **bugünkü cihaz rezervasyonları** artık Cihaz Uygunluğu'nu görenlere ve rezervasyon yapanlara da gösterilir (rezerve eden adı yalnızca
   cihazı yönetenlere ve rezervasyon yapanlara; yalnızca görüntüleyenlere kişi adı verilmez).
-- Ana panelde **bugünkü oda etkinlikleri** (saat, ad, oda, katılımcı sayısı) oda etkinliklerini görebilen herkese gösterilir; iptal edilenler listelenmez,
+- Ana panelde **bugünkü oda etkinlikleri** (saat, ad, oda, katılımcı sayısı) giriş yapmış herkese gösterilir (salt okunur); iptal edilenler listelenmez,
   organize eden adı verilmez.
 - Rezervasyon listesinde Rezerve eden sütunu ve satırda düzenle/iptal düğmeleri; arıza tarihleri gün.ay.yıl biçiminde; Raporlar'da
   "Tümü" döneminde tarih kutuları pasif. Bakım, Uygunluk, Rezervasyon ve Raporlar ekranları 1366 px'lik dizüstü ekranlarına sığar.

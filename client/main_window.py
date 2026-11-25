@@ -122,7 +122,7 @@ IZIN_LISTESI.extend([
         "".join(
             "E" if rol in (
                 "admin", "mudur", "memur",
-                "psikolog", "ogrenci"
+                "psikolog", "ogrenci", "asistan"
             ) else "H"
             for rol in ROLLER
         ),
@@ -131,7 +131,7 @@ IZIN_LISTESI.extend([
         "Oda etkinliklerini yönetme",
         _oda_etkinlik_kategori,
         "".join(
-            "E" if rol in ("admin", "mudur", "memur") else "H"
+            "E" if rol in ("admin", "mudur", "memur", "asistan") else "H"
             for rol in ROLLER
         ),
     ),
@@ -2310,7 +2310,7 @@ QLabel {
             self.token,
             cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
             rezervasyon_paneli=rezervasyon_panelini_gorebilir_mi(rol),
-            etkinlik_paneli=izin_var(rol, "Oda etkinliklerini görüntüleme"),
+            etkinlik_paneli=True,                                           # salt okunur "bugün" bilgisi: giriş yapmış herkes görür
             sayfa_ac=self._bildirimden_sayfaya_git,
             sayfa_izinli_mi=self._sayfa_izinli_mi,
             kart_ac=self._karttan_sayfaya_git,

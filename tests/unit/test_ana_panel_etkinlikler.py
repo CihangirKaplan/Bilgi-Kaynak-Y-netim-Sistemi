@@ -48,9 +48,21 @@ def test_sunucu_gece_yarisinda_biten_gun_24_00_gosterilir():
         assert sunucu.dashboard_bugunku_etkinlikler(kullanici_id=5)[0]["bitis"] == "24:00"
 
 
-def test_sunucu_uc_noktasi_etkinlik_goruntuleme_iznine_baglidir():
+def test_sunucu_uc_noktasi_giris_yapmis_herkese_aciktir_tokensiz_401():
+    """Ana paneldeki salt okunur bilgi: ayrı görüntüleme izni aramaz (Proje Asistanı'nın Oda Etkinlikleri sayfası yoktur ama görür); token yine şart."""
     import server.sunucu as sunucu
-    assert 'izin_kontrol("ODA_ETKINLIK_GORUNTULE")' in inspect.getsource(sunucu.dashboard_bugunku_etkinlikler)
+    from fastapi.testclient import TestClient
+    assert "mevcut_kullanici_id" in inspect.getsource(sunucu.dashboard_bugunku_etkinlikler) and "izin_kontrol" not in inspect.getsource(sunucu.dashboard_bugunku_etkinlikler)
+    conn = MagicMock()
+    conn.cursor.return_value.fetchall.return_value = [(1, "Seminer", "Oda 2", _bugun(18), _bugun(19), None)]
+    sunucu.app.dependency_overrides[sunucu.mevcut_kullanici_id] = lambda: 9                  # hiçbir izni olmayan, giriş yapmış kullanıcı
+    try:
+        with patch("server.sunucu.psycopg2.connect", return_value=conn), TestClient(sunucu.app) as istemci:
+            assert istemci.get("/api/dashboard/bugunku-etkinlikler").status_code == 200
+    finally:
+        sunucu.app.dependency_overrides.pop(sunucu.mevcut_kullanici_id, None)
+    with TestClient(sunucu.app) as istemci:
+        assert istemci.get("/api/dashboard/bugunku-etkinlikler").status_code == 401           # token olmadan yok
 
 
 ETKINLIKLER = [{"etkinlik_id": 1, "etkinlik": "Aile Eğitimi", "oda": "Toplantı Odası", "baslangic": "10:00", "bitis": "12:00", "katilimci": 15},
@@ -70,7 +82,7 @@ def _panel(etkinlikler=ETKINLIKLER, hata=False, **kw):
     return p
 
 
-def test_etkinlik_izni_olan_rol_paneli_gorur_cihaz_ozeti_olmasa_da():
+def test_cihaz_ozeti_olmayan_rol_etkinlik_panelini_gorur():
     p = _panel(cihaz_ozeti=False, etkinlik_paneli=True)
     p.resize(1400, 900)
     p.show()
@@ -104,6 +116,7 @@ def test_cihaz_ozetli_rol_hem_rezervasyon_hem_etkinlik_panelini_gorur_ve_gun_deg
     p.close()
 
 
-def test_ana_pencere_etkinlik_panelini_izin_fonksiyonuyla_acar():
+def test_ana_pencere_etkinlik_panelini_her_role_acar():
     import client.main_window as mw
-    assert 'etkinlik_paneli=izin_var(rol, "Oda etkinliklerini görüntüleme")' in inspect.getsource(mw.AnaPencere.sayfa_dashboard)
+    kaynak = inspect.getsource(mw.AnaPencere.sayfa_dashboard)
+    assert "etkinlik_paneli=True" in kaynak and 'izin_var(rol, "Oda etkinliklerini görüntüleme")' not in kaynak        # izne bağlı değil: herkes görür
