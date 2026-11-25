@@ -8,7 +8,7 @@ Bu kılavuz **Psikolog** rolü içindir. Giriş, şifre, arama, sıralama ve kı
 
 | Sayfa | Ne için? |
 |---|---|
-| **Ana Kontrol Paneli** | Günün özeti ve kısayol kartları |
+| **Ana Kontrol Paneli** | Günün özeti, bugünkü randevular ve cihaz rezervasyonları (rezerve eden adı gösterilmez) ve kısayol kartları |
 | **Randevu Yönetimi** | Randevularınızı görme, oluşturma, düzenleme, iptal etme, durum işaretleme |
 | **Danışanlar** | Danışanlarınızın bilgileri, özeti ve randevu geçmişi; yeni danışan oluşturma |
 | **Oda Kullanımı** | Odaların doluluk durumu |

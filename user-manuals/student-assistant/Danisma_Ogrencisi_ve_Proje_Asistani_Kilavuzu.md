@@ -83,7 +83,7 @@ Randevu listesinde **dönem seçici** (*Tüm tarihler, Bugün, Bu hafta, Bu ay, 
 
 | Sayfa | Ne için? |
 |---|---|
-| **Ana Kontrol Paneli** | Günün özeti |
+| **Ana Kontrol Paneli** | Günün özeti: bugünkü randevular ve cihaz rezervasyonları |
 | **Randevu Yönetimi** | Randevuları **yalnızca görüntüleme** |
 | **Oda Kullanımı** | Odaların doluluk durumu |
 | **Randevu Raporları** | Randevu sayıları ve dağılımları |

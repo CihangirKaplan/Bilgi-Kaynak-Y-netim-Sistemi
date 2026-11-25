@@ -15,7 +15,8 @@ UCLAR = [
     ("/api/psikologlar", "TAKVIM_GORUNTULE"),
     ("/api/dashboard/bugunku-randevular", "TAKVIM_GORUNTULE"),
     ("/api/dashboard/ozet", "CIHAZ_ENVANTER_YONET"),
-    ("/api/dashboard/bugunku-rezervasyonlar", "CIHAZ_ENVANTER_YONET"),
+    # Bugünkü rezervasyon listesi: cihazı yönetenler, rezervasyon yapanlar ve Cihaz Uygunluğu'nu görenler (hiçbirine sahip olmayan 403 alır)
+    ("/api/dashboard/bugunku-rezervasyonlar", ["CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"]),
     # Bildirim ucu: cihaz envanterini yönetenler VEYA bakım/kalibrasyon izni olanlar (her biri yalnızca kendi türünü görür)
     ("/api/dashboard/yaklasan-islemler", ["CIHAZ_ENVANTER_YONET", "BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET",
                                          "KALIBRASYON_KAYITLARI_GORUNTULE", "KALIBRASYON_KAYITLARI_YONET"]),

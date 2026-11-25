@@ -5739,8 +5739,11 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVI
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# Ana paneldeki "bugünkü cihaz rezervasyonları": cihazı yönetenler, rezervasyon yapanlar ve Cihaz Uygunluğu'nu görebilenler (ör. psikolog) görür;
+# böylece herkes merkezde o gün hangi cihazın ne zaman kullanıldığını bilir. REZERVE EDEN adını yalnızca cihazı yönetenler ve rezervasyon yapanlar
+# görür; Cihaz Uygunluğu sayfası gibi yalnızca görüntüleyenlere kişi adı verilmez (null).
 @app.get("/api/dashboard/bugunku-rezervasyonlar")
-def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTER_YONET"))):
+def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_biri("CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"))):
     conn = None
     cursor = None
     try:
@@ -5750,7 +5753,10 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
         cursor.execute("""
             SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi,
                    COALESCE(k.kullanici_adi, '-'), COALESCE(o.oda_adi, '-'),
-                   r.baslangic_zamani, r.bitis_zamani
+                   r.baslangic_zamani, r.bitis_zamani,
+                   (SELECT COALESCE(MAX(ri.izin_var), 0) FROM kullanicilar kk
+                      JOIN rol_izinleri ri ON kk.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id
+                     WHERE kk.kullanici_id = %s AND i.izin_adi IN ('CIHAZ_ENVANTER_YONET', 'CIHAZ_REZERVASYON')) AS isim_gorebilir
             FROM cihaz_rezervasyonlari r
             JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
             LEFT JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
@@ -5760,7 +5766,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
               AND r.baslangic_zamani < CURRENT_DATE + 1
               AND r.bitis_zamani >= CURRENT_DATE
             ORDER BY r.baslangic_zamani;
-        """)
+        """, (kullanici_id,))
         bugun = date.today()
 
         def zaman(z):
@@ -5769,7 +5775,7 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol("C
         return [{
             "rezervasyon_id": s[0],
             "cihaz": f"{s[1]} - {s[2]}",
-            "rezerve_eden": s[3],
+            "rezerve_eden": s[3] if (len(s) <= 7 or s[7] == 1) else None,
             "oda": s[4],
             "baslangic": zaman(s[5]),
             "bitis": zaman(s[6])

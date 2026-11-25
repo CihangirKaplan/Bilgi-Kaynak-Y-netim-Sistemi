@@ -219,11 +219,19 @@ def yetkileri_temizle(rol):
     _SUNUCU_YETKILERI.pop(rol, None)
 
 
+def rezervasyon_panelini_gorebilir_mi(rol):
+    """Ana paneldeki "Cihaz Rezervasyonları" paneli: cihazı yönetenler, rezervasyon yapanlar ve Cihaz Uygunluğu'nu görenler (örn. psikolog,
+    proje asistanı). Sunucudaki /api/dashboard/bugunku-rezervasyonlar ucu bu üç izinden birini ister; kişi adını yalnızca ilk ikisine verir."""
+    return (izin_var(rol, "Cihaz envanterini yönetme") or izin_var(rol, "Cihaz rezervasyonu yapma")
+            or izin_var(rol, "Cihaz uygunluğunu görüntüleme"))
+
+
 def cihaz_ozeti_gorebilir_mi(rol):
     """Ana paneldeki cihaz kartları, bildirimler ve yaklaşan işlemler.
 
     Sunucudaki /api/dashboard/ozet, /bugunku-rezervasyonlar ve /yaklasan-islemler uçları
-    CIHAZ_ENVANTER_YONET ister; istemci de aynı izne bakar, böylece ikisi hiç ayrışmaz.
+    CIHAZ_ENVANTER_YONET ister (rezervasyon listesi ucu daha geniştir: bkz. rezervasyon_panelini_gorebilir_mi); istemci de aynı izne bakar,
+    böylece ikisi hiç ayrışmaz.
     """
     return izin_var(rol, "Cihaz envanterini yönetme")
 
@@ -2256,12 +2264,13 @@ QLabel {
             and o["ad"] in hizli_erisim_adlari
         ]
 
-        # Randevu listesi her rolde, cihaz özeti yalnızca cihaz envanteri iznine sahip rollerde gösterilir.
+        # Randevu listesi her rolde, cihaz özeti yalnızca cihaz envanteri iznine sahip rollerde, bugünkü cihaz rezervasyonları ise ayrıca rezervasyon yapan ve Cihaz Uygunluğu görenlerde gösterilir.
         # Bu özetin sunucu uçları da aynı izni ister; izin rol adına değil veritabanındaki yetkiye bağlıdır.
         self.istatistik_paneli = DashboardEkrani(
             self.api_url,
             self.token,
             cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
+            rezervasyon_paneli=rezervasyon_panelini_gorebilir_mi(rol),
             sayfa_ac=self._bildirimden_sayfaya_git,
             sayfa_izinli_mi=self._sayfa_izinli_mi,
             kart_ac=self._karttan_sayfaya_git,

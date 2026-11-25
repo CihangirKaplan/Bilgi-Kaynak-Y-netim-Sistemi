@@ -56,6 +56,8 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
   Arıza Kayıtları'nda **◷** ile arızanın cihazının geçmişine geçiş.
 - Bakım, Kalibrasyon, Arıza ve Rezervasyon listeleri en yeni 300 kayıtla açılır; **＋ 300 kayıt daha yükle** ile en çok 5000 kayda kadar uzatılır
   (5000 kayıtlı denemede ekran açılışı 12–99 saniyeden 1 saniyenin altına indi). Arama yüklü kayıtlarda çalışır.
+- Ana panelde **bugünkü cihaz rezervasyonları** artık Cihaz Uygunluğu'nu görenlere ve rezervasyon yapanlara da gösterilir (rezerve eden adı yalnızca
+  cihazı yönetenlere ve rezervasyon yapanlara; yalnızca görüntüleyenlere kişi adı verilmez).
 - Rezervasyon listesinde Rezerve eden sütunu ve satırda düzenle/iptal düğmeleri; arıza tarihleri gün.ay.yıl biçiminde; Raporlar'da
   "Tümü" döneminde tarih kutuları pasif. Bakım, Uygunluk, Rezervasyon ve Raporlar ekranları 1366 px'lik dizüstü ekranlarına sığar.
 - Cihaz raporları (rezervasyon, geciken bakım planı) ve Excel aktarımı.
