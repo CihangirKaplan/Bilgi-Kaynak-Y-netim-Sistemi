@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
     QButtonGroup, QGraphicsDropShadowEffect, QSizePolicy, QTableWidget, QHeaderView, QAbstractItemView, QLineEdit, QCheckBox
 )
 from client.oda_yonetimi import OdaFormu
-from PySide6.QtCore import Qt, Signal, QEvent
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, Signal, QEvent, QSize
+from PySide6.QtGui import QColor, QIcon
 from client.bildirim_toast import basari_bildirimi
 from client.randevu_ekranlari import RandevuOlusturFormu
 from client.cihaz_ekranlari import CihazYonetimEkrani
@@ -429,8 +429,9 @@ QFrame#kart { background: white; border-radius: 16px; }
 QLabel#kartBaslik { font-size: 12px; font-weight: 700; color: #6B7FA8; }
 QLabel#kartDeger { font-size: 26px; font-weight: 800; color: #1D4ED8; }
 QLabel#kartAlt { font-size: 11px; color: #8A9BC0; }
-QPushButton#hizli { background: white; color: #0A1F5C; border: 1px solid transparent; border-radius: 16px; padding: 18px 20px; text-align: left; font-size: 14px; font-weight: 700; }
-QPushButton#hizli:hover { background: #F3F8FF; border: 1px solid #3B82F6; color: #1D4ED8; }
+QPushButton#hizli { background: white; color: #0A1F5C; border: 1px solid transparent; border-radius: 16px; padding: 0px; }
+QPushButton#hizli:hover { background: #F3F8FF; border: 1px solid #3B82F6; }
+QLabel#hizliYazi { font-size: 13px; font-weight: 700; color: #0A1F5C; background: transparent; }
 QLabel#kategori { font-size: 13px; font-weight: 800; color: #0A1F5C; }
 QLabel#izinAdi { font-size: 12px; color: #1E3A8A; }
 QLabel#izinAdiPasif { font-size: 12px; color: #A3B1CE; }
@@ -575,8 +576,42 @@ def _tkys_dashboard_kompakt(sayfa):
 FAALIYET_LISTE_SINIRI = 1000
 
 
+class HizliErisimDugmesi(QPushButton):
+    """Hızlı Erişim kutusu: üstte yumuşak renkli zeminli çizgi ikon, altında sayfa adı (kompakt, 5'i tek satıra sığar)."""
+
+    GENISLIK, YUKSEKLIK = 150, 112
+
+    def __init__(self, ad):
+        super().__init__()
+        from client.ikon_kutusu import HIZLI_ERISIM_IKONLARI, VARSAYILAN_IKON, renkli_ikon_pixmap
+        self._ad = ad
+        self.setObjectName("hizli")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(self.YUKSEKLIK)
+        tur, renk, zemin = HIZLI_ERISIM_IKONLARI.get(ad, VARSAYILAN_IKON)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 12, 12)
+        lay.setSpacing(10)
+        simge = QLabel()
+        simge.setPixmap(renkli_ikon_pixmap(tur, renk, zemin, kutu=42, ikon_boyutu=21, yaricap=13))
+        simge.setFixedSize(42, 42)
+        simge.setAttribute(Qt.WA_TransparentForMouseEvents)
+        yazi = QLabel(ad)
+        yazi.setObjectName("hizliYazi")
+        yazi.setWordWrap(True)
+        yazi.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay.addWidget(simge, 0, Qt.AlignLeft)
+        lay.addWidget(yazi, 1, Qt.AlignLeft | Qt.AlignTop)
+
+    def text(self):
+        return self._ad
+
+    def sizeHint(self):
+        return QSize(self.GENISLIK, self.YUKSEKLIK)
+
+
 class HizliErisimIzgarasi(QWidget):
-    """Ana sayfadaki Hızlı Erişim düğmeleri: geniş pencerede 4, daraldıkça 2 ve 1 sütun.
+    """Ana sayfadaki Hızlı Erişim düğmeleri: geniş pencerede 5, daraldıkça 3, 2 ve 1 sütun.
 
     Düğme yazısı sayfanın en az genişliğini belirlemez; aksi halde dar pencerede ana sayfa sağdan taşar."""
 
@@ -585,26 +620,25 @@ class HizliErisimIzgarasi(QWidget):
         self.dugmeler = list(dugmeler)
         self.izgara = QGridLayout(self)
         self.izgara.setContentsMargins(0, 0, 0, 0)
-        self.izgara.setSpacing(18)
+        self.izgara.setSpacing(14)
         for dugme in self.dugmeler:
             dugme.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-            dugme.setToolTip(dugme.text().strip())
         self._kolon = None
         self._diz(self.kolon_sayisi(0))
 
     def kolon_sayisi(self, genislik):
-        """Yazısı kesilmeden sığan en fazla sütun (en çok 4); düğme yazısı en uzun olana göre ölçülür."""
+        """Yazısı kesilmeden sığan en fazla sütun (en çok 5); düğme genişliği en geniş olana göre ölçülür."""
         if not self.dugmeler:
             return 1
         bosluk = self.izgara.spacing()
         gereken = max(d.sizeHint().width() for d in self.dugmeler) + 24
-        return max(1, min(4, len(self.dugmeler), (genislik + bosluk) // (gereken + bosluk)))
+        return max(1, min(5, len(self.dugmeler), (genislik + bosluk) // (gereken + bosluk)))
 
     def _diz(self, kolon):
         if kolon == self._kolon:
             return
         self._kolon = kolon
-        for c in range(4):
+        for c in range(5):
             self.izgara.setColumnStretch(c, 1 if c < kolon else 0)
         for n, dugme in enumerate(self.dugmeler):
             self.izgara.addWidget(dugme, n // kolon, n % kolon)
@@ -918,7 +952,7 @@ QLabel {
         # ---------------- SOL MENÜ ----------------
         sidebar = QWidget()
         self.sidebar = sidebar
-        self._sol_menu_dar = False
+        self._sol_menu_dar = True            # ilk açılışta daralmış; ☰ düğmesiyle açılır
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(280)
         sb = QVBoxLayout(sidebar)
@@ -1390,7 +1424,10 @@ QLabel {
         ic.setContentsMargins(6, 6, 6, 6)
         ic.setSpacing(0)
 
-        sifre_btn = QPushButton("🔑  Şifremi Değiştir")
+        from client.ikon_kutusu import ikon_pixmap
+        sifre_btn = QPushButton("  Şifremi Değiştir")
+        sifre_btn.setIcon(QIcon(ikon_pixmap("key", "#0A1F5C", 18)))
+        sifre_btn.setIconSize(QSize(18, 18))
         sifre_btn.setObjectName("hesapSifre")
         sifre_btn.setCursor(Qt.PointingHandCursor)
         sifre_btn.setFixedHeight(38)
@@ -1403,7 +1440,9 @@ QLabel {
         )
         ic.addWidget(ayirici)
 
-        cikis_btn = QPushButton("⏻  Çıkış Yap")
+        cikis_btn = QPushButton("  Çıkış Yap")
+        cikis_btn.setIcon(QIcon(ikon_pixmap("power", "#B42332", 18)))      # güç simgesi karakteri bazı Windows yazı tiplerinde kutu çıkıyordu; SVG ikon
+        cikis_btn.setIconSize(QSize(18, 18))
         cikis_btn.setObjectName("hesapSifre")
         cikis_btn.setCursor(Qt.PointingHandCursor)
         cikis_btn.setFixedHeight(38)
@@ -2275,10 +2314,7 @@ QLabel {
 
         hizli_dugmeler = []
         for oge in erisilebilir:
-            btn = QPushButton(f"{oge['ikon']}   {oge['ad']}")
-            btn.setObjectName("hizli")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setMinimumHeight(78)
+            btn = HizliErisimDugmesi(oge["ad"])
             golge(btn, 22, 24, 4)
             btn.clicked.connect(lambda _=False, ad=oge["ad"]: self.nav_btnler[ad].click())
             hizli_dugmeler.append(btn)

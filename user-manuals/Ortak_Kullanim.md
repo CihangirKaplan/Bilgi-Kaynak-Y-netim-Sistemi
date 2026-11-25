@@ -44,10 +44,10 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 
 ## 2. Ekran düzeni
 
-- **Sol menü:** Yetkinize göre sayfalar bölümlere ayrılmış olarak listelenir. **☰** düğmesi menüyü daraltır/genişletir.
+- **Sol menü:** Yetkinize göre sayfalar bölümlere ayrılmış olarak listelenir. Program her açılışta menü **daraltılmış** (yalnızca bölüm simgeleri) gelir; sol üstteki **☰** düğmesi menüyü genişletir/daraltır.
   Menüde bir sayfayı göremiyorsanız o sayfa için yetkiniz yoktur.
 - **Üst çubuk:** Açık sayfanın adı, bildirimler (🔔), **?** (Hakkında / Yardım) ve **🏠 Ana Sayfa** düğmesi.
-- **Ana Kontrol Paneli:** Günün özeti ve sık kullanılan sayfalara kısayol kartları. Bir karta tıklayınca ilgili sayfa açılır.
+- **Ana Kontrol Paneli:** Günün özeti ve sayfanın altında **Hızlı Erişim** kutuları (sık kullanılan sayfalara kısayol). Bir kutuya tıklayınca ilgili sayfa açılır.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
 
 ## 3. Listelerle çalışmak
