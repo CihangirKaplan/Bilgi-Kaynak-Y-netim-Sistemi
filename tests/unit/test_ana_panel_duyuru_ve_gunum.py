@@ -254,3 +254,20 @@ def test_migrasyon_duyuru_tablosu_ve_izni():
     kaynak = Path("database/migrations/versions/c9d2e4f6a801_duyurular_ve_duyuru_izni.py").read_text(encoding="utf-8")
     assert 'down_revision = "a7c3e5b9d014"' in kaynak and "CREATE TABLE IF NOT EXISTS duyurular" in kaynak
     assert "'ADMIN', 'MUDUR', 'MEMUR'" in kaynak and "DUYURU_YONET" in kaynak
+
+
+def test_ana_panel_baglantilarinda_lambda_yok_kapanista_cokme_yapar():
+    """Düğmeye `connect(lambda ...: self...)` bağlamak panelle referans döngüsü kurar; süreç kapanırken Qt nesneleri yanlış sırada yok edilip
+    'Segmentation fault' verir (CI'da dosya tek başına çalışınca yakalandı). Tek bir yuva + sender().property() kullanılır."""
+    import client.dashboard_ekrani as d
+    import client.duyuru_diyaloglari as dd
+    for modul in (d, dd):
+        assert "connect(lambda" not in inspect.getsource(modul)
+
+
+def test_ana_panel_kaynaginda_cizgi_ikon_kuralini_bozan_emoji_yok():
+    """Acceptance testi (test_ana_sayfa_ikon_ve_hizli_erisim) ana panel kaynağında bu emojileri yasaklar; Benim Günüm satırları düz metin etiketi kullanır."""
+    import client.dashboard_ekrani as d
+    kaynak = inspect.getsource(d)
+    for emoji in ("📅", "📌", "🛠️", "📏", "🔬"):
+        assert emoji not in kaynak
