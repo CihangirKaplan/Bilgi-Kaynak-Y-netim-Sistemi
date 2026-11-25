@@ -83,7 +83,7 @@ Randevu listesinde **dönem seçici** (*Tüm tarihler, Bugün, Bu hafta, Bu ay, 
 
 | Sayfa | Ne için? |
 |---|---|
-| **Ana Kontrol Paneli** | Günün özeti: bugünkü randevular ve cihaz rezervasyonları |
+| **Ana Kontrol Paneli** | Günün özeti: bugünkü randevular, cihaz rezervasyonları ve oda etkinlikleri |
 | **Randevu Yönetimi** | Randevuları **yalnızca görüntüleme** |
 | **Oda Kullanımı** | Odaların doluluk durumu |
 | **Randevu Raporları** | Randevu sayıları ve dağılımları |
@@ -92,6 +92,7 @@ Randevu listesinde **dönem seçici** (*Tüm tarihler, Bugün, Bu hafta, Bu ay, 
 | **Puan Raporu, Öğrenci Raporu, Faaliyet Raporu** | Öğrenci puanları ve faaliyet raporları |
 | **Cihaz Uygunluğu** | Cihazların uygun olmadığı zamanları görme |
 | **Cihaz Rezervasyonu** | Cihaz rezervasyonu yapma |
+| **Oda Etkinlikleri** | Odalardaki etkinlikleri görme; etkinlik ekleme, düzenleme ve iptal etme |
 
 ## 1. Öğrencileri görmek
 
@@ -139,3 +140,11 @@ Hepsinde **⬇ Excel'e Aktar** vardır. Hesaplama tanımları için [Raporlama R
 
 Önce **Cihaz Uygunluğu** sayfasından cihazın ne zaman uygun olmadığını görürseniz çakışmayı baştan önlersiniz.
 Rezervasyonu **iptal** etmek için listeden rezervasyonu seçip iptal düğmesini kullanın ve iptal nedenini belirtin.
+
+## 5. Oda etkinliklerini yönetmek
+
+**Oda Etkinlikleri** sayfası (Öğrenci & Faaliyet Yönetimi menüsünde) odalarda planlanan etkinlikleri listeler. Üstteki arama kutusu, **Durum** ve **Dönem**
+süzgeçleriyle daraltabilirsiniz; bir etkinliğe çift tıklayınca oturumları açılır. Sağ üstteki **＋ Yeni Etkinlik** ile etkinlik ekler; bir satırı seçip **Düzenle**
+ya da **İptal Et** ile değiştirirsiniz. Etkinlik olan saatlerde o odaya randevu ve cihaz rezervasyonu verilemez; sistem çakışmayı reddeder ve nedenini yazar.
+Etkinlik ekleme, düzenleme ve iptal **denetim kaydına yazılır**. Ayrıntılı anlatım için Memur Kılavuzu **Bölüm 4**'e bakın.
+(Bu izin, yöneticinin **Rol & İzin Yönetimi** ekranında Proje Asistanı rolü için kapatması hâlinde menüden kalkar.)

@@ -5787,13 +5787,14 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_bi
         if conn is not None: conn.close()
 
 # Ana panel: bugünkü oda etkinlikleri (çok günlü etkinliğin bugüne düşen günü dahil). Yalnızca saat, ad, oda ve katılımcı sayısı döner;
-# organize eden kişi adı verilmez (ayrıntı için Oda Etkinlikleri sayfası). Oda etkinliklerini görebilen herkes (psikolog, memur, müdür,
-# danışma öğrencisi) görür.
+# organize eden kişi adı verilmez. Salt okunur "bugün merkezde ne var" bilgisi olduğu için giriş yapmış HERKES görür (ayrı bir görüntüleme izni
+# aramaz; örn. Proje Asistanı'nın Oda Etkinlikleri sayfası yoktur ama bugünkü etkinlikleri ana panelde görür). Etkinlik eklemek/düzenlemek/iptal etmek
+# yine ODA_ETKINLIK_YONET ister.
 BUGUNKU_ETKINLIK_UST_SINIR = 200
 
 
 @app.get("/api/dashboard/bugunku-etkinlikler")
-def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(izin_kontrol("ODA_ETKINLIK_GORUNTULE"))):
+def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(mevcut_kullanici_id)):
     conn = None
     cursor = None
     try:

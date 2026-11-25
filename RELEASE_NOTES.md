@@ -16,6 +16,7 @@ danışma masası süreçlerini tek bir sistemde, rol bazlı yetkiyle ve izleneb
 | Psikolog | Kendi randevuları ve danışanları, randevu sonucu (Tamamlandı/Gelmedi), cihaz uygunluğunu görüntüleme |
 | Memur (idari personel) | Cihaz envanteri, bakım/kalibrasyon/arıza, oda etkinlikleri, öğrenci ve faaliyet kayıtları |
 | Müdür | Yönetim raporları, kullanıcı ve personel yönetimi, danışma masası raporları (görev onayını Memur verir) |
+| Proje Asistanı | Öğrenci ve faaliyet kayıtları, cihaz rezervasyonu, oda etkinlikleri |
 | Danışma Öğrencisi | Danışma masası görevini başlatma ve bitirme |
 | Yönetici (ADMIN) | Bütün işlemler; rol ve izin yönetimi, parola sıfırlama, denetim kayıtları, sistem durumu |
 
@@ -40,6 +41,8 @@ Sunucuda, sunucu durdurulduktan sonra:
    Bu adım cihaz durumlarını da düzeltir: açık arızası olmayıp **Arızalı** görünen cihazlar **Kullanıma Hazır**'a, açık arızası olup
    **Kullanıma Hazır** görünen cihazlar **Arızalı**'ya çekilir (bakımdaki, kalibrasyondaki ve kullanım dışı cihazlara dokunulmaz).
    Her değişiklik denetim kaydına yazılır; yükseltmeden sonra Cihaz Envanteri'ni gözden geçirmeniz önerilir.
+   Aynı adım **Proje Asistanı**'na Oda Etkinlikleri görüntüleme ve yönetme izinlerini de açar (varsayılan); bir kurulumda bu izin Rol & İzin Yönetimi'nde
+   bilerek kapatılmışsa yükseltmeden sonra yeniden kapatın.
 3. Görevleri yeni ayarlarla yeniden kurun (yönetici PowerShell):
    `python scripts/windows/sunucu_kurulum.py` ve `python scripts/windows/kurulum.py`.
 4. Sunucuyu başlatın: `schtasks /Run /TN TKYS_Sunucu`.

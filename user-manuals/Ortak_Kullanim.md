@@ -51,8 +51,8 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   Panelde **bugünkü danışan randevuları** ve, cihaz rezervasyonlarını görme yetkisi olanlarda (Cihaz Uygunluğu'nu görenler ve rezervasyon yapanlar dahil)
   **bugünkü cihaz rezervasyonları** listelenir; böylece merkezde o gün neyin ne zaman kullanıldığını herkes bilir. **Rezerve eden** adı yalnızca cihazı
   yönetenlere ve rezervasyon yapanlara gösterilir; yalnızca Cihaz Uygunluğu'nu görenlerde bu sütun yoktur (kişi adı verilmez).
-  Oda etkinliklerini görebilenlerde (Psikolog, Memur, Müdür, Danışma Öğrencisi) ayrıca **bugünkü oda etkinlikleri** (saat, etkinlik adı, oda, katılımcı
-  sayısı; iptal edilenler listelenmez, organize eden adı gösterilmez) listelenir.
+  Ayrıca **herkesin** panelinde **bugünkü oda etkinlikleri** (saat, etkinlik adı, oda, katılımcı sayısı; iptal edilenler listelenmez, organize eden adı
+  gösterilmez) listelenir. Bu bölümler yalnızca bilgi verir; etkinlik eklemek ya da cihaz rezervasyonu yapmak için ilgili sayfanın izni gerekir.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
 
 ## 3. Listelerle çalışmak
