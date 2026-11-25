@@ -41,7 +41,7 @@ from client.tablo_siralama import siralama_durumunu_al, siralamayi_geri_yukle, s
 from client.tablo_tasarimi import bos_mesaj_olustur
 from client.bildirim_toast import basari_bildirimi
 from client.sayfa_tema import (
-    DurumRozetiDelegate, TABLO_STILI, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
+    DurumRozetiDelegate, TABLO_STILI, dialog_stili, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
 )
 
 
@@ -282,6 +282,14 @@ UYARI_DUGMESI_STILI = """
 QPushButton#uyari { background: #FFF2DF; color: #96601B; border: 1px solid #F2D6AC; }
 QPushButton#uyari:hover { background: #FFE8C7; border: 1px solid #E6B877; }
 QPushButton#uyari:disabled { background: #F4F6FA; color: #A3B1CE; border: 1px solid #E8EDF6; }
+"""
+
+
+# "Detay / Puanlar" penceresine özgü ek stil (ortak pencere stilinin üstüne).
+DETAY_PENCERESI_STILI = """
+QLabel#puanKart { background: #EEF4FF; color: #1D4ED8; border: none; border-radius: 12px; padding: 10px 18px;
+                  font-size: 18px; font-weight: 800; }
+QLabel#bosMesaj { font-size: 14px; font-weight: 700; color: #8A9BC0; padding: 30px; }
 """
 
 
@@ -798,7 +806,7 @@ class OgrenciYonetimEkrani(QWidget):
 
         self.yenile()
 
-    def detay_ac(self):
+    def detay_ac(self, *_):
         ogrenci = self.secili_ogrenci()
 
         if ogrenci is None:
@@ -806,22 +814,22 @@ class OgrenciYonetimEkrani(QWidget):
 
         pencere = QDialog(self)
         pencere.setObjectName("ogrenciDialog")
-        pencere.setStyleSheet(STIL)
+        pencere.setStyleSheet(dialog_stili() + DETAY_PENCERESI_STILI)
 
         pencere.setWindowTitle(
             "Öğrenci Detayı ve Faaliyet Puanları"
         )
-        pencere.resize(920, 620)
+        pencere.resize(920, 640)
 
         ana = QVBoxLayout(pencere)
-        ana.setSpacing(13)
+        ana.setContentsMargins(24, 22, 24, 18)
+        ana.setSpacing(14)
 
         baslik = QLabel(
             f"{ogrenci['ad_soyad']} • "
             f"{ogrenci['ogrenci_numarasi']}"
         )
-        baslik.setObjectName("tabloBaslik")
-
+        baslik.setObjectName("formBaslik")
         ana.addWidget(baslik)
 
         bilgi = QLabel(
@@ -831,16 +839,19 @@ class OgrenciYonetimEkrani(QWidget):
             f"   |   Kayıt: "
             f"{tarih_goster(ogrenci.get('olusturulma_tarihi'))}"
         )
-        bilgi.setObjectName("aciklama")
+        bilgi.setObjectName("ipucu")
         ana.addWidget(bilgi)
 
-        tarih_satiri = QHBoxLayout()
+        # Dönem seçimi ve toplam puan (tek beyaz kartta)
+        donem_karti = kart_olustur()
+        tarih_satiri = QHBoxLayout(donem_karti)
+        tarih_satiri.setContentsMargins(16, 12, 16, 12)
+        tarih_satiri.setSpacing(10)
 
         baslangic = QDateEdit()
         baslangic.setCalendarPopup(True)
         baslangic.setDisplayFormat("dd.MM.yyyy")
-        baslangic.setObjectName("auditTarih")
-        baslangic.setFixedWidth(155)
+        baslangic.setMinimumWidth(150)
         baslangic.setDate(
             QDate.currentDate().addDays(1 - QDate.currentDate().day())      # ayın ilk günü
         )
@@ -848,8 +859,7 @@ class OgrenciYonetimEkrani(QWidget):
         bitis = QDateEdit()
         bitis.setCalendarPopup(True)
         bitis.setDisplayFormat("dd.MM.yyyy")
-        bitis.setObjectName("auditTarih")
-        bitis.setFixedWidth(155)
+        bitis.setMinimumWidth(150)
         bitis.setDate(
             QDate.currentDate()
         )
@@ -860,41 +870,59 @@ class OgrenciYonetimEkrani(QWidget):
         toplam = QLabel("Toplam Puan: —")
         toplam.setObjectName("puanKart")
 
-        tarih_satiri.addWidget(
-            QLabel("Başlangıç:")
-        )
+        bas_etiketi = QLabel("Başlangıç")
+        bas_etiketi.setObjectName("alanAdi")
+        bit_etiketi = QLabel("Bitiş")
+        bit_etiketi.setObjectName("alanAdi")
+        tarih_satiri.addWidget(bas_etiketi)
         tarih_satiri.addWidget(baslangic)
-
-        tarih_satiri.addWidget(
-            QLabel("Bitiş:")
-        )
+        tarih_satiri.addSpacing(8)
+        tarih_satiri.addWidget(bit_etiketi)
         tarih_satiri.addWidget(bitis)
 
         tarih_satiri.addStretch()
         tarih_satiri.addWidget(toplam)
 
-        ana.addLayout(tarih_satiri)
+        ana.addWidget(donem_karti)
+
+        # Faaliyet tablosu
+        tablo_karti = kart_olustur()
+        tablo_duzen = QVBoxLayout(tablo_karti)
+        tablo_duzen.setContentsMargins(16, 14, 16, 12)
+        tablo_duzen.setSpacing(10)
 
         tablo = QTableWidget()
 
         tablo_hazirla(tablo, [
-            "Tarih",
-            "Faaliyet",
-            "Adet",
-            "Birim",
-            "Birim Puan",
-            "Toplam Puan",
+            "TARİH",
+            "FAALİYET",
+            "ADET",
+            "BİRİM",
+            "BİRİM PUAN",
+            "TOPLAM PUAN",
         ])
+        tablo.setStyleSheet(TABLO_STILI)
+        tablo.setFrameShape(QFrame.NoFrame)
+        tablo.setAlternatingRowColors(False)
+        tablo.setFocusPolicy(Qt.NoFocus)
+        tablo.setWordWrap(False)
+        tablo.verticalHeader().setDefaultSectionSize(46)
+        baslik_cubugu = tablo.horizontalHeader()
+        baslik_cubugu.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        baslik_cubugu.setSectionResizeMode(QHeaderView.ResizeToContents)
+        baslik_cubugu.setSectionResizeMode(1, QHeaderView.Stretch)
+        baslik_cubugu.setMinimumSectionSize(90)
 
-        ana.addWidget(tablo, 1)
+        tablo_duzen.addWidget(tablo, 1)
 
         bos_faaliyet = QLabel(
             "Seçilen tarih aralığında faaliyet kaydı bulunamadı."
         )
-        bos_faaliyet.setObjectName("aciklama")
+        bos_faaliyet.setObjectName("bosMesaj")
         bos_faaliyet.setAlignment(Qt.AlignCenter)
         bos_faaliyet.setVisible(False)
-        ana.addWidget(bos_faaliyet)
+        tablo_duzen.addWidget(bos_faaliyet)
+        ana.addWidget(tablo_karti, 1)
 
         def tarih_degisti(*_):
             """Tarih değişince sonuç kendiliğinden yenilenir; aralık henüz geçersizse (yazarken) yalnızca temizlenir."""
@@ -953,6 +981,7 @@ class OgrenciYonetimEkrani(QWidget):
 
             tablo.setRowCount(len(faaliyetler))
             bos_faaliyet.setVisible(not faaliyetler)
+            tablo.setVisible(bool(faaliyetler))
 
             for satir, faaliyet in enumerate(
                 faaliyetler
@@ -967,21 +996,27 @@ class OgrenciYonetimEkrani(QWidget):
                 ]
 
                 for sutun, deger in enumerate(alanlar):
-                    tablo.setItem(
-                        satir,
-                        sutun,
-                        QTableWidgetItem(deger)
-                    )
+                    hucre = QTableWidgetItem(deger)
+                    hucre.setToolTip(deger)
+                    if sutun == 1:
+                        yazi_tipi = hucre.font()
+                        yazi_tipi.setBold(True)
+                        hucre.setFont(yazi_tipi)             # faaliyet adı satırın ana bilgisi
+                    elif sutun == 5:
+                        hucre.setForeground(QColor("#1D4ED8"))
+                    tablo.setItem(satir, sutun, hucre)
 
         baslangic.dateChanged.connect(tarih_degisti)
         bitis.dateChanged.connect(tarih_degisti)
 
         alt = QHBoxLayout()
+        alt.setSpacing(10)
 
         alt.addWidget(
             buton_olustur(
-                "Puanları Hesapla",
-                puanlari_hesapla
+                "⟳  Puanları Hesapla",
+                puanlari_hesapla,
+                "hayalet"
             )
         )
 
@@ -991,7 +1026,7 @@ class OgrenciYonetimEkrani(QWidget):
             buton_olustur(
                 "Kapat",
                 pencere.accept,
-                "ikincil"
+                "birincil"
             )
         )
 
@@ -999,6 +1034,7 @@ class OgrenciYonetimEkrani(QWidget):
 
         puanlari_hesapla()
         pencere.exec()
+        pencere.deleteLater()            # pencere kapanınca hemen serbest bırakılır (sayfa silinene dek bellekte kalmaz)
 
     def suresi_dolan_ac(self):
         pencere = QDialog(self)
