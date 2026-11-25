@@ -97,6 +97,8 @@ def svg_icon(kind, color="#BFD1E9"):
 
 class ElegantSidebar(QObject):
 
+    DAR_BASLIK_GENISLIGI = 36
+
     def __init__(self, window):
         super().__init__(window)
         self.w = window
@@ -383,7 +385,8 @@ class ElegantSidebar(QObject):
                     header.setText(f"{label}  {arrow}")
 
                 if collapsed:
-                    header.setFixedWidth(45)
+                    # Kaydırma alanı 40 px, sağ boşluk 4 px: düğme bundan geniş olursa hover zemininin sağı kesilir.
+                    header.setFixedWidth(self.DAR_BASLIK_GENISLIGI)
                     self.w.nav_layout.setAlignment(
                         header, Qt.AlignHCenter
                     )
