@@ -10,9 +10,9 @@ Randevuyu **siz oluşturmazsınız** (randevu sayfasını izlersiniz); psikolog 
 
 | Bölüm | Sayfalar |
 |---|---|
-| **Genel** | Ana Kontrol Paneli |
-| **Klinik Operasyon** | Randevu Yönetimi (görüntüleme), Oda Kullanımı, Oda Etkinlikleri, Randevu Raporları, **Oda Kullanım Raporu** |
-| **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Raporları |
+| **Genel Bakış** | Ana Kontrol Paneli, Oda Kullanımı, **Oda Kullanım Raporu** |
+| **Klinik Operasyon** | Randevu Yönetimi (görüntüleme), Randevu Raporları |
+| **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Raporları, Oda Etkinlikleri |
 | **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları |
 | **Yönetim & Denetim** | **Yönetim Raporları ve İstatistikler**, **Kullanıcı & Personel**, **Audit Kayıtları**, **Yetki Raporu**, **Sistem Durumu**, Oda Yönetimi |
 
