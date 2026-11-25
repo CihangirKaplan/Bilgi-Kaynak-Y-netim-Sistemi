@@ -25,6 +25,10 @@ PATHS = {
     "file": '<path d="M6 2h8l5 5v15H6zM14 2v6h5M9 13h7m-7 4h7"/>',
     "building": '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h2m3 0h2M9 11h2m3 0h2M10 21v-4h4v4"/>',
     "shield": '<path d="m12 2 9 4v6c0 5-4 8.5-9 10-5-1.5-9-5-9-10V6zM8 12l3 3 5-6"/>',
+    "check-square": '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>',
+    "ruler": '<path d="M3 17 17 3l4 4L7 21z"/><path d="m8 12 2 2m1-5 2 2m1-5 2 2"/>',
+    "key": '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9m-3 3 3 3m-6-3 2 2"/>',
+    "power": '<path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/>',
     "trophy": '<path d="M7 4h10v5a5 5 0 0 1-10 0zM17 6h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3M12 14v4M8 21h8M10 18h4"/>',
 }
 
@@ -44,6 +48,8 @@ PAGE_ICONS = {
     "Randevu Raporları": "chart",
     "Oda Kullanımı": "door",
     "Danışma Masası": "calendar",
+    "Öğrenciler": "users",
+    "Yönetim Raporları ve İstatistikler": "chart",
     "Danışma Masası Yönetimi": "clipboard",
     "Danışma Masası Raporları": "chart",
     "Faaliyet Kayıtları": "edit",
