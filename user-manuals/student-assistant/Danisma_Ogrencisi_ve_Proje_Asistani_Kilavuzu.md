@@ -11,7 +11,7 @@ Bu kılavuz **Danışma Öğrencisi** ve **Proje Asistanı** rolleri içindir. G
 
 | Sayfa | Ne için? |
 |---|---|
-| **Ana Kontrol Paneli** | Günün özeti |
+| **Ana Kontrol Paneli** | Günün özeti: bugünkü randevular ve oda etkinlikleri |
 | **Randevu Yönetimi** | Randevuları görme, **oluşturma, düzenleme, iptal etme**, durum işaretleme |
 | **Danışanlar** | Danışan listesi ve bilgileri; **yeni danışan oluşturma** |
 | **Oda Kullanımı** | Odaların doluluk durumu |

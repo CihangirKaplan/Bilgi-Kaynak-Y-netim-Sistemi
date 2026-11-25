@@ -5786,6 +5786,48 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_bi
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# Ana panel: bugünkü oda etkinlikleri (çok günlü etkinliğin bugüne düşen günü dahil). Yalnızca saat, ad, oda ve katılımcı sayısı döner;
+# organize eden kişi adı verilmez (ayrıntı için Oda Etkinlikleri sayfası). Oda etkinliklerini görebilen herkes (psikolog, memur, müdür,
+# danışma öğrencisi) görür.
+BUGUNKU_ETKINLIK_UST_SINIR = 200
+
+
+@app.get("/api/dashboard/bugunku-etkinlikler")
+def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(izin_kontrol("ODA_ETKINLIK_GORUNTULE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.etkinlik_id, e.etkinlik_adi, o.oda_adi, g.baslangic_zamani, g.bitis_zamani, e.katilimci_sayisi
+            FROM oda_etkinlik_gunleri g
+            JOIN oda_etkinlikleri e ON e.etkinlik_id = g.etkinlik_id
+            JOIN odalar o ON o.oda_id = e.oda_id
+            WHERE COALESCE(e.iptal_edildi_mi, FALSE) = FALSE
+              AND g.baslangic_zamani < CURRENT_DATE + 1
+              AND g.bitis_zamani > CURRENT_DATE
+            ORDER BY g.baslangic_zamani, e.etkinlik_id
+            LIMIT %s;
+        """, (BUGUNKU_ETKINLIK_UST_SINIR,))
+
+        def saat(zaman, baslangic):
+            return "24:00" if zaman.date() > baslangic.date() else zaman.strftime("%H:%M")      # gece yarısında biten gün "00:00" değil "24:00"
+
+        return [{
+            "etkinlik_id": s[0],
+            "etkinlik": s[1],
+            "oda": s[2],
+            "baslangic": s[3].strftime("%H:%M"),
+            "bitis": saat(s[4], s[3]),
+            "katilimci": s[5],
+        } for s in cursor.fetchall()]
+    except Exception:
+        raise HTTPException(status_code=500, detail="Bugünkü etkinlikler alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 # En acil (en çok geciken) kayıtlar önce gelir. Sınır yalnızca yanıtı makul tutar; istemci listeyi kaydırılabilir
 # gösterir. Eskiden 10'du: 10'dan fazla geciken kayıt varsa fazlası hiç görünmüyordu (güvenlik açısından riskli).
 YAKLASAN_ISLEM_UST_SINIR = 50
