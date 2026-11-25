@@ -278,7 +278,8 @@ class DashboardEkrani(QWidget):
                 "font-size: 12px; font-weight: 700; padding: 7px 16px; } "
                 "QPushButton:checked { background: #1D4ED8; color: white; } "
                 "QPushButton:hover:!checked { background: #DBE7FF; }")
-            dugme.clicked.connect(lambda _=False, a=anahtar: self.aralik_sec(a))
+            dugme.setProperty("aralik", anahtar)
+            dugme.clicked.connect(self._aralik_dugmesi_tiklandi)          # lambda KULLANILMAZ: panelle döngü kurar, kapanışta çökme yapar
             self.aralik_dugmeleri[anahtar] = dugme
             secici.addWidget(dugme)
         secici.addStretch()
@@ -485,6 +486,11 @@ class DashboardEkrani(QWidget):
     def _aralik_adi(self):
         """Boş liste metinleri için: "Bugün" / "Yarın" / "Önümüzdeki 7 gün"."""
         return {"bugun": "Bugün", "yarin": "Yarın", "hafta": "Önümüzdeki 7 gün"}[self.aralik]
+
+    def _aralik_dugmesi_tiklandi(self):
+        aralik = self.sender().property("aralik") if self.sender() is not None else None
+        if aralik:
+            self.aralik_sec(aralik)
 
     def aralik_sec(self, aralik):
         """Gün seçici: randevu, rezervasyon ve etkinlik panelleri seçilen güne göre yeniden yüklenir."""
@@ -742,8 +748,8 @@ class DashboardEkrani(QWidget):
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         self.benim_gunum_lay.addWidget(baslik)
         for gun, gun_adi in (("bugun", "Bugün"), ("yarin", "Yarın")):
-            satirlar = [f"📅  {r['saat']}  ·  Danışan {r['danisan_kod_id']}  ·  {r['oda']}" for r in randevular if r.get("gun") == gun]
-            satirlar += [f"🔬  {r['saat']}  ·  {r['cihaz']}  ·  {r['oda']}" for r in rezervasyonlar if r.get("gun") == gun]
+            satirlar = [f"{r['saat']}  ·  Randevu  ·  Danışan {r['danisan_kod_id']}  ·  {r['oda']}" for r in randevular if r.get("gun") == gun]
+            satirlar += [f"{r['saat']}  ·  Cihaz  ·  {r['cihaz']}  ·  {r['oda']}" for r in rezervasyonlar if r.get("gun") == gun]
             if not satirlar:
                 continue
             ust = QLabel(gun_adi)
