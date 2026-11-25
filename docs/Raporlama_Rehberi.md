@@ -116,6 +116,8 @@ sunucu da aynı izni her istekte ayrıca denetler (menüyü atlayarak doğrudan 
 ### 3.12 Yönetim Raporları ve İstatistikler
 Merkez yöneticisi için dönemsel özet panelidir. Seçilen dönem, aynı uzunluktaki önceki dönemle karşılaştırılır. **PDF** olarak kaydedilebilir.
 
+Üstteki süzgeç kartında hangi iki dönemin (seçilen ve önceki) karşılaştırıldığı tarihleriyle yazılıdır; başlangıç/bitiş tarihleri yalnızca "Tarih Aralığı" seçilince görünür. Genel Bakış'ta dört özet kart (her birinde önceki döneme göre değişim), işlem sayıları listesi ve karşılaştırma grafiği, öğrenci özeti ve faaliyet puanı grafiği (Pasta/Sütun) ile altta ayrıntı tabloları yer alır. Grafiklerin türü, grafiğin köşesindeki düğmelerle değiştirilebilir.
+
 | Görünüm | İçerik |
 |---|---|
 | Genel Bakış | Randevu, bakım, kalibrasyon, arıza, rezervasyon, etkinlik ve öğrenci faaliyeti özeti |
