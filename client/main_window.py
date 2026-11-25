@@ -103,6 +103,7 @@ IZIN_LISTESI = [
     ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
     ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
     ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
+    ("Duyuruları yönetme",                   "Kullanıcı & Denetim","HEEHHE"),
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
     ("Rol-izin yönetme",                     "Sistem Yönetimi",   "HHHHHE"),
     ("Rol oluşturma",                        "Sistem Yönetimi",   "HHHHHE"),
@@ -185,6 +186,7 @@ IZIN_KODLARI = {
     "Danışma masası oturumunu yönetme": ("DANISMA_OTURUMU_YONET",),
     "Danışma masası yönetimi": ("DANISMA_OTURUMU_YONETIM",),
     "Danışma masası raporlarını görüntüleme": ("DANISMA_OTURUMU_GORUNTULE",),
+    "Duyuruları yönetme": ("DUYURU_YONET",),
     "İzin düzenleme": ("IZIN_DUZENLE",),
     "Rol-izin yönetme": ("ROL_IZIN_YONET",),
     "Rol oluşturma": ("ROL_OLUSTUR",),
@@ -1191,6 +1193,29 @@ QLabel {
                         "Cihaz Uyarıları", metin, hedef
                     ))
                     self._bildirim_sayisi += 1
+
+        # Kişisel ve genel bildirimler (HER ROL): kişinin kendi bugünkü/yarınki randevu ve cihaz rezervasyonları, yeni duyurular.
+        # Sunucu uçları izin aramaz: yalnızca kişinin kendi kaydı ya da herkese açık duyuru döner.
+        gunum = getir("/api/dashboard/benim-gunum")
+        if isinstance(gunum, dict):
+            for anahtar, ikon, ad in (("randevular", "📅", "randevunuz"), ("rezervasyonlar", "🔬", "cihaz rezervasyonunuz")):
+                kayitlar = gunum.get(anahtar) or []
+                bugun = sum(1 for k in kayitlar if k.get("gun") == "bugun")
+                yarin = sum(1 for k in kayitlar if k.get("gun") == "yarin")
+                if bugun or yarin:
+                    parcalar = ([f"bugün {bugun}"] if bugun else []) + ([f"yarın {yarin}"] if yarin else [])
+                    self._bildirimler.append((
+                        "Günlük", f"{ikon} {ad.capitalize()}: {', '.join(parcalar)}", "Ana Kontrol Paneli"
+                    ))
+                    self._bildirim_sayisi += 1
+
+        duyurular = getir("/api/duyurular")
+        if isinstance(duyurular, list):
+            for duyuru in [d for d in duyurular if d.get("yeni")][:5]:
+                self._bildirimler.append((
+                    "Duyurular", f"📢 {duyuru.get('baslik', 'Duyuru')}", "Ana Kontrol Paneli"
+                ))
+                self._bildirim_sayisi += 1
 
         if "Danışma Masası Yönetimi" in self.nav_btnler:
             veri = getir("/api/danisma/yonetim/onay-bildirimleri")
@@ -2311,6 +2336,7 @@ QLabel {
             cihaz_ozeti=cihaz_ozeti_gorebilir_mi(rol),
             rezervasyon_paneli=rezervasyon_panelini_gorebilir_mi(rol),
             etkinlik_paneli=True,                                           # salt okunur "bugün" bilgisi: giriş yapmış herkes görür
+            duyuru_yonetebilir=izin_var(rol, "Duyuruları yönetme"),         # duyuruyu herkes okur; yayınlama/kaldırma düğmeleri yalnızca izinli rolde
             sayfa_ac=self._bildirimden_sayfaya_git,
             sayfa_izinli_mi=self._sayfa_izinli_mi,
             kart_ac=self._karttan_sayfaya_git,

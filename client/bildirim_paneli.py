@@ -128,6 +128,8 @@ class BildirimPaneli(QFrame):
             baslik_metni = {
                 "Cihaz Uyarıları": "🔧  CİHAZ UYARILARI",
                 "Parola Talepleri": "🔐  PAROLA SIFIRLAMA TALEPLERİ",
+                "Günlük": "🙋  BENİM GÜNÜM",
+                "Duyurular": "📢  DUYURULAR",
             }.get(grup, "📋  DANIŞMA MASASI ONAYLARI")
 
             grup_baslik = QLabel(baslik_metni)

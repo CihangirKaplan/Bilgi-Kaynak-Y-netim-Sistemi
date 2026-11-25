@@ -80,7 +80,7 @@ from server.denetim import (
 from server import giris_siniri, rapor_bakim_plani, rapor_kullanim, rapor_ogrenci_faaliyet
 from server.girdi_korumasi import NulVeSayiKorumasi, merkezi_hata_yakalayicilari_kur
 from server.randevu_rapor_hesapla import randevu_raporu_hesapla
-from server.modeller import FaaliyetKayitModeli
+from server.modeller import FaaliyetKayitModeli, DuyuruModeli
 from server.modeller import bakim_tarihi_sorunu, RezervasyonGuncelleModeli, rezervasyon_zaman_sorunu
 import psycopg2.errors
 from server.modeller import OgrenciEkleModeli, DanismaGorevDuzenleModeli, RolModeli
@@ -5707,13 +5707,24 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# Ana panel gün seçici: bugün, yarın ya da bugünden başlayan 7 günlük "hafta". (başlangıç, bitiş) = bugüne göre gün farkı, bitiş hariç.
+DASHBOARD_ARALIKLARI = {"bugun": (0, 1), "yarin": (1, 2), "hafta": (0, 7)}
+ARALIK_SORGU_DESENI = "^(bugun|yarin|hafta)$"
+
+
+def _tarih_kisa(zaman):
+    return zaman.strftime("%d.%m")
+
+
 @app.get("/api/dashboard/bugunku-randevular")
-def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
+def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
+                                 aralik: str = Query("bugun", pattern=ARALIK_SORGU_DESENI)):
     conn = None
     cursor = None
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
+        bas, son = DASHBOARD_ARALIKLARI.get(aralik, (0, 1))
         cursor.execute("""
             SELECT r.randevu_id, r.danisan_kod_id, k.kullanici_adi, o.oda_adi,
                    r.baslangic_zamani, r.bitis_zamani, r.durum
@@ -5721,10 +5732,11 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVI
             JOIN personel p ON r.psikolog_id = p.personel_id
             JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
             JOIN odalar o ON r.oda_id = o.oda_id
-            WHERE DATE(r.baslangic_zamani) = CURRENT_DATE
+            WHERE r.baslangic_zamani >= CURRENT_DATE + %s AND r.baslangic_zamani < CURRENT_DATE + %s
             ORDER BY r.baslangic_zamani;
-        """)
+        """, (bas, son))
         return [{
+            "tarih": _tarih_kisa(s[4]),
             "randevu_id": s[0],
             "danisan_kod_id": s[1],
             "psikolog": s[2],
@@ -5743,12 +5755,14 @@ def dashboard_bugunku_randevular(kullanici_id: int = Depends(izin_kontrol("TAKVI
 # böylece herkes merkezde o gün hangi cihazın ne zaman kullanıldığını bilir. REZERVE EDEN adını yalnızca cihazı yönetenler ve rezervasyon yapanlar
 # görür; Cihaz Uygunluğu sayfası gibi yalnızca görüntüleyenlere kişi adı verilmez (null).
 @app.get("/api/dashboard/bugunku-rezervasyonlar")
-def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_biri("CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"))):
+def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_biri("CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON")),
+                                     aralik: str = Query("bugun", pattern=ARALIK_SORGU_DESENI)):
     conn = None
     cursor = None
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
+        bas, son = DASHBOARD_ARALIKLARI.get(aralik, (0, 1))
         # Bugünle kesişen (bugün başlayan, biten veya bugünü kapsayan) aktif rezervasyonlar
         cursor.execute("""
             SELECT r.rezervasyon_id, c.envanter_kodu, c.cihaz_adi,
@@ -5763,16 +5777,17 @@ def dashboard_bugunku_rezervasyonlar(kullanici_id: int = Depends(izin_kontrol_bi
             LEFT JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
             LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id
             WHERE COALESCE(r.iptal_edildi_mi, FALSE) = FALSE
-              AND r.baslangic_zamani < CURRENT_DATE + 1
-              AND r.bitis_zamani >= CURRENT_DATE
+              AND r.baslangic_zamani < CURRENT_DATE + %s
+              AND r.bitis_zamani >= CURRENT_DATE + %s
             ORDER BY r.baslangic_zamani;
-        """, (kullanici_id,))
-        bugun = date.today()
+        """, (kullanici_id, son, bas))
+        gosterilen_gun = date.today() + timedelta(days=bas)
 
         def zaman(z):
-            return z.strftime("%H:%M") if z.date() == bugun else z.strftime("%d.%m %H:%M")
+            return z.strftime("%H:%M") if (aralik != "hafta" and z.date() == gosterilen_gun) else z.strftime("%d.%m %H:%M")
 
         return [{
+            "tarih": _tarih_kisa(s[5]),
             "rezervasyon_id": s[0],
             "cihaz": f"{s[1]} - {s[2]}",
             "rezerve_eden": s[3] if (len(s) <= 7 or s[7] == 1) else None,
@@ -5794,28 +5809,31 @@ BUGUNKU_ETKINLIK_UST_SINIR = 200
 
 
 @app.get("/api/dashboard/bugunku-etkinlikler")
-def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(mevcut_kullanici_id)):
+def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(mevcut_kullanici_id),
+                                  aralik: str = Query("bugun", pattern=ARALIK_SORGU_DESENI)):
     conn = None
     cursor = None
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
+        bas, son = DASHBOARD_ARALIKLARI.get(aralik, (0, 1))
         cursor.execute("""
             SELECT e.etkinlik_id, e.etkinlik_adi, o.oda_adi, g.baslangic_zamani, g.bitis_zamani, e.katilimci_sayisi
             FROM oda_etkinlik_gunleri g
             JOIN oda_etkinlikleri e ON e.etkinlik_id = g.etkinlik_id
             JOIN odalar o ON o.oda_id = e.oda_id
             WHERE COALESCE(e.iptal_edildi_mi, FALSE) = FALSE
-              AND g.baslangic_zamani < CURRENT_DATE + 1
-              AND g.bitis_zamani > CURRENT_DATE
+              AND g.baslangic_zamani < CURRENT_DATE + %s
+              AND g.bitis_zamani > CURRENT_DATE + %s
             ORDER BY g.baslangic_zamani, e.etkinlik_id
             LIMIT %s;
-        """, (BUGUNKU_ETKINLIK_UST_SINIR,))
+        """, (son, bas, BUGUNKU_ETKINLIK_UST_SINIR))
 
         def saat(zaman, baslangic):
             return "24:00" if zaman.date() > baslangic.date() else zaman.strftime("%H:%M")      # gece yarısında biten gün "00:00" değil "24:00"
 
         return [{
+            "tarih": _tarih_kisa(s[3]),
             "etkinlik_id": s[0],
             "etkinlik": s[1],
             "oda": s[2],
@@ -5828,6 +5846,151 @@ def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(mevcut_kullanici_i
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+# Ana panel "Benim günüm": giriş yapan kişinin KENDİ bugünkü/yarınki randevuları ve cihaz rezervasyonları. Yalnızca kişinin kendi kaydı döner
+# (başkasının bilgisi yok), bu yüzden ayrı bir izin aramaz; kaydı olmayan rolde (örn. danışma öğrencisi) listeler boş gelir.
+@app.get("/api/dashboard/benim-gunum")
+def dashboard_benim_gunum(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT (r.baslangic_zamani::date > CURRENT_DATE) AS yarin, r.baslangic_zamani, r.bitis_zamani, r.danisan_kod_id, o.oda_adi
+            FROM randevular r
+            JOIN personel p ON r.psikolog_id = p.personel_id
+            JOIN odalar o ON r.oda_id = o.oda_id
+            WHERE p.kullanici_id = %s
+              AND r.durum <> 'IPTAL_EDILDI'
+              AND r.baslangic_zamani >= CURRENT_DATE AND r.baslangic_zamani < CURRENT_DATE + 2
+            ORDER BY r.baslangic_zamani
+            LIMIT 100;
+        """, (kullanici_id,))
+        randevular = [{
+            "gun": "yarin" if s[0] else "bugun",
+            "saat": f"{s[1].strftime('%H:%M')} – {s[2].strftime('%H:%M')}",
+            "danisan_kod_id": s[3],
+            "oda": s[4],
+        } for s in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT (r.baslangic_zamani::date > CURRENT_DATE) AS yarin, r.baslangic_zamani, r.bitis_zamani,
+                   c.envanter_kodu, c.cihaz_adi, COALESCE(o.oda_adi, '-')
+            FROM cihaz_rezervasyonlari r
+            JOIN cihazlar c ON r.cihaz_id = c.cihaz_id
+            JOIN personel p ON r.rezervasyonu_yapan_personel_id = p.personel_id
+            LEFT JOIN odalar o ON r.kullanilacak_oda_id = o.oda_id
+            WHERE p.kullanici_id = %s
+              AND COALESCE(r.iptal_edildi_mi, FALSE) = FALSE
+              AND r.baslangic_zamani < CURRENT_DATE + 2
+              AND r.bitis_zamani >= CURRENT_DATE
+            ORDER BY r.baslangic_zamani
+            LIMIT 100;
+        """, (kullanici_id,))
+        rezervasyonlar = [{
+            "gun": "yarin" if s[0] else "bugun",
+            "saat": f"{s[1].strftime('%H:%M')} – {s[2].strftime('%H:%M')}" if s[1].date() == s[2].date()
+                    else f"{s[1].strftime('%d.%m %H:%M')} – {s[2].strftime('%d.%m %H:%M')}",
+            "cihaz": f"{s[3]} - {s[4]}",
+            "oda": s[5],
+        } for s in cursor.fetchall()]
+        return {"randevular": randevular, "rezervasyonlar": rezervasyonlar}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Günlük bilgileriniz alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# Duyurular: kurum içi genel bilgi ("yarın sistem bakımı var"). Okumak için giriş yapmak yeter (izin aranmaz; herkesin ana panelinde görünür),
+# yayınlamak/kaldırmak DUYURU_YONET ister. Yazan kişinin adı yalnızca duyuruyu yönetenlere gösterilir. Duyuruya kişisel veri yazılmamalıdır.
+DUYURU_UST_SINIR = 50
+DUYURU_YENI_GUN = 3
+
+
+@app.get("/api/duyurular")
+def duyurulari_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT d.duyuru_id, d.baslik, d.metin, d.olusturma_zamani, d.son_gecerlilik_tarihi, k.kullanici_adi,
+                   (d.olusturma_zamani >= CURRENT_TIMESTAMP - make_interval(days => %s)) AS yeni,
+                   (SELECT COALESCE(MAX(ri.izin_var), 0) FROM kullanicilar kk
+                      JOIN rol_izinleri ri ON kk.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id
+                     WHERE kk.kullanici_id = %s AND i.izin_adi = 'DUYURU_YONET') AS yonetebilir
+            FROM duyurular d
+            LEFT JOIN kullanicilar k ON k.kullanici_id = d.olusturan_kullanici_id
+            WHERE d.son_gecerlilik_tarihi IS NULL OR d.son_gecerlilik_tarihi >= CURRENT_DATE
+            ORDER BY d.olusturma_zamani DESC, d.duyuru_id DESC
+            LIMIT %s;
+        """, (DUYURU_YENI_GUN, kullanici_id, DUYURU_UST_SINIR))
+        return [{
+            "duyuru_id": s[0],
+            "baslik": s[1],
+            "metin": s[2],
+            "tarih": s[3].strftime("%d.%m.%Y %H:%M"),
+            "son_gecerlilik": s[4].strftime("%d.%m.%Y") if s[4] else None,
+            "yazan": s[5] if s[7] == 1 else None,
+            "yeni": bool(s[6]),
+            "yonetebilir": s[7] == 1,
+        } for s in cursor.fetchall()]
+    except Exception:
+        raise HTTPException(status_code=500, detail="Duyurular alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.post("/api/duyurular", status_code=201)
+def duyuru_yayinla(duyuru: DuyuruModeli, kullanici_id: int = Depends(izin_kontrol("DUYURU_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO duyurular (baslik, metin, olusturan_kullanici_id, son_gecerlilik_tarihi) VALUES (%s, %s, %s, %s) RETURNING duyuru_id;",
+            (duyuru.baslik, duyuru.metin, kullanici_id, duyuru.son_gecerlilik_tarihi))
+        duyuru_id = cursor.fetchone()[0]
+        ayrintili_kayit_yaz(cursor, kullanici_id, "CREATE", "duyurular", duyuru_id, baslik=duyuru.baslik)
+        conn.commit()
+        return {"mesaj": "Duyuru yayınlandı.", "duyuru_id": duyuru_id}
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="Duyuru yayınlanamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.delete("/api/duyurular/{duyuru_id}")
+def duyuru_kaldir(duyuru_id: int, kullanici_id: int = Depends(izin_kontrol("DUYURU_YONET"))):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM duyurular WHERE duyuru_id = %s RETURNING baslik;", (duyuru_id,))
+        satir = cursor.fetchone()
+        if satir is None:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Duyuru bulunamadı.")
+        ayrintili_kayit_yaz(cursor, kullanici_id, "DELETE", "duyurular", duyuru_id, silinen_baslik=satir[0])
+        conn.commit()
+        return {"mesaj": "Duyuru kaldırıldı."}
+    except HTTPException:
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="Duyuru kaldırılamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 # En acil (en çok geciken) kayıtlar önce gelir. Sınır yalnızca yanıtı makul tutar; istemci listeyi kaydırılabilir
 # gösterir. Eskiden 10'du: 10'dan fazla geciken kayıt varsa fazlası hiç görünmüyordu (güvenlik açısından riskli).

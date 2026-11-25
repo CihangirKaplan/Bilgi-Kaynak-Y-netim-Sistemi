@@ -53,6 +53,11 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   yönetenlere ve rezervasyon yapanlara gösterilir; yalnızca Cihaz Uygunluğu'nu görenlerde bu sütun yoktur (kişi adı verilmez).
   Ayrıca **herkesin** panelinde **bugünkü oda etkinlikleri** (saat, etkinlik adı, oda, katılımcı sayısı; iptal edilenler listelenmez, organize eden adı
   gösterilmez) listelenir. Bu bölümler yalnızca bilgi verir; etkinlik eklemek ya da cihaz rezervasyonu yapmak için ilgili sayfanın izni gerekir.
+  - **Bugün | Yarın | Bu hafta (7 gün):** Randevu, cihaz rezervasyonu ve oda etkinliği panelleri seçtiğiniz güne göre değişir. Üstteki özet kartları her zaman **bugünü** sayar.
+  - **🙋 Benim Günüm:** Size ait bugünkü ve yarınki randevular ile cihaz rezervasyonları (yalnızca kendi kayıtlarınız). Kaydınız yoksa bu kutu görünmez.
+  - **📢 Duyurular:** Kurum içi duyurular **herkesin** panelinde görünür (yeni olanlar 🆕 ile). **Duyuru yönetme** izni olanlar (varsayılan: Admin, Müdür, Memur)
+    **＋ Yeni duyuru** ile yayınlar, isteğe bağlı son geçerlilik tarihi verir (tarih geçince kendiliğinden kalkar) ve **Kaldır** ile siler. Duyuruya kişisel bilgi
+    (danışan adı, telefon vb.) yazmayın; duyuruyu kimin yazdığı yalnızca duyuru yönetenlere gösterilir.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
 
 ## 3. Listelerle çalışmak
@@ -89,7 +94,9 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 
 - İşlem başarılı olunca ekranın altında kısa süre **yeşil bir bildirim** görünür ve kendiliğinden kaybolur; tıklamanız gerekmez.
 - **Uyarı ve hata** pencereleri ise okumanız gerektiği için pencere olarak kalır; mesajı okuyup **Tamam**'a basın.
-- Üst çubuktaki **🔔** bildirimleri listeler (örneğin bekleyen onaylar, parola talepleri). Bildirime tıklamak sizi ilgili sayfaya götürür.
+- Üst çubuktaki **🔔** bildirimleri listeler. Bildirime tıklamak sizi ilgili sayfaya götürür. Herkes için: **🙋 Benim günüm** (bugünkü/yarınki randevu ve
+  cihaz rezervasyonlarınızın sayısı) ve son 3 günde yayınlanan **📢 duyurular**. Yetkinize göre ayrıca: bekleyen danışma görevi onayları, parola talepleri,
+  açık arızalar, yaklaşan/geciken bakım ve kalibrasyonlar (yetkiniz olmayan sayfanın bildirimi gösterilmez).
 
 ## 6. Hakkında / Yardım
 

@@ -61,6 +61,9 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
   cihazı yönetenlere ve rezervasyon yapanlara; yalnızca görüntüleyenlere kişi adı verilmez).
 - Ana panelde **bugünkü oda etkinlikleri** (saat, ad, oda, katılımcı sayısı) giriş yapmış herkese gösterilir (salt okunur); iptal edilenler listelenmez,
   organize eden adı verilmez.
+- Ana panel: **Bugün | Yarın | Bu hafta** seçici (randevu, rezervasyon, etkinlik); **🙋 Benim Günüm** (kişinin kendi bugünkü/yarınki randevu ve cihaz
+  rezervasyonları); **📢 Duyurular** (herkes okur; yayınlama/kaldırma yeni `DUYURU_YONET` izniyle, varsayılan Admin/Müdür/Memur; denetim kaydı tutulur).
+  🔔 zil artık her rolde kişisel günlük bilgi ve yeni duyuruları da gösterir.
 - Rezervasyon listesinde Rezerve eden sütunu ve satırda düzenle/iptal düğmeleri; arıza tarihleri gün.ay.yıl biçiminde; Raporlar'da
   "Tümü" döneminde tarih kutuları pasif. Bakım, Uygunluk, Rezervasyon ve Raporlar ekranları 1366 px'lik dizüstü ekranlarına sığar.
 - Cihaz raporları (rezervasyon, geciken bakım planı) ve Excel aktarımı.

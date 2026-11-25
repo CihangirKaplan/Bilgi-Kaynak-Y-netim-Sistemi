@@ -32,7 +32,7 @@ def test_sunucu_rezerve_eden_adini_yalniz_izinli_kullaniciya_verir():
         liste = sunucu.dashboard_bugunku_rezervasyonlar(kullanici_id=5)
     assert [r["rezerve_eden"] for r in liste] == ["ayse", None]              # izni olana ad, olmayana null
     assert liste[0]["cihaz"] == "E-1 - EEG" and liste[0]["baslangic"] == "10:00" and liste[1]["oda"] == "Oda 2"
-    assert imlec.execute.call_args.args[1] == (5,)                           # izin sorgusu çağıran kullanıcıya bağlanır
+    assert imlec.execute.call_args.args[1] == (5, 1, 0)                      # izin sorgusu çağıran kullanıcıya bağlanır; sonra (bitiş, başlangıç) gün farkı (bugün: 1, 0)
     assert "CIHAZ_REZERVASYON" in imlec.execute.call_args.args[0]
 
 
