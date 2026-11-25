@@ -16,6 +16,12 @@ oturum_olaylari = OturumOlaylari()
 
 SEMA_UYUMSUZ_KODU = "SEMA_UYUMSUZ"
 
+# Sunucunun, oturum açıkken hesabı ya da rolü pasife alınan kullanıcıya verdiği 403 mesajları (server/sunucu.py: ROL_PASIF_GIRIS_MESAJI ve hesap mesajı).
+PASIF_HESAP_MESAJLARI = frozenset({
+    "Kullanıcı hesabı aktif değil.",
+    "Rolünüz pasif durumda; sisteme giriş engellendi. Yöneticinize başvurun.",
+})
+
 # Ekranın ayrıca süre vermediği istekler için (saniye).
 VARSAYILAN_ZAMAN_ASIMI = 15
 
@@ -46,7 +52,7 @@ def oturum_kontrollu_istek(method, url, **kwargs):
         yanit.reason = detay
         return yanit
 
-    if yanit.status_code != 401:
+    if yanit.status_code not in (401, 403):
         return yanit
 
     headers = kwargs.get("headers") or {}
@@ -80,6 +86,11 @@ def oturum_kontrollu_istek(method, url, **kwargs):
         # Başka bilgisayardan çıkış yapıldığında (oturum sürümü arttı) ya da parola değiştiğinde/sıfırlandığında sunucu bunu döner.
         "Oturum geçersiz. Yeniden giriş yapınız.",
     }
+
+    if yanit.status_code == 403:
+        # 403 yalnızca, açık oturumun hesabı ya da rolü sonradan pasife alındığında oturum hatasıdır (token imzalı kalır ama hiçbir işlemde
+        # kullanılamaz). Yetki eksikliği gibi diğer 403'ler oturumu kapatmaz.
+        token_hatalari = PASIF_HESAP_MESAJLARI
 
     if isinstance(detay, str) and detay in token_hatalari:
         yanit._tkys_oturum_reddedildi = True

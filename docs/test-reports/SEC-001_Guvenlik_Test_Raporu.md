@@ -6,7 +6,8 @@
 | Biçim | Yol haritası belgesi, 24. bölüm (Test ID, Requirement, Environment, …) |
 | Sorumlu | Öğrenci C (Backend, Security & Platform) |
 | Hazırlanma | 22.11.2026 |
-| Sürüm | `develop` — `5626337` |
+| Güncelleme | 25.11.2026 — geliştirme/CI testleri `develop` `f8c0b00` üzerinde yeniden çalıştırıldı |
+| Sürüm | `develop` — `f8c0b00` (ilk sürüm: `5626337`) |
 
 Bu rapor iki ortamı ayrı gösterir:
 
@@ -25,24 +26,38 @@ python -m pytest -q tests/security
 
 | Test ID | Konu | Geliştirme/CI | Canlı ortam |
 |---|---|---|---|
-| SEC-T01 | Authentication Bypass | ✅ PASS (6 test) | ✅ PASS (tokensiz istek 401) — tarih/kanıt eklenecek |
-| SEC-T02 | Function-Level Authorization | ✅ PASS (24 test) | ⏳ |
+| SEC-T01 | Authentication Bypass | ✅ PASS (15 test) | ✅ PASS (tokensiz istek 401) — tarih/kanıt eklenecek |
+| SEC-T02 | Function-Level Authorization | ✅ PASS (25 test) | ⏳ |
 | SEC-T03 | Object-Level Authorization | ✅ PASS (15 test) | ⏳ |
 | SEC-T04 | Property-Level Authorization | ✅ PASS (10 test) | — (sunucu kodu aynı; ayrıca gerekmez) |
 | SEC-T05 | Input Validation | ✅ PASS (129 test) | — |
 | SEC-T06 | Injection | ✅ PASS (5 test) | — |
 | SEC-T07 | Rate / Brute-Force | ✅ PASS (24 test) | ⏳ |
-| SEC-T08 | Token | ✅ PASS (9 test) | ⏳ |
+| SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ⏳ |
 | SEC-T09 | Error Leakage | ✅ PASS (24 test) | — |
 | SEC-T10 | Secret Scan | ✅ PASS (3 test) | ⏳ (`.env` ve JWT anahtarı) |
 | SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ⏳ (sunucudaki kurulumla) |
 | SEC-T12 | Audit Integrity | ✅ PASS (17 test) | ⏳ |
 | SEC-T13 | Backup Security | ✅ PASS (3 test) | ⏳ (klasör izni) |
-| SEC-T14 | Business Logic Abuse | ✅ PASS (11 test) | — |
+| SEC-T14 | Business Logic Abuse | ✅ PASS (36 test) | — |
 | SEC-T15 | Concurrency | ✅ PASS (8 test) | — |
 
 "—" olan maddeler sunucuda farklı davranamayacak kod kurallarıdır; geliştirme/CI testi yeterli kanıttır.
 Bilinen açık bulgu yok (P0 = 0, P1 = 0).
+
+**25.11.2026 yeniden çalıştırma:** Her maddenin "Evidence" satırındaki dosyaların tamamı gerçek PostgreSQL ile çalıştırılmıştır (test sayıları o
+dosyalardaki bütün testleri gösterir; 22.11.2026 listesine göre T01, T02, T08 ve T14 sayıları bu yüzden büyüdü). SEC-T11: `pip-audit -r requirements.txt`
+→ 40 bağımlılık, "No known vulnerabilities found".
+
+**Canlı satırların (⏳) nasıl tamamlanacağı:** `docs/test-reports/SEC-001_Canli_Deneme_Rehberi.md`. API denemeleri (T01, T02, T03, T07, T08)
+`scripts/canli_guvenlik_denemesi.py` ile, sunucu denemeleri (T10–T13) rehberdeki komutlarla yapılır.
+
+## Bulgular
+
+| # | Madde | Bulgu | Önem | Durum |
+|---|---|---|---|---|
+| 1 | SEC-T08 | Oturum açıkken hesabı pasifleştirilen kullanıcının token'ı sunucuda **reddediliyordu** (403 "Kullanıcı hesabı aktif değil."; veri dönmez) ama istemci yalnızca 401'i "oturum bitti" saydığı için giriş ekranına dönmüyor, her işlemde hata gösteriyordu. | P2 (güvenlik açığı değil, kullanıcı deneyimi) | Düzeltildi: istemci bu 403'ü oturum sonu sayar (`client/api_yoneticisi.py`, test `test_oturum_pasif_hesap.py`) |
+| 2 | SEC-T12 | Canlı deneme komutundaki `SET olay_turu = 'X'` tetikleyici yüzünden değil, 'X' geçerli bir değer olmadığı için hata veriyordu (yanlış nedenle PASS verebilirdi). | Rapor düzeltmesi | Düzeltildi: komut geçerli bir sütun/değerle (`SET hedef_tablo = 'deneme'`) yazıldı |
 
 ## Ayrıntılar
 
@@ -57,7 +72,7 @@ Steps:            1. Bütün API uçları taranır, /api/saglik dışında hepsi
                   2. Tokensiz ve süresi dolmuş token ile korunan uca istek atılır.
                   3. Canlı: istemci bilgisayardan GET http://172.24.4.66:8000/api/cihazlar (token yok).
 Expected Result:  401 Unauthorized; veri dönmez.
-Actual Result:    Geliştirme: 6/6 test geçti. Canlı: istemciden 401 alındı.
+Actual Result:    Geliştirme: 15/15 test geçti. Canlı: istemciden 401 alındı.
 PASS / FAIL:      PASS
 Tester:           Öğrenci C
 Date:             22.11.2026 (canlı deneme tarihi eklenecek)
@@ -76,7 +91,7 @@ Steps:            1. Kritik uçlar her rolle çağrılır; izni olmayan roller i
                   2. Canlı: psikolog hesabıyla giriş yapılır; yönetim raporları / kullanıcı yönetimi menülerinin görünmediği
                      ve doğrudan istekle (ör. GET /api/yonetim-raporlari/...) 403 döndüğü görülür.
 Expected Result:  403 Forbidden; menü görünmez.
-Actual Result:    Geliştirme: 24/24 test geçti. Canlı: ⏳
+Actual Result:    Geliştirme: 25/25 test geçti. Canlı: ⏳
 PASS / FAIL:      Geliştirme PASS / Canlı ⏳
 Tester:           Öğrenci C
 Date:             22.11.2026
@@ -182,12 +197,15 @@ Precondition:     Aktif ve pasifleştirilecek iki hesap.
 Steps:            1. Değiştirilmiş ve süresi dolmuş token ile istek.
                   2. Kullanıcı pasifleştirilir; elindeki token ile istek.
                   3. Canlı: istemcide giriş yapılmışken yönetici o hesabı pasifleştirir; istemcide bir işlem denenir.
-Expected Result:  401; istemci giriş ekranına döner.
-Actual Result:    Geliştirme: 9/9 test geçti. Canlı: ⏳
+Expected Result:  Token ile istek reddedilir (veri dönmez): bozuk/süresi dolmuş token 401; pasifleştirilen hesabın token'ı 403 "Kullanıcı hesabı aktif
+                  değil."; her iki durumda istemci "Oturumunuz geçersiz hâle gelmiştir" uyarısıyla giriş ekranına döner.
+Actual Result:    Geliştirme: 25/25 test geçti (25.11.2026). Pasifleştirilen hesabın token'ı 403 alır; istemcinin buna tepkisi eksikti, düzeltildi
+                  (Bulgular #1). Canlı: ⏳
 PASS / FAIL:      Geliştirme PASS / Canlı ⏳
 Tester:           Öğrenci C
 Date:             22.11.2026
-Evidence:         test_token_api_kalite.py, test_guvenlik_jwt_kalite.py, test_kullanici_pasiflestirme.py
+Evidence:         test_token_api_kalite.py, test_guvenlik_jwt_kalite.py, test_kullanici_pasiflestirme.py, tests/unit/test_oturum_pasif_hesap.py;
+                  canlı: scripts/canli_guvenlik_denemesi.py çıktısı (T08.1–T08.4) + istemcide giriş ekranına dönüşün ekran görüntüsü
 ```
 
 ### SEC-T09 — Error Leakage
@@ -256,7 +274,8 @@ Steps:            1. denetim_kayitlari tablosunda UPDATE / DELETE / TRUNCATE ver
                   2. Uygulama kodunda denetim tablosunu değiştiren ya da silen sorgu olmadığı taranır.
                   3. API'de denetim kaydını değiştiren/silen uç yoktur; listeleme yalnızca yetkili role açıktır.
                   4. Canlı: sunucuda psql ile uygulama kullanıcısıyla
-                     UPDATE denetim_kayitlari SET olay_turu = 'X' WHERE denetim_id = 1;   → hata vermeli.
+                     UPDATE denetim_kayitlari SET hedef_tablo = 'deneme' WHERE denetim_id = 1;   → tetikleyici hatası vermeli
+                     (mesaj "...degistirilemez veya silinemez (UPDATE)"; DELETE ve TRUNCATE için de aynı).
 Expected Result:  Değiştirme ve silme reddedilir; kayıt aynı kalır.
 Actual Result:    Geliştirme: 17/17 test geçti. Canlı: ⏳
 PASS / FAIL:      Geliştirme PASS / Canlı ⏳
@@ -295,7 +314,7 @@ Environment:      Geliştirme/CI
 Precondition:     Durumu uygun olmayan cihaz; planlı bakım/kalibrasyonla kesişen saat.
 Steps:            Bu cihazlara ve kesişen saatlere rezervasyon denenir.
 Expected Result:  Reddedilir; rezervasyon oluşmaz.
-Actual Result:    11/11 test geçti.
+Actual Result:    36/36 test geçti.
 PASS / FAIL:      PASS
 Tester:           Öğrenci C
 Date:             22.11.2026
