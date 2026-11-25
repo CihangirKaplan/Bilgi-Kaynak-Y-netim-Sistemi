@@ -88,3 +88,81 @@ def test_sayfa_silinince_temizlenir_cikista_qt_cokmez(tkys_qapplication):
     del ekran
     gc.collect()
     assert referans() is None
+
+
+# ------------------------------------------------------------------ Detay / Puanlar penceresi
+FAALIYETLER = [
+    {"tarih": "2026-11-20", "faaliyet": "Danışma masası nöbeti", "adet": 4, "birim": "Saat", "birim_puan": 2.5, "toplam_puan": 10.0},
+    {"tarih": "2026-11-18", "faaliyet": "Deney katılımcı kaydı", "adet": 3, "birim": "Kişi", "birim_puan": 1.0, "toplam_puan": 3.0},
+]
+
+
+def _detay_incele(faaliyetler, toplam, olay=None):
+    """Detay penceresini sahte sunucuyla açar; pencere kapanmadan önce içeriği toplanıp döner."""
+    from PySide6.QtWidgets import QDateEdit, QLabel, QTableWidget
+
+    ekran = _ekran([_ogrenci(1, "Ali")])
+    ekran.tablo.selectRow(0)
+    bulgu = {}
+
+    def istek(metot, url, **kw):
+        return _yanit({"ogrenci_id": 1, "toplam_puan": toplam, "faaliyetler": faaliyetler})
+
+    def exec_(dialog):
+        bulgu["dialog"] = dialog
+        bulgu["baslik"] = [e.text() for e in dialog.findChildren(QLabel) if e.objectName() == "formBaslik"]
+        bulgu["toplam"] = next(e.text() for e in dialog.findChildren(QLabel) if e.objectName() == "puanKart")
+        tablo = dialog.findChildren(QTableWidget)[0]
+        bulgu["tablo"] = tablo
+        bulgu["basliklar"] = [tablo.horizontalHeaderItem(i).text() for i in range(tablo.columnCount())]
+        bulgu["satirlar"] = [[tablo.item(r, c).text() for c in range(tablo.columnCount())] for r in range(tablo.rowCount())]
+        bulgu["bos"] = next(e for e in dialog.findChildren(QLabel) if e.objectName() == "bosMesaj")
+        bulgu["tarihler"] = dialog.findChildren(QDateEdit)
+        if olay:
+            olay(dialog, bulgu)
+        return 0
+
+    with patch.object(modul, "oturum_kontrollu_istek", side_effect=istek), patch.object(modul.QDialog, "exec", exec_):
+        ekran.detay_ac()
+    return ekran, bulgu
+
+
+def test_detay_penceresi_ogrenci_toplam_ve_faaliyetleri_gosterir(tkys_qapplication):
+    _, bulgu = _detay_incele(FAALIYETLER, 13)
+    assert bulgu["baslik"] == ["Ali • 23100001"]
+    assert bulgu["toplam"] == "Toplam Puan: 13"
+    assert bulgu["basliklar"] == ["TARİH", "FAALİYET", "ADET", "BİRİM", "BİRİM PUAN", "TOPLAM PUAN"]
+    assert bulgu["satirlar"][0] == ["20.11.2026", "Danışma masası nöbeti", "4", "Saat", "2.5", "10.0"]
+    assert len(bulgu["satirlar"]) == 2 and bulgu["bos"].isHidden()
+    assert len(bulgu["tarihler"]) == 2                                                     # başlangıç ve bitiş
+
+
+def test_detay_penceresi_kayit_yoksa_bos_mesaj_gosterir(tkys_qapplication):
+    _, bulgu = _detay_incele([], 0)
+    assert bulgu["toplam"] == "Toplam Puan: 0" and bulgu["satirlar"] == []
+    assert not bulgu["bos"].isHidden() and "faaliyet kaydı bulunamadı" in bulgu["bos"].text()
+    assert bulgu["tablo"].isHidden()
+
+
+def test_detay_penceresi_gecersiz_aralikta_temizlenir(tkys_qapplication):
+    def olay(dialog, bulgu):
+        baslangic, bitis = bulgu["tarihler"]
+        baslangic.setDate(bitis.date().addDays(3))                                         # başlangıç bitişten sonra
+        bulgu["toplam_sonra"] = next(e.text() for e in dialog.findChildren(modul.QLabel) if e.objectName() == "puanKart")
+        bulgu["satir_sonra"] = bulgu["tablo"].rowCount()
+
+    _, bulgu = _detay_incele(FAALIYETLER, 13, olay)
+    assert bulgu["toplam_sonra"] == "Toplam Puan: —" and bulgu["satir_sonra"] == 0
+
+
+def test_detay_penceresi_kapaninca_silinmek_uzere_isaretlenir(tkys_qapplication):
+    """Pencere sayfanın çocuğu olarak bellekte kalmaz: kapanınca silinmek üzere işaretlenir (bellek ve çıkış güvenliği)."""
+    ekran = _ekran([_ogrenci(1, "Ali")])
+    ekran.tablo.selectRow(0)
+    silinen = []
+
+    with patch.object(modul, "oturum_kontrollu_istek", return_value=_yanit({"ogrenci_id": 1, "toplam_puan": 0, "faaliyetler": []})), \
+            patch.object(modul.QDialog, "exec", lambda dialog: 0), \
+            patch.object(modul.QDialog, "deleteLater", lambda dialog: silinen.append(dialog)):
+        ekran.detay_ac()
+    assert len(silinen) == 1 and silinen[0].windowTitle() == "Öğrenci Detayı ve Faaliyet Puanları"
