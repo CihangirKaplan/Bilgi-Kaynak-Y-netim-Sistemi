@@ -180,12 +180,14 @@ class DashboardEkrani(QWidget):
     """
 
     def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
-                 parola_talepleri_goster=False, kart_ac=None):
+                 parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False):
         """kart_ac(sayfa_adi, cihaz_durumu): özet kartına tıklanınca o sayfayı (cihaz kartlarında o duruma göre
         süzülmüş) açar; verilmezse kartlar yalnızca bilgi gösterir. Yetkisiz olunan sayfanın kartı tıklanamaz.
         sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
         sayfa_izinli_mi(sayfa_adi): kullanıcının o sayfaya yetkisi yoksa False; o sayfanın bildirimi hiç gösterilmez.
-        İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz)."""
+        İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz).
+        rezervasyon_paneli: cihaz özeti yetkisi olmayan ama cihaz rezervasyonlarını görebilen kullanıcılar (rezervasyon yapanlar, Cihaz Uygunluğu'nu
+        görenler) için "Cihaz Rezervasyonları" panelini de gösterir; cihaz_ozeti True ise panel zaten vardır."""
         super().__init__()
         self.api_url = api_url
         self.token = token
@@ -193,6 +195,7 @@ class DashboardEkrani(QWidget):
         self._sayfa_ac = sayfa_ac
         self._sayfa_izinli_mi = sayfa_izinli_mi
         self._kart_ac = kart_ac
+        self.rezervasyon_paneli = bool(cihaz_ozeti or rezervasyon_paneli)
         self._parola_talepleri_goster = parola_talepleri_goster
         self.parola_talepleri = []
         self.basliklar = {"Authorization": f"Bearer {token}"}
@@ -243,7 +246,7 @@ class DashboardEkrani(QWidget):
         panel_randevu = self.panel_randevu = self._panel("Danışan Randevuları", f"📅  {tarih}",
                                     self.tablo_randevu, self.lbl_randevu_bos)
 
-        if cihaz_ozeti:
+        if self.rezervasyon_paneli:
             self.tablo_rez = _tablo_olustur(["SAAT", "CİHAZ", "REZERVE EDEN", "ODA"])
             cihaz_hucresi_uygula(self.tablo_rez, 1, en_az_satir_yuksekligi=0)      # ad üstte, kod altta (satır yüksekliği değişmez)
             self.lbl_rez_bos = QLabel("Bugün için cihaz rezervasyonu bulunmuyor.")
@@ -271,7 +274,7 @@ class DashboardEkrani(QWidget):
             ana.addWidget(self.panel_islem)
 
         self.tarih_panelleri = [(panel_randevu, "📅")]
-        if cihaz_ozeti:
+        if self.rezervasyon_paneli:
             self.tarih_panelleri.append((panel_rez, "📌"))
 
         self._son_yukleme = 0
@@ -312,7 +315,7 @@ class DashboardEkrani(QWidget):
             for c in range(6):
                 self.kart_grid.setColumnStretch(c, 0)
             self._kartlari_diz(kolon)
-        if self.cihaz_ozeti:
+        if self.rezervasyon_paneli:
             yon = QBoxLayout.LeftToRight if genislik >= 1200 else QBoxLayout.TopToBottom
             self.yan_yana.setDirection(yon)
 
@@ -417,8 +420,9 @@ class DashboardEkrani(QWidget):
         if self.cihaz_ozeti:
             self._ozet_yukle()
         self._randevulari_yukle()
-        if self.cihaz_ozeti:
+        if self.rezervasyon_paneli:
             self._rezervasyonlari_yukle()
+        if self.cihaz_ozeti:
             self._islemleri_yukle()
             self._parola_taleplerini_yukle()
             self._bildirimleri_olustur()
@@ -471,7 +475,7 @@ class DashboardEkrani(QWidget):
             _hap(self.tablo_randevu, i, 4, metin, renk, arka)
 
     def _rezervasyonlari_yukle(self):
-        lbl_deger, lbl_alt = self.kartlar["rezervasyon"]
+        lbl_deger, lbl_alt = self.kartlar.get("rezervasyon") or (QLabel(), QLabel())          # özet kartı yalnızca cihaz özeti yetkisi olanlarda var
         try:
             rezervasyonlar = self._getir("/api/dashboard/bugunku-rezervasyonlar")
         except Exception as e:
@@ -482,6 +486,8 @@ class DashboardEkrani(QWidget):
             self._kaydirma_ipucu_guncelle(self.panel_rez, 0)
             return
 
+        # Sunucu rezerve eden adını yalnızca cihaz yöneticisine / rezervasyon yapana verir; yalnızca görüntüleyen kullanıcıda sütun gizlenir.
+        self.tablo_rez.setColumnHidden(2, bool(rezervasyonlar) and all(r.get("rezerve_eden") is None for r in rezervasyonlar))
         lbl_deger.setText(str(len(rezervasyonlar)))
         lbl_alt.setText("Bugün rezerve edilen cihaz")
         self.lbl_rez_bos.setText("Bugün için cihaz rezervasyonu bulunmuyor.")
@@ -492,7 +498,7 @@ class DashboardEkrani(QWidget):
             rez_cihaz = _item(r["cihaz"])
             rez_cihaz.setToolTip(cihaz_ipucu(r["cihaz"]))                          # "…" ile kısalan ad/kod ipucunda tam
             self.tablo_rez.setItem(i, 1, rez_cihaz)
-            self.tablo_rez.setItem(i, 2, _item(r["rezerve_eden"]))
+            self.tablo_rez.setItem(i, 2, _item(r.get("rezerve_eden") or "—"))
             self.tablo_rez.setItem(i, 3, _item(r["oda"]))
 
     def _islemleri_yukle(self):

@@ -48,6 +48,9 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   Menüde bir sayfayı göremiyorsanız o sayfa için yetkiniz yoktur.
 - **Üst çubuk:** Açık sayfanın adı, bildirimler (🔔), **?** (Hakkında / Yardım) ve **🏠 Ana Sayfa** düğmesi.
 - **Ana Kontrol Paneli:** Günün özeti ve sık kullanılan sayfalara kısayol kartları. Bir karta tıklayınca ilgili sayfa açılır.
+  Panelde **bugünkü danışan randevuları** ve, cihaz rezervasyonlarını görme yetkisi olanlarda (Cihaz Uygunluğu'nu görenler ve rezervasyon yapanlar dahil)
+  **bugünkü cihaz rezervasyonları** listelenir; böylece merkezde o gün neyin ne zaman kullanıldığını herkes bilir. **Rezerve eden** adı yalnızca cihazı
+  yönetenlere ve rezervasyon yapanlara gösterilir; yalnızca Cihaz Uygunluğu'nu görenlerde bu sütun yoktur (kişi adı verilmez).
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
 
 ## 3. Listelerle çalışmak
