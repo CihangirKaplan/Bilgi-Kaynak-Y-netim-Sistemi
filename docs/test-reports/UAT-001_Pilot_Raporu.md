@@ -33,7 +33,7 @@ merkezde bir rolün izni farklı ayarlandıysa o rolün yapamayacağı senaryo �
 | P3 | Randevu oluşturur, saatini değiştirir, birini iptal eder | | |
 | P4 | Geçmiş randevunun sonucunu (tamamlandı / gelmedi) girer | | |
 | P5 | Cihaz Uygunluğu sayfasında bir cihazın hangi saatlerde müsait olduğuna bakar | | |
-| P6 | Kendi randevularını Ana panelde (Bugünkü randevular) ve Randevu Yönetimi listesinde görür | | |
+| P6 | Ana panelde bugünkü randevuları, cihaz rezervasyonlarını ve oda etkinliklerini; Randevu Yönetimi listesinde kendi randevularını görür | | |
 
 ### İdari personel (memur)
 
@@ -69,7 +69,7 @@ ekranından doğrulayın (izin farklı ayarlanmışsa o senaryoyu çıkarın ya 
 | P2, P3 | Randevu oluşturma, düzenleme, iptal etme (`RANDEVU_OLUSTUR`, `RANDEVU_DUZENLE`, `RANDEVU_IPTAL`) | Psikolog |
 | P4 | `RANDEVU_DUZENLE` | Psikolog |
 | P5 | `CIHAZ_UYGUNLUK_GORUNTULE` | Psikolog, Memur, Müdür |
-| P6 | `TAKVIM_GORUNTULE` | Psikolog, Memur, Müdür |
+| P6 | `TAKVIM_GORUNTULE`, `CIHAZ_UYGUNLUK_GORUNTULE`, `ODA_ETKINLIK_GORUNTULE` | Psikolog, Memur, Müdür |
 | M2 | `CIHAZ_ENVANTER_YONET` | Memur, Müdür |
 | M3 | `BAKIM_KAYITLARI_YONET`, `KALIBRASYON_KAYITLARI_YONET` | Memur, Müdür |
 | M4 | `ARIZA_KAYITLARI_YONET` | Memur, Müdür |

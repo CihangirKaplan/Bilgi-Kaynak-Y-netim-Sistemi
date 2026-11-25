@@ -180,14 +180,15 @@ class DashboardEkrani(QWidget):
     """
 
     def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
-                 parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False):
+                 parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False, etkinlik_paneli=False):
         """kart_ac(sayfa_adi, cihaz_durumu): özet kartına tıklanınca o sayfayı (cihaz kartlarında o duruma göre
         süzülmüş) açar; verilmezse kartlar yalnızca bilgi gösterir. Yetkisiz olunan sayfanın kartı tıklanamaz.
         sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
         sayfa_izinli_mi(sayfa_adi): kullanıcının o sayfaya yetkisi yoksa False; o sayfanın bildirimi hiç gösterilmez.
         İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz).
         rezervasyon_paneli: cihaz özeti yetkisi olmayan ama cihaz rezervasyonlarını görebilen kullanıcılar (rezervasyon yapanlar, Cihaz Uygunluğu'nu
-        görenler) için "Cihaz Rezervasyonları" panelini de gösterir; cihaz_ozeti True ise panel zaten vardır."""
+        görenler) için "Cihaz Rezervasyonları" panelini de gösterir; cihaz_ozeti True ise panel zaten vardır.
+        etkinlik_paneli: oda etkinliklerini görebilen kullanıcılar için bugünkü "Oda Etkinlikleri" panelini gösterir."""
         super().__init__()
         self.api_url = api_url
         self.token = token
@@ -196,6 +197,7 @@ class DashboardEkrani(QWidget):
         self._sayfa_izinli_mi = sayfa_izinli_mi
         self._kart_ac = kart_ac
         self.rezervasyon_paneli = bool(cihaz_ozeti or rezervasyon_paneli)
+        self.etkinlik_paneli = bool(etkinlik_paneli)
         self._parola_talepleri_goster = parola_talepleri_goster
         self.parola_talepleri = []
         self.basliklar = {"Authorization": f"Bearer {token}"}
@@ -260,6 +262,13 @@ class DashboardEkrani(QWidget):
         else:
             ana.addWidget(panel_randevu)
 
+        # ---- 3b. BUGÜNKÜ ODA ETKİNLİKLERİ ----
+        if self.etkinlik_paneli:
+            self.tablo_etkinlik = _tablo_olustur(["SAAT", "ETKİNLİK", "ODA", "KATILIMCI"])
+            self.lbl_etkinlik_bos = QLabel("Bugün için oda etkinliği bulunmuyor.")
+            self.panel_etkinlik = self._panel("Oda Etkinlikleri", f"🗓️  {tarih}", self.tablo_etkinlik, self.lbl_etkinlik_bos)
+            ana.addWidget(self.panel_etkinlik)
+
         # ---- 4. YAKLAŞAN BAKIM / KALİBRASYON ----
         if cihaz_ozeti:
             self.tablo_islem = _tablo_olustur(["CİHAZ", "İŞLEM", "SON TARİH", "KALAN SÜRE"])
@@ -276,6 +285,8 @@ class DashboardEkrani(QWidget):
         self.tarih_panelleri = [(panel_randevu, "📅")]
         if self.rezervasyon_paneli:
             self.tarih_panelleri.append((panel_rez, "📌"))
+        if self.etkinlik_paneli:
+            self.tarih_panelleri.append((self.panel_etkinlik, "🗓️"))
 
         self._son_yukleme = 0
         self.yenile()
@@ -422,6 +433,8 @@ class DashboardEkrani(QWidget):
         self._randevulari_yukle()
         if self.rezervasyon_paneli:
             self._rezervasyonlari_yukle()
+        if self.etkinlik_paneli:
+            self._etkinlikleri_yukle()
         if self.cihaz_ozeti:
             self._islemleri_yukle()
             self._parola_taleplerini_yukle()
@@ -500,6 +513,27 @@ class DashboardEkrani(QWidget):
             self.tablo_rez.setItem(i, 1, rez_cihaz)
             self.tablo_rez.setItem(i, 2, _item(r.get("rezerve_eden") or "—"))
             self.tablo_rez.setItem(i, 3, _item(r["oda"]))
+
+    def _etkinlikleri_yukle(self):
+        try:
+            etkinlikler = self._getir("/api/dashboard/bugunku-etkinlikler")
+        except Exception as e:
+            logger.warning("Etkinlik listesi yüklenemedi: %s", e)
+            self.lbl_etkinlik_bos.setText("Etkinlikler yüklenemedi.")
+            self._liste_goster(self.tablo_etkinlik, self.lbl_etkinlik_bos, 0)
+            self._kaydirma_ipucu_guncelle(self.panel_etkinlik, 0)
+            return
+
+        self.lbl_etkinlik_bos.setText("Bugün için oda etkinliği bulunmuyor.")
+        kaydirilabilir = self._liste_goster(self.tablo_etkinlik, self.lbl_etkinlik_bos, len(etkinlikler), TABLO_GORUNEN_SATIR)
+        self._kaydirma_ipucu_guncelle(self.panel_etkinlik, len(etkinlikler) if kaydirilabilir else 0)
+        for i, ek in enumerate(etkinlikler):
+            self.tablo_etkinlik.setItem(i, 0, _item(f"{ek['baslangic']} – {ek['bitis']}", kalin=True))
+            ad = _item(ek["etkinlik"])
+            ad.setToolTip(ek["etkinlik"])                                           # uzun ad "…" ile kısalır, ipucunda tam
+            self.tablo_etkinlik.setItem(i, 1, ad)
+            self.tablo_etkinlik.setItem(i, 2, _item(ek["oda"]))
+            self.tablo_etkinlik.setItem(i, 3, _item("—" if ek.get("katilimci") is None else str(ek["katilimci"])))
 
     def _islemleri_yukle(self):
         yukleme_hatasi = False
