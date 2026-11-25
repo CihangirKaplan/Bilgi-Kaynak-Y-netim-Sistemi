@@ -2,6 +2,7 @@ import logging
 import datetime
 import time
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
+from client.ikon_kutusu import renkli_ikon_pixmap
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -219,14 +220,14 @@ class DashboardEkrani(QWidget):
 
         # ---- 2. ÖZET KARTLARI ----
         self.kartlar = {}
-        tanimlar = [("BUGÜNKÜ RANDEVU", "randevu", "📅", "#1D4ED8", "#DBEAFE")]
+        tanimlar = [("BUGÜNKÜ RANDEVU", "randevu", "calendar", "#1D4ED8", "#DBEAFE")]
         if cihaz_ozeti:
             tanimlar += [
-                ("BUGÜNKÜ REZERVASYON", "rezervasyon", "📌", "#6D28D9", "#EDE9FE"),
-                ("KULLANILABİLİR CİHAZ", "aktif_cihaz", "✅", "#15803D", "#DCFCE7"),
-                ("BAKIMDAKİ CİHAZ", "bakimdaki_cihaz", "🛠️", "#B45309", "#FEF3C7"),
-                ("KALİBRASYONDAKİ CİHAZ", "kalibrasyondaki_cihaz", "📏", "#0E7490", "#CFFAFE"),
-                ("ARIZALI CİHAZ", "arizali_cihaz", "⚠️", "#B91C1C", "#FEE2E2"),
+                ("BUGÜNKÜ REZERVASYON", "rezervasyon", "pin", "#6D28D9", "#EDE9FE"),
+                ("KULLANILABİLİR CİHAZ", "aktif_cihaz", "check-square", "#15803D", "#DCFCE7"),
+                ("BAKIMDAKİ CİHAZ", "bakimdaki_cihaz", "wrench", "#B45309", "#FEF3C7"),
+                ("KALİBRASYONDAKİ CİHAZ", "kalibrasyondaki_cihaz", "ruler", "#0E7490", "#CFFAFE"),
+                ("ARIZALI CİHAZ", "arizali_cihaz", "warning", "#B91C1C", "#FEE2E2"),
             ]
         self.kart_grid = QGridLayout()
         self.kart_grid.setSpacing(18)
@@ -245,14 +246,14 @@ class DashboardEkrani(QWidget):
 
         self.tablo_randevu = _tablo_olustur(["SAAT", "DANIŞAN KODU", "PSİKOLOG", "ODA", "DURUM"])
         self.lbl_randevu_bos = QLabel("Bugün için kayıtlı randevu bulunmuyor.")
-        panel_randevu = self.panel_randevu = self._panel("Danışan Randevuları", f"📅  {tarih}",
+        panel_randevu = self.panel_randevu = self._panel("Danışan Randevuları", tarih,
                                     self.tablo_randevu, self.lbl_randevu_bos)
 
         if self.rezervasyon_paneli:
             self.tablo_rez = _tablo_olustur(["SAAT", "CİHAZ", "REZERVE EDEN", "ODA"])
             cihaz_hucresi_uygula(self.tablo_rez, 1, en_az_satir_yuksekligi=0)      # ad üstte, kod altta (satır yüksekliği değişmez)
             self.lbl_rez_bos = QLabel("Bugün için cihaz rezervasyonu bulunmuyor.")
-            panel_rez = self.panel_rez = self._panel("Cihaz Rezervasyonları", f"📌  {tarih}",
+            panel_rez = self.panel_rez = self._panel("Cihaz Rezervasyonları", tarih,
                                     self.tablo_rez, self.lbl_rez_bos)
             self.yan_yana = QBoxLayout(QBoxLayout.LeftToRight)
             self.yan_yana.setSpacing(18)
@@ -266,7 +267,7 @@ class DashboardEkrani(QWidget):
         if self.etkinlik_paneli:
             self.tablo_etkinlik = _tablo_olustur(["SAAT", "ETKİNLİK", "ODA", "KATILIMCI"])
             self.lbl_etkinlik_bos = QLabel("Bugün için oda etkinliği bulunmuyor.")
-            self.panel_etkinlik = self._panel("Oda Etkinlikleri", f"🗓️  {tarih}", self.tablo_etkinlik, self.lbl_etkinlik_bos)
+            self.panel_etkinlik = self._panel("Oda Etkinlikleri", tarih, self.tablo_etkinlik, self.lbl_etkinlik_bos)
             ana.addWidget(self.panel_etkinlik)
 
         # ---- 4. YAKLAŞAN BAKIM / KALİBRASYON ----
@@ -279,14 +280,14 @@ class DashboardEkrani(QWidget):
                 self.tablo_islem.viewport().setCursor(Qt.PointingHandCursor)
             self.lbl_islem_bos = QLabel("Uyarı süresine giren ya da geciken bakım veya kalibrasyon yok.")
             self.panel_islem = self._panel("Yaklaşan ve Geciken Bakım/Kalibrasyonlar",
-                                           "🛠️  uyarı süresi içinde ve geciken", self.tablo_islem, self.lbl_islem_bos)
+                                           "uyarı süresi içinde ve geciken", self.tablo_islem, self.lbl_islem_bos)
             ana.addWidget(self.panel_islem)
 
-        self.tarih_panelleri = [(panel_randevu, "📅")]
+        self.tarih_panelleri = [(panel_randevu, "")]
         if self.rezervasyon_paneli:
-            self.tarih_panelleri.append((panel_rez, "📌"))
+            self.tarih_panelleri.append((panel_rez, ""))
         if self.etkinlik_paneli:
-            self.tarih_panelleri.append((self.panel_etkinlik, "🗓️"))
+            self.tarih_panelleri.append((self.panel_etkinlik, ""))
 
         self._son_yukleme = 0
         self.yenile()
@@ -352,10 +353,10 @@ class DashboardEkrani(QWidget):
         ana.setContentsMargins(18, 16, 18, 16)
         ana.setSpacing(14)
 
-        chip = QLabel(ikon)
+        chip = QLabel()
         chip.setFixedSize(46, 46)
         chip.setAlignment(Qt.AlignCenter)
-        chip.setStyleSheet(f"background: {zemin}; border-radius: 14px; font-size: 20px;")
+        chip.setPixmap(renkli_ikon_pixmap(ikon, renk, zemin))       # yumuşak renkli zemin + çizgi ikon (emoji yok)
 
         sag = QVBoxLayout()
         sag.setSpacing(0)
@@ -417,7 +418,7 @@ class DashboardEkrani(QWidget):
         bugun = datetime.date.today()
         tarih = f"{bugun.day} {AYLAR[bugun.month - 1]} {bugun.year}"
         for panel, ikon in self.tarih_panelleri:
-            panel.rozet.setText(f"{ikon}  {tarih}")
+            panel.rozet.setText(f"{ikon}  {tarih}".strip())
         self._son_yukleme = time.monotonic()
         self.verileri_yukle()
 
