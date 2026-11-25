@@ -262,8 +262,12 @@ ODA_PASIFE_AL_ETIKETI = "✕  Odayı Pasife Al"
 ODA_AKTIF_ET_ETIKETI = "✓  Odayı Aktif Et"
 
 MENU = [
-    ("GENEL", [
+    ("GENEL BAKIŞ", [
         dict(ikon="📊", ad="Ana Kontrol Paneli", izin=None, dashboard=True),
+        dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
+             aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
+        dict(ikon="📊", ad="Oda Kullanım Raporu", izin="Yönetim raporlarını görüntüleme",
+             aciklama="Oda bazlı kullanım saatleri, doluluk oranı, gün dağılımı ve Excel raporu", aksiyon=[]),
     ]),
     ("KLİNİK OPERASYON", [
         dict(ikon="📅", ad="Randevu Yönetimi", izin="Randevu takvimini görüntüleme",
@@ -274,19 +278,8 @@ MENU = [
         dict(ikon="👤", ad="Danışanlar", izin="Randevu oluşturma",
              aciklama="Psikologlara göre danışanlar, bilgileri, randevu özeti ve geçmişi",
              aksiyon=[("＋  Yeni Danışan", "Randevu oluşturma")]),
-        dict(ikon="🚪", ad="Oda Kullanımı", izin="Oda kullanım durumunu görüntüleme",
-             aciklama="Oda doluluk ve kullanım durumu", aksiyon=[]),
-        dict(
-            ikon="🗓️",
-            ad="Oda Etkinlikleri",
-            izin="Oda etkinliklerini görüntüleme",
-            aciklama="Oda etkinliklerini listeleme ve yönetme",
-            aksiyon=[],
-        ),
         dict(ikon="📈", ad="Randevu Raporları", izin="Randevu takvimini görüntüleme",
              aciklama="Randevu sayıları, durumlar, iptal nedenleri, dağılımlar ve Excel raporu", aksiyon=[]),
-        dict(ikon="📊", ad="Oda Kullanım Raporu", izin="Yönetim raporlarını görüntüleme",
-             aciklama="Oda bazlı kullanım saatleri, doluluk oranı, gün dağılımı ve Excel raporu", aksiyon=[]),
     ]),
     ("ÖĞRENCİ & FAALİYET YÖNETİMİ", [
         dict(
@@ -326,6 +319,13 @@ MENU = [
              izin="Danışma masası raporlarını görüntüleme",
              aciklama="Öğrencilerin çalışma süreleri ve görev raporları",
              aksiyon=[]),
+        dict(
+            ikon="🗓️",
+            ad="Oda Etkinlikleri",
+            izin="Oda etkinliklerini görüntüleme",
+            aciklama="Oda etkinliklerini listeleme ve yönetme",
+            aksiyon=[],
+        ),
     ]),
     ("CİHAZ YAŞAM DÖNGÜSÜ", [
         dict(ikon="🔎", ad="Cihaz Uygunluğu", izin="Cihaz uygunluğunu görüntüleme",

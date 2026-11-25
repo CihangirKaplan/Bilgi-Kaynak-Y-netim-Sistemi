@@ -248,7 +248,7 @@ def gercek_pencere(qt_app):
 
 def test_gercek_pencere_izin_eklenince_yeni_sekmeler_kendiliginden_gelir(gercek_pencere):
     ana, durum, bilgi = gercek_pencere
-    assert list(ana.nav_btnler) == ["Ana Kontrol Paneli", "Randevu Yönetimi", "Oda Kullanımı", "Randevu Raporları"]
+    assert list(ana.nav_btnler) == ["Ana Kontrol Paneli", "Oda Kullanımı", "Randevu Yönetimi", "Randevu Raporları"]
     durum["izinler"] += ["CIHAZ_ENVANTER_YONET", "BAKIM_KAYITLARI_GORUNTULE", "BAKIM_KAYITLARI_YONET"]
     ana._yetkileri_denetle()                                                       # zamanlayıcının bir turu
     assert {"Cihaz Envanteri", "Bakım Kayıtları", "Bakım Planları", "Cihaz Raporları"} <= set(ana.nav_btnler)

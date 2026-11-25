@@ -7,9 +7,9 @@ Bu kılavuz **Memur** rolü içindir (cihaz, öğrenci, faaliyet ve danışma ma
 
 | Bölüm | Sayfalar |
 |---|---|
-| **Genel** | Ana Kontrol Paneli |
-| **Klinik Operasyon** | Randevu Yönetimi (yalnızca görüntüleme), Oda Kullanımı, Oda Etkinlikleri, Randevu Raporları |
-| **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Yönetimi, Danışma Masası Raporları |
+| **Genel Bakış** | Ana Kontrol Paneli, Oda Kullanımı |
+| **Klinik Operasyon** | Randevu Yönetimi (yalnızca görüntüleme), Randevu Raporları |
+| **Öğrenci & Faaliyet Yönetimi** | Öğrenciler, Faaliyet Kayıtları, Puan Raporu, Öğrenci Raporu, Faaliyet Raporu, Danışma Masası Yönetimi, Danışma Masası Raporları, Oda Etkinlikleri |
 | **Cihaz Yaşam Döngüsü** | Cihaz Uygunluğu, Cihaz Envanteri, Cihaz Rezervasyonu, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Raporları |
 | **Yönetim & Denetim** | Oda Yönetimi |
 

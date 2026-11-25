@@ -29,7 +29,7 @@ PATHS = {
 }
 
 CATEGORY_ICONS = {
-    "GENEL": "grid",
+    "GENEL BAKIŞ": "grid",
     "KLİNİK OPERASYON": "calendar",
     "ÖĞRENCİ & FAALİYET YÖNETİMİ": "graduation-cap",
     "CİHAZ YAŞAM DÖNGÜSÜ": "chip",
@@ -147,7 +147,7 @@ class ElegantSidebar(QObject):
                 current = {
                     "header": header,
                     "items": [],
-                    "open": name == "GENEL",
+                    "open": name == "GENEL BAKIŞ",
                 }
 
                 self.groups[name] = current
