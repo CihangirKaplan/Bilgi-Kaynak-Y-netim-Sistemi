@@ -210,3 +210,94 @@ def test_varsayilan_oda_etkinligi_izin_matrisi_alembic_sonrasi_dogru():
         conn.close()
     gercek = {rol: (d.get("ODA_ETKINLIK_GORUNTULE"), d.get("ODA_ETKINLIK_YONET")) for rol, d in bulunan.items()}
     assert gercek == VARSAYILAN_ODA_ETKINLIK_IZINLERI
+
+
+# ---------------------------------------------------------------- Ana panel: duyurular, "Benim günüm", gün seçici (gerçek SQL)
+def _mevcut_kullanici(rol_adi):
+    """Veritabanında bu rolde etkin, kayıtlı bir kullanıcı (CI tohumunda Admin vardır). Yeni kullanıcı AÇILMAZ: denetim kaydı bağlanan
+    kullanıcı silinemez ve diğer PG testlerinin kullanıcı sayımlarını bozardı. Döndürür: (kullanici_id, kullanici_adi, temizle)."""
+    assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
+    conn = psycopg2.connect(**VT_AYARLARI)
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT k.kullanici_id, k.kullanici_adi FROM kullanicilar k JOIN roller r ON r.rol_id = k.rol_id "
+                       "WHERE UPPER(r.rol_adi) = %s AND k.aktif_mi = TRUE ORDER BY k.kullanici_id LIMIT 1", (rol_adi,))
+        satir = cursor.fetchone()
+    assert satir is not None, f"{rol_adi} rolünde etkin kullanıcı yok (CI tohumu çalışmadı mı?)"
+    kullanici_id, kullanici_adi = satir
+
+    def temizle():
+        with conn.cursor() as imlec:
+            imlec.execute("DELETE FROM duyurular WHERE olusturan_kullanici_id = %s", (kullanici_id,))
+        conn.commit()
+        conn.close()
+
+    return kullanici_id, kullanici_adi, temizle
+
+
+def test_varsayilan_duyuru_izni_yalniz_yonetim_rollerinde_alembic_sonrasi():
+    conn = psycopg2.connect(**VT_AYARLARI)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT UPPER(r.rol_adi), ri.izin_var FROM rol_izinleri ri
+                JOIN roller r ON r.rol_id = ri.rol_id JOIN izinler i ON i.izin_id = ri.izin_id
+                WHERE i.izin_adi = 'DUYURU_YONET' AND UPPER(r.rol_adi) IN ('ADMIN','MUDUR','MEMUR','PSIKOLOG','PROJE_ASISTANI','DANISMA_OGRENCISI')
+            """)
+            bulunan = dict(cursor.fetchall())
+    finally:
+        conn.rollback()
+        conn.close()
+    assert bulunan == {"ADMIN": 1, "MUDUR": 1, "MEMUR": 1, "PSIKOLOG": 0, "PROJE_ASISTANI": 0, "DANISMA_OGRENCISI": 0}
+
+
+def test_duyuru_herkes_okur_yalniz_izinli_yazar_ve_kaldirir_gercek_sql():
+    yonetici_id, yonetici_adi, yonetici_temizle = _mevcut_kullanici("ADMIN")
+    izinsiz_id, _rol, izinsiz_temizle = gecici_izinsiz_kullanici()
+    try:
+        yanit = istek_yap(yonetici_id, "POST", "/api/duyurular", json={"baslik": "Test duyurusu", "metin": "Yarın bakım var."})
+        assert yanit.status_code == 201, yanit.text
+        duyuru_id = yanit.json()["duyuru_id"]
+
+        # izni olmayan, giriş yapmış kullanıcı okur ama yazan adını görmez; yazamaz ve kaldıramaz
+        okunan = [d for d in istek_yap(izinsiz_id, "GET", "/api/duyurular").json() if d["duyuru_id"] == duyuru_id]
+        assert okunan and okunan[0]["yazan"] is None and okunan[0]["yonetebilir"] is False and okunan[0]["yeni"] is True
+        assert istek_yap(izinsiz_id, "POST", "/api/duyurular", json={"baslik": "a", "metin": "b"}).status_code == 403
+        assert istek_yap(izinsiz_id, "DELETE", f"/api/duyurular/{duyuru_id}").status_code == 403
+
+        yonetici_gorur = [d for d in istek_yap(yonetici_id, "GET", "/api/duyurular").json() if d["duyuru_id"] == duyuru_id][0]
+        assert yonetici_gorur["yazan"] == yonetici_adi and yonetici_gorur["yonetebilir"] is True
+
+        # süresi geçmiş duyuru listede çıkmaz
+        conn = psycopg2.connect(**VT_AYARLARI)
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE duyurular SET son_gecerlilik_tarihi = CURRENT_DATE - 1 WHERE duyuru_id = %s", (duyuru_id,))
+        conn.commit()
+        conn.close()
+        assert duyuru_id not in [d["duyuru_id"] for d in istek_yap(izinsiz_id, "GET", "/api/duyurular").json()]
+
+        assert istek_yap(yonetici_id, "DELETE", f"/api/duyurular/{duyuru_id}").status_code == 200
+        assert istek_yap(yonetici_id, "DELETE", f"/api/duyurular/{duyuru_id}").status_code == 404
+        assert istek_yap(yonetici_id, "POST", "/api/duyurular", json={"baslik": " ", "metin": "x"}).status_code == 422
+
+        conn = psycopg2.connect(**VT_AYARLARI)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT olay_turu::text FROM denetim_kayitlari WHERE hedef_tablo = 'duyurular' AND hedef_kayit_id = %s ORDER BY 1", (duyuru_id,))
+            assert [s[0] for s in cursor.fetchall()] == ["CREATE", "DELETE"]
+        conn.close()
+    finally:
+        yonetici_temizle()
+        izinsiz_temizle()
+
+
+@pytest.mark.parametrize("aralik", ["bugun", "yarin", "hafta"])
+def test_ana_panel_uclari_her_aralikta_gercek_sql_ile_calisir(aralik):
+    yonetici_id, _ad, yonetici_temizle = _mevcut_kullanici("ADMIN")
+    try:
+        for yol in ("bugunku-randevular", "bugunku-rezervasyonlar", "bugunku-etkinlikler"):
+            yanit = istek_yap(yonetici_id, "GET", f"/api/dashboard/{yol}?aralik={aralik}")
+            assert yanit.status_code == 200, (yol, yanit.text)
+            assert isinstance(yanit.json(), list)
+        gunum = istek_yap(yonetici_id, "GET", "/api/dashboard/benim-gunum")
+        assert gunum.status_code == 200 and gunum.json() == {"randevular": [], "rezervasyonlar": []}        # personel kaydı olmayan kullanıcıda boş
+    finally:
+        yonetici_temizle()

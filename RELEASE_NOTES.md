@@ -43,6 +43,8 @@ Sunucuda, sunucu durdurulduktan sonra:
    Her değişiklik denetim kaydına yazılır; yükseltmeden sonra Cihaz Envanteri'ni gözden geçirmeniz önerilir.
    Aynı adım **Proje Asistanı**'na Oda Etkinlikleri görüntüleme ve yönetme izinlerini de açar (varsayılan); bir kurulumda bu izin Rol & İzin Yönetimi'nde
    bilerek kapatılmışsa yükseltmeden sonra yeniden kapatın.
+   Aynı adım **duyurular** tablosunu ve **DUYURU_YONET** iznini ekler (varsayılan: Admin, Müdür, Memur açık); duyuru yayınlama yetkisini başka role
+   vermek için Rol & İzin Yönetimi'ni kullanın.
 3. Görevleri yeni ayarlarla yeniden kurun (yönetici PowerShell):
    `python scripts/windows/sunucu_kurulum.py` ve `python scripts/windows/kurulum.py`.
 4. Sunucuyu başlatın: `schtasks /Run /TN TKYS_Sunucu`.

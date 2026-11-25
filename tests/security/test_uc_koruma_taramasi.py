@@ -40,6 +40,9 @@ ISTISNALAR = {
     ("GET", "/api/yetkilerim"): "Kullanıcı yalnızca kendi rolünün izinlerini görür; ayrıca izin gerektirmez.",
     ("GET", "/api/dashboard/bugunku-etkinlikler"): "Ana panel: bugünkü oda etkinlikleri (saat, ad, oda, katılımcı sayısı); salt okunur, kişi adı "
                                                    "içermez; giriş yapmış herkes görebilir (etkinlik eklemek/düzenlemek ODA_ETKINLIK_YONET ister).",
+    ("GET", "/api/dashboard/benim-gunum"): "Ana panel: yalnızca giriş yapan kişinin KENDİ bugünkü/yarınki randevu ve cihaz rezervasyonları; başkasının kaydı dönmez, izin gerektirmez.",
+    ("GET", "/api/duyurular"): "Kurum içi duyuruları giriş yapmış herkes okur; yazan kişinin adı yalnızca DUYURU_YONET sahibine gösterilir "
+                               "(yayınlama ve kaldırma DUYURU_YONET ister).",
     ("GET", "/api/surum"): "Hakkında penceresi için sürüm bilgisi; giriş yapmış herkes görebilir, kişisel veri ve ayar döndürmez.",
     ("POST", "/api/liste-aktarim-kaydi"): "JWT ile kimlik doğrulanır; kaydı yazmadan önce listenin kendi görüntüleme izni "
                                            "(LISTE_AKTARIM_HEDEFLERI) sunucuda denetlenir, izin yoksa 403 döner.",

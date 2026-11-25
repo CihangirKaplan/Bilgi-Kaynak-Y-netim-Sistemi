@@ -871,3 +871,27 @@ class RolGorunenAdModeli(BaseModel):
     model_config = ConfigDict(extra="forbid")
     gorunen_ad: str = Field(min_length=1, max_length=100)
     aktif_mi: bool = Field(default=True)
+
+
+class DuyuruModeli(BaseModel):
+    """Ana panel duyurusu (kişisel veri içermemelidir: yalnızca kurum içi genel bilgi)."""
+    model_config = ConfigDict(extra="forbid")
+
+    baslik: str = Field(min_length=1, max_length=120)
+    metin: str = Field(min_length=1, max_length=1000)
+    son_gecerlilik_tarihi: Optional[date] = None
+
+    @field_validator("baslik", "metin")
+    @classmethod
+    def bos_olmasin(cls, deger):
+        deger = deger.strip()
+        if not deger:
+            raise ValueError("Bu alan boş olamaz.")
+        return deger
+
+    @field_validator("son_gecerlilik_tarihi")
+    @classmethod
+    def gecmis_olmasin(cls, deger):
+        if deger is not None and deger < date.today():
+            raise ValueError("Son geçerlilik tarihi geçmişte olamaz.")
+        return deger

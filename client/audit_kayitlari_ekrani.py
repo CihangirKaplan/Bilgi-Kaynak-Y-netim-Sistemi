@@ -62,6 +62,7 @@ HEDEF_TABLO_ADLARI = {
     "deneyler": "Deney",
     "denetim_kayitlari": "Denetim Kayıtları",
     "oda_etkinlikleri": "Oda Etkinliği",
+    "duyurular": "Duyuru",
     "faaliyetler": "Faaliyet Türü",
     "ogrenci_kayit_erteleme_gecmisi": "Öğrenci Kayıt Erteleme",
     "parola_sifirlama_talepleri": "Parola Sıfırlama Talebi",

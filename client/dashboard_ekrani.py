@@ -7,7 +7,8 @@ from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
-from PySide6.QtWidgets import (QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
+from client.duyuru_diyaloglari import DuyuruDiyalogu, duyuru_kaldir
+from PySide6.QtWidgets import (QDialog, QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
                                QSizePolicy)
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -181,7 +182,8 @@ class DashboardEkrani(QWidget):
     """
 
     def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
-                 parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False, etkinlik_paneli=False):
+                 parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False, etkinlik_paneli=False,
+                 duyuru_yonetebilir=False):
         """kart_ac(sayfa_adi, cihaz_durumu): özet kartına tıklanınca o sayfayı (cihaz kartlarında o duruma göre
         süzülmüş) açar; verilmezse kartlar yalnızca bilgi gösterir. Yetkisiz olunan sayfanın kartı tıklanamaz.
         sayfa_ac(sayfa_adi): bildirime tıklanınca o sayfayı açar.
@@ -189,7 +191,8 @@ class DashboardEkrani(QWidget):
         İkisi de verilmezse bildirimler eskisi gibi yalnızca gösterilir (tıklanınca bir şey olmaz).
         rezervasyon_paneli: cihaz özeti yetkisi olmayan ama cihaz rezervasyonlarını görebilen kullanıcılar (rezervasyon yapanlar, Cihaz Uygunluğu'nu
         görenler) için "Cihaz Rezervasyonları" panelini de gösterir; cihaz_ozeti True ise panel zaten vardır.
-        etkinlik_paneli: oda etkinliklerini görebilen kullanıcılar için bugünkü "Oda Etkinlikleri" panelini gösterir."""
+        etkinlik_paneli: oda etkinliklerini görebilen kullanıcılar için bugünkü "Oda Etkinlikleri" panelini gösterir.
+        duyuru_yonetebilir: Duyurular panelinde "Yeni duyuru" ve "Kaldır" düğmelerini gösterir (sunucu yine DUYURU_YONET ister)."""
         super().__init__()
         self.api_url = api_url
         self.token = token
@@ -199,6 +202,8 @@ class DashboardEkrani(QWidget):
         self._kart_ac = kart_ac
         self.rezervasyon_paneli = bool(cihaz_ozeti or rezervasyon_paneli)
         self.etkinlik_paneli = bool(etkinlik_paneli)
+        self.duyuru_yonetebilir = bool(duyuru_yonetebilir)
+        self.aralik = "bugun"                       # gün seçici: bugun | yarin | hafta
         self._parola_talepleri_goster = parola_talepleri_goster
         self.parola_talepleri = []
         self.basliklar = {"Authorization": f"Bearer {token}"}
@@ -217,6 +222,25 @@ class DashboardEkrani(QWidget):
             self.bildirim_lay.setContentsMargins(22, 16, 22, 16)
             self.bildirim_lay.setSpacing(8)
             ana.addWidget(self.bildirim_paneli)
+
+        # ---- 1b. DUYURULAR (herkes okur) ve BENİM GÜNÜM (yalnızca kişinin kendi kaydı varsa görünür) ----
+        self.duyurular = []
+        self.benim_gunum = {}
+        self.panel_duyuru = QFrame()
+        self.panel_duyuru.setObjectName("kart")
+        self.duyuru_lay = QVBoxLayout(self.panel_duyuru)
+        self.duyuru_lay.setContentsMargins(22, 16, 22, 16)
+        self.duyuru_lay.setSpacing(8)
+        self.panel_duyuru.hide()
+        ana.addWidget(self.panel_duyuru)
+
+        self.panel_benim_gunum = QFrame()
+        self.panel_benim_gunum.setObjectName("kart")
+        self.benim_gunum_lay = QVBoxLayout(self.panel_benim_gunum)
+        self.benim_gunum_lay.setContentsMargins(22, 16, 22, 16)
+        self.benim_gunum_lay.setSpacing(6)
+        self.panel_benim_gunum.hide()
+        ana.addWidget(self.panel_benim_gunum)
 
         # ---- 2. ÖZET KARTLARI ----
         self.kartlar = {}
@@ -239,6 +263,26 @@ class DashboardEkrani(QWidget):
             self._karti_baglantila(kart, anahtar)
         self._kartlari_diz(self._kolon_sayisi(0))
         ana.addLayout(self.kart_grid)
+
+        # ---- 2b. GÜN SEÇİCİ: Bugün | Yarın | Bu hafta (randevu, rezervasyon ve etkinlik panelleri için) ----
+        secici = QHBoxLayout()
+        secici.setSpacing(8)
+        self.aralik_dugmeleri = {}
+        for anahtar, metin in (("bugun", "Bugün"), ("yarin", "Yarın"), ("hafta", "Bu hafta (7 gün)")):
+            dugme = QPushButton(metin)
+            dugme.setCheckable(True)
+            dugme.setChecked(anahtar == "bugun")
+            dugme.setCursor(Qt.PointingHandCursor)
+            dugme.setStyleSheet(
+                "QPushButton { background: #EEF4FF; color: #3B5BA9; border: none; border-radius: 14px; "
+                "font-size: 12px; font-weight: 700; padding: 7px 16px; } "
+                "QPushButton:checked { background: #1D4ED8; color: white; } "
+                "QPushButton:hover:!checked { background: #DBE7FF; }")
+            dugme.clicked.connect(lambda _=False, a=anahtar: self.aralik_sec(a))
+            self.aralik_dugmeleri[anahtar] = dugme
+            secici.addWidget(dugme)
+        secici.addStretch()
+        ana.addLayout(secici)
 
         # ---- 3. RANDEVULAR  |  CİHAZ REZERVASYONLARI ----
         bugun = datetime.date.today()
@@ -415,12 +459,48 @@ class DashboardEkrani(QWidget):
 
     # ------------------------------------------------------------------
     def yenile(self):
-        bugun = datetime.date.today()
-        tarih = f"{bugun.day} {AYLAR[bugun.month - 1]} {bugun.year}"
+        tarih = self._aralik_rozeti()
         for panel, ikon in self.tarih_panelleri:
             panel.rozet.setText(f"{ikon}  {tarih}".strip())
         self._son_yukleme = time.monotonic()
         self.verileri_yukle()
+
+    @staticmethod
+    def _tarih_metni(gun):
+        return f"{gun.day} {AYLAR[gun.month - 1]} {gun.year}"
+
+    def _aralik_rozeti(self):
+        bugun = datetime.date.today()
+        if self.aralik == "yarin":
+            return f"Yarın · {self._tarih_metni(bugun + datetime.timedelta(days=1))}"
+        if self.aralik == "hafta":
+            son = bugun + datetime.timedelta(days=6)
+            return f"{bugun.day} {AYLAR[bugun.month - 1]} – {son.day} {AYLAR[son.month - 1]}"
+        return self._tarih_metni(bugun)
+
+    def _aralik_yolu(self, yol):
+        """Bugün için yol olduğu gibi kalır (eski sunucuyla da çalışır); yarın/hafta için aralık eklenir."""
+        return yol if self.aralik == "bugun" else f"{yol}?aralik={self.aralik}"
+
+    def _aralik_adi(self):
+        """Boş liste metinleri için: "Bugün" / "Yarın" / "Önümüzdeki 7 gün"."""
+        return {"bugun": "Bugün", "yarin": "Yarın", "hafta": "Önümüzdeki 7 gün"}[self.aralik]
+
+    def aralik_sec(self, aralik):
+        """Gün seçici: randevu, rezervasyon ve etkinlik panelleri seçilen güne göre yeniden yüklenir."""
+        if aralik not in self.aralik_dugmeleri:
+            return
+        self.aralik = aralik
+        for anahtar, dugme in self.aralik_dugmeleri.items():
+            dugme.setChecked(anahtar == aralik)
+        self.yenile()
+
+    def _saat_metni(self, kayit):
+        """Haftalık görünümde saatin önüne gün-ay eklenir (rezervasyonda sunucu zaten tarihli verir)."""
+        saat = f"{kayit['baslangic']} – {kayit['bitis']}"
+        if self.aralik == "hafta" and kayit.get("tarih") and "." not in kayit["baslangic"]:
+            return f"{kayit['tarih']}  {saat}"
+        return saat
 
     def showEvent(self, olay):
         """Ana panele her dönüşte (başka sayfadan gelince) veriyi tazeler."""
@@ -429,6 +509,8 @@ class DashboardEkrani(QWidget):
             self.yenile()
 
     def verileri_yukle(self):
+        self._duyurulari_yukle()
+        self._benim_gunumu_yukle()
         if self.cihaz_ozeti:
             self._ozet_yukle()
         self._randevulari_yukle()
@@ -463,7 +545,9 @@ class DashboardEkrani(QWidget):
     def _randevulari_yukle(self):
         lbl_deger, lbl_alt = self.kartlar["randevu"]
         try:
-            randevular = self._getir("/api/dashboard/bugunku-randevular")
+            randevular = self._getir(self._aralik_yolu("/api/dashboard/bugunku-randevular"))
+            # Özet kartı her zaman BUGÜNÜ sayar; başka gün seçiliyse bugün için ayrıca sorulur.
+            bugunku = randevular if self.aralik == "bugun" else self._getir("/api/dashboard/bugunku-randevular")
         except Exception as e:
             logger.warning("Randevu listesi yüklenemedi: %s", e)
             lbl_deger.setText("?")
@@ -472,17 +556,17 @@ class DashboardEkrani(QWidget):
             self._kaydirma_ipucu_guncelle(self.panel_randevu, 0)
             return
 
-        aktif = [r for r in randevular if r["durum"] != "IPTAL_EDILDI"]
+        aktif = [r for r in bugunku if r["durum"] != "IPTAL_EDILDI"]
         lbl_deger.setText(str(len(aktif)))
         lbl_alt.setText("Bugün planlanan seans")
-        self.lbl_randevu_bos.setText("Bugün için kayıtlı randevu bulunmuyor.")
+        self.lbl_randevu_bos.setText(f"{self._aralik_adi()} için kayıtlı randevu bulunmuyor.")
         kaydirilabilir = self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, len(randevular), TABLO_GORUNEN_SATIR)
         self._kaydirma_ipucu_guncelle(self.panel_randevu, len(randevular) if kaydirilabilir else 0)
         for i, r in enumerate(randevular):
             iptal = r["durum"] == "IPTAL_EDILDI"
             gri = "#9CA3AF" if iptal else None
             metin, renk, arka = DURUM_METIN.get(r["durum"], (r["durum"], "#374151", "#F3F4F6"))
-            self.tablo_randevu.setItem(i, 0, _item(f"{r['baslangic']} – {r['bitis']}", renk=gri, kalin=not iptal))
+            self.tablo_randevu.setItem(i, 0, _item(self._saat_metni(r), renk=gri, kalin=not iptal))
             self.tablo_randevu.setItem(i, 1, _item(r["danisan_kod_id"], renk=gri))
             self.tablo_randevu.setItem(i, 2, _item(r["psikolog"], renk=gri))
             self.tablo_randevu.setItem(i, 3, _item(r["oda"], renk=gri))
@@ -491,7 +575,8 @@ class DashboardEkrani(QWidget):
     def _rezervasyonlari_yukle(self):
         lbl_deger, lbl_alt = self.kartlar.get("rezervasyon") or (QLabel(), QLabel())          # özet kartı yalnızca cihaz özeti yetkisi olanlarda var
         try:
-            rezervasyonlar = self._getir("/api/dashboard/bugunku-rezervasyonlar")
+            rezervasyonlar = self._getir(self._aralik_yolu("/api/dashboard/bugunku-rezervasyonlar"))
+            bugunku = rezervasyonlar if self.aralik == "bugun" else self._getir("/api/dashboard/bugunku-rezervasyonlar")
         except Exception as e:
             logger.warning("Rezervasyon listesi yüklenemedi: %s", e)
             lbl_deger.setText("?")
@@ -502,13 +587,13 @@ class DashboardEkrani(QWidget):
 
         # Sunucu rezerve eden adını yalnızca cihaz yöneticisine / rezervasyon yapana verir; yalnızca görüntüleyen kullanıcıda sütun gizlenir.
         self.tablo_rez.setColumnHidden(2, bool(rezervasyonlar) and all(r.get("rezerve_eden") is None for r in rezervasyonlar))
-        lbl_deger.setText(str(len(rezervasyonlar)))
+        lbl_deger.setText(str(len(bugunku)))
         lbl_alt.setText("Bugün rezerve edilen cihaz")
-        self.lbl_rez_bos.setText("Bugün için cihaz rezervasyonu bulunmuyor.")
+        self.lbl_rez_bos.setText(f"{self._aralik_adi()} için cihaz rezervasyonu bulunmuyor.")
         kaydirilabilir = self._liste_goster(self.tablo_rez, self.lbl_rez_bos, len(rezervasyonlar), TABLO_GORUNEN_SATIR)
         self._kaydirma_ipucu_guncelle(self.panel_rez, len(rezervasyonlar) if kaydirilabilir else 0)
         for i, r in enumerate(rezervasyonlar):
-            self.tablo_rez.setItem(i, 0, _item(f"{r['baslangic']} – {r['bitis']}", kalin=True))
+            self.tablo_rez.setItem(i, 0, _item(self._saat_metni(r), kalin=True))
             rez_cihaz = _item(r["cihaz"])
             rez_cihaz.setToolTip(cihaz_ipucu(r["cihaz"]))                          # "…" ile kısalan ad/kod ipucunda tam
             self.tablo_rez.setItem(i, 1, rez_cihaz)
@@ -517,7 +602,7 @@ class DashboardEkrani(QWidget):
 
     def _etkinlikleri_yukle(self):
         try:
-            etkinlikler = self._getir("/api/dashboard/bugunku-etkinlikler")
+            etkinlikler = self._getir(self._aralik_yolu("/api/dashboard/bugunku-etkinlikler"))
         except Exception as e:
             logger.warning("Etkinlik listesi yüklenemedi: %s", e)
             self.lbl_etkinlik_bos.setText("Etkinlikler yüklenemedi.")
@@ -525,16 +610,149 @@ class DashboardEkrani(QWidget):
             self._kaydirma_ipucu_guncelle(self.panel_etkinlik, 0)
             return
 
-        self.lbl_etkinlik_bos.setText("Bugün için oda etkinliği bulunmuyor.")
+        self.lbl_etkinlik_bos.setText(f"{self._aralik_adi()} için oda etkinliği bulunmuyor.")
         kaydirilabilir = self._liste_goster(self.tablo_etkinlik, self.lbl_etkinlik_bos, len(etkinlikler), TABLO_GORUNEN_SATIR)
         self._kaydirma_ipucu_guncelle(self.panel_etkinlik, len(etkinlikler) if kaydirilabilir else 0)
         for i, ek in enumerate(etkinlikler):
-            self.tablo_etkinlik.setItem(i, 0, _item(f"{ek['baslangic']} – {ek['bitis']}", kalin=True))
+            self.tablo_etkinlik.setItem(i, 0, _item(self._saat_metni(ek), kalin=True))
             ad = _item(ek["etkinlik"])
             ad.setToolTip(ek["etkinlik"])                                           # uzun ad "…" ile kısalır, ipucunda tam
             self.tablo_etkinlik.setItem(i, 1, ad)
             self.tablo_etkinlik.setItem(i, 2, _item(ek["oda"]))
             self.tablo_etkinlik.setItem(i, 3, _item("—" if ek.get("katilimci") is None else str(ek["katilimci"])))
+
+    # ------------------------------------------------------------------
+    # Duyurular ve "Benim günüm"
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _kutuyu_bosalt(lay):
+        while lay.count():
+            oge = lay.takeAt(0)
+            w = oge.widget()
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
+            elif oge.layout() is not None:
+                DashboardEkrani._kutuyu_bosalt(oge.layout())
+
+    def _duyurulari_yukle(self):
+        try:
+            duyurular = self._getir("/api/duyurular")
+            if not isinstance(duyurular, list):
+                raise ValueError("Geçersiz duyuru listesi")
+        except Exception as e:
+            logger.warning("Duyurular yüklenemedi: %s", e)
+            duyurular = []
+        self.duyurular = duyurular
+        self._duyurulari_ciz()
+
+    def _duyurulari_ciz(self):
+        self._kutuyu_bosalt(self.duyuru_lay)
+        # Yönetebilen kişi duyuru yoksa da "Yeni duyuru" düğmesine ulaşabilsin diye panel onda hep görünür.
+        self.panel_duyuru.setVisible(bool(self.duyurular) or self.duyuru_yonetebilir)
+
+        ust = QHBoxLayout()
+        baslik = QLabel("📢  Duyurular")
+        baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
+        ust.addWidget(baslik)
+        ust.addStretch()
+        if self.duyuru_yonetebilir:
+            yeni = QPushButton("＋ Yeni duyuru")
+            yeni.setObjectName("yeniDuyuruDugmesi")
+            yeni.setCursor(Qt.PointingHandCursor)
+            yeni.setStyleSheet("QPushButton { background: #1D4ED8; color: white; border: none; border-radius: 10px; "
+                               "font-size: 12px; font-weight: 700; padding: 6px 14px; } QPushButton:hover { background: #1E40AF; }")
+            yeni.clicked.connect(self._yeni_duyuru)
+            ust.addWidget(yeni)
+        ust_kap = QWidget()
+        ust.setContentsMargins(0, 0, 0, 0)
+        ust_kap.setLayout(ust)
+        self.duyuru_lay.addWidget(ust_kap)
+
+        if not self.duyurular:
+            bos = QLabel("Şu an yayında duyuru yok.")
+            bos.setStyleSheet("font-size: 13px; color: #8A9BC0; padding: 6px;")
+            self.duyuru_lay.addWidget(bos)
+            return
+
+        for d in self.duyurular:
+            kutu = QFrame()
+            kutu.setObjectName("duyuruSatiri")
+            kutu.setStyleSheet("QFrame#duyuruSatiri { background: #F3F7FF; border-radius: 10px; }")
+            lay = QVBoxLayout(kutu)
+            lay.setContentsMargins(14, 10, 14, 10)
+            lay.setSpacing(3)
+            ust_satir = QHBoxLayout()
+            ad = QLabel(("🆕 " if d.get("yeni") else "") + str(d.get("baslik", "")))
+            ad.setStyleSheet("font-size: 14px; font-weight: 800; color: #0A1F5C;")
+            ad.setWordWrap(True)
+            ust_satir.addWidget(ad, 1)
+            if self.duyuru_yonetebilir and d.get("yonetebilir"):
+                kaldir = QPushButton("Kaldır")
+                kaldir.setProperty("duyuru_id", d.get("duyuru_id"))
+                kaldir.setCursor(Qt.PointingHandCursor)
+                kaldir.setStyleSheet("QPushButton { background: #FEE2E2; color: #991B1B; border: none; border-radius: 8px; "
+                                     "font-size: 11px; font-weight: 700; padding: 4px 10px; }")
+                kaldir.clicked.connect(self._duyuru_kaldir_tiklandi)
+                ust_satir.addWidget(kaldir, 0)
+            lay.addLayout(ust_satir)
+            metin = QLabel(str(d.get("metin", "")))
+            metin.setWordWrap(True)
+            metin.setStyleSheet("font-size: 13px; color: #0F2552;")
+            lay.addWidget(metin)
+            ayrinti = d.get("tarih", "")
+            if d.get("yazan"):
+                ayrinti += f"  ·  {d['yazan']}"
+            if d.get("son_gecerlilik"):
+                ayrinti += f"  ·  {d['son_gecerlilik']} tarihine kadar"
+            alt = QLabel(ayrinti)
+            alt.setStyleSheet("font-size: 11px; color: #6B7FA8;")
+            lay.addWidget(alt)
+            self.duyuru_lay.addWidget(kutu)
+
+    def _yeni_duyuru(self):
+        if DuyuruDiyalogu(self.api_url, self.token, self).exec() == QDialog.Accepted:
+            self._duyurulari_yukle()
+
+    def _duyuru_kaldir_tiklandi(self):
+        duyuru_id = self.sender().property("duyuru_id") if self.sender() is not None else None
+        if duyuru_id is not None and duyuru_kaldir(self.api_url, self.token, duyuru_id, self):
+            self._duyurulari_yukle()
+
+    def _benim_gunumu_yukle(self):
+        try:
+            veri = self._getir("/api/dashboard/benim-gunum")
+            if not isinstance(veri, dict):
+                raise ValueError("Geçersiz yanıt")
+        except Exception as e:
+            logger.warning("Benim günüm yüklenemedi: %s", e)
+            veri = {"randevular": [], "rezervasyonlar": []}
+        self.benim_gunum = veri
+        self._benim_gunumu_ciz()
+
+    def _benim_gunumu_ciz(self):
+        self._kutuyu_bosalt(self.benim_gunum_lay)
+        randevular = self.benim_gunum.get("randevular") or []
+        rezervasyonlar = self.benim_gunum.get("rezervasyonlar") or []
+        self.panel_benim_gunum.setVisible(bool(randevular or rezervasyonlar))        # kaydı olmayan rolde panel hiç görünmez
+        if not (randevular or rezervasyonlar):
+            return
+        baslik = QLabel("🙋  Benim Günüm")
+        baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
+        self.benim_gunum_lay.addWidget(baslik)
+        for gun, gun_adi in (("bugun", "Bugün"), ("yarin", "Yarın")):
+            satirlar = [f"📅  {r['saat']}  ·  Danışan {r['danisan_kod_id']}  ·  {r['oda']}" for r in randevular if r.get("gun") == gun]
+            satirlar += [f"🔬  {r['saat']}  ·  {r['cihaz']}  ·  {r['oda']}" for r in rezervasyonlar if r.get("gun") == gun]
+            if not satirlar:
+                continue
+            ust = QLabel(gun_adi)
+            ust.setStyleSheet("font-size: 12px; font-weight: 800; color: #3B5BA9; padding-top: 4px;")
+            self.benim_gunum_lay.addWidget(ust)
+            for satir in satirlar:
+                etiket = QLabel(satir)
+                etiket.setStyleSheet("font-size: 13px; color: #0F2552; background: #F3F7FF; border-radius: 8px; padding: 7px 12px;")
+                self.benim_gunum_lay.addWidget(etiket)
 
     def _islemleri_yukle(self):
         yukleme_hatasi = False

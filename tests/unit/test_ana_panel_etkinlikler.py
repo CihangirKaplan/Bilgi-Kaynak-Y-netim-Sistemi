@@ -31,8 +31,8 @@ def test_sunucu_bugunku_etkinlikleri_ad_oda_saat_ve_katilimciyla_dondurur():
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         liste = sunucu.dashboard_bugunku_etkinlikler(kullanici_id=5)
     assert liste == [
-        {"etkinlik_id": 1, "etkinlik": "Aile Eğitimi", "oda": "Toplantı Odası", "baslangic": "10:00", "bitis": "12:00", "katilimci": 15},
-        {"etkinlik_id": 2, "etkinlik": "Seminer", "oda": "Oda 2", "baslangic": "18:00", "bitis": "19:00", "katilimci": None},
+        {"tarih": _bugun(10).strftime("%d.%m"), "etkinlik_id": 1, "etkinlik": "Aile Eğitimi", "oda": "Toplantı Odası", "baslangic": "10:00", "bitis": "12:00", "katilimci": 15},
+        {"tarih": _bugun(18).strftime("%d.%m"), "etkinlik_id": 2, "etkinlik": "Seminer", "oda": "Oda 2", "baslangic": "18:00", "bitis": "19:00", "katilimci": None},
     ]
     sorgu = imlec.execute.call_args.args[0]
     assert "iptal_edildi_mi" in sorgu and "oda_etkinlik_gunleri" in sorgu                      # iptal edilenler gelmez; çok günlü etkinliğin günü
