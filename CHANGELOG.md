@@ -5,7 +5,7 @@ Biçim: [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/). Sürüm numara
 
 ## [1.0.0] — Yayın tarihi: GO/NO-GO kararından sonra yazılacak
 
-İlk kararlı sürüm. 21 Eylül – 22 Kasım 2026 arasında, 8 haftalık yol haritasıyla geliştirildi (yaklaşık 340 Pull Request).
+İlk kararlı sürüm. 21 Eylül – 24 Kasım 2026 arasında, 8 haftalık yol haritasıyla geliştirildi (yaklaşık 500 Pull Request).
 Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritabanı şeması Alembic migration'larıyla yönetilir.
 
 ### Kimlik doğrulama ve oturum
@@ -50,7 +50,14 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 - Cihaz rezervasyonu: çakışma, mesai ve sahiplik kuralları; düzenleme ve iptal; arızalı/bakımdaki cihaz rezerve edilemez.
 - Cihaz Uygunluğu: haftalık takvim, gün detayı, müsait cihaz bulma.
 - Bakım ve kalibrasyon kayıtları ve planları (periyot, uyarı süresi, geciken plan bildirimleri).
-- Arıza bildirimi, çözüm notu ve yeniden açma; arıza cihaz durumunu tutarlı biçimde günceller.
+- Arıza bildirimi, çözüm notu ve yeniden açma. Cihazın **Arızalı** durumu tek kaynaktan, çözülmemiş arıza kaydından türetilir (elle seçilemez;
+  Envanter, Uygunluk, Rezervasyon ve panel aynı sonucu gösterir). Mevcut tutarsız kayıtlar bir migration ile düzeltilir (aşağıdaki yükseltme notuna bakın).
+- Bakım Planları'nda **▶** ile plandan tek tıkla bakım/kalibrasyon kaydı açma (cihaz ve plan seçili gelir, kayıt eklenince plan ilerler);
+  Arıza Kayıtları'nda **◷** ile arızanın cihazının geçmişine geçiş.
+- Bakım, Kalibrasyon, Arıza ve Rezervasyon listeleri en yeni 300 kayıtla açılır; **＋ 300 kayıt daha yükle** ile en çok 5000 kayda kadar uzatılır
+  (5000 kayıtlı denemede ekran açılışı 12–99 saniyeden 1 saniyenin altına indi). Arama yüklü kayıtlarda çalışır.
+- Rezervasyon listesinde Rezerve eden sütunu ve satırda düzenle/iptal düğmeleri; arıza tarihleri gün.ay.yıl biçiminde; Raporlar'da
+  "Tümü" döneminde tarih kutuları pasif. Bakım, Uygunluk, Rezervasyon ve Raporlar ekranları 1366 px'lik dizüstü ekranlarına sığar.
 - Cihaz raporları (rezervasyon, geciken bakım planı) ve Excel aktarımı.
 
 ### Öğrenci, faaliyet ve danışma masası

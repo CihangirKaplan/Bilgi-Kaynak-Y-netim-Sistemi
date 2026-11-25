@@ -37,6 +37,9 @@ Sunucuda, sunucu durdurulduktan sonra:
 
 1. `git pull` ile kodu güncelleyin.
 2. `python -m alembic upgrade head` ile veritabanı şemasını güncelleyin; `python scripts/sema_dogrula.py` uyumlu demeli.
+   Bu adım cihaz durumlarını da düzeltir: açık arızası olmayıp **Arızalı** görünen cihazlar **Kullanıma Hazır**'a, açık arızası olup
+   **Kullanıma Hazır** görünen cihazlar **Arızalı**'ya çekilir (bakımdaki, kalibrasyondaki ve kullanım dışı cihazlara dokunulmaz).
+   Her değişiklik denetim kaydına yazılır; yükseltmeden sonra Cihaz Envanteri'ni gözden geçirmeniz önerilir.
 3. Görevleri yeni ayarlarla yeniden kurun (yönetici PowerShell):
    `python scripts/windows/sunucu_kurulum.py` ve `python scripts/windows/kurulum.py`.
 4. Sunucuyu başlatın: `schtasks /Run /TN TKYS_Sunucu`.
