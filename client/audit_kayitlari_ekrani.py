@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QDateEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFrame, QDialog,
     QMenu, QWidgetAction, QApplication, QFileDialog, QMessageBox,
-    QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle
+    QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle, QSizePolicy
 )
 from client.liste_excel import aktarimi_denetime_yaz
 from client.sayfa_tema import (
@@ -111,24 +111,83 @@ AYRINTI_ETIKETLERI = {
 }
 
 
+def alan_adi(anahtar):
+    return AYRINTI_ETIKETLERI.get(anahtar) or str(anahtar).replace("_", " ").capitalize()
+
+
+def biçimle(deger):
+    if deger is None:
+        return "—"
+    if isinstance(deger, bool):
+        return "Evet" if deger else "Hayır"
+    if isinstance(deger, (list, tuple)):
+        return ", ".join(biçimle(d) for d in deger) if deger else "—"
+    if isinstance(deger, dict):                                         # önceki/yeni gibi iç içe değerler: "Alan: değer, Alan: değer"
+        return ", ".join(f"{alan_adi(a)}: {biçimle(d)}" for a, d in deger.items()) if deger else "—"
+    return str(deger)
+
+
+def hedef_metni(kayit):
+    """İşlemin hangi kayda yapıldığını okunur yazar: "Kullanıcı: ayse", "Randevu (no 12)" ya da "—"."""
+    tablo = kayit.get("hedef_tablo")
+    kayit_no = kayit.get("hedef_kayit_id")
+    ad = HEDEF_TABLO_ADLARI.get(tablo, tablo)
+    if not ad:
+        return "—"
+    if tablo == "kullanicilar" and kayit_no is not None:
+        return f"{ad}: {kayit.get('hedef_kullanici_adi') or 'bulunamadı (kayıt silinmiş olabilir)'}"
+    return f"{ad} (no {kayit_no})" if kayit_no is not None else ad
+
+
+def olay_cumlesi(kayit):
+    """Denetim kaydını tek cümleyle anlatır: kim, neyi, nasıl yaptı. Ayrıntı penceresinin başında gösterilir."""
+    kim = kayit.get("kullanici_adi") or "Bilinmeyen kullanıcı"
+    olay = kayit.get("olay_turu")
+    ayrinti = kayit.get("ayrinti") if isinstance(kayit.get("ayrinti"), dict) else {}
+    tablo = kayit.get("hedef_tablo")
+    etiket = HEDEF_TABLO_ADLARI.get(tablo, tablo or "kayıt")
+    hedef_kullanici = kayit.get("hedef_kullanici_adi")
+
+    if olay == "LOGIN":
+        return f"{kim} sisteme giriş yaptı."
+    if olay == "LOGIN_FAILED":
+        denenen = ayrinti.get("kullanici_adi") or kim
+        return f"“{denenen}” adıyla başarısız bir giriş denemesi yapıldı."
+    if olay == "LOGOUT":
+        return f"{kim} oturumu kapattı."
+    if olay == "PASSWORD_CHANGE":
+        return f"{kim} parolasını değiştirdi."
+    if olay == "PASSWORD_CHANGE_FAILED":
+        return f"{kim} parolasını değiştirmeyi denedi; işlem başarısız oldu."
+    if olay == "PASSWORD_RESET":
+        return (f"{kim}, {hedef_kullanici} kullanıcısının parolasını sıfırladı." if hedef_kullanici
+                else f"{kim} bir parola sıfırlama işlemi yaptı.")
+    if olay == "VIEW":
+        return (f"{kim} denetim kayıtlarını görüntüledi." if tablo == "denetim_kayitlari"
+                else f"{kim}, “{etiket}” kaydını görüntüledi.")
+    if olay == "CREATE":
+        return f"{kim}, yeni bir “{etiket}” kaydı oluşturdu."
+    if olay == "UPDATE":
+        return f"{kim}, “{etiket}” kaydını güncelledi."
+    if olay == "CANCEL":
+        return f"{kim}, “{etiket}” kaydını iptal etti."
+    if olay == "DELETE":
+        return f"{kim}, “{etiket}” kaydını sildi."
+    if olay == "EXPORT":
+        liste = LISTE_ADLARI.get(ayrinti.get("liste"), ayrinti.get("liste"))
+        return f"{kim}, “{liste}” listesini Excel'e aktardı." if liste else f"{kim} bir listeyi Excel'e aktardı."
+    if olay == "ROLE_CHANGE":
+        return (f"{kim}, {hedef_kullanici} kullanıcısının rollerini değiştirdi." if hedef_kullanici
+                else f"{kim} bir rol değişikliği yaptı.")
+    if olay == "DEVICE_STATUS_CHANGE":
+        return f"{kim} bir cihazın durumunu değiştirdi."
+    return f"{kim}: {OLAY_ADLARI.get(olay, olay)}"
+
+
 def ayrinti_satirlari(ayrinti):
     """Denetim kaydındaki ayrıntıyı (silinen veri, önceki/yeni değer) ekranda gösterilecek (başlık, değer) satırlarına çevirir."""
     if not isinstance(ayrinti, dict):
         return []
-
-    def biçimle(deger):
-        if deger is None:
-            return "—"
-        if isinstance(deger, bool):
-            return "Evet" if deger else "Hayır"
-        if isinstance(deger, (list, tuple)):
-            return ", ".join(biçimle(d) for d in deger) if deger else "—"
-        if isinstance(deger, dict):                                     # önceki/yeni gibi iç içe değerler: "Alan: değer, Alan: değer"
-            return ", ".join(f"{alan_adi(a)}: {biçimle(d)}" for a, d in deger.items()) if deger else "—"
-        return str(deger)
-
-    def alan_adi(anahtar):
-        return AYRINTI_ETIKETLERI.get(anahtar) or str(anahtar).replace("_", " ").capitalize()
 
     satirlar = []
     for anahtar, deger in ayrinti.items():
@@ -455,90 +514,69 @@ class AuditKayitlariEkrani(QWidget):
         pencere.setWindowTitle("Denetim Kaydı Detayları")
         pencere.setObjectName("auditDetayPenceresi")
         pencere.setStyleSheet(dialog_stili())
-        pencere.setMinimumWidth(480)
+        pencere.setMinimumWidth(580)
 
         duzen = QVBoxLayout(pencere)
         duzen.setContentsMargins(24, 22, 24, 20)
-        duzen.setSpacing(16)
+        duzen.setSpacing(14)
 
         baslik = QLabel("Denetim Kaydı Detayları")
         baslik.setObjectName("formBaslik")
         duzen.addWidget(baslik)
 
+        # Özet kartı: ne olduğunu tek cümleyle anlatır (renkli işlem rozeti + kim, neyi yaptı; tarih aşağıdaki satırlardadır).
+        olay = kayit.get("olay_turu")
+        renk, zemin = OLAY_RENKLERI.get(olay, VARSAYILAN_DURUM_RENGI)
+        ozet = QFrame()
+        ozet.setObjectName("oturumSatiri")
+        ozet_duzen = QVBoxLayout(ozet)
+        ozet_duzen.setContentsMargins(18, 14, 18, 14)
+        ozet_duzen.setSpacing(8)
+        rozet = QLabel(OLAY_ADLARI.get(olay, olay or "İşlem"))
+        rozet.setObjectName("islemRozeti")
+        rozet.setStyleSheet(
+            f"QLabel#islemRozeti {{ color: {renk}; background: {zemin}; border-radius: 10px; padding: 3px 12px;"
+            " font-size: 12px; font-weight: 800; }"
+        )
+        rozet.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+        ozet_duzen.addWidget(rozet)
+        cumle = QLabel(olay_cumlesi(kayit))
+        cumle.setObjectName("olayCumlesi")
+        cumle.setTextFormat(Qt.PlainText)
+        cumle.setWordWrap(True)
+        cumle.setStyleSheet("QLabel#olayCumlesi { font-size: 15px; font-weight: 700; color: #0F2552; }")
+        ozet_duzen.addWidget(cumle)
+        duzen.addWidget(ozet)
+
+        kullanici_no = kayit.get("kullanici_id")
+        yapan = kayit.get("kullanici_adi") or "Bilinmeyen kullanıcı"
         bilgiler = [
-            ("Kayıt ID", kayit.get("denetim_id")),
             ("Tarih / Saat", tarih),
-            ("İşlemi Yapan", kayit.get("kullanici_adi")),
-            ("Kullanıcı ID", kayit.get("kullanici_id")),
-            ("İşlem Türü", OLAY_ADLARI.get(
-                kayit.get("olay_turu"),
-                kayit.get("olay_turu")
-            )),
-            ("Hedef Tablo", kayit.get("hedef_tablo")),
-            ("Hedef Kayıt ID", kayit.get("hedef_kayit_id")),
+            ("İşlemi Yapan", f"{yapan} (kullanıcı no {kullanici_no})" if kullanici_no is not None else yapan),
+            ("İşlem Türü", OLAY_ADLARI.get(olay, olay)),
+            ("İşlem Yapılan", hedef_metni(kayit)),
             ("İstemci Adresi", kayit.get("istemci_adresi")),
+            ("Kayıt No", kayit.get("denetim_id")),
         ]
+        duzen.addLayout(self._alan_izgarasi(bilgiler, 12))
 
-        if (
-            kayit.get("hedef_tablo") == "kullanicilar"
-            and kayit.get("hedef_kayit_id") is not None
-        ):
-            bilgiler.insert(-1, (
-                "İşlem Yapılan Kullanıcı",
-                kayit.get("hedef_kullanici_adi")
-                or "Bulunamadı (kayıt silinmiş olabilir)"
-            ))
-
-        izgara = QGridLayout()
-        izgara.setHorizontalSpacing(20)
-        izgara.setVerticalSpacing(12)
-
-        for sira, (alan, deger) in enumerate(bilgiler):
-            ad = QLabel(alan)
-            ad.setObjectName("alanAdi")
-            ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-
-            deger_yazisi = QLabel(
-                "—" if deger is None else str(deger)
-            )
-            deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            deger_yazisi.setTextFormat(Qt.PlainText)
-            deger_yazisi.setWordWrap(True)
-            deger_yazisi.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
-
-            izgara.addWidget(ad, sira, 0)
-            izgara.addWidget(deger_yazisi, sira, 1)
-
-        izgara.setColumnStretch(1, 1)
-        duzen.addLayout(izgara)
-
-        ayrinti = ayrinti_satirlari(kayit.get("ayrinti"))
-        if ayrinti:
+        ayrinti = kayit.get("ayrinti")
+        onceki_yeni = (
+            isinstance(ayrinti, dict) and isinstance(ayrinti.get("onceki"), dict) and isinstance(ayrinti.get("yeni"), dict)
+        )
+        kalan = ayrinti_satirlari(
+            {k: v for k, v in ayrinti.items() if k not in ("onceki", "yeni")} if onceki_yeni else ayrinti
+        )
+        if onceki_yeni or kalan:
             alt_baslik = QLabel(
-                {"DELETE": "Silinen Veri", "EXPORT": "Aktarım Ayrıntısı"}.get(kayit.get("olay_turu"), "Değişiklik Ayrıntısı")
+                {"DELETE": "Silinen Veri", "EXPORT": "Aktarım Ayrıntısı"}.get(olay, "Değişiklik Ayrıntısı")
             )
             alt_baslik.setObjectName("formBaslik")
             duzen.addWidget(alt_baslik)
-
-            ayrinti_izgara = QGridLayout()
-            ayrinti_izgara.setHorizontalSpacing(20)
-            ayrinti_izgara.setVerticalSpacing(8)
-            for sira, (alan, deger) in enumerate(ayrinti):
-                ad = QLabel(alan)
-                ad.setObjectName("alanAdi")
-                ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-                ad.setWordWrap(True)
-                deger_yazisi = QLabel(deger)
-                deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-                deger_yazisi.setTextFormat(Qt.PlainText)
-                deger_yazisi.setWordWrap(True)
-                deger_yazisi.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                ayrinti_izgara.addWidget(ad, sira, 0)
-                ayrinti_izgara.addWidget(deger_yazisi, sira, 1)
-            ayrinti_izgara.setColumnStretch(1, 1)
-            duzen.addLayout(ayrinti_izgara)
+            if onceki_yeni:
+                duzen.addWidget(self._degisiklik_tablosu(ayrinti["onceki"], ayrinti["yeni"]))
+            if kalan:
+                duzen.addLayout(self._alan_izgarasi(kalan, 8))
 
         kapat = QPushButton("Kapat")
         kapat.setObjectName("birincil")
@@ -548,6 +586,63 @@ class AuditKayitlariEkrani(QWidget):
 
         duzen.addWidget(kapat, alignment=Qt.AlignRight)
         pencere.exec()
+        pencere.deleteLater()
+
+    @staticmethod
+    def _alan_izgarasi(satirlar, dikey_bosluk):
+        """(alan adı, değer) çiftlerini iki sütunlu, üstten hizalı ve seçilip kopyalanabilir bir ızgaraya dizer."""
+        izgara = QGridLayout()
+        izgara.setHorizontalSpacing(20)
+        izgara.setVerticalSpacing(dikey_bosluk)
+        for sira, (alan, deger) in enumerate(satirlar):
+            ad = QLabel(alan)
+            ad.setObjectName("alanAdi")
+            ad.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            ad.setWordWrap(True)
+            deger_yazisi = QLabel("—" if deger is None or deger == "" else str(deger))
+            deger_yazisi.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            deger_yazisi.setTextFormat(Qt.PlainText)
+            deger_yazisi.setWordWrap(True)
+            deger_yazisi.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            izgara.addWidget(ad, sira, 0)
+            izgara.addWidget(deger_yazisi, sira, 1)
+        izgara.setColumnStretch(1, 1)
+        izgara.setColumnMinimumWidth(0, 150)
+        return izgara
+
+    @staticmethod
+    def _degisiklik_tablosu(onceki, yeni):
+        """Değişen alanlar için Alan / Önceki / Yeni karşılaştırma tablosu; değişen yeni değer vurgulanır."""
+        kart = QFrame()
+        kart.setObjectName("oturumSatiri")
+        izgara = QGridLayout(kart)
+        izgara.setContentsMargins(16, 12, 16, 12)
+        izgara.setHorizontalSpacing(18)
+        izgara.setVerticalSpacing(8)
+        for sutun, metin in enumerate(("ALAN", "ÖNCEKİ", "YENİ")):
+            etiket = QLabel(metin)
+            etiket.setObjectName("ipucu")
+            etiket.setStyleSheet("font-size: 11px; font-weight: 800; color: #6B7FA8;")
+            izgara.addWidget(etiket, 0, sutun)
+        anahtarlar = list(onceki) + [a for a in yeni if a not in onceki]
+        for sira, anahtar in enumerate(anahtarlar, start=1):
+            eski_deger, yeni_deger = biçimle(onceki.get(anahtar)), biçimle(yeni.get(anahtar))
+            degisti = eski_deger != yeni_deger
+            for sutun, (metin, adi) in enumerate(((alan_adi(anahtar), "alanAdi"), (eski_deger, ""), (yeni_deger, ""))):
+                etiket = QLabel(metin)
+                if adi:
+                    etiket.setObjectName(adi)
+                etiket.setTextFormat(Qt.PlainText)
+                etiket.setWordWrap(True)
+                etiket.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+                etiket.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                if sutun == 2 and degisti:
+                    etiket.setStyleSheet("font-weight: 800; color: #1D4ED8;")
+                izgara.addWidget(etiket, sira, sutun)
+        izgara.setColumnMinimumWidth(0, 130)
+        izgara.setColumnStretch(1, 1)
+        izgara.setColumnStretch(2, 1)
+        return kart
 
     def detay_dugmesine_basildi(self, *_):
         """"Görüntüle" düğmesi: hangi satırın olduğu düğmenin özelliğinden bulunur (düğmeyi lambda ile bağlamak pencereyi çöp
