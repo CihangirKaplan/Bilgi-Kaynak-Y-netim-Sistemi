@@ -15,7 +15,7 @@ danışma masası süreçlerini tek bir sistemde, rol bazlı yetkiyle ve izleneb
 |---|---|
 | Psikolog | Kendi randevuları ve danışanları, randevu sonucu (Tamamlandı/Gelmedi), cihaz uygunluğunu görüntüleme |
 | Memur (idari personel) | Cihaz envanteri, bakım/kalibrasyon/arıza, oda etkinlikleri, öğrenci ve faaliyet kayıtları |
-| Müdür | Yönetim raporları, kullanıcı ve personel yönetimi, danışma masası onayları |
+| Müdür | Yönetim raporları, kullanıcı ve personel yönetimi, danışma masası raporları (görev onayını Memur verir) |
 | Danışma Öğrencisi | Danışma masası görevini başlatma ve bitirme |
 | Yönetici (ADMIN) | Bütün işlemler; rol ve izin yönetimi, parola sıfırlama, denetim kayıtları, sistem durumu |
 
