@@ -102,3 +102,14 @@ def test_hesap_menusu_cikis_ve_sifre_ikonlari_svg_olup_eski_karakter_yok():
     kaynak = inspect.getsource(mw.AnaPencere._kullanici_hesap_menusu)
     assert 'ikon_pixmap("power"' in kaynak and 'ikon_pixmap("key"' in kaynak
     assert "⏻" not in kaynak and "🔑" not in kaynak          # bazı Windows yazı tiplerinde kutu olarak görünüyordu
+
+
+def test_dar_menu_baslik_dugmeleri_kaydirma_alanina_sigar_hover_zemini_kesilmez(pencere):
+    assert pencere._sol_menu_dar is True
+    pencere.resize(1366, 720)
+    pencere.show()
+    QApplication.processEvents()
+    for grup in pencere._sidebar_elegant.groups.values():
+        dugme = grup["header"]
+        kullanilabilir = dugme.parentWidget().parentWidget().width() - pencere.nav_layout.contentsMargins().right()
+        assert dugme.geometry().right() + 1 <= kullanilabilir      # sağ kenar kesilirse :hover zemini yarım görünür
