@@ -55,6 +55,7 @@ POSTGRESQL_TEST_DOSYALARI = {
     "test_yas_terapi_gorusme_pg_quality.py",
     "test_randevu_raporu_pg_quality.py",
     "test_psikolog_pasif_oda_pg_quality.py",
+    "test_vt_havuzu_pg_quality.py",
     "test_oda_kullanimi_pg_quality.py",
     "test_girdi_fuzz_pg_quality.py",
     "test_sema_dogrulama_pg_quality.py",
@@ -153,6 +154,17 @@ def postgresql_test_guvenligi(request, monkeypatch):
             raise
 
     monkeypatch.setattr(psycopg2, "connect", guvenli_connect)
+
+
+@pytest.fixture(autouse=True)
+def veritabani_havuzu_testlerde_kapali(monkeypatch):
+    """Bağlantı havuzu üretimde varsayılan açıktır; testler her çağrıda `psycopg2.connect`'in doğrudan çağrıldığını varsayar
+    (sahte bağlantılar, çağrı sayıları). Havuzu sınayan testler değeri kendileri açar.
+    Tüm testleri havuz AÇIK koşturmak için: TKYS_TEST_HAVUZ_BOYUTU=10 (yerel doğrulama)."""
+    monkeypatch.setenv("TKYS_DB_HAVUZ_BOYUTU", os.getenv("TKYS_TEST_HAVUZ_BOYUTU", "0"))
+    yield
+    from server import vt_baglanti
+    vt_baglanti.havuzlari_bosalt()
 
 
 @pytest.fixture(autouse=True)

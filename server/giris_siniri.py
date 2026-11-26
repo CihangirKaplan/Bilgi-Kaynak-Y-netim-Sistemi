@@ -16,7 +16,7 @@ import logging
 
 import psycopg2
 
-from server.vt_baglanti import mevcut_adres
+from server.vt_baglanti import mevcut_adres, vt_baglan
 
 GUNLUK = logging.getLogger("uvicorn.error")
 
@@ -42,7 +42,7 @@ def engel_suresi(vt_ayarlari: dict, anahtar: str | None) -> int:
         return 0
     conn = None
     try:
-        conn = psycopg2.connect(**vt_ayarlari)
+        conn = vt_baglan(vt_ayarlari)
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -70,7 +70,7 @@ def basarisiz_girisi_kaydet(vt_ayarlari: dict, anahtar: str | None) -> None:
         return
     conn = None
     try:
-        conn = psycopg2.connect(**vt_ayarlari)
+        conn = vt_baglan(vt_ayarlari)
         cursor = conn.cursor()
         cursor.execute(
             """

@@ -145,6 +145,7 @@ Sunucu bilgisayarındaki `.env` dosyası **gizlidir; GitHub'a yüklenmez, kimsey
 | `JWT_SECRET` | Oturum anahtarlarını imzalayan gizli anahtar; **en az 32 karakter**, rastgele olmalı. Değiştirirseniz herkes bir kez yeniden giriş yapar |
 | `JWT_EXPIRE_MINUTES` | Oturum süresi (varsayılan **45** dakika) |
 | `GECICI_PAROLA_GECERLILIK_SAAT` | Geçici parolanın geçerlilik süresi (varsayılan **48** saat) |
+| `TKYS_DB_HAVUZ_BOYUTU` | Veritabanı bağlantı havuzunda boşta bekletilen bağlantı sayısı (varsayılan **10**). Program ve sayfalar daha hızlı açılır; **0** yazılırsa havuz kapanır. Değiştirirseniz sunucuyu yeniden başlatın |
 | `TKYS_BACKUP_DIR` | Yedeklerin yazılacağı klasör (ayarsızsa projenin `backups` klasörü) |
 | `PG_DUMP_PATH` | `pg_dump.exe` dosyasının tam yolu |
 | `TKYS_API_DOCS` | `1` ise API belge sayfaları (`/docs`) açılır; **varsayılan kapalıdır**, yalnızca teknik kişi gerektiğinde açmalı |
