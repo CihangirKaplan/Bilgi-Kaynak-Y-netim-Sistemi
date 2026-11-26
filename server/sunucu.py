@@ -5688,12 +5688,9 @@ def dashboard_ozet_getir(kullanici_id: int = Depends(izin_kontrol("CIHAZ_ENVANTE
                 ozet["kalibrasyondaki_cihaz"] = sayi
 
         # 2. Açık Arızaları Çek (cozuldu_mu sütunu FALSE olanlar)
-        # Eğer tabloda cozuldu_mu yok durum varsa: WHERE durum != 'Çözüldü' şeklinde de olabilir, biz genel halini yazalım.
-        try:
-            cursor.execute("SELECT COUNT(*) FROM cihaz_arizalari WHERE cozuldu_mu = False;")
-            ozet["acik_ariza_sayisi"] = cursor.fetchone()[0]
-        except:
-            conn.rollback() # Sütun adı farklıysa diye önlem
+        # Sorgu hata verirse sayı sessizce 0 kalmaz: ortak hata yakalayıcı 500 döner ve asıl nedeni günlüğe yazar.
+        cursor.execute("SELECT COUNT(*) FROM cihaz_arizalari WHERE cozuldu_mu = False;")
+        ozet["acik_ariza_sayisi"] = cursor.fetchone()[0]
 
         # 3. Bugünkü Randevuları Çek
         cursor.execute("SELECT COUNT(*) FROM randevular WHERE DATE(baslangic_zamani) = CURRENT_DATE;")

@@ -56,3 +56,40 @@ def test_kullanilmayan_rol_kodu_sozlugu_kalmamis():
     kullanici_olustur = next(n for n in AGAC.body if isinstance(n, ast.FunctionDef) and n.name == "kullanici_olustur")
     atamalar = [t.id for n in ast.walk(kullanici_olustur) if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)]
     assert "rol_kodlari" not in atamalar
+
+
+def test_sunucuda_cirplak_except_yok():
+    """Çıplak `except:` hatayı sessizce yutar; en azından `except Exception` yazılmalı ve hata günlüğe düşmeli."""
+    import ast
+    from pathlib import Path
+
+    kaynak = Path(__file__).resolve().parents[2] / "server" / "sunucu.py"
+    cirplak = [d.lineno for d in ast.walk(ast.parse(kaynak.read_text(encoding="utf-8")))
+               if isinstance(d, ast.ExceptHandler) and d.type is None]
+    assert cirplak == []
+
+
+def test_dashboard_ozeti_ariza_sorgusu_hata_verirse_500_doner():
+    """Açık arıza sorgusu hata verirse özet sessizce 0 göstermez; 500 döner (neden ortak yakalayıcıda günlüğe yazılır)."""
+    import pytest
+    from unittest.mock import MagicMock
+
+    from fastapi import HTTPException
+    import server.sunucu as sunucu
+
+    imlec = MagicMock()
+    imlec.fetchall.return_value = []
+
+    def calistir(sorgu, *a, **k):
+        if sorgu.strip().startswith("SELECT COUNT(*) FROM cihaz_arizalari"):
+            raise RuntimeError("sorgu hatası (deneme)")
+
+    imlec.execute.side_effect = calistir
+    baglanti = MagicMock()
+    baglanti.cursor.return_value = imlec
+    from unittest.mock import patch
+    with patch.object(sunucu, "vt_baglan", return_value=baglanti):
+        with pytest.raises(HTTPException) as hata:
+            sunucu.dashboard_ozet_getir(kullanici_id=1)
+    assert hata.value.status_code == 500
+    assert isinstance(hata.value.__context__, RuntimeError)
