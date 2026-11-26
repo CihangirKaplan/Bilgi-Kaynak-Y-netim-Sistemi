@@ -54,7 +54,7 @@ def test_sinira_ulasilmayinca_eskisi_gibi_basliksiz_ve_ek_sorgusuz(ad, fonksiyon
 
 @pytest.mark.parametrize("ad, fonksiyon, genislik", UCLAR)
 def test_sinira_ulasilinca_gercek_toplam_baslikta_gelir(ad, fonksiyon, genislik):
-    with patch("server.sunucu.LISTE_UST_SINIRI", 2):
+    with patch("server.liste_siniri.LISTE_UST_SINIRI", 2):
         liste, yanit, imlec = _calistir(fonksiyon, genislik, 2, toplam=7312)
     assert len(liste) == 2
     assert yanit.headers["X-Toplam-Kayit"] == "7312"
@@ -67,7 +67,7 @@ def test_dogrudan_cagrida_response_verilmezse_sorun_cikmaz(ad, fonksiyon, genisl
     """Eski çağıranlar (testler) response vermez; sınıra ulaşılsa bile hata çıkmaz."""
     baglanti = MagicMock()
     baglanti.cursor.return_value.fetchall.return_value = [_satir(genislik, 1), _satir(genislik, 2)]
-    with patch("server.sunucu.psycopg2.connect", return_value=baglanti), patch("server.sunucu.LISTE_UST_SINIRI", 2):
+    with patch("server.sunucu.psycopg2.connect", return_value=baglanti), patch("server.liste_siniri.LISTE_UST_SINIRI", 2):
         assert len(getattr(sunucu, fonksiyon)(kullanici_id=1)) == 2
 
 

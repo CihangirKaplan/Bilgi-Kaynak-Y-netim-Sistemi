@@ -22,7 +22,7 @@ D = datetime.date
 @pytest.fixture(autouse=True)
 def varsayilan_plan_yetkileri():
     with patch(
-        "server.sunucu._plan_yetkileri",
+        "server.bakim_plani_api._plan_yetkileri",
         return_value={
             "BAKIM_KAYITLARI_YONET",
             "KALIBRASYON_KAYITLARI_YONET",
@@ -124,7 +124,7 @@ def test_listelemede_gecersiz_cihaz_422():
 # -------------------------------------------------------------------------- ekleme
 def test_ekleme_basarili_tarih_bos_ise_bugun_artı_periyot_ve_denetim_ayni_islemde():
     conn, cursor = baglanti(fetchone=[(1,), None, (11,)])      # cihaz var, çakışan plan yok, yeni plan_id
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.date") as bugun:
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.bakim_plani_api.date") as bugun:
         bugun.today.return_value = D(2026, 11, 4)
         sonuc = bakim_plani_ekle(plan(periyot_gun=90), 5)
     assert sonuc["plan_id"] == 11 and sonuc["sonraki_gorev_tarihi"] == "2027-02-02"
@@ -281,7 +281,7 @@ def istek(yontem, yol, govde, izinler):
     try:
         with (
             patch("server.sunucu.psycopg2.connect", return_value=conn),
-            patch("server.sunucu._plan_yetkileri", return_value=set(izinler)),
+            patch("server.bakim_plani_api._plan_yetkileri", return_value=set(izinler)),
         ):
             with TestClient(app) as istemci:
                 yanit = getattr(istemci, yontem)(
