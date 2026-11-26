@@ -234,7 +234,7 @@ def _mevcut_kullanici(rol_adi):
     return kullanici_id, kullanici_adi, temizle
 
 
-def test_varsayilan_duyuru_izni_yalniz_yonetim_rollerinde_alembic_sonrasi():
+def test_varsayilan_duyuru_izni_danisma_ogrencisi_disinda_herkeste_alembic_sonrasi():
     conn = psycopg2.connect(**VT_AYARLARI)
     try:
         with conn.cursor() as cursor:
@@ -247,7 +247,7 @@ def test_varsayilan_duyuru_izni_yalniz_yonetim_rollerinde_alembic_sonrasi():
     finally:
         conn.rollback()
         conn.close()
-    assert bulunan == {"ADMIN": 1, "MUDUR": 1, "MEMUR": 1, "PSIKOLOG": 0, "PROJE_ASISTANI": 0, "DANISMA_OGRENCISI": 0}
+    assert bulunan == {"ADMIN": 1, "MUDUR": 1, "MEMUR": 1, "PSIKOLOG": 1, "PROJE_ASISTANI": 1, "DANISMA_OGRENCISI": 0}
 
 
 def test_duyuru_herkes_okur_yalniz_izinli_yazar_ve_kaldirir_gercek_sql():
@@ -301,3 +301,20 @@ def test_ana_panel_uclari_her_aralikta_gercek_sql_ile_calisir(aralik):
         assert gunum.status_code == 200 and gunum.json() == {"randevular": [], "rezervasyonlar": []}        # personel kaydı olmayan kullanıcıda boş
     finally:
         yonetici_temizle()
+
+
+def test_psikolog_duyuru_yayinlar_ve_kaldirir_gercek_sql():
+    """Duyuru izni Danışma Öğrencisi dışında herkese açık: gerçek bir Psikolog hesabı yayınlayabilir ve kendi duyurusunu kaldırabilir."""
+    psikolog_id, psikolog_adi, temizle = _mevcut_kullanici("PSIKOLOG")
+    izinsiz_id, _rol, izinsiz_temizle = gecici_izinsiz_kullanici()
+    try:
+        yanit = istek_yap(psikolog_id, "POST", "/api/duyurular", json={"baslik": "Psikolog duyurusu", "metin": "Cuma toplantısı 14:00."})
+        assert yanit.status_code == 201, yanit.text
+        duyuru_id = yanit.json()["duyuru_id"]
+        gorunen = [d for d in istek_yap(psikolog_id, "GET", "/api/duyurular").json() if d["duyuru_id"] == duyuru_id][0]
+        assert gorunen["yonetebilir"] is True and gorunen["yazan"] == psikolog_adi
+        assert istek_yap(izinsiz_id, "DELETE", f"/api/duyurular/{duyuru_id}").status_code == 403         # izni olmayan kaldıramaz
+        assert istek_yap(psikolog_id, "DELETE", f"/api/duyurular/{duyuru_id}").status_code == 200
+    finally:
+        temizle()
+        izinsiz_temizle()
