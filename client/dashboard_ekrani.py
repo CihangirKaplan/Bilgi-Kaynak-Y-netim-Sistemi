@@ -230,22 +230,22 @@ class DashboardEkrani(QWidget):
         # ---- 1b. DUYURULAR (herkes okur) ve BENİM GÜNÜM (yalnızca kişinin kendi kaydı varsa görünür) ----
         self.duyurular = []
         self._okunanlar_acik = False                # "Okunan duyurular" bölümü açık mı (yenilemelerde korunur)
+        self._duyuru_hata = False                   # son yükleme başarısız mı (boş kutuda "yüklenemedi" yazılsın)
+        self._benim_gunum_hata = False
         self.benim_gunum = {}
         self.panel_duyuru = QFrame()
         self.panel_duyuru.setObjectName("kart")
         self.duyuru_lay = QVBoxLayout(self.panel_duyuru)
         self.duyuru_lay.setContentsMargins(22, 16, 22, 16)
         self.duyuru_lay.setSpacing(8)
-        self.panel_duyuru.hide()
-        ana.addWidget(self.panel_duyuru)
+        ana.addWidget(self.panel_duyuru)            # kutu boş olsa da HER ZAMAN görünür (boşken kısa bir açıklama yazar)
 
         self.panel_benim_gunum = QFrame()
         self.panel_benim_gunum.setObjectName("kart")
         self.benim_gunum_lay = QVBoxLayout(self.panel_benim_gunum)
         self.benim_gunum_lay.setContentsMargins(22, 16, 22, 16)
         self.benim_gunum_lay.setSpacing(6)
-        self.panel_benim_gunum.hide()
-        ana.addWidget(self.panel_benim_gunum)
+        ana.addWidget(self.panel_benim_gunum)       # kutu boş olsa da HER ZAMAN görünür (boşken kısa bir açıklama yazar)
 
         # ---- 2. ÖZET KARTLARI ----
         self.kartlar = {}
@@ -652,9 +652,11 @@ class DashboardEkrani(QWidget):
             duyurular = self._getir("/api/duyurular")
             if not isinstance(duyurular, list):
                 raise ValueError("Geçersiz duyuru listesi")
+            self._duyuru_hata = False
         except Exception as e:
             logger.warning("Duyurular yüklenemedi: %s", e)
             duyurular = []
+            self._duyuru_hata = True
         self.duyurular = duyurular
         self._duyurulari_ciz()
 
@@ -715,9 +717,7 @@ class DashboardEkrani(QWidget):
         self._kutuyu_bosalt(self.duyuru_lay)
         okunmamis = [d for d in self.duyurular if not d.get("okundu")]          # "okundu" alanı yoksa (eski sunucu) hepsi okunmamış sayılır
         okunan = [d for d in self.duyurular if d.get("okundu")]
-        # Yönetebilen kişi duyuru yoksa da "Yeni duyuru" düğmesine ulaşabilsin diye panel onda hep görünür; okuyan kişide hepsi okunduysa da
-        # (okunanları geri getirebilsin diye) görünür.
-        self.panel_duyuru.setVisible(bool(self.duyurular) or self.duyuru_yonetebilir)
+        self.panel_duyuru.setVisible(True)                      # duyuru yoksa da kutu görünür ("Şu an yayında duyuru yok")
 
         ust = QHBoxLayout()
         baslik = QLabel("📢  Duyurular" + (f"  ({len(okunmamis)} yeni)" if okunmamis else ""))
@@ -742,7 +742,8 @@ class DashboardEkrani(QWidget):
         self.duyuru_lay.addWidget(ust_kap)
 
         if not self.duyurular:
-            bos = QLabel("Şu an yayında duyuru yok.")
+            bos = QLabel("Duyurular yüklenemedi." if self._duyuru_hata else "Şu an yayında duyuru yok.")
+            bos.setObjectName("duyuruBos")
             bos.setStyleSheet("font-size: 13px; color: #8A9BC0; padding: 6px;")
             self.duyuru_lay.addWidget(bos)
             return
@@ -824,6 +825,9 @@ class DashboardEkrani(QWidget):
         except Exception as e:
             logger.warning("Benim günüm yüklenemedi: %s", e)
             veri = {"randevular": [], "rezervasyonlar": []}
+            self._benim_gunum_hata = True
+        else:
+            self._benim_gunum_hata = False
         self.benim_gunum = veri
         self._benim_gunumu_ciz()
 
@@ -831,12 +835,17 @@ class DashboardEkrani(QWidget):
         self._kutuyu_bosalt(self.benim_gunum_lay)
         randevular = self.benim_gunum.get("randevular") or []
         rezervasyonlar = self.benim_gunum.get("rezervasyonlar") or []
-        self.panel_benim_gunum.setVisible(bool(randevular or rezervasyonlar))        # kaydı olmayan rolde panel hiç görünmez
-        if not (randevular or rezervasyonlar):
-            return
+        self.panel_benim_gunum.setVisible(True)                                       # kaydınız yoksa da kutu görünür
         baslik = QLabel("🙋  Benim Günüm")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         self.benim_gunum_lay.addWidget(baslik)
+        if not (randevular or rezervasyonlar):
+            bos = QLabel("Günlük bilgileriniz yüklenemedi." if self._benim_gunum_hata
+                         else "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok.")
+            bos.setObjectName("benimGunumBos")
+            bos.setStyleSheet("font-size: 13px; color: #8A9BC0; padding: 6px;")
+            self.benim_gunum_lay.addWidget(bos)
+            return
         for gun, gun_adi in (("bugun", "Bugün"), ("yarin", "Yarın")):
             satirlar = [f"{r['saat']}  ·  Randevu  ·  Danışan {r['danisan_kod_id']}  ·  {r['oda']}" for r in randevular if r.get("gun") == gun]
             satirlar += [f"{r['saat']}  ·  Cihaz  ·  {r['cihaz']}  ·  {r['oda']}" for r in rezervasyonlar if r.get("gun") == gun]

@@ -162,26 +162,31 @@ def test_herkes_duyuruyu_gorur_yonet_dugmeleri_yalniz_izinlide():
     p.close()
 
 
-def test_duyuru_yoksa_panel_gizli_ama_yonetende_yeni_duyuru_dugmesi_kalir():
+def test_duyuru_yoksa_kutu_yine_gorunur_aciklama_yazar_yonetende_yeni_duyuru_dugmesi_kalir():
     p = _panel(duyurular=[], cihaz_ozeti=False)
-    assert p.panel_duyuru.isHidden()
+    assert not p.panel_duyuru.isHidden() and "Şu an yayında duyuru yok." in _metinler(p.panel_duyuru)
+    assert "＋ Yeni duyuru" not in _metinler(p.panel_duyuru)
     p.close()
     p = _panel(duyurular=[], cihaz_ozeti=False, duyuru_yonetebilir=True)
     assert not p.panel_duyuru.isHidden() and "＋ Yeni duyuru" in _metinler(p.panel_duyuru)
     p.close()
 
 
-def test_benim_gunum_bugun_ve_yarini_listeler_kaydi_yoksa_gizlenir():
+def test_benim_gunum_bugun_ve_yarini_listeler_kaydi_yoksa_da_kutu_gorunur():
     p = _panel(cihaz_ozeti=False)
     assert not p.panel_benim_gunum.isHidden()
     metin = " | ".join(_metinler(p.panel_benim_gunum))
     assert "09:00 – 10:00" in metin and "11:00 – 12:00" in metin and "E-1 - EEG" in metin and "Bugün" in metin and "Yarın" in metin
     p.close()
     p = _panel(gunum={"randevular": [], "rezervasyonlar": []}, cihaz_ozeti=False)
-    assert p.panel_benim_gunum.isHidden()
+    assert not p.panel_benim_gunum.isHidden()                                       # kaydı olmasa da görünür
+    assert "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok." in _metinler(p.panel_benim_gunum)
+    assert "🙋  Benim Günüm" in _metinler(p.panel_benim_gunum)
     p.close()
-    p = _panel(gunum=None, duyurular=None, cihaz_ozeti=False)                       # sunucu yanıtı bozuksa ekran çökmez
-    assert p.panel_benim_gunum.isHidden() and p.panel_duyuru.isHidden()
+    p = _panel(gunum=None, duyurular=None, cihaz_ozeti=False)                       # sunucu yanıtı bozuksa ekran çökmez; "boş" değil "yüklenemedi" yazar
+    assert not p.panel_benim_gunum.isHidden() and not p.panel_duyuru.isHidden()
+    assert "Günlük bilgileriniz yüklenemedi." in _metinler(p.panel_benim_gunum)
+    assert "Duyurular yüklenemedi." in _metinler(p.panel_duyuru)
     p.close()
 
 
