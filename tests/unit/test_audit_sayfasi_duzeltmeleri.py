@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QPushButton
 
 import client.audit_kayitlari_ekrani as modul
 import server.sunucu as sunucu
+from server import audit_api
 
 
 # ------------------------------------------------------------------ sunucu
@@ -57,7 +58,7 @@ def _liste(**ek):
     imlec = _Imlec()
     varsayilan = dict(kullanici=None, olay_turu=None, baslangic_tarihi=None, bitis_tarihi=None, limit=50, offset=0, ozet=True, kullanici_id=1)
     varsayilan.update(ek)
-    with patch.object(sunucu, "vt_baglan", return_value=_Baglanti(imlec)):
+    with patch.object(audit_api, "vt_baglan", return_value=_Baglanti(imlec)):     # kod server/audit_api.py'ye taşındı
         sonuc = sunucu.audit_kayitlarini_getir(**varsayilan)
     return sonuc, imlec
 
