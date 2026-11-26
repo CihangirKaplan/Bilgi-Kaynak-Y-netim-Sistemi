@@ -48,8 +48,8 @@ def _guncelle(degisiklik, kayitli=(7, date(2026, 11, 1), date(2026, 11, 3), date
     conn = MagicMock()
     imlec = conn.cursor.return_value
     imlec.fetchone.side_effect = [(1,), kayitli]
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"), \
-         patch("server.sunucu.cakisan_rezervasyonlari_denetle"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur"), \
+         patch("server.bakim_kalibrasyon_api.cakisan_rezervasyonlari_denetle"):
         sunucu.bakim_guncelle(9, BakimGuncelleModeli(**degisiklik), kullanici_id=1)
     return [c for c in imlec.execute.call_args_list if "UPDATE cihaz_bakimlari" in str(c.args[0])][0].args
 

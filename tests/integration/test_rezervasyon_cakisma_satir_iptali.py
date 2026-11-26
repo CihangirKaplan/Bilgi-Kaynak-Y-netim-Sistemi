@@ -112,14 +112,14 @@ def test_bakim_tarihi_degisince_yeni_aralik_icin_liste_doner():
 
 def test_tarih_degismediyse_veya_alan_tarih_degilse_sorulmaz():
     conn, cursor = baglanti(REZ, fetchone=[(1,)])
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur"):
         bakim_guncelle(5, BakimGuncelleModeli(yapilan_islem="yeni not"), 3)
     assert not any("CIHAZ_REZERVASYONLARI" in s for s in sorgular(cursor))
 
     # Formlar tarihleri hep gönderir: değerler aynıysa yine sorulmaz.
     conn, cursor = baglanti(REZ, fetchone=[(1,), (7, D(2026, 11, 1), D(2026, 11, 2), None)])
     model = BakimGuncelleModeli(bakim_baslangic_tarihi=D(2026, 11, 1), bakim_bitis_tarihi=D(2026, 11, 2))
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur"):
         bakim_guncelle(5, model, 3)
     assert not any("FROM CIHAZ_REZERVASYONLARI" in s for s in sorgular(cursor))
 
@@ -132,7 +132,7 @@ def test_kalibrasyon_tarihi_degisince_sorulur_ve_eski_bos_kayitta_atlanir():
     assert hata.value.detail["kod"] == "REZERVASYON_CAKISMASI"
 
     conn, cursor = baglanti(REZ, fetchone=[(1,), (7, None, None)])
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur"):
         kalibrasyon_guncelle(5, KalibrasyonGuncelleModeli(kalibrasyon_bitis_tarihi=D(2026, 11, 12)), 3)
     assert not any("FROM CIHAZ_REZERVASYONLARI" in s for s in sorgular(cursor))
 

@@ -112,8 +112,8 @@ def test_bakim_ve_kalibrasyon_kaydi_plan_id_yi_veritabanina_yazar():
         cursor = conn.cursor.return_value
         cursor.fetchone.return_value = (1,)
         with patch("server.sunucu.psycopg2.connect", return_value=conn), \
-             patch("server.sunucu.cakisan_rezervasyonlari_denetle"), \
-             patch("server.sunucu.plani_ilerlet"), patch("server.sunucu.plan_periyodu", return_value=30), \
+             patch("server.bakim_kalibrasyon_api.cakisan_rezervasyonlari_denetle"), \
+             patch("server.bakim_kalibrasyon_api.plani_ilerlet"), patch("server.bakim_kalibrasyon_api.plan_periyodu", return_value=30), \
              patch("server.denetim.denetim_kaydi_olustur"):
             ekle(model, kullanici_id=3)
         insert = next(c for c in cursor.execute.call_args_list if f"INSERT INTO {tablo}" in c.args[0])

@@ -143,6 +143,7 @@ def test_quality_update_delete_basarili(
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
         patch("server.sunucu.denetim_kaydi_olustur", audit),
+        patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur", audit),
         patch("server.denetim.denetim_kaydi_olustur", audit),
     ):
         sonuc = islemi_calistir(fonksiyon, model_uret)
@@ -193,6 +194,7 @@ def test_quality_update_delete_kayit_yok(
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
         patch("server.sunucu.denetim_kaydi_olustur", audit),
+        patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur", audit),
         patch("server.denetim.denetim_kaydi_olustur", audit),
     ):
         with pytest.raises(HTTPException) as hata:
@@ -230,6 +232,7 @@ def test_quality_update_delete_audit_hatasi(
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
         patch("server.sunucu.denetim_kaydi_olustur", audit),
+        patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur", audit),
         patch("server.denetim.denetim_kaydi_olustur", audit),
     ):
         with pytest.raises(HTTPException) as hata:

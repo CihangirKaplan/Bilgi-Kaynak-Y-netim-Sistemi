@@ -660,7 +660,7 @@ def test_ariza_listesi_ust_sinirda_en_yeni_kayitlari_ve_gercek_toplami_verir_ger
         assert yanit.status_code == 200 and "x-toplam-kayit" not in yanit.headers
         assert {a["ariza_baslik"] for a in yanit.json()} >= {f"eski-{etiket}", f"orta-{etiket}", f"yeni-{etiket}"}
 
-        with patch("server.sunucu.LISTE_UST_SINIRI", 2):                                          # sınır 2: yalnızca en yeni iki kayıt
+        with patch("server.liste_siniri.LISTE_UST_SINIRI", 2):                                          # sınır 2: yalnızca en yeni iki kayıt
             yanit = istemci.get("/api/arizalar")
         assert yanit.status_code == 200
         basliklar = [a["ariza_baslik"] for a in yanit.json()]

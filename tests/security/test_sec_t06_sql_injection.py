@@ -97,9 +97,17 @@ def test_bakim_kalibrasyon_sql_injection(
         **{alan: zararli_deger}
     )
 
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     rota = next(
-        r for r in app.routes
-        if r.path == yol and metot in getattr(r, "methods", set())
+        r for r in rotalar(app.routes)
+        if getattr(r, "path", None) == yol and metot in getattr(r, "methods", set())
     )
 
     kimlik_alani = (
@@ -108,7 +116,7 @@ def test_bakim_kalibrasyon_sql_injection(
     )
 
     with patch("server.sunucu.psycopg2.connect") as baglanti:
-        with patch("server.sunucu.denetim_kaydi_olustur"):
+        with patch("server.bakim_kalibrasyon_api.denetim_kaydi_olustur"):
             cursor = baglanti.return_value.cursor.return_value
             cursor.fetchone.return_value = (1,)
 
