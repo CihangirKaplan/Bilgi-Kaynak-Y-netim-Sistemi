@@ -21,7 +21,7 @@ from client.oda_yonetimi import OdaFormu
 from PySide6.QtCore import Qt, Signal, QEvent, QSize
 from PySide6.QtGui import QColor, QIcon
 from client.bildirim_toast import basari_bildirimi
-from client.sayfa_tema import ACILIR_OK_STILI
+from client.sayfa_tema import ACILIR_OK_STILI, KAYDIRMA_CUBUGU_STILI
 from client.randevu_ekranlari import RandevuOlusturFormu
 from client.cihaz_ekranlari import CihazYonetimEkrani
 from client.cihaz_rezervasyon_ekranlari import RezervasyonYonetimEkrani
@@ -418,9 +418,6 @@ QPushButton#cikis { background: rgba(255,255,255,0.08); color: #DCE7FF; border: 
 QPushButton#cikis:hover { background: #DC2626; color: white; border: 1px solid #DC2626; }
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
-QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
-QScrollBar::handle:vertical { background: rgba(120,150,210,0.45); border-radius: 4px; min-height: 30px; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
 /* ---------- ÜST BAR ---------- */
 QFrame#topbar { background: white; border-radius: 16px; }
@@ -464,6 +461,7 @@ QLabel#bosBaslik { font-size: 16px; font-weight: 800; color: #0A1F5C; }
 QLabel#bosAlt { font-size: 12px; color: #8A9BC0; }
 QStatusBar { background: #0A1F5C; color: #BFD2F7; font-size: 12px; padding: 4px; }
 """
+STIL += KAYDIRMA_CUBUGU_STILI      # her yerde aynı, belirgin kaydırma çubuğu
 STIL += ACILIR_OK_STILI      # açılır kutuların sağındaki aşağı ok (::drop-down kuralı Qt'nin okunu siler)
 
 def golge(widget, blur=32, alpha=38, dy=8):

@@ -59,7 +59,7 @@ def test_ortak_stiller_ok_kuralini_icerir():
 def test_uygulama_acilisi_ok_kuralini_uygulamaya_verir():
     """Ana pencereye bağlı olmayan pencereler de oku alsın diye kural uygulama düzeyinde verilir."""
     kaynak = Path("client/login_ekrani.py").read_text(encoding="utf-8")
-    assert "app.setStyleSheet(ACILIR_OK_STILI)" in kaynak and login_ekrani.ACILIR_OK_STILI == ACILIR_OK_STILI
+    assert "app.setStyleSheet(ACILIR_OK_STILI + KAYDIRMA_CUBUGU_STILI)" in kaynak and login_ekrani.ACILIR_OK_STILI == ACILIR_OK_STILI
 
 
 def test_drop_down_kurali_okun_kendisini_siliyordu(tkys_qapplication):

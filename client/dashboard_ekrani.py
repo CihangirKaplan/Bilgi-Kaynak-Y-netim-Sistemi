@@ -2,6 +2,7 @@ import logging
 import datetime
 import time
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
+from client.sayfa_tema import KAYDIRMA_CUBUGU_STILI as CUBUK_STILI      # tek ortak kaydırma çubuğu
 from client.ikon_kutusu import renkli_ikon_pixmap, ikon_pixmap
 from client.bildirim_ikonlari import cizgi_ikonu, ikon_boyutu
 from client.api_yoneticisi import (
@@ -151,13 +152,6 @@ def _hap(tablo, satir, kolon, metin, renk, arka):
     tablo.setCellWidget(satir, kolon, kap)
 
 
-CUBUK_STILI = """
-QScrollBar:vertical { background: #DCE8FB; width: 18px; margin: 2px 0 2px 8px; border-radius: 9px; }
-QScrollBar::handle:vertical { background: #2563EB; min-height: 70px; border-radius: 9px; margin: 2px; }
-QScrollBar::handle:vertical:hover { background: #1D4ED8; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-"""
 KAYDIRMA_CUBUGU_STILI = """
 QScrollArea#bildirimKaydirma { background: transparent; }
 QScrollArea#bildirimKaydirma > QWidget > QWidget { background: transparent; }
