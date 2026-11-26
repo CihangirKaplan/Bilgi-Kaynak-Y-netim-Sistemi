@@ -18,6 +18,7 @@ from pydantic import ValidationError
 import client.faaliyet_dialog as dialog_modulu
 import client.faaliyet_turleri_dialog as turler_modulu
 from server import sunucu
+from server import faaliyet_birimleri_api, faaliyet_kayitlari_api          # uçlar server/*_api.py modüllerine taşındı
 from server.sunucu import (
     FAALIYET_PUANI_EN_FAZLA,
     FaaliyetBirimIslemModeli,
@@ -96,7 +97,7 @@ def test_faaliyet_kayitlari_listesi_kimlikleri_dondurur():
     conn = MagicMock()
     cursor = conn.cursor.return_value
     cursor.fetchall.return_value = [(7, "Ayşe", "2201002", "Online Anket", 3, "SAAT", 3, date(2026, 11, 2), 2, 2, 2)]
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_kayitlari_api, "vt_baglan", return_value=conn):
         kayitlar = sunucu.faaliyet_kayitlarini_getir(limit=None, offset=0, response=None, kullanici_id=1)
     assert kayitlar[0]["ogrenci_id"] == 2 and kayitlar[0]["faaliyet_id"] == 2 and kayitlar[0]["birim_id"] == 2
     assert kayitlar[0]["miktar"] == "3 SAAT" and kayitlar[0]["tarih"] == "02.11.2026"
@@ -135,7 +136,7 @@ def _yazma_sorgusu_var(cursor):
 
 def test_birim_ekle_kucuk_harfle_yazilan_mevcut_adi_400_ile_reddeder():
     conn, cursor = _baglanti([(1,)])                                   # "SAAT" zaten var
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn):
         with pytest.raises(HTTPException) as hata:
             sunucu.faaliyet_birimi_ekle(FaaliyetBirimIslemModeli(birim_adi="saat"), yetkili_id=1)
     assert hata.value.status_code == 400 and "zaten mevcut" in hata.value.detail
@@ -150,7 +151,7 @@ def test_birim_ekle_es_zamanli_cakismada_500_degil_400_verir():
         if sql.lstrip().upper().startswith("INSERT"):
             raise psycopg2.errors.UniqueViolation()
     cursor.execute.side_effect = calistir
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn):
         with pytest.raises(HTTPException) as hata:
             sunucu.faaliyet_birimi_ekle(FaaliyetBirimIslemModeli(birim_adi="Yeni"), yetkili_id=1)
     assert hata.value.status_code == 400
@@ -159,7 +160,7 @@ def test_birim_ekle_es_zamanli_cakismada_500_degil_400_verir():
 
 def test_birim_ekle_bos_ad_422():
     conn, _ = _baglanti([])
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn):
         with pytest.raises(HTTPException) as hata:
             sunucu.faaliyet_birimi_ekle(FaaliyetBirimIslemModeli(birim_adi="   "), yetkili_id=1)
     assert hata.value.status_code == 422
@@ -167,7 +168,7 @@ def test_birim_ekle_bos_ad_422():
 
 def test_birim_guncelle_baska_birimin_adina_400_verir():
     conn, cursor = _baglanti([("KISI",), (2,)])                        # mevcut ad KISI; "SAAT" adı başka birimde var
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn):
         with pytest.raises(HTTPException) as hata:
             sunucu.faaliyet_birimi_guncelle(1, FaaliyetBirimIslemModeli(birim_adi="saat"), yetkili_id=1)
     assert hata.value.status_code == 400 and "zaten mevcut" in hata.value.detail
@@ -177,7 +178,7 @@ def test_birim_guncelle_baska_birimin_adina_400_verir():
 
 def test_birim_guncelle_degisiklik_yoksa_yazmaz():
     conn, cursor = _baglanti([("SAAT",)])
-    with patch.object(sunucu, "vt_baglan", return_value=conn):
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn):
         sonuc = sunucu.faaliyet_birimi_guncelle(2, FaaliyetBirimIslemModeli(birim_adi="saat"), yetkili_id=1)
     assert "değişiklik yapılmadı" in sonuc["mesaj"]
     assert not _yazma_sorgusu_var(cursor)
@@ -185,7 +186,7 @@ def test_birim_guncelle_degisiklik_yoksa_yazmaz():
 
 def test_birim_guncelle_basarida_denetim_kaydina_onceki_ve_yeni_ad_yazilir():
     conn, cursor = _baglanti([("KISI",), None])
-    with patch.object(sunucu, "vt_baglan", return_value=conn), patch("server.denetim.denetim_kaydi_olustur") as denetim:
+    with patch.object(faaliyet_birimleri_api, "vt_baglan", return_value=conn), patch("server.denetim.denetim_kaydi_olustur") as denetim:
         sunucu.faaliyet_birimi_guncelle(1, FaaliyetBirimIslemModeli(birim_adi="Kişi Sayısı"), yetkili_id=7)
     cagri = denetim.call_args
     assert cagri.args[1] == "UPDATE" and cagri.args[2] == 7 and cagri.args[3] == "faaliyet_birimleri"

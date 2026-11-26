@@ -5496,52 +5496,7 @@ def bakim_plani_sil(plan_id: int, kullanici_id: int = Depends(mevcut_kullanici_i
 # FAALİYET YÖNETİMİ MODÜLÜ API UÇLARI
 # ==========================================
 
-@app.get("/api/faaliyetler")
-def faaliyetleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        # Sadece aktif olan faaliyetleri listele
-        cursor.execute("SELECT faaliyet_id, faaliyet_adi, puan FROM faaliyetler WHERE aktif_mi = true ORDER BY faaliyet_id;")
 
-        faaliyetler = []
-        for kayit in cursor.fetchall():
-            faaliyetler.append({
-                "id": kayit[0],
-                "ad": kayit[1],
-                "puan": kayit[2]
-            })
-        return faaliyetler
-    except Exception:
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-@app.get("/api/faaliyet-birimleri")
-def faaliyet_birimleri_getir(kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        # Sadece aktif olan birimleri listele
-        cursor.execute("SELECT birim_id, birim_adi FROM faaliyet_birimleri WHERE aktif_mi = true ORDER BY birim_id;")
-
-        birimler = []
-        for kayit in cursor.fetchall():
-            birimler.append({
-                "id": kayit[0],
-                "ad": kayit[1]
-            })
-        return birimler
-    except Exception:
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 # --- Faaliyet formundaki öğrenci listesi ---
 @app.get("/api/ogrenciler-liste")
@@ -6304,58 +6259,6 @@ def ogrenci_aktiflik_duzenle(
             conn.close()
 
 
-# --- GÜNCELLENEN: YENİ TABLOYA (ÖĞRENCİ TAKİP) KAYIT ATAR ---
-@app.post("/api/faaliyet-kayitlari")
-def faaliyet_kaydi_ekle(kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # Kayıt ogrenci_faaliyet_takip tablosuna yazılır (miktar "adet" sütununa gider).
-        cursor.execute("""
-            INSERT INTO ogrenci_faaliyet_takip
-            (ogrenci_id, faaliyet_id, birim_id, adet,
-             faaliyet_tarihi, kayit_puani)
-            SELECT %s, f.faaliyet_id, %s, %s, CURRENT_DATE, f.puan
-            FROM faaliyetler AS f
-            WHERE f.faaliyet_id = %s AND f.aktif_mi = TRUE
-            RETURNING takip_id;
-        """, (
-            kayit.ogrenci_id,
-            kayit.birim_id,
-            kayit.miktar,
-            kayit.faaliyet_id
-        ))
-        if cursor.rowcount != 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Aktif faaliyet türü bulunamadı."
-            )
-
-        yeni_id = cursor.fetchone()[0]
-
-        # Denetim kaydı
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "ogrenci_faaliyet_takip", yeni_id, mevcut_cursor=cursor)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Öğrenci faaliyeti başarıyla sisteme işlendi."}
-    except HTTPException:
-        if conn is not None:
-            conn.rollback()
-        raise
-    except Exception:
-        if conn is not None:
-            conn.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu."
-        )
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 @app.post("/api/ogrenci-ekle")
 def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
@@ -6397,192 +6300,7 @@ def ogrenci_ekle(ogr: OgrenciEkleModeli, yetkili_id: int = Depends(izin_kontrol(
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# --- Faaliyet kayıtları listesi ---
-@app.get("/api/faaliyet-kayitlari")
-def faaliyet_kayitlarini_getir(
-    limit: Optional[int] = None,
-    offset: int = 0,
-    response: Response = None,
-    kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
-):
-    """Faaliyet kayıtları (en yeni önce). limit verilirse toplam sayı X-Toplam-Kayit başlığında döner."""
-    if limit is not None and (limit < 1 or limit > 5000):
-        raise HTTPException(status_code=422, detail="limit 1 ile 5000 arasında olmalıdır.")
-    if offset < 0:
-        raise HTTPException(status_code=422, detail="offset negatif olamaz.")
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
 
-        # 4 tabloyu birleştirir; toplam puan = adet x kaydın puanı
-        sorgu = """
-        SELECT
-            t.takip_id,
-            o.ad_soyad,
-            o.ogrenci_numarasi,
-            f.faaliyet_adi,
-            t.adet,
-            b.birim_adi,
-            (t.adet * t.kayit_puani) AS toplam_puan,
-            t.faaliyet_tarihi,
-            t.ogrenci_id,
-            t.faaliyet_id,
-            t.birim_id
-        FROM ogrenci_faaliyet_takip t
-        JOIN ogrenciler o ON t.ogrenci_id = o.ogrenci_id
-        JOIN faaliyetler f ON t.faaliyet_id = f.faaliyet_id
-        JOIN faaliyet_birimleri b ON t.birim_id = b.birim_id
-        ORDER BY t.olusturulma_tarihi DESC, t.takip_id DESC
-        """
-        if limit is None:
-            cursor.execute(sorgu + ";")
-        else:
-            cursor.execute("SELECT COUNT(*) FROM ogrenci_faaliyet_takip;")
-            if response is not None:
-                response.headers["X-Toplam-Kayit"] = str((cursor.fetchone() or (0,))[0])
-            cursor.execute(sorgu + " LIMIT %s OFFSET %s;", (limit, offset))
-
-        kayitlar = []
-        for row in cursor.fetchall():
-            kayitlar.append({
-                "id": row[0],
-                "ad_soyad": row[1],
-                "ogrenci_no": row[2],
-                "faaliyet_adi": row[3],
-                "miktar": f"{row[4]} {row[5]}", # Örn: "3 KISI" veya "5 SAAT"
-                "toplam_puan": row[6],
-                "tarih": row[7].strftime("%d.%m.%Y") if row[7] else "",
-                "ogrenci_id": row[8],
-                "faaliyet_id": row[9],
-                "birim_id": row[10],
-            })
-        return kayitlar
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-# --- Faaliyet kaydı düzenleme (PUT) ---
-@app.put("/api/faaliyet-kayitlari/{takip_id}")
-def faaliyet_kaydi_guncelle(takip_id: int, kayit: FaaliyetKayitModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # Kaydı kilitleyip önceki değerlerini al (denetim kaydına "neyden neye" yazılır).
-        alanlar = ("ogrenci_id", "faaliyet_id", "birim_id", "adet", "kayit_puani")
-        cursor.execute(
-            "SELECT ogrenci_id, faaliyet_id, birim_id, adet, kayit_puani "
-            "FROM ogrenci_faaliyet_takip WHERE takip_id = %s FOR UPDATE;",
-            (takip_id,)
-        )
-        eski_satir = cursor.fetchone()
-        if not eski_satir:
-            raise HTTPException(status_code=404, detail="Güncellenecek kayıt bulunamadı.")
-        onceki = dict(zip(alanlar, eski_satir))
-
-        # Faaliyet türü değişmediyse kayıttaki puan korunur (sonradan değişen tür puanı eski kaydı etkilemez).
-        # Değiştiyse yeni tür aktif olmalı ve kayıt o türün güncel puanını alır.
-        kayit_puani = onceki.get("kayit_puani")
-        if onceki.get("faaliyet_id") != kayit.faaliyet_id:
-            cursor.execute(
-                "SELECT puan FROM faaliyetler WHERE faaliyet_id = %s AND aktif_mi = TRUE;",
-                (kayit.faaliyet_id,)
-            )
-            puan = cursor.fetchone()
-            if puan is None:
-                raise HTTPException(status_code=400, detail="Aktif faaliyet türü bulunamadı.")
-            kayit_puani = puan[0]
-
-        yeni = {
-            "ogrenci_id": kayit.ogrenci_id,
-            "faaliyet_id": kayit.faaliyet_id,
-            "birim_id": kayit.birim_id,
-            "adet": kayit.miktar,
-            "kayit_puani": kayit_puani,
-        }
-        if all(onceki.get(alan) == yeni[alan] for alan in alanlar):
-            conn.commit()
-            return {"durum": "basarili", "mesaj": "Kayıtta değişiklik yapılmadı."}
-
-        cursor.execute("""
-            UPDATE ogrenci_faaliyet_takip
-            SET ogrenci_id = %s,
-                faaliyet_id = %s,
-                birim_id = %s,
-                adet = %s,
-                kayit_puani = %s
-            WHERE takip_id = %s;
-        """, (
-            kayit.ogrenci_id,
-            kayit.faaliyet_id,
-            kayit.birim_id,
-            kayit.miktar,
-            kayit_puani,
-            takip_id
-        ))
-
-        # Denetim kaydı: yalnızca değişen alanların önceki ve yeni değeri (kimlik ve sayı; kişisel veri yok).
-        degisen = [alan for alan in alanlar if onceki.get(alan) != yeni[alan]]
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(
-            VT_AYARLARI, "UPDATE", yetkili_id, "ogrenci_faaliyet_takip", takip_id, mevcut_cursor=cursor,
-            ayrinti={
-                "onceki": {alan: onceki.get(alan) for alan in degisen},
-                "yeni": {alan: yeni[alan] for alan in degisen},
-            },
-        )
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Kayıt başarıyla güncellendi."}
-    except HTTPException:
-        if conn is not None:
-            conn.rollback()
-        raise
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-# --- Faaliyet kaydı silme (DELETE) ---
-@app.delete("/api/faaliyet-kayitlari/{takip_id}")
-def faaliyet_kaydi_sil(takip_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # Silinmeden önce kaydın var olup olmadığını kontrol edelim
-        cursor.execute("SELECT * FROM ogrenci_faaliyet_takip WHERE takip_id = %s", (takip_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Silinecek kayıt zaten yok veya bulunamadı.")
-
-        # Kaydı veritabanından siliyoruz; silinen içerik denetim kaydına yazılır (kim, neyi sildi).
-        silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenci_faaliyet_takip", takip_id)
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "ogrenci_faaliyet_takip", takip_id,
-                              mevcut_cursor=cursor, ayrinti=silinen)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Kayıt başarıyla silindi!"}
-    except HTTPException:
-        if conn is not None:
-            conn.rollback()
-        raise
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 # DANIŞMA MASASI OTURUM ENDPOINTLERİ
 
@@ -7729,126 +7447,12 @@ def danisma_yonetim_oturum_duzenle(
 
 
 
-BIRIM_ADI_KAYITLI_MESAJI = "Bu birim adı zaten mevcut (büyük/küçük harf farkı aynı ad sayılır)."
 
 
-@app.post("/api/faaliyet-birimleri")
-def faaliyet_birimi_ekle(kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        # Birim adları büyük harfle saklanır; tekrar kontrolü de aynı biçimle yapılır.
-        ad = kayit.birim_adi.strip().upper()
-        if not ad:
-            raise HTTPException(status_code=422, detail="Birim adı boş olamaz.")
-        cursor.execute("SELECT birim_id FROM faaliyet_birimleri WHERE birim_adi = %s", (ad,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
-
-        cursor.execute(
-            "INSERT INTO faaliyet_birimleri (birim_adi) VALUES (%s) RETURNING birim_id;",
-            (ad,)
-        )
-        yeni_id = cursor.fetchone()[0]
-
-        # Audit Log (Denetim Kaydı)
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "CREATE", yetkili_id, "faaliyet_birimleri", yeni_id, mevcut_cursor=cursor)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Birim başarıyla eklendi.", "id": yeni_id}
-    except HTTPException:
-        raise
-    except psycopg2.errors.UniqueViolation:
-        # Kontrol ile kayıt arasında aynı adı başka bir istek eklediyse.
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
-@app.put("/api/faaliyet-birimleri/{birim_id}")
-def faaliyet_birimi_guncelle(birim_id: int, kayit: FaaliyetBirimIslemModeli, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        ad = kayit.birim_adi.strip().upper()
-        if not ad:
-            raise HTTPException(status_code=422, detail="Birim adı boş olamaz.")
-
-        cursor.execute("SELECT birim_adi FROM faaliyet_birimleri WHERE birim_id = %s FOR UPDATE", (birim_id,))
-        eski = cursor.fetchone()
-        if not eski:
-            raise HTTPException(status_code=404, detail="Güncellenecek birim bulunamadı.")
-        eski_ad = eski[0]
-        if eski_ad == ad:
-            conn.commit()
-            return {"durum": "basarili", "mesaj": "Birimde değişiklik yapılmadı."}
-
-        cursor.execute("SELECT 1 FROM faaliyet_birimleri WHERE birim_adi = %s AND birim_id <> %s", (ad, birim_id))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
-
-        cursor.execute("UPDATE faaliyet_birimleri SET birim_adi = %s WHERE birim_id = %s;", (ad, birim_id))
-
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(
-            VT_AYARLARI, "UPDATE", yetkili_id, "faaliyet_birimleri", birim_id, mevcut_cursor=cursor,
-            ayrinti={"onceki": {"birim_adi": eski_ad}, "yeni": {"birim_adi": ad}},
-        )
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Birim başarıyla güncellendi."}
-    except HTTPException:
-        raise
-    except psycopg2.errors.UniqueViolation:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=400, detail=BIRIM_ADI_KAYITLI_MESAJI)
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
-@app.delete("/api/faaliyet-birimleri/{birim_id}")
-def faaliyet_birimi_sil(birim_id: int, yetkili_id: int = Depends(izin_kontrol("FAALIYET_BIRIMI_DUZENLE"))):
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT 1 FROM ogrenci_faaliyet_takip WHERE birim_id = %s LIMIT 1", (birim_id,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="DİKKAT: Bu birim geçmiş faaliyet kayıtlarında kullanıldığı için SİLİNEMEZ! İsterseniz adını güncelleyebilirsiniz.")
-
-        silinen = satiri_sil_ve_ayrintisini_al(cursor, "faaliyet_birimleri", birim_id)
-        from server.denetim import denetim_kaydi_olustur
-        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", yetkili_id, "faaliyet_birimleri", birim_id,
-                              mevcut_cursor=cursor, ayrinti=silinen)
-
-        conn.commit()
-        return {"durum": "basarili", "mesaj": "Birim başarıyla silindi."}
-    except HTTPException:
-        raise
-    except Exception:
-        if conn is not None: conn.rollback()
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
 # --- 1. YENİ İZİN EKLEME (POST) ---
@@ -7981,306 +7585,6 @@ def izin_duzenle(izin_id: int, veri: IzinDuzenleModeli, kullanici_id: int = Depe
             conn.close()
 
 
-# ==========================================================
-# FAALIYET TURLERI YONETIMI
-# ==========================================================
-
-from pydantic import BaseModel as _FaaliyetBaseModel
-from pydantic import Field as _FaaliyetField
-
-
-# Faaliyet puanı üst sınırı: puan x miktar (en çok 10.000) çarpımı veritabanındaki INTEGER sınırını aşmasın.
-FAALIYET_PUANI_EN_FAZLA = 10_000
-
-
-class FaaliyetTuruEkleModeli(_FaaliyetBaseModel):
-    faaliyet_adi: str = _FaaliyetField(
-        min_length=1, max_length=100
-    )
-    puan: int = _FaaliyetField(
-        ge=0, le=FAALIYET_PUANI_EN_FAZLA, strict=True
-    )
-
-
-FAALIYET_ADI_KAYITLI_MESAJI = "Bu adla bir faaliyet türü zaten kayıtlı (büyük/küçük harf farkı aynı ad sayılır)."
-
-
-def _faaliyet_adi_kayitli_mi(cursor, ad, haric_id=None):
-    """Aynı ad (büyük/küçük harf ve baş/son boşluk farkı gözetmeden) başka bir faaliyet türünde var mı?
-
-    Pasif türler de sayılır: veritabanındaki benzersizlik kuralı onları da kapsar. Kontrol ile kayıt arasında başka bir
-    isteğin aynı adı eklememesi için işlem boyunca tek bir kilit alınır."""
-    cursor.execute("SELECT pg_advisory_xact_lock(hashtext('TKYS_FAALIYET_ADI'));")
-    cursor.execute(
-        "SELECT faaliyet_id FROM faaliyetler "
-        "WHERE LOWER(BTRIM(faaliyet_adi)) = LOWER(%s) AND faaliyet_id <> %s;",
-        (ad, haric_id if haric_id is not None else 0),
-    )
-    return len(list(cursor.fetchall())) > 0
-
-
-@app.post("/api/faaliyetler", status_code=201)
-def faaliyet_turu_ekle(
-    veri: FaaliyetTuruEkleModeli,
-    yetkili_id: int = Depends(
-        izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
-    )
-):
-    ad = veri.faaliyet_adi.strip()
-
-    if not ad:
-        raise HTTPException(
-            status_code=422,
-            detail="Faaliyet adı boş olamaz."
-        )
-
-    conn = None
-
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-
-        with conn.cursor() as cursor:
-            if _faaliyet_adi_kayitli_mi(cursor, ad):
-                raise HTTPException(status_code=409, detail=FAALIYET_ADI_KAYITLI_MESAJI)
-
-            cursor.execute("""
-                INSERT INTO faaliyetler
-                    (faaliyet_adi, puan, aktif_mi)
-                VALUES (%s, %s, TRUE)
-                RETURNING faaliyet_id;
-            """, (ad, veri.puan))
-
-            yeni_id = cursor.fetchone()[0]
-
-            from server.denetim import denetim_kaydi_olustur
-
-            denetim_kaydi_olustur(
-                VT_AYARLARI,
-                "CREATE",
-                yetkili_id,
-                "faaliyetler",
-                yeni_id,
-                mevcut_cursor=cursor
-            )
-
-        conn.commit()
-
-        return {
-            "durum": "basarili",
-            "id": yeni_id,
-            "ad": ad,
-            "puan": veri.puan
-        }
-
-    except psycopg2.errors.UniqueViolation:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Bu faaliyet türü zaten kayıtlı."
-        )
-
-    except HTTPException:
-        if conn:
-            conn.rollback()
-        raise
-
-    except Exception:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Faaliyet türü eklenemedi."
-        )
-
-    finally:
-        if conn:
-            conn.close()
-
-
-
-
-class FaaliyetTuruDuzenleModeli(_FaaliyetBaseModel):
-    faaliyet_adi: str = _FaaliyetField(
-        min_length=1, max_length=100
-    )
-    puan: int = _FaaliyetField(
-        ge=0, le=FAALIYET_PUANI_EN_FAZLA, strict=True
-    )
-    gecmis_puanlari_guncelle: bool = _FaaliyetField(
-        strict=True
-    )
-
-
-@app.put("/api/faaliyetler/{faaliyet_id}")
-def faaliyet_turu_duzenle(
-    faaliyet_id: int,
-    veri: FaaliyetTuruDuzenleModeli,
-    yetkili_id: int = Depends(
-        izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
-    )
-):
-    ad = veri.faaliyet_adi.strip()
-
-    if not ad:
-        raise HTTPException(
-            status_code=422,
-            detail="Faaliyet adı boş olamaz."
-        )
-
-    conn = None
-
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-
-        with conn.cursor() as cursor:
-
-            # Aynı faaliyet üzerinde eşzamanlı değişiklikleri
-            # transaction tamamlanana kadar kilitle.
-            cursor.execute("""
-                SELECT faaliyet_adi, puan
-                FROM faaliyetler
-                WHERE faaliyet_id = %s
-                  AND aktif_mi = TRUE
-                FOR UPDATE;
-            """, (faaliyet_id,))
-
-            eski = cursor.fetchone()
-
-            if eski is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Aktif faaliyet türü bulunamadı."
-                )
-
-            eski_ad, eski_puan = eski
-            puan_degisti = eski_puan != veri.puan
-
-            # Kayıt değişmemişse gereksiz audit oluşturma.
-            if eski_ad == ad and not puan_degisti:
-                conn.commit()
-                return {
-                    "durum": "degisiklik_yok",
-                    "id": faaliyet_id,
-                    "ad": ad,
-                    "puan": veri.puan,
-                    "guncellenen_gecmis_kayit": 0
-                }
-
-            if eski_ad != ad and _faaliyet_adi_kayitli_mi(cursor, ad, haric_id=faaliyet_id):
-                raise HTTPException(status_code=409, detail=FAALIYET_ADI_KAYITLI_MESAJI)
-
-            cursor.execute("""
-                UPDATE faaliyetler
-                SET faaliyet_adi = %s,
-                    puan = %s
-                WHERE faaliyet_id = %s;
-            """, (ad, veri.puan, faaliyet_id))
-
-            etkilenen = 0
-
-            # Yalnızca puan değişmişse VE kullanıcı açıkça
-            # geçmişi güncelle demişse geçmişe dokun.
-            if (
-                puan_degisti
-                and veri.gecmis_puanlari_guncelle
-            ):
-                cursor.execute("""
-                    UPDATE ogrenci_faaliyet_takip
-                    SET kayit_puani = %s
-                    WHERE faaliyet_id = %s
-                      AND kayit_puani <> %s;
-                """, (
-                    veri.puan,
-                    faaliyet_id,
-                    veri.puan
-                ))
-
-                etkilenen = cursor.rowcount
-
-            from server.denetim import denetim_kaydi_olustur
-
-            # Denetim kaydı: ad ve puanın önceki/yeni değeri; geçmiş kayıtlara uygulandıysa kaç kayıt etkilendiği.
-            degisiklik = {"onceki": {}, "yeni": {}}
-            if eski_ad != ad:
-                degisiklik["onceki"]["faaliyet_adi"] = eski_ad
-                degisiklik["yeni"]["faaliyet_adi"] = ad
-            if puan_degisti:
-                degisiklik["onceki"]["puan"] = eski_puan
-                degisiklik["yeni"]["puan"] = veri.puan
-                degisiklik["gecmis_kayitlara_uygulandi"] = bool(veri.gecmis_puanlari_guncelle)
-                degisiklik["guncellenen_gecmis_kayit"] = etkilenen
-
-            denetim_kaydi_olustur(
-                VT_AYARLARI,
-                "UPDATE",
-                yetkili_id,
-                "faaliyetler",
-                faaliyet_id,
-                mevcut_cursor=cursor,
-                ayrinti=degisiklik
-            )
-
-            # Toplu geçmiş güncellemesini ayrıca işaretle.
-            if etkilenen:
-                denetim_kaydi_olustur(
-                    VT_AYARLARI,
-                    "UPDATE",
-                    yetkili_id,
-                    "ogrenci_faaliyet_takip",
-                    None,
-                    mevcut_cursor=cursor,
-                    ayrinti={
-                        "neden": "faaliyet puanı geçmiş kayıtlara uygulandı",
-                        "faaliyet_id": faaliyet_id,
-                        "onceki": {"faaliyet_puani": eski_puan},
-                        "yeni": {"faaliyet_puani": veri.puan},
-                        "etkilenen_kayit": etkilenen,
-                    }
-                )
-
-        conn.commit()
-
-        return {
-            "durum": "basarili",
-            "id": faaliyet_id,
-            "ad": ad,
-            "puan": veri.puan,
-            "gecmis_puanlari_guncellendi": (
-                puan_degisti
-                and veri.gecmis_puanlari_guncelle
-            ),
-            "guncellenen_gecmis_kayit": etkilenen
-        }
-
-    except psycopg2.errors.UniqueViolation:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Bu faaliyet türü adı zaten kayıtlı."
-        )
-
-    except HTTPException:
-        if conn:
-            conn.rollback()
-        raise
-
-    except Exception:
-        if conn:
-            conn.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Faaliyet türü güncellenemedi."
-        )
-
-    finally:
-        if conn:
-            conn.close()
-
-
-
-
 # Oda Etkinlikleri API
 from server.oda_etkinlikleri_api import router_olustur
 
@@ -8289,8 +7593,8 @@ app.include_router(router_olustur(izin_kontrol, VT_AYARLARI))
 # Ayrılan modüller (server/sunucu.py'nin parçalanması): uçlar kendi dosyalarında; yetki bağımlılığı buradan verilir.
 # Fonksiyon adları geriye dönük olarak burada da erişilebilir kalır (testler `server.sunucu.<ad>` ile içe aktarır).
 from server import (
-    anasayfa_api, audit_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, puan_raporu_api, randevu_oda_raporlari_api,
-    surum_api, yonetim_raporlari_api, bildirim_ozeti_api,
+    anasayfa_api, audit_api, bildirim_ozeti_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, faaliyet_birimleri_api,
+    faaliyet_kayitlari_api, faaliyet_turleri_api, puan_raporu_api, randevu_oda_raporlari_api, surum_api, yonetim_raporlari_api,
 )
 
 app.include_router(audit_api.router_olustur(izin_kontrol))
@@ -8303,6 +7607,9 @@ app.include_router(puan_raporu_api.router_olustur(izin_kontrol))
 app.include_router(surum_api.router_olustur(izin_kontrol, mevcut_kullanici_id))
 app.include_router(anasayfa_api.router_olustur(izin_kontrol, izin_kontrol_biri, mevcut_kullanici_id))
 app.include_router(bildirim_ozeti_api.router_olustur(izin_kontrol))
+app.include_router(faaliyet_turleri_api.router_olustur(izin_kontrol))
+app.include_router(faaliyet_birimleri_api.router_olustur(izin_kontrol))
+app.include_router(faaliyet_kayitlari_api.router_olustur(izin_kontrol))
 audit_kayitlarini_getir = audit_api.audit_kayitlarini_getir
 cihaz_raporlari = cihaz_raporlari_api.cihaz_raporlari
 danisma_raporlari = danisma_raporlari_api.danisma_raporlari
@@ -8321,6 +7628,29 @@ from server.randevu_oda_raporlari_api import (  # noqa: E402  (geriye dönük ad
 from server.puan_raporu_api import (  # noqa: E402  (geriye dönük adlar)
     PUAN_RAPORU_DURUMLARI,
     puan_raporu,
+)
+from server.faaliyet_turleri_api import (  # noqa: E402  (geriye dönük adlar)
+    faaliyetleri_getir,
+    FAALIYET_PUANI_EN_FAZLA,
+    FaaliyetTuruEkleModeli,
+    FAALIYET_ADI_KAYITLI_MESAJI,
+    _faaliyet_adi_kayitli_mi,
+    faaliyet_turu_ekle,
+    FaaliyetTuruDuzenleModeli,
+    faaliyet_turu_duzenle,
+)
+from server.faaliyet_birimleri_api import (  # noqa: E402  (geriye dönük adlar)
+    faaliyet_birimleri_getir,
+    BIRIM_ADI_KAYITLI_MESAJI,
+    faaliyet_birimi_ekle,
+    faaliyet_birimi_guncelle,
+    faaliyet_birimi_sil,
+)
+from server.faaliyet_kayitlari_api import (  # noqa: E402  (geriye dönük adlar)
+    faaliyet_kaydi_ekle,
+    faaliyet_kayitlarini_getir,
+    faaliyet_kaydi_guncelle,
+    faaliyet_kaydi_sil,
 )
 from server.anasayfa_api import (  # noqa: E402  (geriye dönük adlar)
     dashboard_ozet_getir,

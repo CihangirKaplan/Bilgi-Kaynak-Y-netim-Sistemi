@@ -192,8 +192,16 @@ def test_gecmis_secimi_boolean_olmali():
 
 
 def test_api_yetki_kontrolu_tanimli():
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     route = next(
-        r for r in app.routes
+        r for r in rotalar(app.routes)
         if getattr(r, "path", None)
         == "/api/faaliyetler/{faaliyet_id}"
         and "PUT" in getattr(r, "methods", set())
