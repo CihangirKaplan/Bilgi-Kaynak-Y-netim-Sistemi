@@ -94,7 +94,7 @@ def test_quality_audit_hatasinda_gercek_postgresql_rollback():
 
     try:
         with patch(
-            "server.sunucu.denetim_kaydi_olustur",
+            "server.cihaz_api.denetim_kaydi_olustur",
             side_effect=RuntimeError("QA-001 kontrollu audit hatasi"),
         ) as mock_audit:
 

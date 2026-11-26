@@ -151,10 +151,18 @@ def test_gercek_eszamanli_cihaz_rezervasyonu():
         bitis = baslangic + timedelta(hours=1)
 
         # 3. Mevcut endpoint'in yetki bagimliligini kullan.
+        def rotalar(liste):
+            """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+            for r in liste:
+                yield r
+                asil = getattr(r, "original_router", None)
+                if asil is not None:
+                    yield from rotalar(asil.routes)
+
         route = next(
-            route for route in app.routes
+            route for route in rotalar(app.routes)
             if getattr(route, "path", None) == "/api/rezervasyonlar"
-            and "POST" in route.methods
+            and "POST" in getattr(route, "methods", set())
         )
 
         izin_bagimliligi = route.dependant.dependencies[0].call

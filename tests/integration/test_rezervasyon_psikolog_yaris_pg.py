@@ -102,9 +102,17 @@ def test_rezervasyon_ve_psikolog_oda_atamasi_ayni_anda():
                     """, (kod, "QA Yarış Testi Cihazı"))
                     cihaz_id = cur.fetchone()[0]
 
+        def rotalar(liste):
+            """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+            for r in liste:
+                yield r
+                asil = getattr(r, "original_router", None)
+                if asil is not None:
+                    yield from rotalar(asil.routes)
+
         def bagimlilik_bul(yol, metot):
             route = next(
-                r for r in app.routes
+                r for r in rotalar(app.routes)
                 if getattr(r, "path", None) == yol
                 and metot in getattr(r, "methods", set())
             )
