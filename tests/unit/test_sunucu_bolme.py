@@ -8,15 +8,37 @@ from fastapi import Depends
 from fastapi.testclient import TestClient
 
 import server.sunucu as sunucu
-from server import audit_api, cihaz_raporlari_api, vt_ayarlari
+from server import (
+    audit_api, cihaz_raporlari_api, danisma_raporlari_api, ortak_sabitler, vt_ayarlari, yonetim_raporlari_api,
+)
 from server.yetki_baglama import yetkiyle_bagla
 
 KOK = Path(__file__).resolve().parents[2]
-# Ayrılan modüller: (modül, uç yolu, gereken izin)
+
+YONETIM = "YONETIM_RAPORLARI_GORUNTULE"
+# Ayrılan modüller: (modül, [(uç yolu, gereken izin), ...]). Yetki eşlemesi güvenlik açısından AÇIKÇA yazılıdır:
+# taşıma sırasında hiçbir ucun izni değişmemelidir.
 AYRILANLAR = [
-    (audit_api, "/api/audit-kayitlari", "AUDIT_KAYITLARI_INCELE"),
-    (cihaz_raporlari_api, "/api/cihaz-raporlari", "CIHAZ_ENVANTER_YONET"),
+    (audit_api, [("/api/audit-kayitlari", "AUDIT_KAYITLARI_INCELE")]),
+    (cihaz_raporlari_api, [("/api/cihaz-raporlari", "CIHAZ_ENVANTER_YONET")]),
+    (danisma_raporlari_api, [("/api/danisma/raporlar", "DANISMA_OTURUMU_GORUNTULE")]),
+    (yonetim_raporlari_api, [
+        ("/api/yonetim-raporlari/randevu-ozet", YONETIM),
+        ("/api/yonetim-raporlari/cihaz-ozet", YONETIM),
+        ("/api/yonetim-raporlari/ogrenci-ozet", YONETIM),
+        ("/api/yonetim-raporlari/proje-etkinlik-ozet", YONETIM),
+        ("/api/yonetim-raporlari/kullanim-ozet", YONETIM),
+        ("/api/cihaz-rezervasyon-raporu", "CIHAZ_ENVANTER_YONET"),
+        ("/api/oda-kullanim-raporu", YONETIM),
+        ("/api/yetki-raporu", "AUDIT_KAYITLARI_INCELE"),
+        ("/api/ogrenci-raporu", "FAALIYET_KAYITLARI_DUZENLE"),
+        ("/api/faaliyet-raporu", "FAALIYET_KAYITLARI_DUZENLE"),
+        ("/api/bakim-plani-raporu", "CIHAZ_ENVANTER_YONET"),
+        ("/api/yonetim-raporlari/bugun-merkezde", YONETIM),
+        ("/api/yonetim-raporlari/gunluk-detay", YONETIM),
+    ]),
 ]
+TUM_UCLAR = [(m, yol, izin) for m, ucler in AYRILANLAR for yol, izin in ucler]
 
 
 def _ice_aktarilan_modul_adlari(modul):
@@ -31,52 +53,68 @@ def _ice_aktarilan_modul_adlari(modul):
     return adlar
 
 
-@pytest.mark.parametrize("modul, yol, izin", AYRILANLAR)
-def test_ayrilan_modul_sunucuyu_ice_aktarmaz_dongusel_bagimlilik_olmaz(modul, yol, izin):
+@pytest.mark.parametrize("modul", [m for m, _ in AYRILANLAR] + [ortak_sabitler, vt_ayarlari])
+def test_ayrilan_modul_sunucuyu_ice_aktarmaz_dongusel_bagimlilik_olmaz(modul):
     assert not {a for a in _ice_aktarilan_modul_adlari(modul) if a == "server.sunucu" or a.startswith("server.sunucu.")}
 
 
-@pytest.mark.parametrize("modul, yol, izin", AYRILANLAR)
-def test_ayrilan_ucun_gerekli_izni_modulde_tek_yerde_tanimlidir(modul, yol, izin):
-    assert modul.IZIN_ADI == izin
-
-
-@pytest.mark.parametrize("modul, yol, izin", AYRILANLAR)
+@pytest.mark.parametrize("modul, yol, izin", TUM_UCLAR)
 def test_uc_tam_bir_kez_kayitli_ve_kimliksiz_istek_reddedilir(modul, yol, izin):
     sema = sunucu.app.openapi()["paths"]
     assert yol in sema and list(sema[yol]) == ["get"]
-    istemci = TestClient(sunucu.app)
-    assert istemci.get(yol).status_code == 401                      # yetki bağımlılığı gerçekten bağlı (kimliksiz istek geçemez)
+    assert TestClient(sunucu.app).get(yol).status_code == 401      # yetki bağımlılığı gerçekten bağlı (kimliksiz istek geçemez)
 
 
-@pytest.mark.parametrize("modul, yol, izin", AYRILANLAR)
-def test_uc_izin_kontrolunu_dogru_izinle_olusturur(modul, yol, izin, monkeypatch):
+@pytest.mark.parametrize("modul, ucler", AYRILANLAR)
+def test_router_her_ucun_izin_kontrolunu_dogru_izinle_ve_sirayla_olusturur(modul, ucler):
     istenen = []
 
     def sahte_izin_kontrol(ad):
         istenen.append(ad)
         return lambda: 1
 
-    modul.router_olustur(sahte_izin_kontrol)
-    assert istenen == [izin]
+    yonlendirici = modul.router_olustur(sahte_izin_kontrol)
+    assert istenen == [izin for _, izin in ucler]
+    # kayıtlı yollar da beklenen listeyle aynı
+    kayitli = [getattr(r, "path", None) for r in yonlendirici.routes]
+    assert kayitli == [yol for yol, _ in ucler]
 
 
-def test_sunucudaki_geriye_donuk_adlar_ayrilan_fonksiyonlarla_ayni_nesnedir():
+def test_sunucudaki_geriye_donuk_adlar_ayrilan_nesnelerle_aynidir():
     assert sunucu.audit_kayitlarini_getir is audit_api.audit_kayitlarini_getir
     assert sunucu.cihaz_raporlari is cihaz_raporlari_api.cihaz_raporlari
+    assert sunucu.danisma_raporlari is danisma_raporlari_api.danisma_raporlari
+    for ad in ("_yonetim_onceki_donem", "_rapor_donemi_dogrula", "yonetim_randevu_ozet", "yonetim_cihaz_ozet", "yonetim_ogrenci_ozet",
+               "yonetim_proje_etkinlik_ozet", "yonetim_kullanim_ozet", "cihaz_rezervasyon_raporu", "oda_kullanim_raporu",
+               "yetki_raporu_getir", "ogrenci_raporu_getir", "faaliyet_raporu_getir", "bakim_plani_raporu_getir",
+               "yonetim_bugun_merkezde", "yonetim_gunluk_detay"):
+        assert getattr(sunucu, ad) is getattr(yonetim_raporlari_api, ad), ad
     assert sunucu.VT_AYARLARI is vt_ayarlari.VT_AYARLARI
+    assert sunucu.ETKIN_CIHAZ_DURUMU_SQL is ortak_sabitler.ETKIN_CIHAZ_DURUMU_SQL
+    assert sunucu.OGRENCI_TUR_ETIKETLERI is ortak_sabitler.OGRENCI_TUR_ETIKETLERI
 
 
 def test_ayrilan_kod_sunucu_dosyasinda_yinelenmez():
     kaynak = (KOK / "server" / "sunucu.py").read_text(encoding="utf-8")
-    assert "def audit_kayitlarini_getir(" not in kaynak and "def cihaz_raporlari(" not in kaynak and "def _tarih_metni(" not in kaynak
-    assert '@app.get("/api/audit-kayitlari")' not in kaynak and '@app.get("/api/cihaz-raporlari")' not in kaynak
+    for modul, _ in AYRILANLAR:
+        for ad, deger in vars(modul).items():
+            if inspect.isfunction(deger) and deger.__module__ == modul.__name__ and ad != "router_olustur":
+                assert f"def {ad}(" not in kaynak, ad
+    for yol in [yol for _, ucler in AYRILANLAR for yol, _ in ucler]:
+        assert f'("{yol}")' not in kaynak and f"('{yol}')" not in kaynak
+    assert "ETKIN_CIHAZ_DURUMU_SQL = " not in kaynak and "OGRENCI_TUR_ETIKETLERI = " not in kaynak
 
 
-def test_ayrilan_fonksiyonlar_dogrudan_cagrilabilir_ve_yetki_parametresi_acik_kalir():
-    for modul, _, _ in AYRILANLAR:
-        fonksiyon = getattr(modul, "audit_kayitlarini_getir" if modul is audit_api else "cihaz_raporlari")
-        assert inspect.signature(fonksiyon).parameters["kullanici_id"].default is None   # çıplak fonksiyonda bağımlılık yok
+def test_ayrilan_fonksiyonlar_dogrudan_cagrilabilir_yetki_parametresi_acik_kalir():
+    for modul, ucler in AYRILANLAR:
+        yonlendirici = modul.router_olustur(lambda izin: (lambda: 1))
+        for r in yonlendirici.routes:
+            imza = inspect.signature(r.endpoint)
+            assert "kullanici_id" in imza.parameters
+        # ham fonksiyonlarda Depends yok (varsayılan None)
+        for ad, deger in vars(modul).items():
+            if inspect.isfunction(deger) and deger.__module__ == modul.__name__ and "kullanici_id" in inspect.signature(deger).parameters:
+                assert inspect.signature(deger).parameters["kullanici_id"].default is None, ad
 
 
 # --------------------------------------------------------------------------- yetkiyle_bagla
