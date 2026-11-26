@@ -10,12 +10,27 @@ Bir sayfa `liste_sayfasi_stili()` çıktısını kendi `setStyleSheet`'ine verir
     rozet                         küçük sayaç etiketi
     altBilgi                      kart altındaki açıklama satırı
 """
+from pathlib import Path
+
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QStyle, QStyledItemDelegate,
     QStyleOptionViewItem, QVBoxLayout,
 )
+
+def _simge_yolu(ad):
+    """QSS url(...) içinde ters bölüler kaçış dizisi sayıldığından (Windows yollarında stil sessizce uygulanmaz) yol ileri bölülü yazılır."""
+    return (Path(__file__).resolve().parent / "assets" / ad).as_posix()
+
+
+# Açılır kutunun (QComboBox) ve takvimi açılan tarih kutusunun (QDateEdit/QDateTimeEdit, calendarPopup) sağındaki aşağı ok. `::drop-down` kuralı yazılınca Qt kendi okunu çizmez; ok bu kuralla geri getirilir.
+ACILIR_OK_STILI = f"""
+QComboBox::down-arrow {{ image: url("{_simge_yolu('tkys_ok_asagi.svg')}"); width: 14px; height: 14px; }}
+QComboBox::down-arrow:disabled {{ image: url("{_simge_yolu('tkys_ok_asagi_pasif.svg')}"); }}
+QDateTimeEdit[calendarPopup="true"]::down-arrow {{ image: url("{_simge_yolu('tkys_ok_asagi.svg')}"); width: 14px; height: 14px; }}
+QDateTimeEdit[calendarPopup="true"]::down-arrow:disabled {{ image: url("{_simge_yolu('tkys_ok_asagi_pasif.svg')}"); }}
+"""
 
 LACIVERT = "#0A1F5C"
 METIN = "#0F2552"
@@ -69,6 +84,7 @@ QLineEdit:hover, QComboBox:hover, QDateEdit:hover {{ border: 1px solid #93B4F5; 
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus {{ border: 2px solid #2563EB; padding: 7px 11px; }}
 QComboBox {{ min-width: 120px; }}
 QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: 26px; }}
+{ACILIR_OK_STILI}
 QComboBox QAbstractItemView {{ background: white; color: {METIN}; selection-background-color: #2563EB; selection-color: white;
                                border: 1px solid #C7D9FB; outline: none; }}
 
@@ -111,6 +127,7 @@ QLineEdit, QComboBox, QDateEdit, QTimeEdit {{
 QLineEdit:hover, QComboBox:hover, QDateEdit:hover, QTimeEdit:hover {{ border: 1px solid #93B4F5; }}
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus {{ border: 2px solid #2563EB; padding: 6px 11px; }}
 QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: 26px; }}
+{ACILIR_OK_STILI}
 QComboBox QAbstractItemView {{ background: white; color: {METIN}; selection-background-color: #2563EB; selection-color: white;
                                border: 1px solid #C7D9FB; outline: none; }}
 
