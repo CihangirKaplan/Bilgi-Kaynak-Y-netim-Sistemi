@@ -36,6 +36,9 @@ GRUP_BASLIKLARI = {
     "Parola Talepleri": ("PAROLA SIFIRLAMA TALEPLERİ", "key", MAVI),
     "Günlük": ("BENİM GÜNÜM", "user", MAVI),
     "Duyurular": ("DUYURULAR", "megaphone", MAVI),
+    "Öğrenci Kayıtları": ("ÖĞRENCİ KAYITLARI", "graduation-cap", AMBER),
+    "Randevu Sonuçları": ("RANDEVU SONUÇLARI", "calendar", AMBER),
+    "Sistem": ("SİSTEM UYARILARI", "shield", KIRMIZI),
 }
 VARSAYILAN_GRUP = ("DANIŞMA MASASI ONAYLARI", "clipboard", MAVI)
 

@@ -8290,7 +8290,7 @@ app.include_router(router_olustur(izin_kontrol, VT_AYARLARI))
 # Fonksiyon adları geriye dönük olarak burada da erişilebilir kalır (testler `server.sunucu.<ad>` ile içe aktarır).
 from server import (
     anasayfa_api, audit_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, puan_raporu_api, randevu_oda_raporlari_api,
-    surum_api, yonetim_raporlari_api,
+    surum_api, yonetim_raporlari_api, bildirim_ozeti_api,
 )
 
 app.include_router(audit_api.router_olustur(izin_kontrol))
@@ -8302,6 +8302,7 @@ app.include_router(randevu_oda_raporlari_api.router_olustur(izin_kontrol))
 app.include_router(puan_raporu_api.router_olustur(izin_kontrol))
 app.include_router(surum_api.router_olustur(izin_kontrol, mevcut_kullanici_id))
 app.include_router(anasayfa_api.router_olustur(izin_kontrol, izin_kontrol_biri, mevcut_kullanici_id))
+app.include_router(bildirim_ozeti_api.router_olustur(izin_kontrol))
 audit_kayitlarini_getir = audit_api.audit_kayitlarini_getir
 cihaz_raporlari = cihaz_raporlari_api.cihaz_raporlari
 danisma_raporlari = danisma_raporlari_api.danisma_raporlari

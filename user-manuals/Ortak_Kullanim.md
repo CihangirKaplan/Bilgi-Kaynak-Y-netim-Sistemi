@@ -100,6 +100,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 - Üst çubuktaki **🔔** bildirimleri listeler. Bildirime tıklamak sizi ilgili sayfaya götürür. Herkes için: **🙋 Benim günüm** (bugünkü/yarınki randevu ve
   cihaz rezervasyonlarınızın sayısı) ve **okumadığınız duyurular** (satırın yanındaki **Okudum** düğmesiyle zilden de okundu işaretleyebilirsiniz; işaretlediğiniz duyuru zilde ve ana panelde sizin için gizlenir). Yetkinize göre ayrıca: bekleyen danışma görevi onayları, parola talepleri,
   açık arızalar, yaklaşan/geciken bakım ve kalibrasyonlar (yetkiniz olmayan sayfanın bildirimi gösterilmez).
+  Ayrıca unutulunca bir şey kaybettiren işler için (yalnızca ilgili sayfaya yetkisi olana): **Öğrenci Kayıtları** (kayıt saklama süresi dolan gönüllü öğrenciler; Öğrenciler sayfası), **Randevu Sonuçları** (tarihi geçmiş ama sonucu girilmemiş randevular; psikolog yalnızca kendi randevularını görür) ve **Sistem** (son yedek beklenenden eskiyse ya da hiç yedek yoksa; yalnızca Admin).
 
 ## 6. Hakkında / Yardım
 

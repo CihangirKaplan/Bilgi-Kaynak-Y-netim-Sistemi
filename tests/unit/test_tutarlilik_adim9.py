@@ -36,7 +36,9 @@ def _ana():
         _parola_talepleri_gorebilir_mi=lambda: True,
         _sayfa_izinli_mi=lambda ad: True,
         _bekleme_metni=lambda d: "",
+        _yedek_yasi_metni=mw.AnaPencere._yedek_yasi_metni,
     )
+    ana._eylem_bildirimleri = lambda getir: mw.AnaPencere._eylem_bildirimleri(ana, getir)       # gerçek yöntem: yetkiye göre ek sorgular
     return ana
 
 
