@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from openpyxl import Workbook
-from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QPushButton, QWidget
 
 import client.rapor_cikti as rapor_cikti
 from client.liste_excel import listeyi_excele_aktar
@@ -39,26 +39,72 @@ def _ornek_excel(yol, satir_sayisi=5):
                     satirlar, "Ayrıntı")])
 
 
-# ---------------------------------------------------------------- kayit_yolu_sec
-@pytest.mark.parametrize("yol,secilen,beklenen", [
-    ("/tmp/a.pdf", "", ("/tmp/a.pdf", "pdf")),
-    ("/tmp/a.XLSX", "", ("/tmp/a.XLSX", "xlsx")),
-    ("/tmp/a", rapor_cikti.PDF_FILTRESI, ("/tmp/a.pdf", "pdf")),
-    ("/tmp/a", rapor_cikti.XLSX_FILTRESI, ("/tmp/a.xlsx", "xlsx")),
-    ("/tmp/a", "", ("/tmp/a.xlsx", "xlsx")),                                # filtre bilinmiyorsa Excel (eski davranış)
-    ("/tmp/a.xlsx", rapor_cikti.PDF_FILTRESI, ("/tmp/a.xlsx", "xlsx")),     # yazılan uzantı filtreden önceliklidir
+# ---------------------------------------------------------------- tür sorusu + kayit_yolu_sec
+def _secim(bicim):
+    """bicim_sec'i, kullanıcı o türü seçmiş gibi yamar."""
+    return patch.object(rapor_cikti, "bicim_sec", return_value=bicim)
+
+
+@pytest.mark.parametrize("bicim,yol,beklenen", [
+    ("pdf", "/tmp/a", ("/tmp/a.pdf", "pdf")),
+    ("pdf", "/tmp/a.pdf", ("/tmp/a.pdf", "pdf")),
+    ("pdf", "/tmp/a.PDF", ("/tmp/a.PDF", "pdf")),
+    ("xlsx", "/tmp/a", ("/tmp/a.xlsx", "xlsx")),
+    ("xlsx", "/tmp/a.xlsx", ("/tmp/a.xlsx", "xlsx")),
 ])
-def test_kayit_yolu_turu_uzantidan_ya_da_secili_kayit_turunden_anlasilir(yol, secilen, beklenen):
-    with patch.object(QFileDialog, "getSaveFileName", return_value=(yol, secilen)):
+def test_dosya_penceresi_secilen_turun_uzantisini_tamamlar(bicim, yol, beklenen):
+    with _secim(bicim), patch.object(QFileDialog, "getSaveFileName", return_value=(yol, "")):
         assert rapor_cikti.kayit_yolu_sec(QWidget(), "Kaydet", "rapor") == beklenen
 
 
-def test_kayit_penceresi_iki_turu_de_sunar_ve_vazgecilince_bos_doner():
-    with patch.object(QFileDialog, "getSaveFileName", return_value=("", "")) as pencere:
-        assert rapor_cikti.kayit_yolu_sec(QWidget(), "Kaydet", "rapor_20260101.xlsx") == (None, None)
-    filtre = pencere.call_args.args[3]
-    assert "(*.xlsx)" in filtre and "(*.pdf)" in filtre
-    assert pencere.call_args.args[2] == "rapor_20260101.xlsx"                  # varsayılan ad Excel uzantılı önerilir
+def test_tur_sorusundan_vazgecilirse_dosya_penceresi_hic_acilmaz():
+    with _secim(None), patch.object(QFileDialog, "getSaveFileName") as pencere:
+        assert rapor_cikti.kayit_yolu_sec(QWidget(), "Kaydet", "rapor") == (None, None)
+    assert not pencere.called
+
+
+def test_dosya_penceresi_yalniz_secilen_turu_sunar_ve_varsayilan_ad_o_uzantiyla_gelir():
+    for bicim, filtre, ad in (("xlsx", "(*.xlsx)", "rapor_1.xlsx"), ("pdf", "(*.pdf)", "rapor_1.pdf")):
+        with _secim(bicim), patch.object(QFileDialog, "getSaveFileName", return_value=("", "")) as pencere:
+            assert rapor_cikti.kayit_yolu_sec(QWidget(), "Kaydet", "rapor_1.xlsx") == (None, None)
+        assert pencere.call_args.args[3].endswith(filtre) and ";;" not in pencere.call_args.args[3]     # tek tür: karışıklık yok
+        assert pencere.call_args.args[2].endswith(ad)
+        assert bicim_adi_beklenen(bicim) in pencere.call_args.args[1]
+
+
+def bicim_adi_beklenen(bicim):
+    return {"xlsx": "Excel", "pdf": "PDF"}[bicim]
+
+
+def test_tur_penceresi_iki_secenek_ve_vazgec_sunar_excel_varsayilandir():
+    ebeveyn = QWidget()
+    pencere = rapor_cikti.BicimSecimDiyalogu(ebeveyn)
+    adlar = {d.objectName(): d.text() for d in pencere.findChildren(QPushButton)}
+    assert set(adlar) == {"disaAktarExcel", "disaAktarPdf", "disaAktarVazgec"}
+    assert "Excel (.xlsx)" in adlar["disaAktarExcel"] and "PDF (.pdf)" in adlar["disaAktarPdf"]
+    assert pencere.dugmeler["xlsx"].isDefault() and not pencere.dugmeler["pdf"].isDefault()
+    assert "Hangi türde kaydetmek istersiniz?" in [e.text() for e in pencere.findChildren(QLabel)]
+    pencere.close()
+
+
+@pytest.mark.parametrize("dugme,beklenen", [("pdf", "pdf"), ("xlsx", "xlsx")])
+def test_tur_penceresinde_tiklanan_dugme_secimi_belirler(dugme, beklenen):
+    ebeveyn = QWidget()
+    pencere = rapor_cikti.BicimSecimDiyalogu(ebeveyn)
+    pencere.dugmeler[dugme].click()
+    assert pencere.secilen == beklenen and pencere.result() == QDialog.Accepted
+    pencere.close()
+
+
+def test_tur_penceresi_vazgecilince_none_doner():
+    ebeveyn = QWidget()
+    pencere = rapor_cikti.BicimSecimDiyalogu(ebeveyn)
+    pencere.findChild(QPushButton, "disaAktarVazgec").click()
+    assert pencere.secilen is None and pencere.result() == QDialog.Rejected
+    with patch.object(rapor_cikti.BicimSecimDiyalogu, "exec", return_value=QDialog.Rejected):
+        assert rapor_cikti.bicim_sec(ebeveyn) is None
+    with patch.object(rapor_cikti.BicimSecimDiyalogu, "exec", return_value=QDialog.Accepted):
+        assert rapor_cikti.bicim_sec(ebeveyn) is None             # seçim yapılmadan kapanırsa da yok sayılır
 
 
 # ---------------------------------------------------------------- xlsx -> pdf
@@ -139,7 +185,7 @@ def test_liste_pdf_olarak_kaydedilir_ve_denetime_pdf_yazilir(tmp_path):
         gonderilen.append(kw["json"])
         yanit = MagicMock(); yanit.status_code = 200
         return yanit
-    with patch.object(QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
+    with _secim("pdf"), patch.object(QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
             patch("client.liste_excel.QMessageBox.information") as bilgi, \
             patch("client.liste_excel.oturum_kontrollu_istek", istek), patch("client.liste_excel.oturum_hatasi_mi", return_value=False):
         yol = listeyi_excele_aktar(QWidget(), "Öğrenciler", "ogrenciler", [("Ad", None)], [["Ayşe"], ["Çağrı"]],
@@ -160,7 +206,7 @@ def test_liste_excel_denetim_istegi_eski_bicimde_kalir(tmp_path):
         gonderilen.append(kw["json"])
         yanit = MagicMock(); yanit.status_code = 200
         return yanit
-    with patch.object(QFileDialog, "getSaveFileName", return_value=(hedef, "")), patch("client.liste_excel.QMessageBox.information"), \
+    with _secim("xlsx"), patch.object(QFileDialog, "getSaveFileName", return_value=(hedef, "")), patch("client.liste_excel.QMessageBox.information"), \
             patch("client.liste_excel.oturum_kontrollu_istek", istek), patch("client.liste_excel.oturum_hatasi_mi", return_value=False):
         listeyi_excele_aktar(QWidget(), "Öğrenciler", "ogrenciler", [("Ad", None)], [["Ayşe"]],
                              kayit={"api_url": "http://x", "token": "T", "liste": "OGRENCI"})

@@ -228,3 +228,17 @@ def giris_siniri_diger_testlerde_kapali(request, monkeypatch):
     if request.module.__name__.split(".")[-1] in GIRIS_SINIRI_TEST_MODULLERI:
         return
     monkeypatch.setattr("server.giris_siniri.istemci_anahtari", lambda istek: None)
+
+
+# "Hangi türde kaydetmek istersiniz?" penceresi modaldır; testte kimse tıklamayacağı için varsayılan olarak Excel seçilir.
+# Pencerenin kendi testleri (ve PDF yolunu deneyenler) bicim_sec'i kendileri yamar.
+BICIM_SECIMI_GERCEK_TEST_MODULLERI = {"test_rapor_cikti_pdf"}
+
+
+@pytest.fixture(autouse=True)
+def dis_aktar_bicim_secimi_testte_excel(request, monkeypatch):
+    import sys
+    modul = sys.modules.get("client.rapor_cikti")
+    if modul is None or request.module.__name__.split(".")[-1] in BICIM_SECIMI_GERCEK_TEST_MODULLERI:
+        return
+    monkeypatch.setattr(modul, "bicim_sec", lambda pencere=None, baslik="Dışa Aktar": "xlsx")

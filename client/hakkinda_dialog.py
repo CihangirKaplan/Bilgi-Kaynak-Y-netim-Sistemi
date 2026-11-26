@@ -42,7 +42,7 @@ YARDIM_BOLUMLERI = [
         "Randevu listesinde \"Tüm tarihler\" en yeni 2000 randevuyu getirir; daha eskilerini görmek için bir dönem seçin.",
     ]),
     ("Excel ya da PDF olarak kaydetme", [
-        "\"Dışa Aktar\" düğmesi, ekranda o an görünen kayıtları dosyaya yazar. Kaydetme penceresindeki \"Kayıt türü\" listesinden Excel (.xlsx) ya da PDF seçebilirsiniz. Önce arama ya da süzgeç uygulayabilirsiniz.",
+        "\"Dışa Aktar\" düğmesi, ekranda o an görünen kayıtları dosyaya yazar. Önce açılan pencerede Excel (.xlsx) mi PDF mi istediğinizi seçersiniz, sonra dosyanın yerini belirlersiniz. Önce arama ya da süzgeç uygulayabilirsiniz.",
         "Aktarılan dosyaların paylaşımında dikkatli olun; her aktarım denetim kaydına işlenir.",
     ]),
     ("Kişisel veriler", [
