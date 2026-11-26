@@ -109,9 +109,17 @@ def test_ogrenci_yonetimi_api_yollari_tanimli():
         ("PATCH", "/api/ogrenciler/{ogrenci_id}/aktiflik"),
     }
 
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     mevcut = {
         (metot, route.path)
-        for route in app.routes
+        for route in rotalar(app.routes)
         for metot in getattr(route, "methods", [])
     }
 
@@ -148,9 +156,9 @@ def test_saklama_suresi_sorgulari_pasife_alinmaya_dayanir_10_yil_kalmadi():
     """Saklama süresi pasife alındıktan 2 yıldır; kayıt tarihinden 10 yıl kuralı sunucuda kalmamalı."""
     from pathlib import Path
 
-    for dosya in ("server/sunucu.py", "server/rapor_ogrenci_faaliyet.py"):
+    for dosya in ("server/sunucu.py", "server/ogrenci_api.py", "server/rapor_ogrenci_faaliyet.py"):
         kaynak = Path(dosya).read_text(encoding="utf-8")
         assert "INTERVAL '10 years'" not in kaynak, dosya
-    sunucu = Path("server/sunucu.py").read_text(encoding="utf-8")
+    sunucu = Path("server/ogrenci_api.py").read_text(encoding="utf-8")                   # uçlar server/ogrenci_api.py'ye taşındı
     assert "pasife_alinma_tarihi" in sunucu and "INTERVAL '2 years'" in sunucu
     assert "SAKLAMA_YIL = 2" in Path("server/rapor_ogrenci_faaliyet.py").read_text(encoding="utf-8")

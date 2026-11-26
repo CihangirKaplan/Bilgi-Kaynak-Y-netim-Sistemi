@@ -10,9 +10,17 @@ from server.sunucu import app, ogrenci_ekle
 
 
 def test_ogrenci_ekleme_rbac_zorunlu():
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     endpoint = next(
         route
-        for route in app.routes
+        for route in rotalar(app.routes)
         if getattr(route, "path", None) == "/api/ogrenci-ekle"
         and "POST" in getattr(route, "methods", set())
     )
@@ -42,7 +50,7 @@ def test_ogrenci_ekleme_audit_zorunlu():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.denetim_kaydi_olustur") as audit,
+        patch("server.ogrenci_api.denetim_kaydi_olustur") as audit,
     ):
         sonuc = ogrenci_ekle(ogrenci, yetkili_id=1)
 

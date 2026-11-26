@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QDateEdit, QPushButton
 import client.ogrenci_dialog as dialog_modulu
 import client.ogrenci_yonetim_ekrani as modul
 import server.sunucu as sunucu
+from server import ogrenci_api                         # öğrenci uçları server/ogrenci_api.py'ye taşındı
 from server.modeller import OgrenciEkleModeli
 from server.sunucu import app, mevcut_kullanici_id
 
@@ -85,8 +86,8 @@ class _Baglanti:
 
 def test_ogrenci_ekleme_denetimi_yalniz_turu_yazar_kisisel_veri_yazmaz():
     imlec = _Imlec()
-    with patch.object(sunucu, "vt_baglan", return_value=_Baglanti(imlec)), \
-            patch.object(sunucu, "denetim_kaydi_olustur") as denetim:
+    with patch.object(ogrenci_api, "vt_baglan", return_value=_Baglanti(imlec)), \
+            patch.object(ogrenci_api, "denetim_kaydi_olustur") as denetim:
         sunucu.ogrenci_ekle(_ekle(telefon="05551234567", bolum="Psikoloji"), yetkili_id=1)
     ayrinti = denetim.call_args.kwargs["ayrinti"]
     assert ayrinti == {"yeni": {"tur": "GONULLU"}}
@@ -95,7 +96,7 @@ def test_ogrenci_ekleme_denetimi_yalniz_turu_yazar_kisisel_veri_yazmaz():
 
 def test_ogrenci_kimlik_listesi_sirali_gelir():
     imlec = _Imlec([(1, "Ali", "10", "GONULLU")])
-    with patch.object(sunucu, "vt_baglan", return_value=_Baglanti(imlec)):
+    with patch.object(ogrenci_api, "vt_baglan", return_value=_Baglanti(imlec)):
         sunucu.ogrencileri_getir(kullanici_id=1)
     assert "ORDER BY ad_soyad, ogrenci_numarasi" in imlec.sorgular[0]
 
