@@ -32,14 +32,14 @@ def temiz_yetkiler():
 def test_istemci_izni_cihaz_ozeti_sunucu_uclariyla_ayni_izin_kodudur():
     import server.sunucu as sunucu
     assert mw.IZIN_KODLARI["Cihaz envanterini yönetme"] == ("CIHAZ_ENVANTER_YONET",)
+    from server import anasayfa_api                                          # uçlar server/anasayfa_api.py'ye taşındı (izinler UCLAR tablosunda)
+    yetki = {u[2].__name__: u[4] for u in anasayfa_api.UCLAR}
     for ad in DASHBOARD_UCLARI:
-        assert 'izin_kontrol("CIHAZ_ENVANTER_YONET")' in inspect.getsource(getattr(sunucu, ad)), ad
-    rezervasyon = inspect.getsource(sunucu.dashboard_bugunku_rezervasyonlar)
-    assert "izin_kontrol_biri(" in rezervasyon
-    for kod in ("CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"):
-        assert f'"{kod}"' in rezervasyon
-    bildirim = inspect.getsource(sunucu.yaklasan_islemler_getir)
-    assert 'izin_kontrol_biri(' in bildirim and '"CIHAZ_ENVANTER_YONET"' in bildirim and "BAKIM_KAYITLARI_GORUNTULE" in bildirim
+        assert yetki[ad] == "CIHAZ_ENVANTER_YONET", ad
+    # rezervasyon ucu izin_kontrol_biri ile (tuple) korunur: bu üç izinden biri yeter
+    assert set(yetki["dashboard_bugunku_rezervasyonlar"]) == {"CIHAZ_ENVANTER_YONET", "CIHAZ_UYGUNLUK_GORUNTULE", "CIHAZ_REZERVASYON"}
+    bildirim = yetki["yaklasan_islemler_getir"]                              # izin_kontrol_biri: izinlerden biri yeter
+    assert isinstance(bildirim, tuple) and "CIHAZ_ENVANTER_YONET" in bildirim and "BAKIM_KAYITLARI_GORUNTULE" in bildirim
 
 
 def test_sunucu_yetkisi_yokken_eski_tabloya_donulur():

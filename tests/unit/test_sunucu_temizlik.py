@@ -101,7 +101,8 @@ def test_dashboard_ozeti_ariza_sorgusu_hata_verirse_500_doner():
     baglanti = MagicMock()
     baglanti.cursor.return_value = imlec
     from unittest.mock import patch
-    with patch.object(sunucu, "vt_baglan", return_value=baglanti):
+    from server import anasayfa_api                                          # uç server/anasayfa_api.py'ye taşındı
+    with patch.object(anasayfa_api, "vt_baglan", return_value=baglanti):
         with pytest.raises(HTTPException) as hata:
             sunucu.dashboard_ozet_getir(kullanici_id=1)
     assert hata.value.status_code == 500

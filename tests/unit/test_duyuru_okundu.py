@@ -70,9 +70,9 @@ def test_hepsini_okundu_yalniz_yayindakileri_ve_cagirani_isaretler():
 def test_uclar_yalniz_token_ister_izin_aramaz_tokensiz_401():
     import server.sunucu as sunucu
     from fastapi.testclient import TestClient
+    from server import anasayfa_api                                          # uçlar server/anasayfa_api.py'ye taşındı
     for fonksiyon in (sunucu.duyuruyu_okundu_isaretle, sunucu.duyuruyu_tekrar_goster, sunucu.duyurulari_okundu_isaretle):
-        kaynak = inspect.getsource(fonksiyon)
-        assert "mevcut_kullanici_id" in kaynak and "izin_kontrol" not in kaynak
+        assert next(u[4] for u in anasayfa_api.UCLAR if u[2] is fonksiyon) is None    # izin yok, yalnızca oturum (kimlik) bağımlılığı
     with TestClient(sunucu.app) as istemci:
         assert istemci.post("/api/duyurular/okundu").status_code == 401
         assert istemci.post("/api/duyurular/3/okundu").status_code == 401

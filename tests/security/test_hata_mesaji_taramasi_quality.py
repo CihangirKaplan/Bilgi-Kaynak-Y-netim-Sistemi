@@ -41,11 +41,11 @@ def test_quality_api_hata_detayi_sizdirmaz(fonksiyon_adi):
     dogrudan aktarilmamali.
     """
 
-    kaynak = Path("server/sunucu.py").read_text(encoding="utf-8")
-    agac = ast.parse(kaynak)
-
+    # Uç fonksiyonları server/sunucu.py ve ondan ayrılan uç modüllerinde (server/*_api.py) bulunur.
     eslesenler = [
-        dugum for dugum in agac.body
+        dugum
+        for dosya in sorted(Path("server").glob("*.py"))
+        for dugum in ast.parse(dosya.read_text(encoding="utf-8")).body
         if isinstance(dugum, (ast.FunctionDef, ast.AsyncFunctionDef))
         and dugum.name == fonksiyon_adi
     ]
