@@ -178,11 +178,11 @@ def test_durum_ucu_gecersiz_govdeleri_reddeder(istemci, govde):
 def test_randevu_listesi_iptal_alanlarini_dondurur(istemci):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), ("ADMIN",), (1,)]          # izin, rol, randevu düzenleme izni (iptal notunu görmek için)
+    c.fetchone.side_effect = [(1,), ("ADMIN",), (1,), (2,)]    # izin, rol, randevu düzenleme izni (iptal notunu görmek için), toplam sayı (süzgeçsiz liste sınırlı sorgudur)
     simdi = datetime.now()
-    c.fetchall.return_value = [
-        (1, "DAN-1", 3, 2, simdi, simdi, "IPTAL_EDILDI", simdi, "DIGER", "kurum içi görev"),
+    c.fetchall.return_value = [                                              # sınırlı sorgu en yeniden başlar; uç artan sıraya çevirir
         (2, "DAN-2", 3, 2, simdi, simdi, "PLANLANDI", simdi),                  # eski biçim (8 sütun) de çalışır
+        (1, "DAN-1", 3, 2, simdi, simdi, "IPTAL_EDILDI", simdi, "DIGER", "kurum içi görev"),
     ]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.get("/api/randevular")

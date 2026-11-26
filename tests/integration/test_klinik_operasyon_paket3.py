@@ -24,7 +24,7 @@ def test_psikolog_rolu_tek_yerde_karsilastirilir(rol, beklenen):
 def _liste(rol, izin):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(rol,), izin]                                     # rol, RANDEVU_DUZENLE izin satırı
+    c.fetchone.side_effect = [(rol,), izin, (1,)]                               # rol, RANDEVU_DUZENLE izin satırı, toplam sayı (süzgeçsiz liste sınırlı sorgudur)
     simdi = datetime.now()
     c.fetchall.return_value = [(1, "DAN-1", 3, 2, simdi, simdi, "IPTAL_EDILDI", simdi, "DIGER", "özel not", "YUZ_YUZE", None)]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):

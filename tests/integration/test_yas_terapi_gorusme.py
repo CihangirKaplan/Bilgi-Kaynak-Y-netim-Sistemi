@@ -219,11 +219,11 @@ def test_eski_danisanda_randevu_terapisiz_olusabilir():
 def test_randevu_listesi_yeni_alanlari_dondurur(istemci):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), ("ADMIN",), (1,)]          # izin, rol, randevu düzenleme izni
+    c.fetchone.side_effect = [(1,), ("ADMIN",), (1,), (2,)]    # izin, rol, randevu düzenleme izni, toplam sayı (süzgeçsiz liste sınırlı sorgudur)
     simdi = datetime.now()
-    c.fetchall.return_value = [
-        (1, "D", 3, 2, simdi, simdi, "PLANLANDI", simdi, None, None, "ONLINE", "OYUN_TERAPISI"),
+    c.fetchall.return_value = [                                                              # sınırlı sorgu en yeniden başlar; uç artan sıraya çevirir
         (2, "D", 3, 2, simdi, simdi, "PLANLANDI", simdi),                                    # eski biçim
+        (1, "D", 3, 2, simdi, simdi, "PLANLANDI", simdi, None, None, "ONLINE", "OYUN_TERAPISI"),
     ]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         veri = istemci.get("/api/randevular").json()
