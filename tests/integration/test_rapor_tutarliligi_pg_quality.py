@@ -261,18 +261,22 @@ def test_ogrenci_raporu_saklama_suresi_tur_bolum_ve_telefon_yok(veri):
     etiket = uuid4().hex[:6]
     eklenen = []
     try:
-        for ad, tur, tarih, bolum in [
-            ("doldu", "GONULLU", "2010-01-01", None), ("ertelenen", "GONULLU", "2010-01-01", None),
-            ("yaklasan", "GONULLU", None, None), ("asistan", "ASISTAN", "2020-01-01", "Psikoloji"),
+        # Saklama süresi PASİFE ALINDIKTAN 2 yıl sonra dolar; aktif öğrencinin süresi işlemez (kayıt tarihi ne kadar eski olursa olsun).
+        for ad, tur, pasife, bolum in [
+            ("doldu", "GONULLU", "2020-01-01", None), ("ertelenen", "GONULLU", "2020-01-01", None),
+            ("yaklasan", "GONULLU", "yaklasan", None),        # 2 yıl dolmasına 1 ay kalmış
+            ("eskiaktif", "GONULLU", None, None),             # 2010'dan beri aktif: süre işlemez
+            ("asistan", "ASISTAN", None, "Psikoloji"),
         ]:
-            if tarih is None:        # 10 yıl dolmasına 6 ay kalmış
-                c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, telefon, tur, olusturulma_tarihi) "
-                          "VALUES (%s, %s, '5550000000', %s, (CURRENT_DATE - INTERVAL '10 years' + INTERVAL '6 months')) RETURNING ogrenci_id",
-                          (f"RT {ad} {etiket}", f"{ad[:3]}{etiket}", tur))
-            else:
-                c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, telefon, tur, olusturulma_tarihi, bolum) "
-                          "VALUES (%s, %s, '5550000000', %s, %s, %s) RETURNING ogrenci_id", (f"RT {ad} {etiket}", f"{ad[:3]}{etiket}", tur, tarih, bolum))
-            eklenen.append((ad, c.fetchone()[0]))
+            c.execute("INSERT INTO ogrenciler (ad_soyad, ogrenci_numarasi, telefon, tur, aktif_mi, olusturulma_tarihi, bolum) "
+                      "VALUES (%s, %s, '5550000000', %s, %s, '2010-01-01', %s) RETURNING ogrenci_id",
+                      (f"RT {ad} {etiket}", f"{ad[:3]}{etiket}", tur, pasife is None, bolum))
+            kimlik_no = c.fetchone()[0]
+            if pasife == "yaklasan":
+                c.execute("UPDATE ogrenciler SET pasife_alinma_tarihi = CURRENT_DATE - INTERVAL '2 years' + INTERVAL '1 month' WHERE ogrenci_id = %s", (kimlik_no,))
+            elif pasife:
+                c.execute("UPDATE ogrenciler SET pasife_alinma_tarihi = %s WHERE ogrenci_id = %s", (pasife, kimlik_no))
+            eklenen.append((ad, kimlik_no))
         kimlik = dict(eklenen)
         c.execute("INSERT INTO ogrenci_kayit_erteleme_gecmisi (ogrenci_id, ogrenci_numarasi, yeni_uyari_tarihi) VALUES (%s, 'x', CURRENT_DATE + 30)",
                   (kimlik["ertelenen"],))
@@ -280,8 +284,10 @@ def test_ogrenci_raporu_saklama_suresi_tur_bolum_ve_telefon_yok(veri):
         r = ogrenci_raporu_getir(tur=None, durum=None, kullanici_id=0)
         durum = {o["ad_soyad"].split()[1]: o for o in r["ogrenciler"] if o["ad_soyad"].endswith(etiket)}
         assert durum["doldu"]["saklama_durumu"] == "Süresi doldu" and durum["ertelenen"]["saklama_durumu"] == "Ertelendi"
-        assert durum["yaklasan"]["saklama_durumu"] == "12 ay içinde dolacak" and durum["asistan"]["saklama_durumu"] is None
-        assert durum["asistan"]["saklama_bitis"] is None and durum["doldu"]["saklama_bitis"] == "2020-01-01"
+        assert durum["yaklasan"]["saklama_durumu"] == "3 ay içinde dolacak" and durum["asistan"]["saklama_durumu"] is None
+        assert durum["eskiaktif"]["saklama_durumu"] is None and durum["eskiaktif"]["saklama_bitis"] is None
+        assert durum["asistan"]["saklama_bitis"] is None and durum["doldu"]["saklama_bitis"] == "2022-01-01"
+        assert durum["doldu"]["pasife_alinma_tarihi"].startswith("2020-01-01")
         assert r["ozet"]["saklama_suresi_dolmus"] >= 1 and r["ozet"]["saklama_ertelenen"] >= 1 and r["ozet"]["saklama_yaklasan"] >= 1
         assert r["ozet"]["toplam"] == r["ozet"]["aktif"] + r["ozet"]["pasif"] == len(r["ogrenciler"])
         assert "5550000000" not in str(r) and not any("telefon" in o for o in r["ogrenciler"])        # telefon raporda yok

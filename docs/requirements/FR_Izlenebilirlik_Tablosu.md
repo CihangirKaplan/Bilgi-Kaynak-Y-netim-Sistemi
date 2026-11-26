@@ -141,7 +141,7 @@ PostgreSQL ister, ana veritabanını korumak için CI dışındadır ve `TKYS_PG
 | FR-052 | Öğrenci listeleme | ⚠️ | `GET /api/ogrenciler-liste`, `GET /api/ogrenciler-yonetim`; `client/ogrenci_yonetim_ekrani.py` | `test_ogrenci_liste_tur_etiketi.py`, `test_ogrenci_liste_api_hatalari.py`; Doğrulama: öğrenci listeleme ve API hata testleri başarılı (16.11.2026). |
 | FR-053 | Öğrenci ekleme | ⚠️ | `POST /api/ogrenci-ekle`; `client/ogrenci_dialog.py` | `test_ogrenci_ekleme_http_quality.py`, `test_ogrenci_ekleme_son_quality.py`; Doğrulama: öğrenci ekleme HTTP, kalite ve güvenlik testleri başarılı (16.11.2026). |
 | FR-054 | Öğrenci aktiflik yönetimi | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/aktiflik` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG) |
-| FR-055 | Öğrenci silme ve erteleme | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/silme-ertele`, `DELETE /api/ogrenciler/{ogrenci_id}/on-yil-sil` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG); saklama ve silme koşulları ayrıca doğrulanmalı |
+| FR-055 | Öğrenci silme ve erteleme | ⚠️ | `PATCH /api/ogrenciler/{ogrenci_id}/silme-ertele`, `DELETE /api/ogrenciler/{ogrenci_id}/saklama-suresi-sil` | `test_ogrenci_yonetimi_postgresql_quality.py` (PG); saklama ve silme koşulları ayrıca doğrulanmalı |
 
 ### 5.12 Faaliyet ve puan yönetimi
 

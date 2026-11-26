@@ -6269,10 +6269,11 @@ def ogrenciler_yonetim_listesi(
 
                     (
                         o.tur::text = 'GONULLU'
-                        AND o.olusturulma_tarihi::date
+                        AND NOT o.aktif_mi
+                        AND o.pasife_alinma_tarihi::date
                             <= (
                                 CURRENT_DATE
-                                - INTERVAL '10 years'
+                                - INTERVAL '2 years'
                             )::date
                     ) AS kayit_suresi_doldu,
 
@@ -6280,7 +6281,9 @@ def ogrenciler_yonetim_listesi(
 
                     (
                         e.yeni_uyari_tarihi > CURRENT_DATE
-                    ) AS ertelendi_mi
+                    ) AS ertelendi_mi,
+
+                    o.pasife_alinma_tarihi
 
                 FROM ogrenciler o
 
@@ -6324,6 +6327,8 @@ def ogrenciler_yonetim_listesi(
                     "ertelemeye_kadar":
                         v[11].isoformat() if v[11] else None,
                     "ertelendi_mi": bool(v[12]),
+                    "pasife_alinma_tarihi":
+                        v[13].isoformat() if v[13] else None,
                 })
 
             return sonuc
@@ -6867,11 +6872,13 @@ def puan_raporu(
             conn.close()
 
 
-def _ogrenci_on_yil_kontrol(cursor, ogrenci_id):
+def _ogrenci_saklama_suresi_kontrol(cursor, ogrenci_id):
+    """Gönüllü öğrencinin kaydı, pasife alındıktan 2 yıl geçmişse silinebilir ya da ertelenebilir (aktif öğrencinin süresi işlemez)."""
     cursor.execute("""
         SELECT
             tur::text,
-            olusturulma_tarihi,
+            aktif_mi,
+            pasife_alinma_tarihi,
             kullanici_id,
             ogrenci_numarasi
         FROM ogrenciler
@@ -6887,29 +6894,41 @@ def _ogrenci_on_yil_kontrol(cursor, ogrenci_id):
             detail="Öğrenci bulunamadı."
         )
 
-    tur, tarih, kullanici_id, ogrenci_no = ogrenci
+    tur, aktif_mi, pasife_alinma, kullanici_id, ogrenci_no = ogrenci
 
     if tur != "GONULLU":
         raise HTTPException(
             status_code=409,
             detail=(
-                "10 yıllık kayıt işlemi yalnızca "
+                "Saklama süresi işlemi yalnızca "
                 "Gönüllü Öğrenciler içindir."
+            )
+        )
+
+    if aktif_mi or pasife_alinma is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Saklama süresi yalnızca pasife alınmış "
+                "öğrenciler için işler. Bu öğrenci aktif."
             )
         )
 
     cursor.execute("""
         SELECT (
             %s::date <= (
-                CURRENT_DATE - INTERVAL '10 years'
+                CURRENT_DATE - INTERVAL '2 years'
             )::date
         );
-    """, (tarih.date(),))
+    """, (pasife_alinma.date(),))
 
     if not cursor.fetchone()[0]:
         raise HTTPException(
             status_code=409,
-            detail="Bu öğrencinin 10 yıllık süresi dolmadı."
+            detail=(
+                "Bu öğrencinin pasif kalma süresi "
+                "(2 yıl) dolmadı."
+            )
         )
 
     return kullanici_id, ogrenci_no
@@ -6927,7 +6946,7 @@ def ogrenci_silme_ertele(
 
     try:
         with conn.cursor() as cursor:
-            _, ogrenci_no = _ogrenci_on_yil_kontrol(
+            _, ogrenci_no = _ogrenci_saklama_suresi_kontrol(
                 cursor, ogrenci_id
             )
 
@@ -6993,8 +7012,8 @@ def ogrenci_silme_ertele(
         conn.close()
 
 
-@app.delete("/api/ogrenciler/{ogrenci_id}/on-yil-sil")
-def ogrenci_on_yil_sil(
+@app.delete("/api/ogrenciler/{ogrenci_id}/saklama-suresi-sil")
+def ogrenci_saklama_suresi_sil(
     ogrenci_id: int,
     veri: OgrenciSilOnayModeli,
     yetkili_id: int = Depends(
@@ -7012,7 +7031,7 @@ def ogrenci_on_yil_sil(
 
     try:
         with conn.cursor() as cursor:
-            kullanici_id, _ = _ogrenci_on_yil_kontrol(
+            kullanici_id, _ = _ogrenci_saklama_suresi_kontrol(
                 cursor, ogrenci_id
             )
 
@@ -7120,7 +7139,7 @@ def ogrenci_on_yil_sil(
             )
             silinen_erteleme_sayisi = cursor.rowcount
 
-            # 10 yıllık saklama süresi sonunda yapılan imha: denetim kaydına kişisel veri (ad, telefon...) YAZILMAZ;
+            # Saklama süresi (pasife alındıktan 2 yıl) sonunda yapılan imha: denetim kaydına kişisel veri (ad, telefon...) YAZILMAZ;
             # yalnızca kimliksiz alanlar ve silinen faaliyet sayısı tutulur.
             silinen = satiri_sil_ve_ayrintisini_al(cursor, "ogrenciler", ogrenci_id)
             if silinen is not None:
@@ -10796,7 +10815,7 @@ def ogrenci_raporu_getir(
     durum: str | None = Query(None, pattern="^(aktif|pasif)$"),
     kullanici_id: int = Depends(izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")),
 ):
-    """Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (10 yıl) durumu, faaliyetsiz aktif
+    """Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (pasife alındıktan 2 yıl) durumu, faaliyetsiz aktif
     öğrenciler ve öğrenci listesi. Telefon raporda yer almaz."""
     if tur is not None and tur not in OGRENCI_TUR_ETIKETLERI:
         raise HTTPException(status_code=422, detail="Geçersiz öğrenci türü.")

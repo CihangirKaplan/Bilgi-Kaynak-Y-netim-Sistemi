@@ -45,7 +45,7 @@ uç bazında yetki listesi için [API/Uc_Listesi.md](../API/Uc_Listesi.md).
 - Öğrenci adı/telefonu yalnızca öğrenci yönetimi yetkisi olanlara görünür; Excel aktarımı denetim kaydına yazılır.
 - Yönetim raporları ve oda/cihaz raporları **kişisel veri içermez** (kişi adı, tanı, danışan bilgisi dışarıya verilmez) (`test_kisisel_veri_ayrimi_pg_quality.py`, `docs/Raporlama_Rehberi.md` bölüm 6).
 - Excel çıktılarında metin hücreleri **formül olarak yorumlanmaz** (formül enjeksiyonuna karşı).
-- **Saklama süresi:** kayıtlar 10 yıl saklanır; hangi verinin nerede ne kadar tutulduğu için bkz. [Veri Saklama Politikası](Veri_Saklama_Politikasi.md).
+- **Saklama süresi:** kayıtlar 10 yıl saklanır (gönüllü öğrenci kayıtları hariç: pasife alındıktan 2 yıl); hangi verinin nerede ne kadar tutulduğu için bkz. [Veri Saklama Politikası](Veri_Saklama_Politikasi.md).
 
 ## 5. Veri ve sunucu güvenliği
 

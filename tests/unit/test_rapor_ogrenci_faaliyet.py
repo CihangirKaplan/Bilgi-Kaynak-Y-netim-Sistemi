@@ -20,7 +20,7 @@ OGRENCI = {
     "ogrenciler": [
         {"ogrenci_id": 1, "ad_soyad": "Ayşe Y", "ogrenci_numarasi": "N1", "tur": "GONULLU", "tur_etiketi": "Gönüllü Öğrenci", "aktif_mi": True,
          "bolum": None, "sinif": None, "olusturulma_tarihi": "2010-01-01T00:00:00", "faaliyet_sayisi": 0, "toplam_puan": 0.0,
-         "son_faaliyet_tarihi": None, "saklama_durumu": "Süresi doldu", "saklama_bitis": "2020-01-01", "erteleme_tarihi": None,
+         "son_faaliyet_tarihi": None, "saklama_durumu": "Süresi doldu", "saklama_bitis": "2022-01-01", "pasife_alinma_tarihi": "2020-01-01", "erteleme_tarihi": None,
          "yeni_kayit_mi": False, "faaliyetsiz_mi": True},
         {"ogrenci_id": 2, "ad_soyad": "=KOTU()", "ogrenci_numarasi": "N2", "tur": "ASISTAN", "tur_etiketi": "Asistan Öğrenci", "aktif_mi": False,
          "bolum": "Psikoloji", "sinif": "3", "olusturulma_tarihi": "2025-05-05T00:00:00", "faaliyet_sayisi": 4, "toplam_puan": 12.0,
