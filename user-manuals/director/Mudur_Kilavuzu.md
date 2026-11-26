@@ -150,7 +150,7 @@ Teknik bir bilgi gerekmeden sistemin sağlığını görürsünüz:
 Aşağıdaki sayfalar için adım adım anlatım [Memur Kılavuzu](../administrative/Memur_Kilavuzu.md)'ndadır; sizin için de aynı şekilde çalışırlar:
 - **Cihaz Envanteri, Bakım Kayıtları, Bakım Planları, Kalibrasyon, Arıza Kayıtları, Cihaz Uygunluğu** → Memur Kılavuzu **Bölüm 1**.
   (Cihaz **rezervasyonu** yapma yetkisi varsayılan olarak sizde değildir; rezervasyon raporunu görürsünüz.)
-- **Öğrenciler, Faaliyet Kayıtları** (10 yıllık kayıt süresi, ertele/sil dahil) → Memur Kılavuzu **Bölüm 2**. 10 yıl dolan kaydı **kalıcı silme** yetkisi yalnızca sizde ve Admin'dedir (Memur ertelemeyi yapar, silemez).
+- **Öğrenciler, Faaliyet Kayıtları** (kayıt saklama süresi: pasife alındıktan 2 yıl, ertele/sil dahil) → Memur Kılavuzu **Bölüm 2**. Süresi (pasife alındıktan 2 yıl) dolan kaydı **kalıcı silme** yetkisi yalnızca sizde ve Admin'dedir (Memur ertelemeyi yapar, silemez).
 - **Oda Yönetimi, Oda Etkinlikleri** → Memur Kılavuzu **Bölüm 4**.
 
 ---

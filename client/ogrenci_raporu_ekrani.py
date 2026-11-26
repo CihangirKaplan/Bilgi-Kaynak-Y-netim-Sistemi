@@ -1,4 +1,4 @@
-"""TKYS - Öğrenci Raporu: tür/bölüm dağılımı, aktif/pasif, kayıt saklama süresi (10 yıl) durumu ve öğrenci listesi (telefon yok)."""
+"""TKYS - Öğrenci Raporu: tür/bölüm dağılımı, aktif/pasif, kayıt saklama süresi (pasife alındıktan 2 yıl) durumu ve öğrenci listesi (telefon yok)."""
 
 from client.rapor_excel import TARIH_BICIMI, _tarih_degeri
 from client.rapor_excel_genel import excel_olustur
@@ -70,7 +70,7 @@ class OgrenciRaporuEkrani(RaporSayfasiTaban):
         self.kart_yaz("toplam", ozet.get("toplam", 0), f"{ozet.get('aktif', 0)} aktif · {ozet.get('pasif', 0)} pasif")
         self.kart_yaz("yeni", ozet.get("son_30_gun_yeni", 0), "Son 30 günde kaydedilen")
         self.kart_yaz("saklama", ozet.get("saklama_suresi_dolmus", 0),
-                      f"{ozet.get('saklama_ertelenen', 0)} ertelendi · {ozet.get('saklama_yaklasan', 0)} yaklaşıyor ({kural.get('saklama_yil', 10)} yıl, Gönüllü)")
+                      f"{ozet.get('saklama_ertelenen', 0)} ertelendi · {ozet.get('saklama_yaklasan', 0)} yaklaşıyor ({kural.get('saklama_yil', 2)} yıl pasif, Gönüllü)")
         self.kart_yaz("faaliyetsiz", ozet.get("faaliyetsiz_aktif", 0), f"Son {kural.get('faaliyetsiz_gun', 90)} günde faaliyeti yok")
         self.doldur("tur", [[g["etiket"], g["toplam"], g["aktif"], g["pasif"]] for g in veri.get("tur_dagilimi", [])])
         self.doldur("bolum", [[b["bolum"], b["ogrenci"]] for b in veri.get("bolum_dagilimi", [])])
@@ -79,7 +79,7 @@ class OgrenciRaporuEkrani(RaporSayfasiTaban):
              gun_metni(o["son_faaliyet_tarihi"]), o["saklama_durumu"] or "—"]
             for o in veri.get("ogrenciler", [])
         ])
-        self.durum_etiketi.setText("Telefon raporda yer almaz. Saklama süresi yalnızca Gönüllü Öğrenciler için geçerlidir (10 yıl; ertelenebilir).")
+        self.durum_etiketi.setText("Telefon raporda yer almaz. Saklama süresi yalnızca Gönüllü Öğrenciler için geçerlidir (pasife alındıktan 2 yıl; ertelenebilir).")
 
     def excel_yaz(self, veri, filtre, dosya_yolu):
         ozet = veri.get("ozet", {})
@@ -88,15 +88,15 @@ class OgrenciRaporuEkrani(RaporSayfasiTaban):
         excel_olustur(
             dosya_yolu, "ÖĞRENCİ RAPORU",
             "Bu rapor, sistemdeki öğrenci kayıtlarının güncel durumunu gösterir. Telefon bilgisi raporda yer almaz. "
-            "Kayıt saklama süresi yalnızca Gönüllü Öğrenciler için geçerlidir (10 yıl; ertelenebilir).",
+            "Kayıt saklama süresi yalnızca Gönüllü Öğrenciler için geçerlidir (pasife alındıktan 2 yıl; ertelenebilir).",
             filtre,
             [
                 ("Toplam öğrenci", ozet.get("toplam", 0), "Süzgece uyan öğrenci sayısı."),
                 ("Aktif / pasif", f"{ozet.get('aktif', 0)} / {ozet.get('pasif', 0)}", "Hesap durumu."),
                 ("Yeni kayıt (son 30 gün)", ozet.get("son_30_gun_yeni", 0), "Son 30 günde kaydedilen öğrenciler."),
-                ("Saklama süresi dolmuş", ozet.get("saklama_suresi_dolmus", 0), "Kayıt süresi dolan, ertelenmemiş Gönüllü öğrenciler."),
+                ("Saklama süresi dolmuş", ozet.get("saklama_suresi_dolmus", 0), "2 yıldır pasif olan, ertelenmemiş Gönüllü öğrenciler."),
                 ("Saklama süresi ertelenen", ozet.get("saklama_ertelenen", 0), "Süresi dolmuş ama ileri bir tarihe ertelenmiş kayıtlar."),
-                ("Saklama süresi yaklaşan", ozet.get("saklama_yaklasan", 0), "Önümüzdeki 12 ay içinde süresi dolacak Gönüllü öğrenciler."),
+                ("Saklama süresi yaklaşan", ozet.get("saklama_yaklasan", 0), "Önümüzdeki 3 ay içinde süresi dolacak Gönüllü öğrenciler."),
                 ("Faaliyetsiz aktif öğrenci", ozet.get("faaliyetsiz_aktif", 0), "Aktif ama son 90 günde faaliyet kaydı olmayan öğrenciler."),
             ],
             [
@@ -113,10 +113,10 @@ class OgrenciRaporuEkrani(RaporSayfasiTaban):
                  "Öğrenci türüne göre sayılar."),
                 ("Bölüm Dağılımı", [("Bölüm", None), ("Öğrenci", None)],
                  [[b["bolum"], b["ogrenci"]] for b in veri.get("bolum_dagilimi", [])], "Bölümü girilmiş öğrencilerin dağılımı."),
-                ("Saklama Süresi", [("Ad Soyad", None), ("Öğrenci No", None), ("Kayıt Tarihi", TARIH_BICIMI), ("Saklama Bitiş", TARIH_BICIMI),
+                ("Saklama Süresi", [("Ad Soyad", None), ("Öğrenci No", None), ("Pasife Alındığı Tarih", TARIH_BICIMI), ("Saklama Bitiş", TARIH_BICIMI),
                                     ("Durum", None), ("Erteleme Tarihi", TARIH_BICIMI)],
-                 [[o["ad_soyad"], o["ogrenci_numarasi"], _tarih_degeri(o["olusturulma_tarihi"]), _tarih_degeri(o["saklama_bitis"]),
+                 [[o["ad_soyad"], o["ogrenci_numarasi"], _tarih_degeri(o.get("pasife_alinma_tarihi")), _tarih_degeri(o["saklama_bitis"]),
                    o["saklama_durumu"], _tarih_degeri(o["erteleme_tarihi"])] for o in saklamalilar],
-                 "Süresi dolmuş, ertelenmiş ya da 12 ay içinde dolacak Gönüllü öğrenciler (KVKK takibi)."),
+                 "Pasife alınalı 2 yıl dolmuş, ertelenmiş ya da 3 ay içinde dolacak Gönüllü öğrenciler (KVKK takibi)."),
             ],
         )

@@ -32,15 +32,15 @@ Bir satır ✘ ise "Not" sütununa gördüğünüzü yazıp geliştiriciye ileti
 | 1 | Deneme öğrencisini seçip **Aktiflik Düzenle** ile pasife alın | Durum **Pasif** olur; üstteki kartlarda aktif sayısı azalır | ☐ | |
 | 2 | Aynı öğrenciyi yeniden aktif edin | Durum **Aktif** olur | ☐ | |
 
-## FR-055: Öğrenci silme ve erteleme (10 yıllık saklama)
+## FR-055: Öğrenci silme ve erteleme (pasife alındıktan 2 yıl saklama)
 
-Bu madde 10 yıllık kayıt süresiyle ilgilidir; arayüzden "10 yıl önce kaydedilmiş" bir öğrenci oluşturulamaz. Bu yüzden adımları **geliştirici hazırlar**
-(kayıt tarihi 10 yıldan eski bir deneme öğrencisi ekler) ve siz ekranda izlersiniz.
+Bu madde, öğrencinin pasife alınmasından sonra 2 yıl geçmesiyle ilgilidir; arayüzden "2 yıl önce pasife alınmış" bir öğrenci oluşturulamaz. Bu yüzden adımları **geliştirici hazırlar**
+(pasife alınma tarihi 2 yıldan eski bir deneme öğrencisi ekler) ve siz ekranda izlersiniz. Aktif bir öğrencinin süresi hiç işlemez.
 
 | # | Adım | Beklenen sonuç | Sonuç | Not |
 |---|---|---|---|---|
 | 1 | **Öğrenciler** sayfasını açın | Süresi dolan kayıt varsa sayfa açılışında uyarı çıkar; **Süresi Dolan Kayıtlar (N)** düğmesi sayıyı gösterir | ☐ | |
-| 2 | **Süresi Dolan Kayıtlar**'a basın | Süresi dolan gönüllü öğrencilerin listesi açılır (Ad Soyad, Öğrenci No, Kayıt Tarihi, Erteleme Tarihi, Durum: İşlem Bekliyor / Ertelendi) | ☐ | |
+| 2 | **Süresi Dolan Kayıtlar**'a basın | Süresi dolan gönüllü öğrencilerin listesi açılır (Ad Soyad, Öğrenci No, Pasife Alındığı Tarih, Erteleme Tarihi, Durum: İşlem Bekliyor / Ertelendi) | ☐ | |
 | 3 | Bir öğrenciyi seçip **Seçili Öğrenciyi Ertele** ile yeni bir tarih verin | Durum **Ertelendi** olur; erteleme tarihi kaydedilir | ☐ | |
 | 4 | Ertelenmiş (erteleme tarihi gelmemiş) öğrenci için **Seçili Kaydı Sil**'i deneyin | Sistem silmeyi **reddeder** (erteleme tarihi gelmeden silinemez) | ☐ | |
 | 5 | Erteleme tarihi gelmiş ya da hiç ertelenmemiş süresi dolan bir deneme kaydı için **Seçili Kaydı Sil**'e basıp onaylayın | Kayıt kalıcı olarak silinir; listeden kaybolur. (**Silme geri alınamaz**; yalnızca deneme kaydıyla yapın) | ☐ | |

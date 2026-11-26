@@ -309,10 +309,10 @@ class OgrenciYonetimEkrani(QWidget):
         self.token = token
         self._sayfaya_git = sayfaya_git                              # ana pencerenin sayfa açma işlevi
         self._kullanici_sayfasi_izinli = kullanici_sayfasi_izinli    # "Kullanıcı & Personel" sayfasına yetkisi var mı
-        self.silebilir = silebilir                                   # 10 yıl sonu kalıcı silme izni (Admin, Müdür)
+        self.silebilir = silebilir                                   # saklama süresi (pasife alındıktan 2 yıl) sonunda kalıcı silme izni (Admin, Müdür)
         self.kayitlar = []
         self.gorunen_kayitlar = []                                   # arama ve süzgeçlere uyanlar (Excel'e bunlar aktarılır)
-        self._on_yil_uyarisi_gosterildi = False
+        self._saklama_uyarisi_gosterildi = False
 
         self.setObjectName("ogrenciYonetimi")
         self.setStyleSheet(liste_sayfasi_stili() + UYARI_DUGMESI_STILI)
@@ -495,7 +495,7 @@ class OgrenciYonetimEkrani(QWidget):
         return hata_detayi_metni(cevap, f"İşlem tamamlanamadı (HTTP {cevap.status_code}).")
 
     def _bekleyen_sayisi(self):
-        """10 yıllık süresi dolmuş, ertelenmemiş (işlem bekleyen) gönüllü öğrenci sayısı."""
+        """Pasife alınalı 2 yıl dolmuş, ertelenmemiş (işlem bekleyen) gönüllü öğrenci sayısı."""
         return sum(
             o.get("tur") == "GONULLU"
             and bool(o.get("kayit_suresi_doldu"))
@@ -527,15 +527,16 @@ class OgrenciYonetimEkrani(QWidget):
 
         if (
             bekleyen > 0
-            and not self._on_yil_uyarisi_gosterildi
+            and not self._saklama_uyarisi_gosterildi
         ):
-            self._on_yil_uyarisi_gosterildi = True
+            self._saklama_uyarisi_gosterildi = True
 
             QMessageBox.information(
                 self,
-                "10 Yıllık Kayıt Uyarısı",
-                f"{bekleyen} gönüllü öğrencinin "
-                "10 yıllık kayıt süresi dolmuş.\n\n"
+                "Kayıt Saklama Süresi Uyarısı",
+                f"{bekleyen} gönüllü öğrenci "
+                "2 yıldan uzun süredir pasif; "
+                "kayıt saklama süresi dolmuş.\n\n"
                 "İncelemek için "
                 "'Süresi Dolan Kayıtlar' "
                 "butonunu kullanın."
@@ -1042,7 +1043,7 @@ class OgrenciYonetimEkrani(QWidget):
         pencere.setStyleSheet(STIL)
 
         pencere.setWindowTitle(
-            "10 Yılını Dolduran Gönüllü Öğrenciler"
+            "2 Yıldır Pasif Olan Gönüllü Öğrenciler"
         )
         pencere.resize(850, 530)
 
@@ -1056,7 +1057,8 @@ class OgrenciYonetimEkrani(QWidget):
         ana.addWidget(baslik)
 
         aciklama = QLabel(
-            "Yalnızca Gönüllü Öğrenciler listelenir. "
+            "Pasife alındıktan 2 yıl geçen Gönüllü Öğrenciler listelenir "
+            "(yeniden aktif edilen öğrencinin süresi sıfırlanır). "
             "Erteleme tarihi gelmeden kayıt silinemez."
         )
         aciklama.setWordWrap(True)
@@ -1073,7 +1075,7 @@ class OgrenciYonetimEkrani(QWidget):
         tablo_hazirla(tablo, [
             "Ad Soyad",
             "Öğrenci No",
-            "Kayıt Tarihi",
+            "Pasife Alındığı Tarih",
             "Erteleme Tarihi",
             "Durum",
         ])
@@ -1081,7 +1083,7 @@ class OgrenciYonetimEkrani(QWidget):
         ana.addWidget(tablo, 1)
 
         bos_kayit = QLabel(
-            "10 yıllık kayıt süresi dolan gönüllü öğrenci bulunmuyor."
+            "2 yıldır pasif olan gönüllü öğrenci bulunmuyor."
         )
         bos_kayit.setObjectName("aciklama")
         bos_kayit.setAlignment(Qt.AlignCenter)
@@ -1119,7 +1121,7 @@ class OgrenciYonetimEkrani(QWidget):
                     ogrenci["ad_soyad"],
                     ogrenci["ogrenci_numarasi"],
                     tarih_goster(
-                        ogrenci.get("olusturulma_tarihi")
+                        ogrenci.get("pasife_alinma_tarihi")
                     ),
                     tarih_goster(
                         ogrenci.get("ertelemeye_kadar")
@@ -1260,7 +1262,7 @@ class OgrenciYonetimEkrani(QWidget):
             yanit = self._istek(
                 "DELETE",
                 f"/api/ogrenciler/"
-                f"{ogrenci['ogrenci_id']}/on-yil-sil",
+                f"{ogrenci['ogrenci_id']}/saklama-suresi-sil",
                 json={
                     "onayla": True
                 }

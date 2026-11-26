@@ -150,7 +150,7 @@ import server.sunucu as sunucu
 
 @pytest.fixture
 def gecici_gonullu():
-    """Yalnızca test veritabanında geçici öğrenci oluşturur."""
+    """Yalnızca test veritabanında geçici öğrenci oluşturur: 2015'ten beri pasif (saklama süresi dolmuş) Gönüllü öğrenci."""
 
     assert VT_AYARLARI["dbname"] == "crkys_alembic_test"
 
@@ -163,8 +163,8 @@ def gecici_gonullu():
             cur.execute("""
                 INSERT INTO ogrenciler
                     (ad_soyad, ogrenci_numarasi, tur,
-                     olusturulma_tarihi)
-                VALUES (%s, %s, 'GONULLU', %s)
+                     aktif_mi, olusturulma_tarihi)
+                VALUES (%s, %s, 'GONULLU', FALSE, %s)
                 RETURNING ogrenci_id
             """, (
                 "QA Geçici Öğrenci",
@@ -173,6 +173,12 @@ def gecici_gonullu():
             ))
 
             ogrenci_id = cur.fetchone()[0]
+
+            # Tetikleyici pasif eklenen öğrencinin pasife alınma tarihini "şimdi" yazar; süresi dolmuş durumu için geriye alınır.
+            cur.execute(
+                "UPDATE ogrenciler SET pasife_alinma_tarihi = %s WHERE ogrenci_id = %s",
+                (datetime(2020, 1, 1), ogrenci_id),
+            )
 
         conn.commit()
 
@@ -329,7 +335,7 @@ def test_ertelenen_ogrenci_silinemez(gecici_gonullu):
     )
 
     with pytest.raises(HTTPException) as hata:
-        sunucu.ogrenci_on_yil_sil(
+        sunucu.ogrenci_saklama_suresi_sil(
             ogrenci_id=ogrenci_id,
             veri=sunucu.OgrenciSilOnayModeli(
                 onayla=True
@@ -340,10 +346,10 @@ def test_ertelenen_ogrenci_silinemez(gecici_gonullu):
     assert hata.value.status_code == 409
 
 
-def test_on_yili_dolan_gonullu_guvenle_silinir(gecici_gonullu):
+def test_iki_yildir_pasif_gonullu_guvenle_silinir(gecici_gonullu):
     ogrenci_id = gecici_gonullu
 
-    sonuc = sunucu.ogrenci_on_yil_sil(
+    sonuc = sunucu.ogrenci_saklama_suresi_sil(
         ogrenci_id=ogrenci_id,
         veri=sunucu.OgrenciSilOnayModeli(
             onayla=True
@@ -395,7 +401,7 @@ def test_silinen_ogrencinin_erteleme_gecmisi_de_imha_edilir(gecici_gonullu):
             """, (ogrenci_id, numara))
         conn.commit()
 
-        sunucu.ogrenci_on_yil_sil(ogrenci_id=ogrenci_id, veri=sunucu.OgrenciSilOnayModeli(onayla=True), yetkili_id=None)
+        sunucu.ogrenci_saklama_suresi_sil(ogrenci_id=ogrenci_id, veri=sunucu.OgrenciSilOnayModeli(onayla=True), yetkili_id=None)
 
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM ogrenci_kayit_erteleme_gecmisi WHERE ogrenci_numarasi = %s", (numara,))
@@ -476,7 +482,7 @@ def test_faaliyetli_gonullu_faaliyetleriyle_silinir(gecici_gonullu):
     try:
         assert faaliyet_sayisi(ogrenci_id) == 1
 
-        sonuc = sunucu.ogrenci_on_yil_sil(
+        sonuc = sunucu.ogrenci_saklama_suresi_sil(
             ogrenci_id=ogrenci_id,
             veri=sunucu.OgrenciSilOnayModeli(onayla=True),
             yetkili_id=None,
@@ -544,7 +550,7 @@ def test_faaliyet_silme_audit_hatasinda_rollback(gecici_gonullu):
             side_effect=audit_ve_hata,
         ):
             with pytest.raises(HTTPException) as hata:
-                sunucu.ogrenci_on_yil_sil(
+                sunucu.ogrenci_saklama_suresi_sil(
                     ogrenci_id=ogrenci_id,
                     veri=sunucu.OgrenciSilOnayModeli(onayla=True),
                     yetkili_id=None,
@@ -597,7 +603,7 @@ def test_silme_audit_hatasinda_rollback(gecici_gonullu):
         side_effect=audit_ve_hata,
     ):
         with pytest.raises(HTTPException) as hata:
-            sunucu.ogrenci_on_yil_sil(
+            sunucu.ogrenci_saklama_suresi_sil(
                 ogrenci_id=ogrenci_id,
                 veri=sunucu.OgrenciSilOnayModeli(
                     onayla=True
@@ -632,3 +638,64 @@ def test_silme_audit_hatasinda_rollback(gecici_gonullu):
     finally:
         conn.rollback()
         conn.close()
+
+
+# ------------------------------------------------------------------ saklama süresi: pasife alındıktan 2 yıl
+def _sql(sorgu, parametre=()):
+    conn = psycopg2.connect(**VT_AYARLARI)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sorgu, parametre)
+            sonuc = cur.fetchall() if cur.description else None
+        conn.commit()
+        return sonuc
+    finally:
+        conn.close()
+
+
+def test_pasife_alinma_tarihi_tetikleyici_ile_tutulur(gecici_gonullu):
+    ogrenci_id = gecici_gonullu
+    # Aktif edilince tarih boşalır.
+    _sql("UPDATE ogrenciler SET aktif_mi = TRUE WHERE ogrenci_id = %s", (ogrenci_id,))
+    assert _sql("SELECT pasife_alinma_tarihi FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))[0][0] is None
+    # Yeniden pasife alınınca "şimdi" yazılır.
+    _sql("UPDATE ogrenciler SET aktif_mi = FALSE WHERE ogrenci_id = %s", (ogrenci_id,))
+    assert _sql("SELECT pasife_alinma_tarihi >= NOW() - INTERVAL '1 minute' FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))[0][0]
+    # Pasifken başka bir alan güncellenince tarih değişmez.
+    onceki = _sql("SELECT pasife_alinma_tarihi FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))[0][0]
+    _sql("UPDATE ogrenciler SET ad_soyad = 'QA Başka' WHERE ogrenci_id = %s", (ogrenci_id,))
+    assert _sql("SELECT pasife_alinma_tarihi FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))[0][0] == onceki
+
+
+def test_aktif_ogrenci_eski_olsa_da_silinemez_ve_ertelenemez(gecici_gonullu):
+    ogrenci_id = gecici_gonullu
+    _sql("UPDATE ogrenciler SET aktif_mi = TRUE WHERE ogrenci_id = %s", (ogrenci_id,))
+    with pytest.raises(HTTPException) as silme:
+        sunucu.ogrenci_saklama_suresi_sil(ogrenci_id=ogrenci_id, veri=sunucu.OgrenciSilOnayModeli(onayla=True), yetkili_id=None)
+    assert silme.value.status_code == 409
+    with pytest.raises(HTTPException) as erteleme:
+        sunucu.ogrenci_silme_ertele(
+            ogrenci_id=ogrenci_id,
+            veri=sunucu.OgrenciErteleModeli(yeni_uyari_tarihi=date.today() + timedelta(days=30)),
+            yetkili_id=None,
+        )
+    assert erteleme.value.status_code == 409
+    assert _sql("SELECT COUNT(*) FROM ogrenciler WHERE ogrenci_id = %s", (ogrenci_id,))[0][0] == 1
+
+
+def test_iki_yili_dolmamis_pasif_ogrenci_silinemez(gecici_gonullu):
+    ogrenci_id = gecici_gonullu
+    _sql("UPDATE ogrenciler SET pasife_alinma_tarihi = NOW() - INTERVAL '1 year 11 months' WHERE ogrenci_id = %s", (ogrenci_id,))
+    with pytest.raises(HTTPException) as hata:
+        sunucu.ogrenci_saklama_suresi_sil(ogrenci_id=ogrenci_id, veri=sunucu.OgrenciSilOnayModeli(onayla=True), yetkili_id=None)
+    assert hata.value.status_code == 409 and "2 yıl" in hata.value.detail
+
+
+def test_yonetim_listesi_saklama_suresi_pasife_alinmaya_gore(gecici_gonullu):
+    ogrenci_id = gecici_gonullu
+    liste = {o["ogrenci_id"]: o for o in sunucu.ogrenciler_yonetim_listesi(yetkili_id=None)}
+    assert liste[ogrenci_id]["kayit_suresi_doldu"] is True and liste[ogrenci_id]["pasife_alinma_tarihi"].startswith("2020-01-01")
+    # Yeniden aktif edilince süre işlemez.
+    _sql("UPDATE ogrenciler SET aktif_mi = TRUE WHERE ogrenci_id = %s", (ogrenci_id,))
+    liste = {o["ogrenci_id"]: o for o in sunucu.ogrenciler_yonetim_listesi(yetkili_id=None)}
+    assert liste[ogrenci_id]["kayit_suresi_doldu"] is False and liste[ogrenci_id]["pasife_alinma_tarihi"] is None

@@ -27,4 +27,4 @@ def test_migrasyon_zincirinde_tek_head_vardir():
     spec.loader.exec_module(modul)
     kod, mesaj = modul.kontrol_et()
     assert kod == 0, mesaj
-    assert "d4a8b6c2e913" in mesaj
+    assert list((KOK / "database" / "migrations" / "versions").glob("d4a8b6c2e913_*.py"))      # head sonraki göçlerle ilerler; bu göç zincirde durur

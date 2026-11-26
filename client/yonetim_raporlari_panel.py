@@ -321,7 +321,7 @@ def ogrenci_mevcut_gorunumu(veri):
          [(o["ad_soyad"], (o["son_faaliyet_tarihi"] or "Hiç yok")) for o in faaliyetsiz[:8]] or [("Faaliyetsiz aktif öğrenci yok.", "")]),
         ("Önemli Açıklamalar", ["Bilgi"], [
             ("Telefon raporda yer almaz.",),
-            (f"Saklama süresi: Gönüllü öğrenciler, {kural.get('saklama_yil', 10)} yıl (ertelenebilir).",),
+            (f"Saklama süresi: Gönüllü öğrenciler, pasife alındıktan {kural.get('saklama_yil', 2)} yıl (ertelenebilir).",),
             ("Öğrenci mevcudu dönemden bağımsız, güncel durumdur.",),
         ]),
     ]

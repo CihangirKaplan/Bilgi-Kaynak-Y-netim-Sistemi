@@ -251,14 +251,14 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/ogrenci-raporu` | FAALIYET_KAYITLARI_DUZENLE | Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (10 yıl) durumu, faal |
+| GET | `/api/ogrenci-raporu` | FAALIYET_KAYITLARI_DUZENLE | Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (pasife alındıktan 2 yıl) durumu, faal |
 
 ## /api/ogrenciler
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
 | PATCH | `/api/ogrenciler/{ogrenci_id}/aktiflik` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_aktiflik_duzenle |
-| DELETE | `/api/ogrenciler/{ogrenci_id}/on-yil-sil` | OGRENCI_KAYDI_SIL | ogrenci_on_yil_sil |
+| DELETE | `/api/ogrenciler/{ogrenci_id}/saklama-suresi-sil` | OGRENCI_KAYDI_SIL | ogrenci_saklama_suresi_sil |
 | GET | `/api/ogrenciler/{ogrenci_id}/puanlar` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_puan_detayi |
 | PATCH | `/api/ogrenciler/{ogrenci_id}/silme-ertele` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_silme_ertele |
 

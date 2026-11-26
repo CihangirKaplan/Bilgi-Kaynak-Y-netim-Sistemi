@@ -5,13 +5,13 @@ faaliyet kayıtlarını ve puanları özetler. Puan = adet x kaydın girildiği 
 """
 from datetime import date
 
-SAKLAMA_YIL = 10                 # Gönüllü öğrenci kaydı saklama süresi (ogrenci_on_yil_sil kuralıyla aynı)
-YAKLASAN_AY = 12                 # "yaklaşan" saklama süresi eşiği
+SAKLAMA_YIL = 2                  # Gönüllü öğrenci kaydı saklama süresi: PASİFE ALINDIKTAN sonra (ogrenci_saklama_suresi_sil kuralıyla aynı)
+YAKLASAN_AY = 3                  # "yaklaşan" saklama süresi eşiği
 FAALIYETSIZ_GUN = 90             # "faaliyetsiz aktif öğrenci" eşiği
 
 
 def ogrenci_raporu(cursor, etiketler: dict, tur: str | None = None, durum: str | None = None) -> dict:
-    """Öğrenci mevcudu: tür/bölüm dağılımı, kayıt saklama süresi durumu ve öğrenci listesi (telefon yok)."""
+    """Öğrenci mevcudu: tür/bölüm dağılımı, kayıt saklama süresi durumu (pasife alındıktan 2 yıl) ve öğrenci listesi (telefon yok)."""
     kosullar, parametreler = [], []
     if tur is not None:
         kosullar.append("o.tur::text = %s")
@@ -26,13 +26,14 @@ def ogrenci_raporu(cursor, etiketler: dict, tur: str | None = None, durum: str |
                (SELECT COUNT(*) FROM ogrenci_faaliyet_takip t WHERE t.ogrenci_id = o.ogrenci_id),
                (SELECT COALESCE(SUM(t.adet * t.kayit_puani), 0) FROM ogrenci_faaliyet_takip t WHERE t.ogrenci_id = o.ogrenci_id),
                (SELECT MAX(t.faaliyet_tarihi) FROM ogrenci_faaliyet_takip t WHERE t.ogrenci_id = o.ogrenci_id),
-               (o.tur::text = 'GONULLU' AND o.olusturulma_tarihi::date <= (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years')::date),
-               (o.tur::text = 'GONULLU' AND o.olusturulma_tarihi::date > (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years')::date
-                    AND o.olusturulma_tarihi::date <= (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years' + INTERVAL '{YAKLASAN_AY} months')::date),
+               (o.tur::text = 'GONULLU' AND NOT o.aktif_mi AND o.pasife_alinma_tarihi::date <= (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years')::date),
+               (o.tur::text = 'GONULLU' AND NOT o.aktif_mi AND o.pasife_alinma_tarihi::date > (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years')::date
+                    AND o.pasife_alinma_tarihi::date <= (CURRENT_DATE - INTERVAL '{SAKLAMA_YIL} years' + INTERVAL '{YAKLASAN_AY} months')::date),
                e.yeni_uyari_tarihi,
                (e.yeni_uyari_tarihi IS NOT NULL AND e.yeni_uyari_tarihi > CURRENT_DATE),
                (o.olusturulma_tarihi >= NOW() - INTERVAL '30 days'),
-               (o.olusturulma_tarihi::date + INTERVAL '{SAKLAMA_YIL} years')::date
+               (o.pasife_alinma_tarihi::date + INTERVAL '{SAKLAMA_YIL} years')::date,
+               o.pasife_alinma_tarihi
         FROM ogrenciler o
         LEFT JOIN LATERAL (
             SELECT yeni_uyari_tarihi FROM ogrenci_kayit_erteleme_gecmisi e
@@ -62,7 +63,8 @@ def ogrenci_raporu(cursor, etiketler: dict, tur: str | None = None, durum: str |
             "faaliyet_sayisi": int(k[8]), "toplam_puan": float(k[9]),
             "son_faaliyet_tarihi": son.isoformat() if son else None,
             "saklama_durumu": saklama,
-            "saklama_bitis": k[16].isoformat() if k[3] == "GONULLU" and k[16] else None,
+            "saklama_bitis": k[16].isoformat() if k[3] == "GONULLU" and not k[4] and k[16] else None,
+            "pasife_alinma_tarihi": k[17].isoformat() if k[17] else None,
             "erteleme_tarihi": k[13].isoformat() if k[13] else None,
             "yeni_kayit_mi": bool(k[15]),
             "faaliyetsiz_mi": bool(k[4]) and (son is None or (bugun - son).days > FAALIYETSIZ_GUN),

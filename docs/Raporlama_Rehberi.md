@@ -165,8 +165,8 @@ kayıt cihaz durumunu değiştirmemiş olsa bile "bakımda/kalibrasyonda" sayıl
   dışında değişmez. Puan Raporu, Faaliyet Raporu ve Yönetim Raporları aynı hesabı kullanır.
 - **Sıralama** eşit puanlılarda aynı sırayı verir (1, 2, 2, 4); puanı olmayanın sırası yoktur. Pasif öğrenciler listede kalır.
 - Faaliyet kayıtlarında onay adımı yoktur; kayıt girildiği anda puana dahildir.
-- **Saklama süresi:** yalnızca **Gönüllü öğrenciler** için, kayıt tarihinden itibaren **10 yıl**. Süresi dolan ama ileri bir tarihe ertelenmiş kayıt "Ertelendi",
-  önümüzdeki 12 ay içinde dolacak kayıt "12 ay içinde dolacak" olarak gösterilir.
+- **Saklama süresi:** yalnızca **Gönüllü öğrenciler** için, öğrencinin **pasife alınmasından itibaren 2 yıl**. Aktif öğrencinin süresi işlemez; yeniden aktif edilen öğrencinin
+  süresi sıfırlanır. Süresi dolan ama ileri bir tarihe ertelenmiş kayıt "Ertelendi", önümüzdeki 3 ay içinde dolacak kayıt "3 ay içinde dolacak" olarak gösterilir.
 - **Faaliyetsiz aktif öğrenci:** aktif olup son 90 günde (ya da hiç) faaliyet kaydı olmayan öğrenci.
 - **Yeni kayıt:** son 30 günde kaydedilen öğrenci.
 - **Danışma masası çalışma süresi:** yalnızca tamamlanan görevlerin kesinleşmiş süresi toplanır; devam eden görevin süresi toplama girmez.
@@ -209,7 +209,7 @@ Aynı bilgi farklı raporlarda farklı sayı vermemelidir. Aşağıdaki eşleşm
   yetkili rollere görünür.
 - **Yetki Raporu** parola ya da parola özeti içermez.
 - **Audit kayıtları** sonradan değiştirilemez (veritabanı tetikleyicisiyle korunur). Kalıcı silmelerde silinen verinin içeriği denetim kaydına yazılır; ancak
-  10 yıllık süre dolumuyla yapılan **öğrenci silmesinde ad, telefon ve öğrenci numarası denetime yazılmaz** (yalnızca kimliksiz alanlar kaydedilir).
+  saklama süresi (pasife alındıktan 2 yıl) dolumuyla yapılan **öğrenci silmesinde ad, telefon ve öğrenci numarası denetime yazılmaz** (yalnızca kimliksiz alanlar kaydedilir).
 - **Yetki sunucuda uygulanır.** Menüde görünmeyen bir rapora doğrudan istek göndermek de reddedilir. Psikolog, randevu raporunda yalnızca kendi randevularını görür.
 - Giriş güvenliği (rapor değil ama denetim izine yansır): aynı hesapta art arda hatalı girişte geçici kilit ve aynı bilgisayardan çok sayıda hatalı girişte geçici engel.
 

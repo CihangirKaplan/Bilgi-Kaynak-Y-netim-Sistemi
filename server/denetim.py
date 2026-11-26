@@ -23,7 +23,7 @@ SILINEBILIR_TABLOLAR = {
 }
 
 # Kişisel veri içeren tablolarda denetim kaydına YALNIZCA bu alanlar yazılır; kalanı (ad soyad, telefon, öğrenci numarası...)
-# yazılmaz. Öğrencinin 10 yıllık silmesi bir kişisel veri imhasıdır: silinen kişinin bilgisi denetim kaydında kalmamalıdır.
+# yazılmaz. Öğrencinin saklama süresi sonunda silinmesi (pasife alındıktan 2 yıl) bir kişisel veri imhasıdır: silinen kişinin bilgisi denetim kaydında kalmamalıdır.
 SAKLANACAK_ALANLAR = {
     "ogrenciler": ("ogrenci_id", "tur", "aktif_mi", "olusturulma_tarihi"),
 }

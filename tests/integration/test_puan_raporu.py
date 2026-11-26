@@ -194,7 +194,7 @@ def test_yetkisiz_kullanici_403_alir_ve_hicbir_rapor_sorgusu_calismaz():
 
 def test_yetki_faaliyet_kayitlari_duzenleme_iznine_baglidir():
     kaynak = Path(sunucu.__file__).read_text(encoding="utf-8")
-    govde = kaynak[kaynak.index("def puan_raporu("):kaynak.index("def _ogrenci_on_yil_kontrol")]
+    govde = kaynak[kaynak.index("def puan_raporu("):kaynak.index("def _ogrenci_saklama_suresi_kontrol")]
     assert 'izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")' in govde
 
 

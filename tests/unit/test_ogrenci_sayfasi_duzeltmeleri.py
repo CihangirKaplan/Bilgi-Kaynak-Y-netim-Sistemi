@@ -120,7 +120,7 @@ def test_kalici_silme_listeleme_izniyle_yapilamaz_ayri_izin_ister(giris_yapmis_k
     cursor.execute.side_effect = calistir
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         with TestClient(app) as istemci:
-            yanit = istemci.request("DELETE", "/api/ogrenciler/3/on-yil-sil", json={"onayla": True})
+            yanit = istemci.request("DELETE", "/api/ogrenciler/3/saklama-suresi-sil", json={"onayla": True})
     assert yanit.status_code == 403 and sorulan == ["OGRENCI_KAYDI_SIL"]
     assert not any(c.args[0].lstrip().upper().startswith("DELETE") for c in cursor.execute.call_args_list)
     conn.commit.assert_not_called()
