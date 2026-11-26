@@ -6655,23 +6655,44 @@ def randevu_raporu(
             parametreler.append(oda_id)
         where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
 
-        cursor.execute(f"""
-            SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, ku.kullanici_adi, r.oda_id, o.oda_adi,
-                   r.baslangic_zamani, r.bitis_zamani, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu
+        etiketler = {"iptal": IPTAL_NEDENLERI, "gorusme": GORUSME_TIPLERI, "terapi": TERAPI_TURLERI, "yas": YAS_GRUPLARI}
+        birlestirme = """
             FROM randevular r
             LEFT JOIN personel p ON p.personel_id = r.psikolog_id
             LEFT JOIN kullanicilar ku ON ku.kullanici_id = p.kullanici_id
             LEFT JOIN odalar o ON o.oda_id = r.oda_id
             LEFT JOIN danisan_kodlari d ON d.danisan_kod_id = r.danisan_kod_id
+        """
+        if not detay:
+            # Özet rapor tek tek randevuyu Python'a taşımaz: SQL'de gruplanır (10 yıllık veride 1,6 sn -> milisaniyeler; sonuç satır satır hesapla aynıdır).
+            bugun = date.today()
+            cursor.execute(f"""
+                SELECT r.psikolog_id, ku.kullanici_adi, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu,
+                       (r.baslangic_zamani::date < %s::date) AS gecmis, COUNT(*) AS adet
+                {birlestirme}
+                {where}
+                GROUP BY r.psikolog_id, ku.kullanici_adi, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu, gecmis;
+            """, (bugun, *parametreler))
+            gruplar = [
+                {"psikolog_id": g[0], "psikolog_adi": g[1], "durum": g[2], "iptal_nedeni": g[3], "gorusme_tipi": g[4],
+                 "terapi_turu": g[5], "yas_grubu": g[6], "gecmis": bool(g[7]), "adet": int(g[8])}
+                for g in cursor.fetchall()
+            ]
+            cursor.execute(f"SELECT COUNT(DISTINCT r.danisan_kod_id) {birlestirme} {where};", tuple(parametreler))
+            danisan_sayisi = int((cursor.fetchone() or (0,))[0])
+            return randevu_raporu_hesapla(gruplar, etiketler, detay=False, bugun=bugun, danisan_sayisi=danisan_sayisi)
+
+        cursor.execute(f"""
+            SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, ku.kullanici_adi, r.oda_id, o.oda_adi,
+                   r.baslangic_zamani, r.bitis_zamani, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu
+            {birlestirme}
             {where}
             ORDER BY r.baslangic_zamani, r.randevu_id;
         """, tuple(parametreler))
         anahtarlar = ("randevu_id", "danisan_kod_id", "psikolog_id", "psikolog_adi", "oda_id", "oda_adi",
                       "baslangic_zamani", "bitis_zamani", "durum", "iptal_nedeni", "gorusme_tipi", "terapi_turu", "yas_grubu")
         satirlar = [dict(zip(anahtarlar, kayit)) for kayit in cursor.fetchall()]
-        return randevu_raporu_hesapla(
-            satirlar, {"iptal": IPTAL_NEDENLERI, "gorusme": GORUSME_TIPLERI, "terapi": TERAPI_TURLERI, "yas": YAS_GRUPLARI}, detay=detay,
-        )
+        return randevu_raporu_hesapla(satirlar, etiketler, detay=detay)
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

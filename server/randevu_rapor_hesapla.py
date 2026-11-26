@@ -3,6 +3,10 @@
 Sunucu uç noktası satırları okur, bu işlevle özetler; ekran ve Excel yalnızca sonucu gösterir. Danışanlar kodla tutulduğundan rapor
 da yalnızca danışan KODU içerir (kişisel veri yok, FR-008).
 
+Satırlar tek tek randevu ya da SQL'de GRUPLANMIŞ özet olabilir: gruplanmış satırda "adet" (kaç randevu) bulunur ve ayrıca "gecmis" (günü bugünden
+önce mi) verilebilir. Böylece yıllar içinde büyüyen randevu tablosu (10 yılda ~160 bin satır) Python'a taşınmadan raporlanır; sonuç, satır satır
+hesapla birebir aynıdır (testlerle doğrulanır).
+
 Tanımlar
 - Tamamlanma oranı = Tamamlandı / (Tamamlandı + Gelmedi); Gelmeme oranı = Gelmedi / (Tamamlandı + Gelmedi).
   Planlanmış (henüz yapılmamış) ve iptal edilmiş randevular oranlara girmez.
@@ -23,12 +27,17 @@ def _oran(pay, payda):
     return round(pay / payda, 4) if payda else None
 
 
+def _adet(satir):
+    """Satırın temsil ettiği randevu sayısı (tek randevu satırında 1; gruplanmış satırda "adet")."""
+    return satir.get("adet", 1)
+
+
 def _say(satirlar, anahtar_fn, etiketler, bos):
     """Değerleri sayar; (kod, etiket, sayı, pay) sözlükleri döndürür (çoktan aza)."""
     sayac = {}
     for s in satirlar:
         kod = anahtar_fn(s) or bos[0]
-        sayac[kod] = sayac.get(kod, 0) + 1
+        sayac[kod] = sayac.get(kod, 0) + _adet(s)
     toplam = sum(sayac.values())
     liste = [
         {"kod": kod, "etiket": etiketler.get(kod, bos[1]) if kod != bos[0] else bos[1], "sayi": sayi, "pay": _oran(sayi, toplam)}
@@ -50,25 +59,32 @@ def _gun(deger):
         return None
 
 
+def _gecmis_mi(satir, bugun):
+    if "gecmis" in satir:
+        return bool(satir["gecmis"])
+    return (_gun(satir.get("baslangic_zamani")) or bugun) < bugun
+
+
 def _sonucsuz_gecmis(satirlar, bugun):
-    return sum(1 for s in satirlar if s["durum"] == "PLANLANDI" and (_gun(s.get("baslangic_zamani")) or bugun) < bugun)
+    return sum(_adet(s) for s in satirlar if s["durum"] == "PLANLANDI" and _gecmis_mi(s, bugun))
 
 
 def _durum_sayilari(satirlar):
     sayilar = {d: 0 for d in DURUMLAR}
     for s in satirlar:
         if s["durum"] in sayilar:
-            sayilar[s["durum"]] += 1
+            sayilar[s["durum"]] += _adet(s)
     return sayilar
 
 
-def randevu_raporu_hesapla(satirlar, etiketler, detay=False, bugun=None):
-    """satirlar: randevu sözlükleri; etiketler: {"iptal", "gorusme", "terapi", "yas"} kod -> görünen ad sözlükleri."""
+def randevu_raporu_hesapla(satirlar, etiketler, detay=False, bugun=None, danisan_sayisi=None):
+    """satirlar: randevu sözlükleri (ya da "adet" taşıyan gruplanmış satırlar); etiketler: {"iptal", "gorusme", "terapi", "yas"} kod -> görünen ad sözlükleri.
+    danisan_sayisi: gruplanmış satırlarda benzersiz danışan sayısı SQL'den gelir (satırlardan hesaplanamaz); verilmezse satırlardan sayılır."""
     bugun = bugun or date.today()
     sayilar = _durum_sayilari(satirlar)
     gerceklesen = sayilar["TAMAMLANDI"] + sayilar["GELMEDI"]
     ozet = {
-        "toplam": len(satirlar),
+        "toplam": sum(_adet(s) for s in satirlar),
         "planlandi": sayilar["PLANLANDI"],
         "sonucsuz_gecmis": _sonucsuz_gecmis(satirlar, bugun),
         "tamamlandi": sayilar["TAMAMLANDI"],
@@ -76,7 +92,7 @@ def randevu_raporu_hesapla(satirlar, etiketler, detay=False, bugun=None):
         "iptal_edildi": sayilar["IPTAL_EDILDI"],
         "tamamlanma_orani": _oran(sayilar["TAMAMLANDI"], gerceklesen),
         "gelmeme_orani": _oran(sayilar["GELMEDI"], gerceklesen),
-        "danisan_sayisi": len({s["danisan_kod_id"] for s in satirlar}),
+        "danisan_sayisi": danisan_sayisi if danisan_sayisi is not None else len({s["danisan_kod_id"] for s in satirlar}),
     }
 
     psikologlar = {}
@@ -87,7 +103,7 @@ def randevu_raporu_hesapla(satirlar, etiketler, detay=False, bugun=None):
     for g in psikologlar.values():
         c = _durum_sayilari(g["satirlar"])
         psikolog_listesi.append({
-            "psikolog_id": g["psikolog_id"], "ad": g["ad"], "toplam": len(g["satirlar"]),
+            "psikolog_id": g["psikolog_id"], "ad": g["ad"], "toplam": sum(_adet(x) for x in g["satirlar"]),
             "planlandi": c["PLANLANDI"], "tamamlandi": c["TAMAMLANDI"], "gelmedi": c["GELMEDI"], "iptal_edildi": c["IPTAL_EDILDI"],
         })
     psikolog_listesi.sort(key=lambda x: (-x["toplam"], x["ad"].casefold()))

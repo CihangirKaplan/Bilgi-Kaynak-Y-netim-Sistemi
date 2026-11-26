@@ -96,15 +96,32 @@ def istemci():
 def _cagir(istemci, sorgu="", rol="ADMIN"):
     conn = MagicMock()
     c = conn.cursor.return_value
-    c.fetchone.side_effect = [(1,), (rol,)]                                               # izin denetimi, rol
-    c.fetchall.return_value = [
-        (r["randevu_id"], r["danisan_kod_id"], r["psikolog_id"], r["psikolog_adi"], r["oda_id"], r["oda_adi"], r["baslangic_zamani"],
-         r["bitis_zamani"], r["durum"], r["iptal_nedeni"], r["gorusme_tipi"], r["terapi_turu"], r["yas_grubu"]) for r in ORNEK
-    ]
+    detay = "detay=true" in sorgu
+    bugun = datetime.now().date()
+    if detay:
+        c.fetchone.side_effect = [(1,), (rol,)]                                           # izin denetimi, rol
+        c.fetchall.return_value = [
+            (r["randevu_id"], r["danisan_kod_id"], r["psikolog_id"], r["psikolog_adi"], r["oda_id"], r["oda_adi"], r["baslangic_zamani"],
+             r["bitis_zamani"], r["durum"], r["iptal_nedeni"], r["gorusme_tipi"], r["terapi_turu"], r["yas_grubu"]) for r in ORNEK
+        ]
+    else:
+        # Özet rapor SQL'de gruplanır: gerçek sorgudaki gibi (psikolog, ad, durum, neden, tip, terapi, yaş, geçmiş mi) -> adet
+        gruplar = {}
+        for r in ORNEK:
+            anahtar = (r["psikolog_id"], r["psikolog_adi"], r["durum"], r["iptal_nedeni"], r["gorusme_tipi"], r["terapi_turu"], r["yas_grubu"],
+                       r["baslangic_zamani"].date() < bugun)
+            gruplar[anahtar] = gruplar.get(anahtar, 0) + 1
+        c.fetchone.side_effect = [(1,), (rol,), (len({r["danisan_kod_id"] for r in ORNEK}),)]    # izin, rol, benzersiz danışan sayısı
+        c.fetchall.return_value = [(*k, adet) for k, adet in gruplar.items()]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         yanit = istemci.get("/api/randevu-raporu" + sorgu)
     sorgular = [x for x in c.execute.call_args_list if "FROM randevular r" in x.args[0]]
-    return yanit, (sorgular[0].args if sorgular else None)
+    if not sorgular:
+        return yanit, None
+    sql, parametreler = sorgular[0].args
+    if not detay:
+        parametreler = parametreler[1:]                                                   # ilk parametre "bugün" (geçmiş/gelecek ayrımı)
+    return yanit, (sql, parametreler)
 
 
 def test_uc_rapor_doner_ve_tarih_suzgeci_uygulanir(istemci):
