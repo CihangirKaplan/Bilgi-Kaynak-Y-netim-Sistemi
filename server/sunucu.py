@@ -8941,6 +8941,7 @@ LISTE_AKTARIM_HEDEFLERI = {
 class ListeAktarimModeli(_DurumBaseModel):
     liste: _Literal["CIHAZ", "OGRENCI", "DANISAN", "REZERVASYON", "BAKIM", "KALIBRASYON", "ARIZA", "BAKIM_PLANI", "DENETIM"]
     satir_sayisi: int = _DurumField(ge=0, le=1_000_000)
+    bicim: _Literal["EXCEL", "PDF"] = "EXCEL"                 # dosya türü; eski istemciler göndermez (Excel sayılır)
 
 
 @app.post("/api/liste-aktarim-kaydi")
@@ -8965,7 +8966,7 @@ def liste_aktarim_kaydi(veri: ListeAktarimModeli, kullanici_id: int = Depends(me
             raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz bulunmuyor.")
         denetim_kaydi_olustur(
             VT_AYARLARI, olay_turu="EXPORT", kullanici_id=kullanici_id, hedef_tablo=tablo,
-            ayrinti={"liste": veri.liste, "satir_sayisi": veri.satir_sayisi},
+            ayrinti={"liste": veri.liste, "satir_sayisi": veri.satir_sayisi, **({"bicim": "PDF"} if veri.bicim == "PDF" else {})},
         )
         return {"durum": "basarili"}
     finally:

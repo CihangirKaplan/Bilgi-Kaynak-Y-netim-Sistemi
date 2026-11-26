@@ -7,9 +7,10 @@ ve tablonun kendisi. Metin hücreleri formül olarak yorumlanmaz (formül enjeks
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 
 from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
+from client.rapor_cikti import bicim_adi, cikti_dosyasi, kayit_yolu_sec
 from client.rapor_excel_genel import excel_olustur
 
 EXCEL_DUGME_STILI = (
@@ -21,8 +22,9 @@ EXCEL_DUGME_STILI = (
 
 
 def excel_dugmesi_olustur(tikla):
-    """Yenile düğmesinin yanına konan, yeşil 'Excel'e Aktar' düğmesi."""
-    dugme = QPushButton("⬇  Excel'e Aktar")
+    """Yenile düğmesinin yanına konan, yeşil 'Dışa Aktar' düğmesi (kaydetme penceresinden Excel ya da PDF seçilir)."""
+    dugme = QPushButton("⬇  Dışa Aktar")
+    dugme.setToolTip("Ekranda görünen kayıtları Excel (.xlsx) ya da PDF olarak kaydet")
     dugme.setCursor(Qt.PointingHandCursor)
     dugme.setStyleSheet(EXCEL_DUGME_STILI)
     dugme.clicked.connect(lambda *_: tikla())
@@ -30,44 +32,40 @@ def excel_dugmesi_olustur(tikla):
 
 
 def dosya_adi_olustur(onek, simdi=None):
-    return f"{onek}_{(simdi or datetime.now()).strftime('%Y%m%d_%H%M')}.xlsx"
+    return f"{onek}_{(simdi or datetime.now()).strftime('%Y%m%d_%H%M')}.xlsx"      # varsayılan öneri; tür kaydetme penceresinde seçilir
 
 
 def listeyi_excele_aktar(pencere, baslik, onek, kolonlar, satirlar, filtre_ozeti=(), sayfa_adi="Liste", aciklama="", kayit=None):
-    """Görünen satırları kullanıcının seçtiği .xlsx dosyasına yazar. Başarılıysa dosya yolunu, aksi halde None döndürür.
+    """Görünen satırları kullanıcının seçtiği Excel (.xlsx) ya da PDF dosyasına yazar. Başarılıysa dosya yolunu, aksi halde None döndürür.
 
     kolonlar: [(başlık, sayı/tarih biçimi veya None)]; satirlar: değer listeleri; filtre_ozeti: [(ad, değer)].
     kayit: {"api_url", "token", "liste"}; verilirse aktarım denetim kaydına yazılır (kim, ne zaman, hangi liste, kaç satır).
     """
     satirlar = [list(s) for s in satirlar]
     if not satirlar:
-        QMessageBox.information(pencere, "Excel'e Aktar", "Aktarılacak kayıt yok. Arama ya da süzgeçleri kontrol edin.")
+        QMessageBox.information(pencere, "Dışa Aktar", "Aktarılacak kayıt yok. Arama ya da süzgeçleri kontrol edin.")
         return None
 
-    dosya_yolu, _ = QFileDialog.getSaveFileName(pencere, "Listeyi Kaydet", dosya_adi_olustur(onek), "Excel Dosyası (*.xlsx)")
+    dosya_yolu, bicim = kayit_yolu_sec(pencere, "Listeyi Kaydet", dosya_adi_olustur(onek))
     if not dosya_yolu:
         return None
-    if not dosya_yolu.lower().endswith(".xlsx"):
-        dosya_yolu += ".xlsx"
 
     try:
-        excel_olustur(
-            dosya_yolu,
-            baslik,
-            aciklama or f"{baslik} sayfasında ekranda görünen kayıtlar.",
-            list(filtre_ozeti),
-            [("Aktarılan Kayıt", len(satirlar), "Ekranda görünen ve Excel'e yazılan satır sayısı.")],
-            [(sayfa_adi, list(kolonlar), satirlar, f"{baslik} - ekrandaki sütunlar ve kayıtlar.")],
-        )
-    except OSError as hata:
-        QMessageBox.warning(
-            pencere, "Kaydedilemedi",
-            f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
-        )
+        with cikti_dosyasi(dosya_yolu, bicim, baslik) as xlsx_yolu:
+            excel_olustur(
+                xlsx_yolu,
+                baslik,
+                aciklama or f"{baslik} sayfasında ekranda görünen kayıtlar.",
+                list(filtre_ozeti),
+                [("Aktarılan Kayıt", len(satirlar), "Ekranda görünen ve dosyaya yazılan satır sayısı.")],
+                [(sayfa_adi, list(kolonlar), satirlar, f"{baslik} - ekrandaki sütunlar ve kayıtlar.")],
+            )
+    except (OSError, RuntimeError) as hata:
+        QMessageBox.warning(pencere, "Kaydedilemedi", f"Dosya kaydedilemedi. Aynı adlı dosya başka bir programda (Excel, PDF okuyucu) açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}")
         return None
     if kayit is not None:
-        aktarimi_denetime_yaz(pencere, kayit, len(satirlar))
-    QMessageBox.information(pencere, "Excel'e Aktar", f"{len(satirlar)} kayıt kaydedildi:\n{dosya_yolu}")
+        aktarimi_denetime_yaz(pencere, {**kayit, "bicim": bicim}, len(satirlar))
+    QMessageBox.information(pencere, "Dışa Aktar", f"{len(satirlar)} kayıt {bicim_adi(bicim)} olarak kaydedildi:\n{dosya_yolu}")
     return dosya_yolu
 
 
@@ -122,7 +120,8 @@ def aktarimi_denetime_yaz(pencere, kayit, satir_sayisi):
         cevap = oturum_kontrollu_istek(
             "POST", f"{kayit['api_url'].rstrip('/')}/api/liste-aktarim-kaydi",
             headers={"Authorization": f"Bearer {kayit['token']}"},
-            json={"liste": kayit["liste"], "satir_sayisi": satir_sayisi}, timeout=10,
+            json={"liste": kayit["liste"], "satir_sayisi": satir_sayisi,
+                  **({"bicim": "PDF"} if kayit.get("bicim") == "pdf" else {})}, timeout=10,
         )
         if oturum_hatasi_mi(cevap):
             return

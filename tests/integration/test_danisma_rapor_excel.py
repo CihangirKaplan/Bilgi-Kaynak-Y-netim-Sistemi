@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 from PySide6.QtWidgets import QApplication
 
 import client.danisma_masasi_raporlari as ekran_modulu
+import client.rapor_cikti as rapor_cikti
 import server.sunucu as sunucu
 from client.danisma_rapor_excel import excel_dosyasi_olustur
 from server.sunucu import app
@@ -189,7 +190,7 @@ def ekran_ac(qt_app, veri=VERI, yanit_yok=False):
 def test_excel_dugmesi_rapor_gelince_acilir_gelmezse_kapali_kalir(qt_app):
     acik = ekran_ac(qt_app)
     kapali = ekran_ac(qt_app, yanit_yok=True)
-    assert acik.excel_btn.isEnabled() and acik.excel_btn.text() == "⬇ Excel'e Aktar"
+    assert acik.excel_btn.isEnabled() and acik.excel_btn.text() == "⬇ Dışa Aktar"
     assert not kapali.excel_btn.isEnabled() and kapali._son_veri is None
 
 
@@ -210,7 +211,7 @@ def test_eski_sunucuda_durum_sutunu_tire_gosterir(qt_app):
 def test_excel_aktar_son_veriyle_dosyayi_yazar_ve_uzantiyi_tamamlar(qt_app, tmp_path):
     e = ekran_ac(qt_app)
     hedef = str(tmp_path / "rapor")                                   # uzantısız verildi
-    with patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
+    with patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
             patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
     dosya = Path(hedef + ".xlsx")
@@ -220,7 +221,7 @@ def test_excel_aktar_son_veriyle_dosyayi_yazar_ve_uzantiyi_tamamlar(qt_app, tmp_
 
 def test_excel_aktar_kaydetme_penceresi_iptal_edilirse_dosya_yazilmaz(qt_app):
     e = ekran_ac(qt_app)
-    with patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=("", "")), \
+    with patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=("", "")), \
             patch.object(ekran_modulu, "excel_dosyasi_olustur") as uretici:
         e.excel_aktar()
     assert not uretici.called
@@ -236,12 +237,12 @@ def test_excel_aktar_rapor_yokken_uyari_verir_ve_yazmaz(qt_app):
 
 def test_excel_aktar_yazma_hatasinda_kullaniciya_anlasilir_uyari_verir(qt_app, tmp_path):
     e = ekran_ac(qt_app)
-    with patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
+    with patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
             patch.object(ekran_modulu, "excel_dosyasi_olustur", side_effect=OSError("kilitli")), \
             patch.object(ekran_modulu.QMessageBox, "warning") as uyari, \
             patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
-    assert uyari.called and "Excel'de açık" in uyari.call_args.args[2] and not bilgi.called
+    assert uyari.called and "başka bir programda" in uyari.call_args.args[2] and not bilgi.called
 
 
 def test_filtre_ozeti_donemi_ve_ogrenciyi_yazar(qt_app):

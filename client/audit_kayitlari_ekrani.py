@@ -9,11 +9,12 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QComboBox,
     QCheckBox, QDateEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QFrame, QDialog,
-    QMenu, QWidgetAction, QApplication, QFileDialog, QMessageBox,
+    QMenu, QWidgetAction, QApplication, QMessageBox,
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle, QSizePolicy
 )
 from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI
 from client.liste_excel import aktarimi_denetime_yaz
+from client.rapor_cikti import bicim_adi, cikti_dosyasi, kayit_yolu_sec
 from client.sayfa_tema import (
     DurumRozetiDelegate, TABLO_STILI, VARSAYILAN_DURUM_RENGI, dialog_stili, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
 )
@@ -38,7 +39,7 @@ OLAY_ADLARI = {
     "UPDATE": "Güncelleme",
     "CANCEL": "İptal",
     "DELETE": "Silme",
-    "EXPORT": "Excel Aktarımı",
+    "EXPORT": "Dışa Aktarım (Excel/PDF)",
     "ROLE_CHANGE": "Rol Değişikliği",
     "DEVICE_STATUS_CHANGE": "Cihaz Durum Değişikliği",
 }
@@ -182,7 +183,10 @@ def olay_cumlesi(kayit):
         return f"{kim}, “{etiket}” kaydını sildi."
     if olay == "EXPORT":
         liste = LISTE_ADLARI.get(ayrinti.get("liste"), ayrinti.get("liste"))
-        return f"{kim}, “{liste}” listesini Excel'e aktardı." if liste else f"{kim} bir listeyi Excel'e aktardı."
+        pdf = ayrinti.get("bicim") == "PDF"
+        if liste:
+            return f"{kim}, “{liste}” listesini PDF olarak kaydetti." if pdf else f"{kim}, “{liste}” listesini Excel'e aktardı."
+        return f"{kim} bir listeyi PDF olarak kaydetti." if pdf else f"{kim} bir listeyi Excel'e aktardı."
     if olay == "ROLE_CHANGE":
         return (f"{kim}, {hedef_kullanici} kullanıcısının rollerini değiştirdi." if hedef_kullanici
                 else f"{kim} bir rol değişikliği yaptı.")
@@ -344,10 +348,10 @@ class AuditKayitlariEkrani(QWidget):
         basliklar.addWidget(sayfa_alt)
         ust.addLayout(basliklar, 1)
 
-        self.excel_btn = QPushButton("⬇  Excel'e Aktar")
+        self.excel_btn = QPushButton("⬇  Dışa Aktar")
         self.excel_btn.setObjectName("yesil")
         self.excel_btn.setMinimumHeight(40)
-        self.excel_btn.setToolTip("Süzgece uyan kayıtları (silinen verinin içeriğiyle birlikte) Excel dosyasına yaz")
+        self.excel_btn.setToolTip("Süzgece uyan kayıtları (silinen verinin içeriğiyle birlikte) Excel ya da PDF dosyasına yaz")
         self.excel_btn.clicked.connect(self.excel_aktar)
         ust.addWidget(self.excel_btn, 0, Qt.AlignTop)
         ana.addLayout(ust)
@@ -768,12 +772,9 @@ class AuditKayitlariEkrani(QWidget):
         except ValueError as hata:
             QMessageBox.warning(self, "Geçersiz Tarih", str(hata))
             return
-        varsayilan = f"denetim_kayitlari_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)")
+        dosya_yolu, bicim = kayit_yolu_sec(self, "Raporu Kaydet", f"denetim_kayitlari_{datetime.now().strftime('%Y%m%d_%H%M')}")
         if not dosya_yolu:
             return
-        if not dosya_yolu.lower().endswith(".xlsx"):
-            dosya_yolu += ".xlsx"
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
@@ -796,17 +797,15 @@ class AuditKayitlariEkrani(QWidget):
             ("İşlem türü", ", ".join(OLAY_ADLARI.get(o, o) for o in parametreler.get("olay_turu", [])) or "Tümü"),
         ]
         try:
-            audit_excel_olustur(dosya_yolu, kayitlar, ozet, filtre, kesildi)
-        except OSError as hata:
-            QMessageBox.warning(
-                self, "Kaydedilemedi",
-                f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
-            )
+            with cikti_dosyasi(dosya_yolu, bicim) as xlsx_yolu:
+                audit_excel_olustur(xlsx_yolu, kayitlar, ozet, filtre, kesildi)
+        except (OSError, RuntimeError) as hata:
+            QMessageBox.warning(self, "Kaydedilemedi", f"Dosya kaydedilemedi. Aynı adlı dosya başka bir programda (Excel, PDF okuyucu) açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}")
             return
         # Denetim kayıtları en hassas listedir (silinen veri ayrıntıları, istemci adresleri): kimin aldığı da denetime yazılır.
-        aktarimi_denetime_yaz(self, {"api_url": self.api_url, "token": self.token, "liste": "DENETIM"}, len(kayitlar))
+        aktarimi_denetime_yaz(self, {"api_url": self.api_url, "token": self.token, "liste": "DENETIM", "bicim": bicim}, len(kayitlar))
         uyari = f"\n\nNot: Dosya en yeni {EN_FAZLA_KAYIT} kayıtla sınırlandırıldı; süzgeçle daraltabilirsiniz." if kesildi else ""
-        QMessageBox.information(self, "Excel'e Aktar", f"{len(kayitlar)} kayıt kaydedildi:\n{dosya_yolu}{uyari}")
+        QMessageBox.information(self, "Dışa Aktar", f"{len(kayitlar)} kayıt {bicim_adi(bicim)} olarak kaydedildi:\n{dosya_yolu}{uyari}")
 
     def kayitlari_getir(self):
         try:

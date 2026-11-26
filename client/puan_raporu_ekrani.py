@@ -13,6 +13,7 @@ from client.api_yoneticisi import (
     oturum_hatasi_mi,
 )
 from client.puan_rapor_excel import excel_dosyasi_olustur
+from client.rapor_cikti import bicim_adi, cikti_dosyasi, kayit_yolu_sec
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
@@ -21,7 +22,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDateEdit,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -180,7 +180,7 @@ class PuanRaporuEkrani(QWidget):
         self.yenile_btn = QPushButton("↻ Raporu Getir")
         satir2.addWidget(self.yenile_btn)
 
-        self.excel_btn = QPushButton("⬇ Excel'e Aktar")
+        self.excel_btn = QPushButton("⬇ Dışa Aktar")
         self.excel_btn.setEnabled(False)
         self.excel_btn.setToolTip("Raporu dört sayfalı bir Excel dosyası olarak kaydeder.")
         self.excel_btn.setStyleSheet(
@@ -507,17 +507,12 @@ class PuanRaporuEkrani(QWidget):
     # ------------------------------------------------------------------ excel
     def excel_aktar(self):
         if self._son_params is None:
-            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            QMessageBox.information(self, "Dışa Aktar", "Önce raporu getirin.")
             return
 
-        varsayilan = f"puan_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        dosya_yolu, _ = QFileDialog.getSaveFileName(
-            self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)"
-        )
+        dosya_yolu, bicim = kayit_yolu_sec(self, "Raporu Kaydet", f"puan_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}")
         if not dosya_yolu:
             return
-        if not dosya_yolu.lower().endswith(".xlsx"):
-            dosya_yolu += ".xlsx"
 
         # Ayrıntı sayfaları için kayıt kayıt veri, ekrandaki raporla aynı filtrelerle istenir.
         try:
@@ -530,18 +525,14 @@ class PuanRaporuEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
+            QMessageBox.warning(self, "Rapor Hatası", f"Rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
             return
 
         try:
-            excel_dosyasi_olustur(veri, self._son_filtre, dosya_yolu)
-        except OSError as hata:
-            QMessageBox.warning(
-                self,
-                "Kaydedilemedi",
-                "Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir "
-                f"ya da klasöre yazma izniniz olmayabilir.\n{hata}",
-            )
+            with cikti_dosyasi(dosya_yolu, bicim) as xlsx_yolu:
+                excel_dosyasi_olustur(veri, self._son_filtre, xlsx_yolu)
+        except (OSError, RuntimeError) as hata:
+            QMessageBox.warning(self, "Kaydedilemedi", f"Dosya kaydedilemedi. Aynı adlı dosya başka bir programda (Excel, PDF okuyucu) açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}")
             return
 
-        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+        QMessageBox.information(self, "Dışa Aktar", f"Rapor {bicim_adi(bicim)} olarak kaydedildi:\n{dosya_yolu}")

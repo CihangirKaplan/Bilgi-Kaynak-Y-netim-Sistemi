@@ -52,6 +52,14 @@ def test_aktarim_kaydi_denetime_yazilir(kullanicilar):
     assert ayrinti == {"liste": "OGRENCI", "satir_sayisi": 42}
 
 
+def test_aktarim_kaydi_pdf_bicimini_denetime_yazar_excelde_eski_bicim_kalir(kullanicilar):
+    k, c = kullanicilar
+    liste_aktarim_kaydi(ListeAktarimModeli(liste="OGRENCI", satir_sayisi=3, bicim="PDF"), kullanici_id=k["admin"])
+    liste_aktarim_kaydi(ListeAktarimModeli(liste="OGRENCI", satir_sayisi=4), kullanici_id=k["admin"])
+    c.execute("SELECT ayrinti FROM denetim_kayitlari WHERE kullanici_id = %s AND olay_turu::text = 'EXPORT' ORDER BY denetim_id", (k["admin"],))
+    assert [r[0] for r in c.fetchall()] == [{"liste": "OGRENCI", "satir_sayisi": 3, "bicim": "PDF"}, {"liste": "OGRENCI", "satir_sayisi": 4}]
+
+
 def test_aktarim_kaydi_listeyi_gorme_yetkisi_ister(kullanicilar):
     k, c = kullanicilar
     with pytest.raises(HTTPException) as hata:                       # psikolog öğrenci listesini göremez

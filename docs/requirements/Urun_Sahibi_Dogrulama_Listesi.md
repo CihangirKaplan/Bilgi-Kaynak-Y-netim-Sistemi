@@ -53,7 +53,7 @@ Bu madde, öğrencinin pasife alınmasından sonra 2 yıl geçmesiyle ilgilidir;
 | 1 | **Faaliyet Kayıtları** sayfasında deneme öğrencisi için bir faaliyet ekleyin (Faaliyet Türü, Birim, Miktar) | Kayıt listede görünür; puan = Miktar × faaliyet puanı | ☐ | |
 | 2 | **Öğrenciler → Detay / Puanlar** ekranını açın | Eklediğiniz faaliyet ve puanı görünür | ☐ | |
 | 3 | **Puan Raporu** sayfasında dönemi seçin | Öğrenci başına toplam puan listelenir; deneme öğrencisinin toplamı adım 2'dekiyle tutarlıdır | ☐ | |
-| 4 | Aynı sayfada **⬇ Excel'e Aktar**'a basıp dosyayı açın | Excel dosyası oluşur; iki sayfalıdır (Özet ve tablo); puanlar ekrandakiyle aynıdır | ☐ | |
+| 4 | Aynı sayfada **⬇ Dışa Aktar**'a basıp dosyayı açın | Excel dosyası oluşur; iki sayfalıdır (Özet ve tablo); puanlar ekrandakiyle aynıdır | ☐ | |
 
 ## FR-012 ve FR-013: Günlük ve haftalık takvim
 

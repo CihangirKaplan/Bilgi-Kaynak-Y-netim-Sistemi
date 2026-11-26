@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from PySide6.QtWidgets import QPushButton
 
 import client.audit_kayitlari_ekrani as modul
+import client.rapor_cikti as rapor_cikti
 import server.sunucu as sunucu
 from server import audit_api
 
@@ -223,7 +224,7 @@ def test_excel_aktarimi_denetim_kaydina_yazilir_ve_sayfalarda_ozet_yalniz_ilkind
         return _yanit({"ozet": {**OZET, "toplam_kayit": 250} if kw["params"]["offset"] == 0 else None, "kayitlar": sayfa})
 
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=sayfali), \
-            patch.object(modul.QFileDialog, "getSaveFileName", return_value=("/tmp/denetim.xlsx", "")), \
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=("/tmp/denetim.xlsx", "")), \
             patch("client.audit_excel.audit_excel_olustur") as olustur, patch.object(modul, "aktarimi_denetime_yaz") as yaz, \
             patch.object(modul.QMessageBox, "information"):
         ekran.excel_aktar()
@@ -236,7 +237,7 @@ def test_excel_dosya_yazilamazsa_denetim_kaydi_yazilmaz(tkys_qapplication):
     istek, _ = _sayfa_istegi([_kayit(1)], OZET)
     ekran = _ekran(tkys_qapplication, istek)
     with patch.object(modul, "oturum_kontrollu_istek", side_effect=istek), \
-            patch.object(modul.QFileDialog, "getSaveFileName", return_value=("/tmp/denetim.xlsx", "")), \
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=("/tmp/denetim.xlsx", "")), \
             patch("client.audit_excel.audit_excel_olustur", side_effect=OSError("kilitli")), \
             patch.object(modul, "aktarimi_denetime_yaz") as yaz, patch.object(modul.QMessageBox, "warning"):
         ekran.excel_aktar()

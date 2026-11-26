@@ -75,8 +75,8 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 | Bir kaydı düzenlemek | Listede kaydın üstüne **çift tıklayın** (yetkiniz varsa) ya da satırın sonundaki ✎ düğmesini kullanın |
 | Süzmek | Sayfadaki dönem, durum ve tür seçicilerini kullanın |
 
-### Excel'e aktarmak
-**Cihaz Envanteri**, **Öğrenciler** ve **Danışanlar** sayfalarında **⬇ Excel'e Aktar** düğmesi vardır; raporlarda da vardır.
+### Excel ya da PDF olarak kaydetmek
+**Cihaz Envanteri**, **Öğrenciler** ve **Danışanlar** gibi liste sayfalarında ve tüm rapor sayfalarında **⬇ Dışa Aktar** düğmesi vardır. Düğmeye basınca açılan kaydetme penceresinde **Kayıt türü** listesinden **Excel Çalışma Kitabı (*.xlsx)** ya da **PDF Belgesi (*.pdf)** seçilir; dosya adının sonuna .pdf ya da .xlsx yazmanız da türü belirler. Excel dosyası düzenleme ve hesaplama, PDF ise yazdırma ve e-postayla paylaşma içindir. İkisinde de içerik aynıdır (Özet ve tablo sayfaları); PDF A4 yatay, sayfa numaralıdır ve her sayfada tablo başlığı tekrarlanır. PDF'te her tablo sayfasının ilk 3000 satırı yer alır; daha uzun listelerin tamamı için Excel'i seçin.
 - Dosyaya, ekranda **o an görünen** kayıtlar yazılır. Önce arama ya da süzgeç uygularsanız yalnızca onlar aktarılır.
 - Dosya iki sayfadan oluşur: **Özet** (aktarım zamanı, kullandığınız süzgeçler, satır sayısı) ve tablonun kendisi.
 - Aktarımlar sistemde **denetim kaydına yazılır** (kim, ne zaman, hangi liste, kaç satır). Bu bir güvenlik önlemidir.
