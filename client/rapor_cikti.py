@@ -1,9 +1,9 @@
 """TKYS - Rapor/liste dışa aktarımında ortak "Excel mi, PDF mi?" katmanı.
 
-Tüm "Dışa Aktar" düğmeleri tek bir kaydetme penceresi kullanır: pencerenin "Kayıt türü" listesinden Excel (.xlsx) ya da PDF seçilir
-(dosya adının uzantısı da türü belirler). Rapor önce her zamanki gibi Excel çalışma kitabı olarak üretilir; PDF seçildiyse aynı
-çalışma kitabı (Özet + tablo sayfaları) A4 yatay PDF'e dönüştürülür. Böylece her rapor için ayrı bir PDF yazmaya gerek kalmadan
-iki çıktı da aynı içeriği taşır. Ek bağımlılık yoktur (Qt'nin QPdfWriter'ı kullanılır).
+Tüm "Dışa Aktar" düğmeleri aynı iki adımı izler: önce "Hangi türde kaydetmek istersiniz?" penceresi (Excel ya da PDF), sonra seçilen
+türe göre dosya adı/konumu penceresi. Rapor her zaman önce Excel çalışma kitabı olarak üretilir; PDF seçildiyse aynı çalışma kitabı
+(Özet + tablo sayfaları) A4 yatay PDF'e dönüştürülür. Böylece her rapor için ayrı bir PDF yazmaya gerek kalmadan iki çıktı da aynı
+içeriği taşır. Ek bağımlılık yoktur (Qt'nin QPdfWriter'ı kullanılır).
 
 Kullanım (bir dışa aktarım yolunda):
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
 from PySide6.QtGui import QColor, QFont, QPageLayout, QPageSize, QPainter, QPdfWriter, QTextDocument
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 XLSX_FILTRESI = "Excel Çalışma Kitabı (*.xlsx)"
 PDF_FILTRESI = "PDF Belgesi (*.pdf)"
@@ -35,27 +35,90 @@ def bicim_adi(bicim):
     return BICIM_ADLARI.get(bicim, "Excel")
 
 
-def kayit_yolu_sec(pencere, baslik, varsayilan_ad):
-    """Tek pencerede kaydetme yeri ve türü (Excel/PDF) seçtirir. (yol, bicim) döndürür; vazgeçilirse (None, None).
+class BicimSecimDiyalogu(QDialog):
+    """"Hangi türde kaydetmek istersiniz?" penceresi: iki büyük seçenek (Excel / PDF) ve Vazgeç. secilen: "xlsx" | "pdf" | None."""
 
-    varsayilan_ad uzantısız ya da .xlsx uzantılı verilebilir. Tür, yazılan uzantıdan (.pdf/.xlsx), yoksa seçili "Kayıt türü"nden
-    anlaşılır; uzantı yoksa tamamlanır.
+    SECENEKLER = (
+        ("xlsx", "Excel (.xlsx)", "Düzenlemek ve hesaplamak için", "disaAktarExcel"),
+        ("pdf", "PDF (.pdf)", "Yazdırmak ve paylaşmak için", "disaAktarPdf"),
+    )
+
+    def __init__(self, pencere=None, baslik="Dışa Aktar"):
+        super().__init__(pencere)
+        self.setWindowTitle(baslik)
+        self.setModal(True)
+        self.secilen = None
+        ana = QVBoxLayout(self)
+        ana.setContentsMargins(22, 20, 22, 18)
+        ana.setSpacing(14)
+        soru = QLabel("Hangi türde kaydetmek istersiniz?")
+        soru.setObjectName("disaAktarSoru")
+        soru.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
+        ana.addWidget(soru)
+        secenekler = QHBoxLayout()
+        secenekler.setSpacing(12)
+        self.dugmeler = {}
+        for bicim, ad, aciklama, nesne_adi in self.SECENEKLER:
+            dugme = QPushButton(f"{ad}\n{aciklama}")
+            dugme.setObjectName(nesne_adi)
+            dugme.setProperty("bicim", bicim)
+            dugme.setCursor(Qt.PointingHandCursor)
+            dugme.setMinimumSize(240, 80)
+            dugme.setStyleSheet(
+                "QPushButton { background: #F3F7FF; color: #0F2552; border: 1px solid #C7D6F2; border-radius: 12px; "
+                "font-size: 13px; font-weight: 700; padding: 10px 14px; } "
+                "QPushButton:hover { background: #E3EDFF; border-color: #1D4ED8; } "
+                "QPushButton:focus { border: 2px solid #1D4ED8; }"
+            )
+            dugme.clicked.connect(self._secildi)
+            secenekler.addWidget(dugme)
+            self.dugmeler[bicim] = dugme
+        ana.addLayout(secenekler)
+        self.dugmeler["xlsx"].setDefault(True)
+        self.dugmeler["xlsx"].setFocus()
+        alt = QHBoxLayout()
+        alt.addStretch(1)
+        vazgec = QPushButton("Vazgeç")
+        vazgec.setObjectName("disaAktarVazgec")
+        vazgec.setCursor(Qt.PointingHandCursor)
+        vazgec.clicked.connect(self.reject)
+        alt.addWidget(vazgec)
+        ana.addLayout(alt)
+
+    def _secildi(self):
+        dugme = self.sender()
+        self.secilen = dugme.property("bicim") if dugme is not None else None
+        self.accept()
+
+
+def bicim_sec(pencere, baslik="Dışa Aktar"):
+    """Kullanıcıya Excel mi PDF mi sorar. "xlsx", "pdf" ya da (vazgeçildiyse) None döndürür."""
+    diyalog = BicimSecimDiyalogu(pencere, baslik)
+    if diyalog.exec() != QDialog.Accepted:
+        return None
+    return diyalog.secilen
+
+
+def kayit_yolu_sec(pencere, baslik, varsayilan_ad):
+    """Önce türü (Excel/PDF) sorar, sonra o türün dosya adı/konumunu seçtirir. (yol, bicim) döndürür; vazgeçilirse (None, None).
+
+    varsayilan_ad uzantısız ya da .xlsx/.pdf uzantılı verilebilir. Seçilen türün uzantısı yoksa tamamlanır.
     """
+    bicim = bicim_sec(pencere, baslik)
+    if bicim is None:
+        return None, None
     ad = Path(varsayilan_ad)
     if ad.suffix.lower() in (".xlsx", ".pdf"):
         ad = ad.with_suffix("")
-    yol, secilen = QFileDialog.getSaveFileName(
-        pencere, baslik, f"{ad}.xlsx", f"{XLSX_FILTRESI};;{PDF_FILTRESI}", XLSX_FILTRESI,
+    uzanti = f".{bicim}"
+    yol, _ = QFileDialog.getSaveFileName(
+        pencere, f"{baslik} - {bicim_adi(bicim)}", f"{ad}{uzanti}", XLSX_FILTRESI if bicim == "xlsx" else PDF_FILTRESI,
     )
     if not yol:
         return None, None
-    kucuk = yol.lower()
-    if kucuk.endswith(".pdf"):
-        return yol, "pdf"
-    if kucuk.endswith(".xlsx"):
-        return yol, "xlsx"
-    bicim = "pdf" if (secilen or "").lower().find("pdf") >= 0 else "xlsx"
-    return f"{yol}.{bicim}", bicim
+    if not yol.lower().endswith(uzanti):
+        yol += uzanti
+    return yol, bicim
 
 
 @contextmanager
