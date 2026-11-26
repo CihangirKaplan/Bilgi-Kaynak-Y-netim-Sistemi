@@ -2,7 +2,8 @@ import logging
 import datetime
 import time
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
-from client.ikon_kutusu import renkli_ikon_pixmap
+from client.ikon_kutusu import renkli_ikon_pixmap, ikon_pixmap
+from client.bildirim_ikonlari import cizgi_ikonu, ikon_boyutu
 from client.api_yoneticisi import (
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
@@ -852,16 +853,16 @@ class DashboardEkrani(QWidget):
         return True if self._sayfa_izinli_mi is None else bool(self._sayfa_izinli_mi(sayfa))
 
     def _bildirim_satirlari(self):
-        """[(ikon, metin, yazı rengi, arka plan, hedef sayfa)] — yetkisiz olunan sayfaların bildirimleri çıkarılır."""
+        """[(çizgi ikon adı, metin, yazı rengi, arka plan, hedef sayfa)] — yetkisiz olunan sayfaların bildirimleri çıkarılır."""
         satirlar = []
         if self._sayfa_izinli(self.PAROLA_SAYFASI):
             for talep in self.parola_talepleri:
-                satirlar.append(("🔐", f"{talep['kullanici_adi']} parola sıfırlama istedi "
+                satirlar.append(("key", f"{talep['kullanici_adi']} parola sıfırlama istedi "
                                        f"({self._bekleme_metni(talep.get('bekleme_dakika'))})",
                                  "#1E3A8A", "#DBEAFE", self.PAROLA_SAYFASI))
         acik_ariza = self.ozet.get("acik_ariza_sayisi", 0)
         if acik_ariza and self._sayfa_izinli(self.ARIZA_SAYFASI):
-            satirlar.append(("⚠️", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2",
+            satirlar.append(("warning", f"{acik_ariza} açık arıza kaydı çözüm bekliyor.", "#991B1B", "#FEE2E2",
                              self.ARIZA_SAYFASI))
         for islem in self.islemler:
             hedef = self._islem_hedefi(islem)
@@ -871,16 +872,19 @@ class DashboardEkrani(QWidget):
             zaman = "bugün" if gun == 0 else (f"{-gun} gün gecikti" if gun < 0 else f"{gun} gün içinde")
             kritik = gun <= 5
             satirlar.append((
-                "🔴" if kritik else "🟡",
+                "warning" if kritik else "wrench",
                 f"{islem['cihaz_adi']}  —  {islem['islem_turu']} {zaman} ({islem['tarih']})",
                 "#991B1B" if kritik else "#854D0E",
                 "#FEE2E2" if kritik else "#FEF3C7",
                 hedef))
         return satirlar
 
-    def _bildirim_dugmesi(self, metin, renk, arka, hedef):
+    def _bildirim_dugmesi(self, metin, renk, arka, hedef, ikon=None):
         """Tıklanınca ilgili sayfayı açan bildirim satırı. Tıklama tek bir yuvaya gider (lambda kullanılmaz)."""
         dugme = QPushButton(f"{metin}   →")
+        if ikon:
+            dugme.setIcon(cizgi_ikonu(ikon, renk))
+            dugme.setIconSize(ikon_boyutu())
         dugme.setProperty("hedef", hedef)
         dugme.setCursor(Qt.PointingHandCursor)
         dugme.setToolTip(f"{hedef} sayfasına git")
@@ -909,7 +913,11 @@ class DashboardEkrani(QWidget):
         fazla = len(satirlar) > self.BILDIRIM_SINIRI
 
         ust = QHBoxLayout()
-        baslik = QLabel(f"🔔  Bildirimler  ({len(satirlar)})" if satirlar else "🔔  Bildirimler")
+        bell = QLabel()
+        bell.setPixmap(ikon_pixmap("bell", "#0A1F5C", 18))
+        bell.setFixedSize(18, 18)
+        ust.addWidget(bell)
+        baslik = QLabel(f"Bildirimler  ({len(satirlar)})" if satirlar else "Bildirimler")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         ust.addWidget(baslik)
         ust.addStretch()
@@ -926,9 +934,19 @@ class DashboardEkrani(QWidget):
         self.bildirim_lay.addWidget(ust_kap)
 
         if not satirlar:
-            ok = QLabel("✅  Bekleyen uyarı yok. Yaklaşan ya da geciken bakım, kalibrasyon ve açık arıza bulunmuyor.")
-            ok.setStyleSheet("background: #DCFCE7; color: #166534; border-radius: 10px; "
-                             "font-size: 13px; font-weight: 600; padding: 10px 14px;")
+            ok = QFrame()
+            ok.setStyleSheet("QFrame { background: #DCFCE7; border-radius: 10px; } "
+                             "QLabel { background: transparent; color: #166534; font-size: 13px; font-weight: 600; }")
+            ok_lay = QHBoxLayout(ok)
+            ok_lay.setContentsMargins(14, 10, 14, 10)
+            ok_lay.setSpacing(8)
+            tik = QLabel()
+            tik.setPixmap(ikon_pixmap("circle-check", "#166534", 16))
+            tik.setFixedSize(16, 16)
+            ok_lay.addWidget(tik)
+            ok_yazi = QLabel("Bekleyen uyarı yok. Yaklaşan ya da geciken bakım, kalibrasyon ve açık arıza bulunmuyor.")
+            ok_yazi.setWordWrap(True)
+            ok_lay.addWidget(ok_yazi, 1)
             self.bildirim_lay.addWidget(ok)
             return
 
@@ -936,7 +954,7 @@ class DashboardEkrani(QWidget):
         satir_lay = QVBoxLayout(satir_kutusu)
         satir_lay.setContentsMargins(0, 0, 0, 0)
         satir_lay.setSpacing(8)
-        dugmeler = [self._bildirim_dugmesi(f"{ikon}  {metin}", renk, arka, hedef)
+        dugmeler = [self._bildirim_dugmesi(metin, renk, arka, hedef, ikon)
                     for ikon, metin, renk, arka, hedef in satirlar]
         for dugme in dugmeler:
             satir_lay.addWidget(dugme)

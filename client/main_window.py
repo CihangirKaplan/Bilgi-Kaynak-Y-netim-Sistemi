@@ -1133,7 +1133,7 @@ QLabel {
                 for talep in talepler:
                     self._bildirimler.append((
                         "Parola Talepleri",
-                        f"🔐 {talep.get('kullanici_adi', 'Kullanıcı')} parola sıfırlama istedi "
+                        f"{talep.get('kullanici_adi', 'Kullanıcı')} parola sıfırlama istedi "
                         f"({self._bekleme_metni(talep.get('bekleme_dakika'))})",
                         "Kullanıcı & Personel"
                     ))
@@ -1149,7 +1149,7 @@ QLabel {
                 if ariza > 0 and self._sayfa_izinli_mi("Arıza Kayıtları"):
                     self._bildirimler.append((
                         "Cihaz Uyarıları",
-                        f"⚠️ {ariza} açık arıza kaydı çözüm bekliyor.",
+                        f"{ariza} açık arıza kaydı çözüm bekliyor.",
                         "Arıza Kayıtları"
                     ))
                     self._bildirim_sayisi += 1
@@ -1169,14 +1169,15 @@ QLabel {
                         continue
 
                     if gun < 0:
-                        zaman, ikon = f"{int(-gun)} gün gecikti", "🔴"
+                        zaman = f"{int(-gun)} gün gecikti"
                     elif gun == 0:
-                        zaman, ikon = "bugün", "🔧"
+                        zaman = "bugün"
                     else:
-                        zaman, ikon = f"{int(gun)} gün kaldı", "🔧"
+                        zaman = f"{int(gun)} gün kaldı"
 
+                    # Simge (gecikmiş: kırmızı uyarı, yaklaşan: anahtar) bildirim panelinde çizgi ikon olarak çizilir.
                     metin = (
-                        f"{ikon} {islem.get('cihaz_adi', 'Cihaz')} — "
+                        f"{islem.get('cihaz_adi', 'Cihaz')} — "
                         f"{islem.get('islem_turu', 'İşlem')} "
                         f"({zaman})"
                     )
@@ -1198,14 +1199,14 @@ QLabel {
         # Sunucu uçları izin aramaz: yalnızca kişinin kendi kaydı ya da herkese açık duyuru döner.
         gunum = getir("/api/dashboard/benim-gunum")
         if isinstance(gunum, dict):
-            for anahtar, ikon, ad in (("randevular", "📅", "randevunuz"), ("rezervasyonlar", "🔬", "cihaz rezervasyonunuz")):
+            for anahtar, ad in (("randevular", "randevunuz"), ("rezervasyonlar", "cihaz rezervasyonunuz")):
                 kayitlar = gunum.get(anahtar) or []
                 bugun = sum(1 for k in kayitlar if k.get("gun") == "bugun")
                 yarin = sum(1 for k in kayitlar if k.get("gun") == "yarin")
                 if bugun or yarin:
                     parcalar = ([f"bugün {bugun}"] if bugun else []) + ([f"yarın {yarin}"] if yarin else [])
                     self._bildirimler.append((
-                        "Günlük", f"{ikon} {ad.capitalize()}: {', '.join(parcalar)}", "Ana Kontrol Paneli"
+                        "Günlük", f"{ad.capitalize()}: {', '.join(parcalar)}", "Ana Kontrol Paneli"
                     ))
                     self._bildirim_sayisi += 1
 
@@ -1213,7 +1214,7 @@ QLabel {
         if isinstance(duyurular, list):
             for duyuru in [d for d in duyurular if d.get("yeni")][:5]:
                 self._bildirimler.append((
-                    "Duyurular", f"📢 {duyuru.get('baslik', 'Duyuru')}", "Ana Kontrol Paneli"
+                    "Duyurular", f"{duyuru.get('baslik', 'Duyuru')}", "Ana Kontrol Paneli"
                 ))
                 self._bildirim_sayisi += 1
 
@@ -1229,7 +1230,7 @@ QLabel {
                 if toplam > 0:
                     self._bildirimler.append((
                         "Danışma Masası",
-                        f"📋 {toplam} görev onay bekliyor",
+                        f"{toplam} görev onay bekliyor",
                         "Danışma Masası Yönetimi"
                     ))
 

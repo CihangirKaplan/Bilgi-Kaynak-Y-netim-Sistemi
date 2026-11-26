@@ -350,8 +350,8 @@ def zil(mw, talep_yaniti, gorebilir_mi=True):
 def test_zilde_her_talep_kullanici_ve_bekleme_suresiyle_listelenir_ve_sayfaya_gider(temiz_yetkiler):
     ana = zil(temiz_yetkiler, (200, TALEPLER))
     assert ana._bildirimler == [
-        ("Parola Talepleri", "🔐 psikolog1 parola sıfırlama istedi (5 dk önce)", "Kullanıcı & Personel"),
-        ("Parola Talepleri", "🔐 memur parola sıfırlama istedi (2 saat önce)", "Kullanıcı & Personel")]
+        ("Parola Talepleri", "psikolog1 parola sıfırlama istedi (5 dk önce)", "Kullanıcı & Personel"),
+        ("Parola Talepleri", "memur parola sıfırlama istedi (2 saat önce)", "Kullanıcı & Personel")]
     assert ana._bildirim_sayisi == 2
 
 
@@ -410,8 +410,8 @@ def satirlar(p):
 def test_ana_panelde_talepler_tiklanabilir_bildirim_olarak_en_ustte_gorunur(qt_app):
     acilan = []
     p = pano(qt_app, sayfa_ac=acilan.append)
-    assert satirlar(p)[0].startswith("🔐  psikolog1 parola sıfırlama istedi (5 dk önce)")
-    assert satirlar(p)[1].startswith("🔐  memur parola sıfırlama istedi (2 saat önce)")
+    assert satirlar(p)[0].startswith("psikolog1 parola sıfırlama istedi (5 dk önce)")
+    assert satirlar(p)[1].startswith("memur parola sıfırlama istedi (2 saat önce)")
     for d in p.bildirim_paneli.findChildren(QPushButton):
         d.click()
     assert acilan == ["Kullanıcı & Personel", "Kullanıcı & Personel"]

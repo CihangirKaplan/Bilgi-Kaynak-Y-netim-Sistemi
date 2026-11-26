@@ -1,12 +1,34 @@
 from collections import OrderedDict
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame, QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QScrollArea,
     QGraphicsDropShadowEffect, QLayout
 )
+
+from client.bildirim_ikonlari import (
+    AMBER, GRI, MAVI, YESIL, bildirim_ikonu, cizgi_ikonu, emojisiz, grup_basligi, ikon_boyutu,
+)
+from client.ikon_kutusu import ikon_pixmap
+
+
+def _ikonlu_baslik(ikon, renk, metin, stil):
+    """Küçük çizgi ikon + yazı (emoji yok)."""
+    kap = QWidget()
+    satir = QHBoxLayout(kap)
+    satir.setContentsMargins(0, 0, 0, 0)
+    satir.setSpacing(8)
+    resim = QLabel()
+    resim.setPixmap(ikon_pixmap(ikon, renk, 16))
+    resim.setFixedSize(16, 16)
+    satir.addWidget(resim)
+    yazi = QLabel(metin)
+    yazi.setStyleSheet(stil)
+    satir.addWidget(yazi)
+    satir.addStretch()
+    return kap
 
 
 class BildirimPaneli(QFrame):
@@ -80,14 +102,16 @@ class BildirimPaneli(QFrame):
 
         baslik_satiri = QHBoxLayout()
 
-        baslik = QLabel(f"🔔  Bildirimler ({toplam})")
-        baslik.setStyleSheet(
+        baslik = _ikonlu_baslik(
+            "bell", MAVI, f"Bildirimler ({toplam})",
             "color: #102A56; font-size: 16px; font-weight: 800;"
         )
         baslik_satiri.addWidget(baslik)
         baslik_satiri.addStretch()
 
-        kapat = QPushButton("✕")
+        kapat = QPushButton()
+        kapat.setIcon(cizgi_ikonu("close", "#6B7FA8", 14))
+        kapat.setIconSize(QSize(14, 14))
         kapat.setObjectName("bildirimKapat")
         kapat.setFixedWidth(28)
         kapat.setCursor(Qt.PointingHandCursor)
@@ -125,24 +149,19 @@ class BildirimPaneli(QFrame):
             if grup == "Danışma Masası":
                 satirlar = self._ogrenci_bildirimlerini_grupla(satirlar)
 
-            baslik_metni = {
-                "Cihaz Uyarıları": "🔧  CİHAZ UYARILARI",
-                "Parola Talepleri": "🔐  PAROLA SIFIRLAMA TALEPLERİ",
-                "Günlük": "🙋  BENİM GÜNÜM",
-                "Duyurular": "📢  DUYURULAR",
-            }.get(grup, "📋  DANIŞMA MASASI ONAYLARI")
+            baslik_metni, grup_ikonu, grup_rengi = grup_basligi(grup)
 
-            grup_baslik = QLabel(baslik_metni)
-            grup_baslik.setStyleSheet("""
-                color: #5072A6;
-                font-size: 11px;
-                font-weight: 800;
-                padding: 8px 0 4px 0;
-            """)
+            grup_baslik = _ikonlu_baslik(
+                grup_ikonu, GRI, baslik_metni,
+                "color: #5072A6; font-size: 11px; font-weight: 800; padding: 8px 0 4px 0;"
+            )
             liste.addWidget(grup_baslik)
 
             for metin, hedef in satirlar:
-                buton = QPushButton(f"{metin}   →")
+                temiz, ikon_adi, ikon_rengi = bildirim_ikonu(grup, metin)
+                buton = QPushButton(f"{temiz}   →")
+                buton.setIcon(cizgi_ikonu(ikon_adi, ikon_rengi))
+                buton.setIconSize(ikon_boyutu())
                 buton.setObjectName("bildirimSatiri")
                 buton.setMinimumHeight(45)
                 buton.setToolTip(metin)
@@ -156,17 +175,19 @@ class BildirimPaneli(QFrame):
                 satir_sayisi += 1
 
         if not bildirimler:
-            bos = QLabel("✅  Bekleyen bildirim yok.")
-            bos.setStyleSheet(
-                "color: #16803C; padding: 14px; font-size: 13px;"
+            bos = _ikonlu_baslik(
+                "circle-check", YESIL, "Bekleyen bildirim yok.",
+                "color: #16803C; font-size: 13px;"
             )
+            bos.layout().setContentsMargins(14, 14, 14, 14)
             liste.addWidget(bos)
 
         if hata:
-            uyari = QLabel("⚠️ Bazı bildirimler yüklenemedi.")
-            uyari.setStyleSheet(
-                "color: #B45309; padding: 10px; font-size: 12px;"
+            uyari = _ikonlu_baslik(
+                "warning", AMBER, "Bazı bildirimler yüklenemedi.",
+                "color: #B45309; font-size: 12px;"
             )
+            uyari.layout().setContentsMargins(10, 10, 10, 10)
             liste.addWidget(uyari)
 
         kaydirma.setWidget(icerik)
@@ -194,11 +215,9 @@ class BildirimPaneli(QFrame):
         digerleri = []
 
         for metin, hedef in satirlar:
-            if (
-                metin.startswith("📋 ")
-                and " — Görev onayı bekliyor" in metin
-            ):
-                ad = metin.removeprefix("📋 ").split(
+            temiz, _ = emojisiz(metin)
+            if " — Görev onayı bekliyor" in temiz:
+                ad = temiz.split(
                     " — Görev onayı bekliyor", 1
                 )[0]
 
@@ -211,9 +230,9 @@ class BildirimPaneli(QFrame):
 
         for (ad, hedef), adet in gruplar.items():
             if adet == 1:
-                metin = f"📋 {ad} — Görev onayı bekliyor"
+                metin = f"{ad} — Görev onayı bekliyor"
             else:
-                metin = f"📋 {ad} — {adet} görev onay bekliyor"
+                metin = f"{ad} — {adet} görev onay bekliyor"
 
             sonuc.append((metin, hedef))
 
