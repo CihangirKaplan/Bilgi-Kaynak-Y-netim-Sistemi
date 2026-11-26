@@ -60,7 +60,7 @@ def _olustur(istemci, kimlik, sorgu="", psikolog_kaydi=(7,)):
     sirali.append(KAYIT)
     c.fetchone.side_effect = sirali
     with patch("server.sunucu.psycopg2.connect", return_value=conn), \
-            patch("server.sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
+            patch("server.danisan_api.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = istemci.post("/api/danisan-kodlari" + sorgu + ("&" if sorgu else "?") + "yas_grubu=YETISKIN")
     ekleme = next((x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
     return yanit, (ekleme.args[1] if ekleme else None)

@@ -17,8 +17,16 @@ from server.sunucu import app, izin_kontrol
     ],
 )
 def test_gecersiz_randevu_http_422(veri):
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     rota = next(
-        r for r in app.routes
+        r for r in rotalar(app.routes)
         if getattr(r, "path", None) == "/api/randevular"
         and "POST" in getattr(r, "methods", set())
     )

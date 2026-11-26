@@ -40,8 +40,16 @@ from server.sunucu import app
 def test_psikolog_baskasinin_randevusunu_http_uzerinden_degistiremez(
     yol, veri, sonuclar
 ):
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
     endpoint = next(
-        route for route in app.routes
+        route for route in rotalar(app.routes)
         if getattr(route, "path", None)
         == (
             "/api/randevular/{randevu_id}/iptal"

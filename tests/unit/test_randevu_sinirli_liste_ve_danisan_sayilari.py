@@ -86,7 +86,8 @@ def test_danisan_randevu_sayilari_psikolog_yalniz_kendi_randevularini_sayar():
 
 def test_danisan_randevu_sayilari_izinli(monkeypatch):
     import server.sunucu as sunucu
-    assert "TAKVIM_GORUNTULE" in inspect.getsource(sunucu.danisan_randevu_sayilari)
+    from server import randevu_api                               # uç server/randevu_api.py'ye taşındı (izin UCLAR tablosunda)
+    assert next(u[4] for u in randevu_api.UCLAR if u[2] is sunucu.danisan_randevu_sayilari) == "TAKVIM_GORUNTULE"
 
 
 # ------------------------------------------------------------------ istemci
