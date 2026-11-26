@@ -153,10 +153,10 @@ def test_kaydirma_alani_en_fazla_5_satir_yukseklikte_ve_cubuk_hep_gorunur(qt_app
     kapat(pano)
 
 
-def test_kaydirma_cubugu_buyuk_ve_renkli_stillenir():
+def test_kaydirma_cubugu_ortak_belirgin_stili_kullanir():
     import client.dashboard_ekrani as dashboard_ekrani
     stil = dashboard_ekrani.KAYDIRMA_CUBUGU_STILI
-    assert "width: 18px" in stil and "#2563EB" in stil and "min-height: 70px" in stil
+    assert "width: 12px" in stil and "#A3B8E4" in stil and "min-height: 48px" in stil      # uygulama genelindeki ortak çubuk
 
 
 def test_ipucu_rozeti_toplam_bildirim_sayisini_soyler(qt_app):
