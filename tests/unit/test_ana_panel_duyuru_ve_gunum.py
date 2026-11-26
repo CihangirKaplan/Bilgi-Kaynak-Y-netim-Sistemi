@@ -68,13 +68,51 @@ def test_benim_gunum_yalniz_kendi_kaydini_sorgular():
     imlec.fetchall.side_effect = [
         [(False, _zaman(0, 9), _zaman(0, 10), "K1", "Oda 1"), (True, _zaman(1, 9), _zaman(1, 10), "K2", "Oda 2")],
         [(False, _zaman(0, 13), _zaman(0, 14), "E-1", "EEG", "Oda 1")],
+        [],                                                                            # izinler: hiçbiri yok → "isler" boş
     ]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         veri = sunucu.dashboard_benim_gunum(kullanici_id=7)
-    for cagri in imlec.execute.call_args_list:
+    assert veri["isler"] == []
+    for cagri in imlec.execute.call_args_list[:2]:
         assert cagri.args[1] == (7,) and "p.kullanici_id = %s" in cagri.args[0]            # yalnızca çağıranın kendi kaydı
     assert [r["gun"] for r in veri["randevular"]] == ["bugun", "yarin"]
     assert veri["randevular"][0]["saat"] == "09:00 – 10:00" and veri["rezervasyonlar"][0]["cihaz"] == "E-1 - EEG"
+
+
+def _isler(izinler, *sonuclar):
+    import server.sunucu as sunucu
+    imlec = MagicMock()
+    imlec.fetchall.return_value = [(i,) for i in izinler]
+    imlec.fetchone.side_effect = list(sonuclar)
+    return sunucu._benim_islerim(imlec, 7), imlec
+
+
+def test_isler_izni_olmayana_hicbir_sey_eklemez_ve_yalniz_izinli_konuyu_sorgular():
+    isler, imlec = _isler([])
+    assert isler == [] and imlec.execute.call_count == 1                              # yalnızca izin sorgusu
+    isler, imlec = _isler(["ARIZA_KAYITLARI_YONET"], (3,))
+    assert [i["metin"] for i in isler] == ["3 açık cihaz arızası çözüm bekliyor."] and isler[0]["hedef"] == "Arıza Kayıtları"
+    assert imlec.execute.call_count == 2 and "cihaz_arizalari" in imlec.execute.call_args.args[0]
+
+
+def test_isler_bekleyen_yoksa_satir_eklenmez():
+    assert _isler(["ARIZA_KAYITLARI_YONET", "DANISMA_OTURUMU_YONETIM"], (0, 0), (0,))[0] == []
+
+
+def test_isler_danisma_ogrencisi_acik_gorevini_gorur_yonetici_bekleyen_onayi_gorur():
+    isler, _ = _isler(["DANISMA_OTURUMU_YONET"], (5400,))
+    assert isler[0]["metin"].startswith("Danışma masası göreviniz devam ediyor (1 saat 30 dakika)") and isler[0]["onem"] == "uyari"
+    isler, _ = _isler(["DANISMA_OTURUMU_YONET"], None)
+    assert isler == []                                                               # açık görev yoksa satır yok
+    isler, _ = _isler(["DANISMA_OTURUMU_YONETIM"], (2, 4))
+    assert [i["metin"] for i in isler] == ["4 danışma masası oturumu onayınızı bekliyor.", "2 öğrenci şu an danışma masasında görevde."]
+
+
+def test_isler_hatasi_gunumu_bozmaz():
+    import server.sunucu as sunucu
+    imlec = MagicMock()
+    imlec.execute.side_effect = RuntimeError("sorgu hatası")
+    assert sunucu._benim_islerim(imlec, 7) == []
 
 
 def test_duyuru_okuma_herkese_acik_yazma_izinli():
@@ -277,3 +315,17 @@ def test_ana_panel_kaynaginda_cizgi_ikon_kuralini_bozan_emoji_yok():
     kaynak = inspect.getsource(d)
     for emoji in ("📅", "📌", "🛠️", "📏", "🔬"):
         assert emoji not in kaynak
+
+
+def test_bekleyen_islerim_satirlari_cizilir_yalniz_isi_olanda_gorunur():
+    gunum = dict(GUNUM, isler=[{"metin": "4 danışma masası oturumu onayınızı bekliyor.", "hedef": "Danışma Masası Yönetimi", "onem": "uyari"}])
+    p = _panel(gunum=gunum, cihaz_ozeti=False)
+    metin = _metinler(p.panel_benim_gunum)
+    assert "Bekleyen işlerim" in metin and "4 danışma masası oturumu onayınızı bekliyor.   →  Danışma Masası Yönetimi" in metin
+    p.close()
+    p = _panel(gunum=GUNUM, cihaz_ozeti=False)                                       # eski sunucu / iş yok: başlık da yok
+    assert "Bekleyen işlerim" not in _metinler(p.panel_benim_gunum)
+    p.close()
+    p = _panel(gunum={"randevular": [], "rezervasyonlar": [], "isler": gunum["isler"]}, cihaz_ozeti=False)
+    assert "Bekleyen işlerim" in _metinler(p.panel_benim_gunum) and "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok." not in _metinler(p.panel_benim_gunum)
+    p.close()

@@ -835,17 +835,32 @@ class DashboardEkrani(QWidget):
         self._kutuyu_bosalt(self.benim_gunum_lay)
         randevular = self.benim_gunum.get("randevular") or []
         rezervasyonlar = self.benim_gunum.get("rezervasyonlar") or []
+        isler = [i for i in (self.benim_gunum.get("isler") or []) if isinstance(i, dict) and i.get("metin")]
         self.panel_benim_gunum.setVisible(True)                                       # kaydınız yoksa da kutu görünür
         baslik = QLabel("🙋  Benim Günüm")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         self.benim_gunum_lay.addWidget(baslik)
-        if not (randevular or rezervasyonlar):
+        if not (randevular or rezervasyonlar or isler):
             bos = QLabel("Günlük bilgileriniz yüklenemedi." if self._benim_gunum_hata
                          else "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok.")
             bos.setObjectName("benimGunumBos")
             bos.setStyleSheet("font-size: 13px; color: #8A9BC0; padding: 6px;")
             self.benim_gunum_lay.addWidget(bos)
             return
+        if isler:                                                                     # rol bazlı bekleyen işler (izne göre sunucu hesaplar)
+            ust = QLabel("Bekleyen işlerim")
+            ust.setObjectName("benimIslerBasligi")
+            ust.setStyleSheet("font-size: 12px; font-weight: 800; color: #3B5BA9; padding-top: 4px;")
+            self.benim_gunum_lay.addWidget(ust)
+            for i in isler:
+                uyari = i.get("onem") == "uyari"
+                hedef = f"   →  {i['hedef']}" if i.get("hedef") else ""
+                etiket = QLabel(f"{i['metin']}{hedef}")
+                etiket.setObjectName("benimIsSatiri")
+                etiket.setWordWrap(True)
+                etiket.setStyleSheet("font-size: 13px; border-radius: 8px; padding: 7px 12px; " +
+                                     ("color: #854D0E; background: #FEF3C7;" if uyari else "color: #0F2552; background: #F3F7FF;"))
+                self.benim_gunum_lay.addWidget(etiket)
         for gun, gun_adi in (("bugun", "Bugün"), ("yarin", "Yarın")):
             satirlar = [f"{r['saat']}  ·  Randevu  ·  Danışan {r['danisan_kod_id']}  ·  {r['oda']}" for r in randevular if r.get("gun") == gun]
             satirlar += [f"{r['saat']}  ·  Cihaz  ·  {r['cihaz']}  ·  {r['oda']}" for r in rezervasyonlar if r.get("gun") == gun]

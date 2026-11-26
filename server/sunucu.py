@@ -5838,6 +5838,55 @@ def dashboard_bugunku_etkinlikler(kullanici_id: int = Depends(mevcut_kullanici_i
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
+# "Benim günüm"e rol bazlı "bekleyen işlerim" satırları: yalnızca kişinin KENDİ izinleri olan konularda, mevcut kayıtlardan hesaplanır (yeni veri tutulmaz).
+# Hiçbir şey beklemiyorsa satır eklenmez. Bu bölüm hata verirse randevu/rezervasyon listesi yine de döner (isler boş gelir).
+ISLER_IZINLERI = ("DANISMA_OTURUMU_YONET", "DANISMA_OTURUMU_YONETIM", "ARIZA_KAYITLARI_YONET")
+
+
+def _benim_islerim(cursor, kullanici_id):
+    try:
+        cursor.execute("""
+            SELECT i.izin_adi FROM kullanicilar k
+            JOIN rol_izinleri ri ON k.rol_id = ri.rol_id
+            JOIN izinler i ON ri.izin_id = i.izin_id
+            WHERE k.kullanici_id = %s AND ri.izin_var = 1 AND i.izin_adi = ANY(%s);
+        """, (kullanici_id, list(ISLER_IZINLERI)))
+        izinler = {s[0] for s in cursor.fetchall()}
+        isler = []
+        if "DANISMA_OTURUMU_YONET" in izinler:
+            cursor.execute("""
+                SELECT EXTRACT(EPOCH FROM (clock_timestamp()::timestamp - d.baslangic_zamani))::bigint
+                FROM danisma_masasi_oturumlari d
+                JOIN ogrenciler o ON o.ogrenci_id = d.ogrenci_id
+                WHERE o.kullanici_id = %s AND o.aktif_mi = TRUE AND d.bitis_zamani IS NULL
+                ORDER BY d.baslangic_zamani DESC LIMIT 1;
+            """, (kullanici_id,))
+            satir = cursor.fetchone()
+            if satir is not None:
+                dakika = max(0, int(satir[0] or 0)) // 60
+                isler.append({"metin": f"Danışma masası göreviniz devam ediyor ({dakika // 60} saat {dakika % 60} dakika). Bitirmeyi unutmayın.",
+                              "hedef": "Danışma Masası", "onem": "uyari"})
+        if "DANISMA_OTURUMU_YONETIM" in izinler:
+            cursor.execute("""
+                SELECT COUNT(*) FILTER (WHERE bitis_zamani IS NULL),
+                       COUNT(*) FILTER (WHERE bitis_zamani IS NOT NULL AND onaylandi_mi IS NOT TRUE)
+                FROM danisma_masasi_oturumlari;
+            """)
+            aktif, bekleyen = cursor.fetchone()
+            if bekleyen:
+                isler.append({"metin": f"{bekleyen} danışma masası oturumu onayınızı bekliyor.", "hedef": "Danışma Masası Yönetimi", "onem": "uyari"})
+            if aktif:
+                isler.append({"metin": f"{aktif} öğrenci şu an danışma masasında görevde.", "hedef": "Danışma Masası Yönetimi", "onem": "bilgi"})
+        if "ARIZA_KAYITLARI_YONET" in izinler:
+            cursor.execute("SELECT COUNT(*) FROM cihaz_arizalari WHERE COALESCE(cozuldu_mu, FALSE) = FALSE;")
+            acik = cursor.fetchone()[0]
+            if acik:
+                isler.append({"metin": f"{acik} açık cihaz arızası çözüm bekliyor.", "hedef": "Arıza Kayıtları", "onem": "uyari"})
+        return isler
+    except Exception:
+        return []
+
+
 # Ana panel "Benim günüm": giriş yapan kişinin KENDİ bugünkü/yarınki randevuları ve cihaz rezervasyonları. Yalnızca kişinin kendi kaydı döner
 # (başkasının bilgisi yok), bu yüzden ayrı bir izin aramaz; kaydı olmayan rolde (örn. danışma öğrencisi) listeler boş gelir.
 @app.get("/api/dashboard/benim-gunum")
@@ -5886,7 +5935,7 @@ def dashboard_benim_gunum(kullanici_id: int = Depends(mevcut_kullanici_id)):
             "cihaz": f"{s[3]} - {s[4]}",
             "oda": s[5],
         } for s in cursor.fetchall()]
-        return {"randevular": randevular, "rezervasyonlar": rezervasyonlar}
+        return {"randevular": randevular, "rezervasyonlar": rezervasyonlar, "isler": _benim_islerim(cursor, kullanici_id)}
     except Exception:
         raise HTTPException(status_code=500, detail="Günlük bilgileriniz alınamadı.")
     finally:

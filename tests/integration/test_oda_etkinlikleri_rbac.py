@@ -298,7 +298,8 @@ def test_ana_panel_uclari_her_aralikta_gercek_sql_ile_calisir(aralik):
             assert yanit.status_code == 200, (yol, yanit.text)
             assert isinstance(yanit.json(), list)
         gunum = istek_yap(yonetici_id, "GET", "/api/dashboard/benim-gunum")
-        assert gunum.status_code == 200 and gunum.json() == {"randevular": [], "rezervasyonlar": []}        # personel kaydı olmayan kullanıcıda boş
+        assert gunum.status_code == 200 and gunum.json()["randevular"] == [] and gunum.json()["rezervasyonlar"] == []        # personel kaydı olmayan kullanıcıda boş
+        assert isinstance(gunum.json()["isler"], list)                                                              # bekleyen işler gerçek SQL ile çalışır
     finally:
         yonetici_temizle()
 
