@@ -58,7 +58,7 @@ def _guncelle(eski_durum, govde, acik_ariza):
     imlec.fetchone.side_effect = sonuclar + [(1,)]
     baglanti = MagicMock()
     baglanti.cursor.return_value = imlec
-    with patch("server.sunucu.vt_baglan", return_value=baglanti):
+    with patch("server.cihaz_api.vt_baglan", return_value=baglanti):
         try:
             sonuc = sunucu.cihaz_guncelle(5, CihazGuncelleModeli(**govde), kullanici_id=1)
         except HTTPException as hata:

@@ -57,7 +57,7 @@ def test_quality_iptal_edilmis_rezervasyon_tekrar_iptal_edilemez():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.denetim_kaydi_olustur") as audit,
+        patch("server.rezervasyon_api.denetim_kaydi_olustur") as audit,
     ):
         with pytest.raises(HTTPException) as hata:
             rezervasyon_iptal(
@@ -82,7 +82,7 @@ def test_quality_aktif_rezervasyon_iptal_edilebilir():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.denetim_kaydi_olustur") as audit,
+        patch("server.rezervasyon_api.denetim_kaydi_olustur") as audit,
     ):
         sonuc = rezervasyon_iptal(
             rezervasyon_id=10,
@@ -113,7 +113,7 @@ def test_quality_rezervasyon_iptal_audit_ayni_transaction():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.denetim_kaydi_olustur") as audit,
+        patch("server.rezervasyon_api.denetim_kaydi_olustur") as audit,
     ):
         sonuc = rezervasyon_iptal(
             rezervasyon_id=10,
@@ -146,7 +146,7 @@ def test_quality_rezervasyon_iptal_audit_hatasinda_rollback():
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
         patch(
-            "server.sunucu.denetim_kaydi_olustur",
+            "server.rezervasyon_api.denetim_kaydi_olustur",
             side_effect=RuntimeError("QA-001 audit hatasi"),
         ) as audit,
     ):

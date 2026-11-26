@@ -36,3 +36,13 @@ OGRENCI_TUR_ETIKETLERI = {
     "DANISMA_MASASI": "Danışma Masası Öğrencisi",
     "ASISTAN": "Asistan Öğrenci",
 }
+
+
+# Cihaz odası = aktif ve AKTİF bir psikologa atanmamış oda. Psikologlara atanan görüşme odaları cihaz rezervasyonuna kapalıdır;
+# pasif psikolog odayı tutmaz (atama kaydı kalmış olsa bile), yani oda cihaz rezervasyonuna açılır.
+CIHAZ_ODALARI_SORGUSU = (
+    "SELECT o.oda_id, o.oda_adi FROM odalar o WHERE o.aktif_mi = TRUE "
+    "AND NOT EXISTS (SELECT 1 FROM psikolog_odalar po JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id "
+    "JOIN roller r ON r.rol_id = k.rol_id "
+    "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') ORDER BY o.oda_adi"
+)
