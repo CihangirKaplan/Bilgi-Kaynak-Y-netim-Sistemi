@@ -248,6 +248,58 @@ def tarih_goster(deger):
         return str(deger)
 
 
+UZUN_PASIF_AY = 12            # bu süreden uzun pasif kalmış öğrenciyi aktifleştirirken ek uyarı gösterilir
+SAKLAMA_SURESI_AY = 24        # sunucudaki saklama süresiyle aynı (pasife alındıktan 2 yıl)
+
+
+def pasif_sure_ay(pasife_alinma_tarihi, bugun=None):
+    """Öğrencinin kaç tam aydır pasif olduğu; tarih yoksa ya da okunamazsa None."""
+    if not pasife_alinma_tarihi:
+        return None
+    try:
+        baslangic = date.fromisoformat(str(pasife_alinma_tarihi)[:10])
+    except ValueError:
+        return None
+    bugun = bugun or date.today()
+    ay = (bugun.year - baslangic.year) * 12 + bugun.month - baslangic.month
+    if bugun.day < baslangic.day:
+        ay -= 1
+    return max(ay, 0)
+
+
+def pasif_sure_metni(ay):
+    yil, kalan = divmod(ay, 12)
+    parcalar = ([f"{yil} yıl"] if yil else []) + ([f"{kalan} ay"] if kalan else [])
+    return " ".join(parcalar) or "1 aydan kısa"
+
+
+def aktiflestirme_uyarisi(ogrenci, bugun=None):
+    """Uzun süredir pasif bir Gönüllü öğrenciyi aktifleştirirken gösterilecek ek uyarı metni (gerekmiyorsa boş).
+
+    Aktifleştirme saklama süresini sıfırlar; öğrenci 2 yılı doldurmuşsa kayıt silinmeye aday olmaktan çıkar.
+    """
+    if ogrenci.get("tur") != "GONULLU" or ogrenci.get("aktif_mi"):
+        return ""
+    ay = pasif_sure_ay(ogrenci.get("pasife_alinma_tarihi"), bugun)
+    if ay is None or ay < UZUN_PASIF_AY:
+        return ""
+    metin = (
+        f"Bu öğrenci {pasif_sure_metni(ay)} süredir pasif "
+        f"(pasife alındığı tarih: {tarih_goster(ogrenci.get('pasife_alinma_tarihi'))}).\n\n"
+    )
+    if ay >= SAKLAMA_SURESI_AY:
+        metin += (
+            "Kayıt saklama süresi (pasife alındıktan 2 yıl) dolmuş; kayıt silinmeye aday. "
+            "Aktifleştirirseniz süre sıfırlanır ve kayıt silinmeye aday olmaktan çıkar.\n\n"
+        )
+    else:
+        metin += (
+            "Aktifleştirirseniz kayıt saklama süresi (2 yıl) sıfırlanır; "
+            "öğrenci ileride yeniden pasife alınırsa süre baştan başlar.\n\n"
+        )
+    return metin
+
+
 def tablo_hazirla(tablo, basliklar):
     tablo.setColumnCount(len(basliklar))
     tablo.setHorizontalHeaderLabels(basliklar)
@@ -773,11 +825,22 @@ class OgrenciYonetimEkrani(QWidget):
             else "pasife almak"
         )
 
+        uyari = aktiflestirme_uyarisi(ogrenci) if yeni_durum else ""
+        if uyari:
+            soru = (
+                f"{ogrenci['ad_soyad']} adlı öğrenciyi aktifleştirmek "
+                f"istediğinizden emin misiniz?\n\n{uyari}Devam etmek istiyor musunuz?"
+            )
+        else:
+            soru = (
+                f"{ogrenci['ad_soyad']} adlı öğrenciyi "
+                f"{islem} istiyor musunuz?"
+            )
+
         onay = QMessageBox.question(
             self,
             "Öğrenci Aktiflik Düzenle",
-            f"{ogrenci['ad_soyad']} adlı öğrenciyi "
-            f"{islem} istiyor musunuz?",
+            soru,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )

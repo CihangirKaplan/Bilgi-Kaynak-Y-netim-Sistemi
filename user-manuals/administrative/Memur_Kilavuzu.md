@@ -91,7 +91,7 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
 - **⬇ Excel'e Aktar:** Ekranda görünen öğrencileri (telefon dahil) yazar; aktarım denetim kaydına yazılır. Dosyayı paylaşırken dikkatli olun.
 
 ### Kayıt saklama süresi (pasife alındıktan 2 yıl)
-**Gönüllü öğrencilerin** kaydı, öğrenci **pasife alındıktan sonra 2 yıl** saklanır. **Aktif öğrencinin süresi işlemez**; pasif öğrenci yeniden aktif edilirse süre sıfırlanır. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi **işlem bekleyen** (ertelenmemiş) kayıt sayısını gösterir; üstteki kart da aynı sayıdır.
+**Gönüllü öğrencilerin** kaydı, öğrenci **pasife alındıktan sonra 2 yıl** saklanır. **Aktif öğrencinin süresi işlemez**; pasif öğrenci yeniden aktif edilirse süre sıfırlanır. **1 yıldan uzun süredir pasif** bir öğrenciyi **Aktiflik Düzenle** ile aktifleştirirken sistem önce uyarır (kaç aydır pasif olduğunu ve sürenin sıfırlanacağını yazar; süresi dolmuşsa kaydın silinmeye aday olmaktan çıkacağını da belirtir) ve onayınızı ister. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi **işlem bekleyen** (ertelenmemiş) kayıt sayısını gösterir; üstteki kart da aynı sayıdır.
 - Düğmeye basınca süresi dolan gönüllü öğrencilerin listesi açılır (**Ad Soyad, Öğrenci No, Pasife Alındığı Tarih, Erteleme Tarihi, Durum**). Durum **İşlem Bekliyor** ya da **Ertelendi** olur.
 - Bir öğrenciyi seçince iki düğme açılır:
   - **Seçili Öğrenciyi Ertele:** Kayıt uyarısı için **yeni bir tarih** seçersiniz ve **Ertelemeyi Kaydet**'e basarsınız.
