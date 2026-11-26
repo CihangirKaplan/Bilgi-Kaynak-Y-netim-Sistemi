@@ -179,3 +179,28 @@ def test_bugunku_sonucsuz_randevusu_olan_danisan_pasife_alinamaz_sonuc_girilince
     assert yanit.status_code == 409 and "Tamamlandı / Gelmedi" in yanit.json()["detail"]
     c.execute("UPDATE randevular SET durum = 'TAMAMLANDI' WHERE danisan_kod_id = %s", (cocuk,))
     assert istemci.patch(f"/api/danisan-kodlari/{cocuk}/durum", params={"aktif_mi": "false"}).status_code == 200
+
+
+def test_ozet_rapor_sql_gruplamasi_satir_satir_hesapla_ayni_sonucu_verir(kayitlar):
+    """Özet rapor (detay=false) SQL'de gruplanır, detay=true ise satır satır hesaplanır: ikisi gerçek veritabanında birebir aynı olmalı."""
+    c, admin, (psi_a, psi_b), (cocuk, yetiskin, eski) = kayitlar
+    _ekle(c, cocuk, psi_a, 0, "TAMAMLANDI", terapi="OYUN_TERAPISI")
+    _ekle(c, yetiskin, psi_a, 1, "TAMAMLANDI", gorusme="ONLINE", terapi="BIREYSEL_TERAPI")
+    _ekle(c, yetiskin, psi_a, 2, "GELMEDI", terapi="BIREYSEL_TERAPI")
+    _ekle(c, eski, psi_a, 3, "PLANLANDI")
+    _ekle(c, cocuk, psi_a, 4, "IPTAL_EDILDI", neden="DANISAN_TALEBI")
+    _ekle(c, cocuk, psi_a, 5, "IPTAL_EDILDI")                                              # nedeni kaydedilmemiş iptal
+    _ekle(c, cocuk, psi_b, 6, "TAMAMLANDI", terapi="BIREYSEL_TERAPI")
+    istemci = TestClient(app)
+    app.dependency_overrides[mevcut_kullanici_id] = lambda: admin
+    for sorgu in ("baslangic=2031-03-01&bitis=2031-03-31", f"baslangic=2031-03-01&bitis=2031-03-31&psikolog_id={psi_a[1]}", f"baslangic=2031-03-01&bitis=2031-03-31&oda_id={psi_b[2]}"):
+        ozet = istemci.get(f"/api/randevu-raporu?{sorgu}").json()
+        detayli = istemci.get(f"/api/randevu-raporu?{sorgu}&detay=true").json()
+        detayli.pop("randevular")
+        assert ozet == detayli, sorgu
+    # 2031 geleceğe düşer: "sonucu girilmemiş geçmiş" 0; geçmiş tarihli planlı randevu için de aynı sonuç (gruplama 'gecmis' bayrağı)
+    _ekle(c, eski, psi_a, -4000, "PLANLANDI")                                              # ~2020: geçmişte hâlâ planlı
+    a = istemci.get("/api/randevu-raporu?baslangic=2010-01-01&bitis=2031-12-31").json()
+    b = istemci.get("/api/randevu-raporu?baslangic=2010-01-01&bitis=2031-12-31&detay=true").json()
+    b.pop("randevular")
+    assert a == b and a["ozet"]["sonucsuz_gecmis"] >= 1

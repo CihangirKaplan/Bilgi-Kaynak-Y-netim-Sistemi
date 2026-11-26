@@ -109,6 +109,7 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 - Yetki Raporu'nun "son giriş" sorgusu için denetim tablosunda kısmi indeks (`ix_denetim_login_kullanici_tarih`); 1 milyon denetim kaydında rapor 3,5 sn → 50 ms. Yeni migration: `d4a8b6c2e913` (`alembic upgrade head`).
 - Danışanlar ekranı tüm randevu geçmişini tek istekte çekmez: danışan başına randevu sayısı hafif bir uçtan (`/api/danisan-randevu-sayilari`) gelir, geçmiş danışan seçilince yalnızca o danışan için istenir (10 yıllık veride 47,7 MB / 5 sn → 216 KB / 92 ms). Süzgeçsiz `/api/randevular` en yeni 5000 kayıtla sınırlıdır; `X-Toplam-Kayit` başlığı gerçek toplamı bildirir.
+- Randevu Raporu (özet) SQL'de gruplanır; tarih seçilmeden tüm zamanlar için 1,6 sn → 0,3 sn. Sonuç, satır satır hesapla birebir aynıdır (testle doğrulanır). Excel için `detay=true` değişmedi.
 
 ### Test ve kalite
 
