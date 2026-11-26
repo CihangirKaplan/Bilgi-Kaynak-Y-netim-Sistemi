@@ -41,8 +41,8 @@ YARDIM_BOLUMLERI = [
         "Arama kutusu ve süzgeçler, listede o an görünen kayıtları daraltır. Ctrl + F ile arama kutusuna geçebilirsiniz.",
         "Randevu listesinde \"Tüm tarihler\" en yeni 2000 randevuyu getirir; daha eskilerini görmek için bir dönem seçin.",
     ]),
-    ("Excel'e aktarma", [
-        "\"Excel'e Aktar\" düğmesi, ekranda o an görünen kayıtları dosyaya yazar. Önce arama ya da süzgeç uygulayabilirsiniz.",
+    ("Excel ya da PDF olarak kaydetme", [
+        "\"Dışa Aktar\" düğmesi, ekranda o an görünen kayıtları dosyaya yazar. Kaydetme penceresindeki \"Kayıt türü\" listesinden Excel (.xlsx) ya da PDF seçebilirsiniz. Önce arama ya da süzgeç uygulayabilirsiniz.",
         "Aktarılan dosyaların paylaşımında dikkatli olun; her aktarım denetim kaydına işlenir.",
     ]),
     ("Kişisel veriler", [

@@ -461,7 +461,7 @@ class OgrenciYonetimEkrani(QWidget):
         liste_ust.addWidget(self.sayac_rozeti)
         liste_ust.addStretch()
 
-        self.excel_btn = buton_olustur("⬇  Excel'e Aktar", self.excele_aktar, "hayalet")
+        self.excel_btn = buton_olustur("⬇  Dışa Aktar", self.excele_aktar, "hayalet")
         self.aktiflik_btn = buton_olustur("Aktiflik Düzenle", self.aktiflik_duzenle, "hayalet")
         self.detay_btn = buton_olustur("Detay / Puanlar", self.detay_ac, "hayalet")
         self.sure_btn = buton_olustur("Süresi Dolan Kayıtlar", self.suresi_dolan_ac, "uyari")

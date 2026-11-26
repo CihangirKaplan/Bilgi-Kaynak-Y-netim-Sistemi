@@ -29,7 +29,7 @@ Kayıtlı tüm cihazlar ve anlık durumları. Üstteki **sayaç çipleri** topla
 - **Sıralamak:** Sütun başlığına tıklayın (Durum sütununda rozet metnine göre sıralanır).
 - **＋ Cihaz Ekle:** Formda **Envanter Kodu \*** ve **Cihaz Adı \*** zorunludur; **Marka / Model**, **Seri No** isteğe bağlıdır; **Durum \*** seçilir (*Kullanıma Hazır, Bakımda, Kalibrasyonda, Kullanım Dışı*; **Arızalı** elle seçilemez, arıza bildirilince kendiliğinden belirlenir). Envanter kodu **benzersiz** olmalıdır ve **büyük/küçük harf fark etmez** (`EEG-01` ile `eeg-01` aynı kod sayılır). Seri no boş bırakılabilir (birden fazla cihazın seri nosu boş olabilir); doluysa o da benzersiz olmalıdır. Bunlardan biri kullanımdaysa "Bu envanter kodu veya seri no zaten kullanımda." uyarısı çıkar.
 - **✎ Envanteri Düzenle** (ya da listede çift tıklama): Cihaz bilgilerini ve durumunu güncellersiniz. Bir cihazı kullanımdan kaldırmak için durumunu **Kullanım Dışı** yapın; cihaz silinmez, geçmişi korunur. **Çözülmemiş arızası olan** cihazın durumu elle değiştirilemez (durum kutusu kilitlenir; yalnızca *Kullanım Dışı* yapılabilir): önce **Arıza Kayıtları**'ndan arızayı *Çözüldü* olarak işaretleyin. Cihazın markası, seri nosu gibi diğer bilgileri arızalıyken de düzenlenebilir.
-- **⬇ Excel'e Aktar:** Ekranda görünen cihazları **demirbaş sayımı** için Excel'e yazar (Envanter Kodu, Cihaz Adı, Marka/Model, Seri No, Durum, Kayıt Tarihi). Ana panelden bir durum kartına tıklayıp geldiyseniz yalnızca o durumdaki cihazlar listelenir ve aktarılır; hepsini istiyorsanız önce **Filtreyi kaldır, tümünü göster**'e basın. Aktarım denetim kaydına yazılır.
+- **⬇ Dışa Aktar:** Ekranda görünen cihazları **demirbaş sayımı** için Excel'e yazar (Envanter Kodu, Cihaz Adı, Marka/Model, Seri No, Durum, Kayıt Tarihi). Ana panelden bir durum kartına tıklayıp geldiyseniz yalnızca o durumdaki cihazlar listelenir ve aktarılır; hepsini istiyorsanız önce **Filtreyi kaldır, tümünü göster**'e basın. Aktarım denetim kaydına yazılır.
 - **🕘 Cihaz geçmişi** (satır sonundaki düğme): Cihazın **bakım, kalibrasyon, arıza ve rezervasyon** kayıtlarını tek bir zaman çizgisinde (en yeni önce) gösterir. Üstte cihazın **bugünkü durumu** ve özet sayılar (toplam bakım maliyeti, kalibrasyon geçerliliği, açık arıza, rezervasyon saati) bulunur; **Bakım / Kalibrasyon / Arıza / Rezervasyon** düğmeleriyle tek türü süzebilirsiniz. Her türden en yeni 300 kayıt gösterilir.
 - Listedeki **Durum**, bugünkü etkin durumu gösterir: bugün bakım ya da kalibrasyon tarih aralığında olan cihaz, kayıtlı durumu *Kullanıma Hazır* olsa da **Bakımda / Kalibrasyonda** görünür; **çözülmemiş arıza kaydı olan cihaz her zaman Arızalı** görünür (bakımda olsa bile). Arıza çözülünce eski durumuna döner. Bu tanım Ana Kontrol Paneli, Cihaz Uygunluğu ve rezervasyonla aynıdır.
 
@@ -47,7 +47,7 @@ Sistem rezervasyonu **reddeder** ve nedenini yazar: bitiş başlangıçtan sonra
 aynı cihaz ya da oda o saatlerde doluysa (çakışma mesajı hangi kayıtla çakıştığını söyler) ya da oda bu iş için uygun değilse.
 **Düzenleme ve iptal:** Rezervasyonun ayrıntısını çift tıklayarak açın. **✎ Rezervasyonu düzenle** ile saat, oda, bölüm ve proje bilgisini değiştirebilirsiniz (**cihaz değişmez**; başka cihaz için yeni rezervasyon açın). Saat ya da oda değişirse çakışmalar yeniden denetlenir; rezervasyonun kendisi çakışma sayılmaz. **Başlamış** rezervasyonda başlangıç saati ve oda değiştirilemez; yalnızca bitiş saati, bölüm ve proje bilgileri düzenlenir. Biten ve iptal edilmiş rezervasyonlar düzenlenemez.
 **İptal** için ayrıntı penceresinde iptal düğmesine basın; kayıt silinmez, iptal edildi olarak kalır. Bir rezervasyonu **yalnızca oluşturan kişi ya da cihaz yöneticisi** (Memur, Müdür, Admin) düzenleyebilir ya da iptal edebilir; başkasının rezervasyonunda düğmeler görünmez. Biten (süresi dolmuş) rezervasyon iptal edilemez.
-**⬇ Excel'e Aktar:** Ekranda görünen rezervasyonları aktarır (Envanter Kodu, Cihaz Adı, Bölüm, Oda, Proje, Tarih ve Saat, Rezerve Eden, Durum); aktarım denetim kaydına yazılır. Aynı düğme **Bakım Kayıtları, Kalibrasyon, Arıza Kayıtları ve Bakım Planları** sayfalarında da vardır.
+**⬇ Dışa Aktar:** Ekranda görünen rezervasyonları aktarır (Envanter Kodu, Cihaz Adı, Bölüm, Oda, Proje, Tarih ve Saat, Rezerve Eden, Durum); aktarım denetim kaydına yazılır. Aynı düğme **Bakım Kayıtları, Kalibrasyon, Arıza Kayıtları ve Bakım Planları** sayfalarında da vardır.
 
 ## 1.4 Bakım Kayıtları
 Cihaza yapılan bakımın kaydı.
@@ -75,7 +75,7 @@ Cihazlar için **tekrarlayan** bakım/kalibrasyon planları. Sistem sonraki tari
 - Filtre: *Aktif planlar, Tüm planlar, Pasif planlar.*
 
 ## 1.8 Cihaz raporları
-**Cihaz Raporları** sayfasında beş sekme vardır: **Bakım Geçmişi**, **Kalibrasyon**, **Arızalar**, **Cihaz Rezervasyonu** (cihaz, proje türü ve bölüm bazlı kullanım) ve **Geciken Bakım Planları** (geciken/yaklaşan planlar ve planı olmayan cihazlar). Her sekmenin kendi süzgeçleri vardır ve **⬇ Excel'e Aktar** içerir. Ayrıntılar: [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).
+**Cihaz Raporları** sayfasında beş sekme vardır: **Bakım Geçmişi**, **Kalibrasyon**, **Arızalar**, **Cihaz Rezervasyonu** (cihaz, proje türü ve bölüm bazlı kullanım) ve **Geciken Bakım Planları** (geciken/yaklaşan planlar ve planı olmayan cihazlar). Her sekmenin kendi süzgeçleri vardır ve **⬇ Dışa Aktar** içerir. Ayrıntılar: [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md).
 
 ---
 
@@ -88,7 +88,7 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
   **Danışma Masası öğrencileri bu pencereden eklenmez**: onlar giriş hesabı gerektirdiği için **Kullanıcı & Personel** üzerinden oluşturulur (pencere sizi yönlendirir).
 - **Aktiflik Düzenle:** Seçili öğrenciyi aktif ya da pasif yapar.
 - **Detay / Puanlar:** Seçili öğrencinin faaliyetlerini ve puanlarını gösterir. Dönem açılışta ayın ilk gününden bugüne ayarlıdır; tarihleri değiştirince sonuç kendiliğinden yenilenir.
-- **⬇ Excel'e Aktar:** Ekranda görünen öğrencileri (telefon dahil) yazar; aktarım denetim kaydına yazılır. Dosyayı paylaşırken dikkatli olun.
+- **⬇ Dışa Aktar:** Ekranda görünen öğrencileri (telefon dahil) yazar; aktarım denetim kaydına yazılır. Dosyayı paylaşırken dikkatli olun.
 
 ### Kayıt saklama süresi (pasife alındıktan 2 yıl)
 **Gönüllü öğrencilerin** kaydı, öğrenci **pasife alındıktan sonra 2 yıl** saklanır. **Aktif öğrencinin süresi işlemez**; pasif öğrenci yeniden aktif edilirse süre sıfırlanır. **1 yıldan uzun süredir pasif** bir öğrenciyi **Aktiflik Düzenle** ile aktifleştirirken sistem önce uyarır (kaç aydır pasif olduğunu ve sürenin sıfırlanacağını yazar; süresi dolmuşsa kaydın silinmeye aday olmaktan çıkacağını da belirtir) ve onayınızı ister. Süresi dolan kayıtlar için sayfa açılınca uyarı çıkar ve **Süresi Dolan Kayıtlar (N)** düğmesi **işlem bekleyen** (ertelenmemiş) kayıt sayısını gösterir; üstteki kart da aynı sayıdır.
@@ -106,7 +106,7 @@ Sütunlar: **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Ka
 - Birimleri yönetmek (**🏢 Faaliyet Birimleri**) yalnızca **Sistem Admin**'e açıktır.
 
 ## 2.3 Öğrenci ve faaliyet raporları
-**Puan Raporu** (öğrenci başına toplam puan), **Öğrenci Raporu** (mevcut, tür/bölüm dağılımı, kayıt saklama süresi) ve **Faaliyet Raporu** (tür, birim, onay durumuna göre). Hepsinde dönem seçilir ve **⬇ Excel'e Aktar** vardır.
+**Puan Raporu** (öğrenci başına toplam puan), **Öğrenci Raporu** (mevcut, tür/bölüm dağılımı, kayıt saklama süresi) ve **Faaliyet Raporu** (tür, birim, onay durumuna göre). Hepsinde dönem seçilir ve **⬇ Dışa Aktar** vardır.
 
 ---
 
@@ -123,7 +123,7 @@ Danışma öğrencilerinin **görev kayıtlarını** yönetirsiniz. Liste, her g
 - Onay bekleyen görevler **🔔 bildirim** olarak da size gelir; bildirime tıklayınca ilgili sayfa açılır.
 
 ## 3.2 Danışma Masası Raporları
-Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz; **⬇ Excel'e Aktar** vardır.
+Dönem seçerek görev sürelerini ve öğrenci bazlı özetleri görürsünüz; **⬇ Dışa Aktar** vardır.
 
 ---
 

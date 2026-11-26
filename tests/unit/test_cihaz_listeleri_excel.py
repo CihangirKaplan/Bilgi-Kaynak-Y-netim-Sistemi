@@ -17,6 +17,7 @@ import client.cihaz_bakim_ekranlari as bakim_modulu
 import client.cihaz_kalibrasyon_ekranlari as kalib_modulu
 import client.cihaz_rezervasyon_ekranlari as rez_modulu
 import client.liste_excel as liste_excel
+import client.rapor_cikti as rapor_cikti
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -47,7 +48,7 @@ def _aktar(ekran, tmp_path):
     """excele_aktar'ı çalıştırır; (açılan çalışma kitabı, denetim isteği) döndürür."""
     yol = str(tmp_path / "liste.xlsx")
     istekler = []
-    with patch.object(liste_excel.QFileDialog, "getSaveFileName", return_value=(yol, "")), \
+    with patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(yol, "")), \
          patch.object(liste_excel.QMessageBox, "information"), patch.object(liste_excel.QMessageBox, "warning") as uyari, \
          patch.object(liste_excel, "oturum_kontrollu_istek", side_effect=lambda *a, **k: istekler.append((a, k)) or _yanit({})), \
          patch.object(liste_excel, "oturum_hatasi_mi", return_value=False):
@@ -72,7 +73,7 @@ def test_tum_cihaz_listelerinde_excel_dugmesi_var():
             plan_modulu: ("BakimPlanlariEkrani", []), ariza_modulu: ("ArizaYonetimEkrani", [])}
     for modul, (sinif, v) in veri.items():
         e = _ac(modul, sinif, v)
-        assert any("Excel" in b.text() for b in e.findChildren(QPushButton)), sinif
+        assert any("Dışa Aktar" in b.text() for b in e.findChildren(QPushButton)), sinif
         e.close()
 
 
@@ -143,7 +144,7 @@ def test_planlar_aktarilir_ve_kayit_yoksa_bilgilendirir(tmp_path):
     _denetim(istekler, "BAKIM_PLANI", 1)
     e.arama.setText("olmayan-bir-sey")
     QApplication.processEvents()
-    with patch.object(liste_excel.QMessageBox, "information") as bilgi, patch.object(liste_excel.QFileDialog, "getSaveFileName") as dosya:
+    with patch.object(liste_excel.QMessageBox, "information") as bilgi, patch.object(rapor_cikti.QFileDialog, "getSaveFileName") as dosya:
         e.excele_aktar()
     bilgi.assert_called_once()
     dosya.assert_not_called()                                          # görünen kayıt yoksa dosya sorulmaz

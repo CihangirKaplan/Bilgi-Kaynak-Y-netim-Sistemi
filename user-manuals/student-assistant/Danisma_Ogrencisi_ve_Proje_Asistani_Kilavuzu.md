@@ -73,7 +73,7 @@ Randevu listesinde **dönem seçici** (*Tüm tarihler, Bugün, Bu hafta, Bu ay, 
 
 - **Oda Kullanımı:** Odaların saatlik doluluğunu gösterir; randevu vermeden önce uygun oda ve saati buradan görebilirsiniz.
 - **Oda Etkinlikleri:** Odalarda planlanan etkinlikler (yalnızca görüntülersiniz). Etkinlik olan saatlerde o odaya randevu verilemez.
-- **Randevu Raporları:** Dönem seçerek randevu sayılarını ve dağılımlarını görürsünüz; **⬇ Excel'e Aktar** ile dosyaya alabilirsiniz.
+- **Randevu Raporları:** Dönem seçerek randevu sayılarını ve dağılımlarını görürsünüz; **⬇ Dışa Aktar** ile dosyaya alabilirsiniz.
 
 ---
 
@@ -98,7 +98,7 @@ Randevu listesinde **dönem seçici** (*Tüm tarihler, Bugün, Bu hafta, Bu ay, 
 
 **Öğrenciler** sayfasında öğrenci listesini, **Ad Soyad, Öğrenci No, Telefon, Öğrenci Grubu, Bağlı Hesap, Kayıt Tarihi, Durum** sütunlarıyla görürsünüz.
 Arama kutusuna ad, numara ya da telefon yazabilir; öğrenci grubuna ve duruma (**Aktif / Pasif**) göre süzebilirsiniz.
-Telefon `0555 000 00 00` biçiminde görünür. **⬇ Excel'e Aktar** ekranda görünen öğrencileri dosyaya yazar (telefon dahil; dosyayı paylaşırken dikkatli olun).
+Telefon `0555 000 00 00` biçiminde görünür. **⬇ Dışa Aktar** ekranda görünen öğrencileri dosyaya yazar (telefon dahil; dosyayı paylaşırken dikkatli olun).
 Bir öğrencinin **Detay / Puanlar** düğmesiyle faaliyetlerini ve puanlarını görebilirsiniz.
 
 ## 2. Faaliyet kaydetmek
@@ -123,7 +123,7 @@ Faaliyet kaydı düzenleme/silme işlemleri **denetim kaydına yazılır**.
 - **Puan Raporu:** Öğrenci başına toplam puan (dönem seçerek).
 - **Öğrenci Raporu:** Öğrenci mevcudu, tür/bölüm dağılımı, kayıt saklama süresi.
 - **Faaliyet Raporu:** Faaliyet türü, birim ve onay durumuna göre dönemsel rapor.
-Hepsinde **⬇ Excel'e Aktar** vardır. Hesaplama tanımları için [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md)'ne bakın.
+Hepsinde **⬇ Dışa Aktar** vardır. Hesaplama tanımları için [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md)'ne bakın.
 
 ## 4. Cihaz rezervasyonu yapmak
 

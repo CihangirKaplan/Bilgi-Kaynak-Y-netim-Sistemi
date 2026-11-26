@@ -39,7 +39,7 @@ Danışanlar **adla değil kodla** kaydedilir. Danışanın adını, telefonunu 
 - Bir danışana tıklayınca sağ tarafta üç bölüm görürsünüz: **Bilgiler**, **Özet** (durum sayıları, ilk randevu, son randevu, sıradaki planlı randevu) ve **Randevular** (geçmiş ve gelecek randevular).
 - **Bilgileri Düzenle:** Danışanın **yaş grubunu** tamamlar/değiştirir. Yetişkin olarak değiştirirseniz ve danışanın **planlı oyun terapisi randevuları** varsa sistem bunu açıkça yazıp onay ister: o randevuların terapi türü **Bireysel terapi**'ye çevrilir (yetişkinlere oyun terapisi verilemez). **Geçmiş randevular değişmez.**
 - **Pasife Al / Yeniden Aktif Et:** Danışanı pasife alırsanız **yeni randevu verilemez**; geçmiş randevuları **korunur**. Hiçbir danışan silinmez.
-- **⬇ Excel'e Aktar:** Ekranda görünen danışan kodlarını Excel'e yazar (ad/telefon içermez). Aktarım denetim kaydına yazılır.
+- **⬇ Dışa Aktar:** Ekranda görünen danışan kodlarını Excel'e yazar (ad/telefon içermez). Aktarım denetim kaydına yazılır.
 
 ## 3. Randevu oluşturmak
 
@@ -89,7 +89,7 @@ Randevu listesinin sütunları: **Randevu ID, Danışan Kodu, Psikolog, Oda, Tar
 
 ## 7. Randevu Raporları
 
-**Randevu Raporları** sayfasında dönem seçerek randevu sayılarını, durum dağılımını, iptal nedenlerini ve yoğun günleri görürsünüz; **⬇ Excel'e Aktar** ile dosyaya alabilirsiniz.
+**Randevu Raporları** sayfasında dönem seçerek randevu sayılarını, durum dağılımını, iptal nedenlerini ve yoğun günleri görürsünüz; **⬇ Dışa Aktar** ile dosyaya alabilirsiniz.
 Siz yalnızca **kendi** randevularınızın raporunu görürsünüz. Raporların hesaplama tanımları için [Raporlama Rehberi](../../docs/Raporlama_Rehberi.md)'ne bakın.
 
 ## 8. Cihaz Uygunluğu

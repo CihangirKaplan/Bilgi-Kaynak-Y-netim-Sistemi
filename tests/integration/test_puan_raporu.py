@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication
 
 import client.main_window as main_window
 import client.puan_raporu_ekrani as ekran_modulu
+import client.rapor_cikti as rapor_cikti
 import server.sunucu as sunucu
 import client.tkys_sidebar_refined as tkys_sidebar_refined
 from client.puan_rapor_excel import excel_dosyasi_olustur
@@ -607,7 +608,7 @@ def test_oturum_hatasinda_ekran_degismez(qt_app):
 
 # ---- Excel düğmesi
 def test_excel_dugmesi_rapor_gelince_acilir(qt_app):
-    assert ekran_ac(qt_app).excel_btn.isEnabled() and ekran_ac(qt_app).excel_btn.text() == "⬇ Excel'e Aktar"
+    assert ekran_ac(qt_app).excel_btn.isEnabled() and ekran_ac(qt_app).excel_btn.text() == "⬇ Dışa Aktar"
 
 
 def test_excel_aktar_ayrintili_veriyi_ayni_filtrelerle_ister_ve_dosyayi_yazar(qt_app, tmp_path):
@@ -617,7 +618,7 @@ def test_excel_aktar_ayrintili_veriyi_ayni_filtrelerle_ister_ve_dosyayi_yazar(qt
     tam = rapor("?detay=true", detaylar=DETAYLAR)[0].json()
     istek = MagicMock(return_value=yanit(tam))
     with patch.object(ekran_modulu, "oturum_kontrollu_istek", istek), patch.object(ekran_modulu, "oturum_hatasi_mi", return_value=False), \
-            patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(hedef, "")), \
             patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
     assert istek.call_args.kwargs["params"] == {**e._son_params, "detay": "true"} and e._son_params["tur"] == "GONULLU"
@@ -630,7 +631,7 @@ def test_excel_aramadan_etkilenmez_raporun_tamamini_icerir(qt_app, tmp_path):
     hedef = str(tmp_path / "r.xlsx")
     tam = rapor("?detay=true", detaylar=DETAYLAR)[0].json()
     with patch.object(ekran_modulu, "oturum_kontrollu_istek", return_value=yanit(tam)), patch.object(ekran_modulu, "oturum_hatasi_mi", return_value=False), \
-            patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(hedef, "")), patch.object(ekran_modulu.QMessageBox, "information"):
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(hedef, "")), patch.object(ekran_modulu.QMessageBox, "information"):
         e.excel_aktar()
     assert len(satirlar(load_workbook(hedef)["Puan Sıralaması"])) == 6
 
@@ -638,7 +639,7 @@ def test_excel_aramadan_etkilenmez_raporun_tamamini_icerir(qt_app, tmp_path):
 def test_excel_kaydetme_penceresi_iptalinde_sunucuya_gidilmez(qt_app):
     e = ekran_ac(qt_app)
     istek = MagicMock()
-    with patch.object(ekran_modulu, "oturum_kontrollu_istek", istek), patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=("", "")):
+    with patch.object(ekran_modulu, "oturum_kontrollu_istek", istek), patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=("", "")):
         e.excel_aktar()
     assert not istek.called
 
@@ -653,20 +654,20 @@ def test_excel_rapor_yokken_uyari_verir(qt_app):
 def test_excel_icin_veri_alinamazsa_dosya_yazilmaz_ve_uyari_verilir(qt_app, tmp_path):
     e = ekran_ac(qt_app)
     with patch.object(ekran_modulu, "oturum_kontrollu_istek", side_effect=ekran_modulu.requests.RequestException("kesildi")), \
-            patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
             patch.object(ekran_modulu, "excel_dosyasi_olustur") as uretici, patch.object(ekran_modulu.QMessageBox, "warning") as uyari:
         e.excel_aktar()
-    assert uyari.called and "Excel için rapor verisi" in uyari.call_args.args[2] and not uretici.called
+    assert uyari.called and "Rapor verisi alınamadı" in uyari.call_args.args[2] and not uretici.called
 
 
 def test_excel_yazma_hatasinda_anlasilir_uyari(qt_app, tmp_path):
     e = ekran_ac(qt_app)
     with patch.object(ekran_modulu, "oturum_kontrollu_istek", return_value=yanit(api_yaniti())), patch.object(ekran_modulu, "oturum_hatasi_mi", return_value=False), \
-            patch.object(ekran_modulu.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
+            patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(str(tmp_path / "r.xlsx"), "")), \
             patch.object(ekran_modulu, "excel_dosyasi_olustur", side_effect=OSError("kilitli")), \
             patch.object(ekran_modulu.QMessageBox, "warning") as uyari, patch.object(ekran_modulu.QMessageBox, "information") as bilgi:
         e.excel_aktar()
-    assert uyari.called and "Excel'de açık" in uyari.call_args.args[2] and not bilgi.called
+    assert uyari.called and "başka bir programda" in uyari.call_args.args[2] and not bilgi.called
 
 
 # ================================================================ menü ve ana pencere bağlantısı

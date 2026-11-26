@@ -140,7 +140,7 @@ def test_yardim_sekmesi_baslikli_bolumler_icerir(qt_app):
     d = _dialog()
     yardim = d.sekmeler.widget(2)
     metin = " ".join(e.text() for e in yardim.findChildren(QLabel))
-    for baslik in ("Başlarken", "Listeler ve arama", "Excel'e aktarma", "Kişisel veriler", "Sorun bildirme"):
+    for baslik in ("Başlarken", "Listeler ve arama", "Excel ya da PDF olarak kaydetme", "Kişisel veriler", "Sorun bildirme"):
         assert baslik in metin, baslik
 
 

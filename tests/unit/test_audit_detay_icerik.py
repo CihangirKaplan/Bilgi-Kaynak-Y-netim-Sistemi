@@ -33,6 +33,8 @@ def _kayit(olay, **ek):
     (_kayit("CREATE", hedef_tablo="randevular", hedef_kayit_id=3), "admin, yeni bir “Randevu” kaydı oluşturdu."),
     (_kayit("DELETE", hedef_tablo="cihazlar", hedef_kayit_id=3), "admin, “Cihaz” kaydını sildi."),
     (_kayit("EXPORT", ayrinti={"liste": "OGRENCI"}), "admin, “Öğrenci” listesini Excel'e aktardı."),
+    (_kayit("EXPORT", ayrinti={"liste": "OGRENCI", "bicim": "PDF"}), "admin, “Öğrenci” listesini PDF olarak kaydetti."),
+    (_kayit("EXPORT", ayrinti={"bicim": "PDF"}), "admin bir listeyi PDF olarak kaydetti."),
 ])
 def test_olay_cumlesi(kayit, beklenen):
     assert modul.olay_cumlesi(kayit) == beklenen

@@ -9,10 +9,11 @@ from datetime import datetime
 import requests
 from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.randevu_rapor_excel import excel_dosyasi_olustur
+from client.rapor_cikti import bicim_adi, cikti_dosyasi, kayit_yolu_sec
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+    QAbstractItemView, QComboBox, QDateEdit, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from client.tablo_siralama import siralanabilir_yap
@@ -150,7 +151,7 @@ class RandevuRaporlariEkrani(QWidget):
         satir.addWidget(self.oda_sec)
         satir.addStretch(1)
         # Rapor süzgeç değişince kendiliğinden yenilenir; ayrı bir "Raporu Getir" düğmesi yoktur.
-        self.excel_btn = QPushButton("⬇ Excel'e Aktar")
+        self.excel_btn = QPushButton("⬇ Dışa Aktar")
         self.excel_btn.setMinimumWidth(150)
         self.excel_btn.setEnabled(False)
         self.excel_btn.setStyleSheet(
@@ -389,14 +390,11 @@ class RandevuRaporlariEkrani(QWidget):
     # ------------------------------------------------------------------ excel
     def excel_aktar(self):
         if self._son_params is None:
-            QMessageBox.information(self, "Excel'e Aktar", "Önce raporu getirin.")
+            QMessageBox.information(self, "Dışa Aktar", "Önce raporu getirin.")
             return
-        varsayilan = f"randevu_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "Raporu Kaydet", varsayilan, "Excel Dosyası (*.xlsx)")
+        dosya_yolu, bicim = kayit_yolu_sec(self, "Raporu Kaydet", f"randevu_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}")
         if not dosya_yolu:
             return
-        if not dosya_yolu.lower().endswith(".xlsx"):
-            dosya_yolu += ".xlsx"
         try:
             yanit = oturum_kontrollu_istek(
                 "GET", f"{self.api_url}/api/randevu-raporu", headers=self._headers(),
@@ -407,14 +405,12 @@ class RandevuRaporlariEkrani(QWidget):
             yanit.raise_for_status()
             veri = yanit.json()
         except (requests.RequestException, ValueError) as hata:
-            QMessageBox.warning(self, "Rapor Hatası", f"Excel için rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
+            QMessageBox.warning(self, "Rapor Hatası", f"Rapor verisi alınamadı:\n{istek_hatasi_metni(hata)}")
             return
         try:
-            excel_dosyasi_olustur(veri, self._son_filtre, dosya_yolu)
-        except OSError as hata:
-            QMessageBox.warning(
-                self, "Kaydedilemedi",
-                f"Dosya kaydedilemedi. Aynı adlı dosya Excel'de açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}",
-            )
+            with cikti_dosyasi(dosya_yolu, bicim) as xlsx_yolu:
+                excel_dosyasi_olustur(veri, self._son_filtre, xlsx_yolu)
+        except (OSError, RuntimeError) as hata:
+            QMessageBox.warning(self, "Kaydedilemedi", f"Dosya kaydedilemedi. Aynı adlı dosya başka bir programda (Excel, PDF okuyucu) açık olabilir ya da klasöre yazma izniniz olmayabilir.\n{hata}")
             return
-        QMessageBox.information(self, "Excel'e Aktar", f"Rapor kaydedildi:\n{dosya_yolu}")
+        QMessageBox.information(self, "Dışa Aktar", f"Rapor {bicim_adi(bicim)} olarak kaydedildi:\n{dosya_yolu}")

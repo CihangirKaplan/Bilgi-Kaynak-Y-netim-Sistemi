@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 import client.cihaz_ekranlari as envanter
 import client.liste_excel as liste_excel
+import client.rapor_cikti as rapor_cikti
 import client.ogrenci_yonetim_ekrani as ogr_modulu
 from client.liste_excel import dosya_adi_olustur, listeyi_excele_aktar
 
@@ -41,7 +42,7 @@ def _hucreler(sayfa):
 def kaydet(tmp_path):
     """Dosya seçme penceresini ve açılan mesaj kutularını yakalar; dosya tmp_path'e yazılır."""
     yol = str(tmp_path / "cikti.xlsx")
-    with patch.object(liste_excel.QFileDialog, "getSaveFileName", return_value=(yol, "")) as dosya, \
+    with patch.object(rapor_cikti.QFileDialog, "getSaveFileName", return_value=(yol, "")) as dosya, \
             patch.object(liste_excel.QMessageBox, "information") as bilgi, \
             patch.object(liste_excel.QMessageBox, "warning") as uyari, \
             patch.object(liste_excel, "oturum_kontrollu_istek", return_value=_yanit({"durum": "basarili"})) as denetim:
@@ -109,7 +110,7 @@ def _envanter():
 
 def test_envanter_excel_dugmesi_var_ve_tum_cihazlari_yazar(kaydet):
     ekran = _envanter()
-    assert any("Excel'e Aktar" in d.text() for d in ekran.findChildren(liste_excel.QPushButton))
+    assert any("Dışa Aktar" in d.text() for d in ekran.findChildren(liste_excel.QPushButton))
     ekran.excele_aktar()
     _, sayfa = _oku(kaydet.yol)
     satirlar = _hucreler(sayfa)
