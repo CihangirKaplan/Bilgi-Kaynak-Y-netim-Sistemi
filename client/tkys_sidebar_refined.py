@@ -30,6 +30,11 @@ PATHS = {
     "key": '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9m-3 3 3 3m-6-3 2 2"/>',
     "power": '<path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/>',
     "trophy": '<path d="M7 4h10v5a5 5 0 0 1-10 0zM17 6h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3M12 14v4M8 21h8M10 18h4"/>',
+    "bell": '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9zM10 21h4"/>',
+    "megaphone": '<path d="M3 10v4h4l8 4V6L7 10zM18 9a4 4 0 0 1 0 6"/>',
+    "circle-check": '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    "user": '<circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-2a7.5 7.5 0 0 1 15 0v2"/>',
+    "close": '<path d="M6 6l12 12M18 6 6 18"/>',
 }
 
 CATEGORY_ICONS = {
