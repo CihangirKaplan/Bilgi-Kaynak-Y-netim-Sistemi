@@ -1,6 +1,7 @@
 """server/sunucu.py'nin parçalanması: ayrılan uç modülleri aynı yetkiyle ve aynı adlarla çalışır; sunucuya geri bağımlı olmaz."""
 import ast
 import inspect
+import re
 from pathlib import Path
 
 import pytest
@@ -9,14 +10,17 @@ from fastapi.testclient import TestClient
 
 import server.sunucu as sunucu
 from server import (
-    anasayfa_api, audit_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, ortak_sabitler, ortak_yardimcilar,
-    puan_raporu_api, randevu_oda_raporlari_api, surum_api, vt_ayarlari, yonetim_raporlari_api,
+    anasayfa_api, audit_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, faaliyet_birimleri_api,
+    faaliyet_kayitlari_api, faaliyet_turleri_api, ortak_sabitler, ortak_yardimcilar, puan_raporu_api, randevu_oda_raporlari_api,
+    surum_api, vt_ayarlari, yonetim_raporlari_api,
 )
 from server.yetki_baglama import yetkiyle_bagla
 
 KOK = Path(__file__).resolve().parents[2]
 
 YONETIM = "YONETIM_RAPORLARI_GORUNTULE"
+FAALIYET = "FAALIYET_KAYITLARI_DUZENLE"
+BIRIM = "FAALIYET_BIRIMI_DUZENLE"
 # Ayrılan modüller: (modül, [(yöntem, uç yolu, gereken yetki), ...]). Yetki eşlemesi güvenlik açısından AÇIKÇA yazılıdır:
 # taşıma sırasında hiçbir ucun yetkisi değişmemelidir. Gereken yetki: "IZIN" (izin_kontrol), ("A", "B") (izin_kontrol_biri: biri yeter),
 # None (yalnızca oturum açmış olmak: kimlik bağımlılığı).
@@ -47,6 +51,23 @@ AYRILANLAR = [
     ]),
     (puan_raporu_api, [("GET", "/api/puan-raporu", "FAALIYET_KAYITLARI_DUZENLE")]),
     (surum_api, [("GET", "/api/surum", None), ("GET", "/api/sistem-durumu", "AUDIT_KAYITLARI_INCELE")]),
+    (faaliyet_turleri_api, [
+        ("GET", "/api/faaliyetler", FAALIYET),
+        ("POST", "/api/faaliyetler", FAALIYET),
+        ("PUT", "/api/faaliyetler/{faaliyet_id}", FAALIYET),
+    ]),
+    (faaliyet_birimleri_api, [
+        ("GET", "/api/faaliyet-birimleri", FAALIYET),
+        ("POST", "/api/faaliyet-birimleri", BIRIM),
+        ("PUT", "/api/faaliyet-birimleri/{birim_id}", BIRIM),
+        ("DELETE", "/api/faaliyet-birimleri/{birim_id}", BIRIM),
+    ]),
+    (faaliyet_kayitlari_api, [
+        ("POST", "/api/faaliyet-kayitlari", FAALIYET),
+        ("GET", "/api/faaliyet-kayitlari", FAALIYET),
+        ("PUT", "/api/faaliyet-kayitlari/{takip_id}", FAALIYET),
+        ("DELETE", "/api/faaliyet-kayitlari/{takip_id}", FAALIYET),
+    ]),
     (anasayfa_api, [
         ("GET", "/api/dashboard/ozet", "CIHAZ_ENVANTER_YONET"),
         ("GET", "/api/dashboard/bugunku-randevular", "TAKVIM_GORUNTULE"),
@@ -102,7 +123,7 @@ def test_ayrilan_modul_sunucuyu_ice_aktarmaz_dongusel_bagimlilik_olmaz(modul):
 def test_uc_tam_bir_kez_kayitli_ve_kimliksiz_istek_reddedilir(modul, yontem, yol, yetki):
     sema = sunucu.app.openapi()["paths"]
     assert yol in sema and yontem.lower() in sema[yol]
-    assert TestClient(sunucu.app).request(yontem, yol.replace("{duyuru_id}", "1")).status_code == 401   # yetki bağımlılığı bağlı
+    assert TestClient(sunucu.app).request(yontem, re.sub(r"\{[^}]+\}", "1", yol)).status_code == 401   # yetki bağımlılığı bağlı
 
 
 @pytest.mark.parametrize("modul, ucler", AYRILANLAR)
@@ -127,6 +148,11 @@ def test_sunucudaki_geriye_donuk_adlar_ayrilan_nesnelerle_aynidir():
                          (randevu_oda_raporlari_api, ("randevu_raporu_secenekleri", "oda_kullanimi", "randevu_raporu")),
                          (puan_raporu_api, ("PUAN_RAPORU_DURUMLARI", "puan_raporu")),
                          (surum_api, ("_sistem_durumu", "_SURUM", "_UYGULAMA_ADI", "surum_bilgisi", "sistem_durumu_getir")),
+                         (faaliyet_turleri_api, ("FAALIYET_PUANI_EN_FAZLA", "FaaliyetTuruEkleModeli", "FAALIYET_ADI_KAYITLI_MESAJI", "_faaliyet_adi_kayitli_mi",
+                                                 "FaaliyetTuruDuzenleModeli", "faaliyetleri_getir", "faaliyet_turu_ekle", "faaliyet_turu_duzenle")),
+                         (faaliyet_birimleri_api, ("BIRIM_ADI_KAYITLI_MESAJI", "faaliyet_birimleri_getir", "faaliyet_birimi_ekle",
+                                                    "faaliyet_birimi_guncelle", "faaliyet_birimi_sil")),
+                         (faaliyet_kayitlari_api, ("faaliyet_kaydi_ekle", "faaliyet_kayitlarini_getir", "faaliyet_kaydi_guncelle", "faaliyet_kaydi_sil")),
                          (anasayfa_api, ("DASHBOARD_ARALIKLARI", "ARALIK_SORGU_DESENI", "_tarih_kisa", "BUGUNKU_ETKINLIK_UST_SINIR", "ISLER_IZINLERI",
                                          "_benim_islerim", "DUYURU_UST_SINIR", "DUYURU_YENI_GUN", "YAKLASAN_ISLEM_UST_SINIR", "dashboard_ozet_getir",
                                          "dashboard_bugunku_randevular", "dashboard_bugunku_rezervasyonlar", "dashboard_bugunku_etkinlikler",
@@ -181,11 +207,14 @@ def test_ayrilan_fonksiyonlar_dogrudan_cagrilabilir_yetki_parametresi_acik_kalir
             assert inspect.signature(fonksiyon).parameters[parametre].default is None, fonksiyon.__name__   # ham fonksiyonda Depends yok
 
 
-def test_duyuru_yayinlama_201_doner_diger_uclar_200():
-    """Yol ayarları (status_code) taşımada korunur."""
+def test_olusturma_uclari_201_doner_diger_uclar_200():
+    """Yol ayarları (status_code) taşımada korunur: oluşturan uçlar 201, diğerleri 200."""
     sema = sunucu.app.openapi()["paths"]
-    assert "201" in sema["/api/duyurular"]["post"]["responses"]
-    assert "200" in sema["/api/duyurular"]["get"]["responses"]
+    for yol in ("/api/duyurular", "/api/faaliyetler"):
+        assert "201" in sema[yol]["post"]["responses"] and "200" not in sema[yol]["post"]["responses"], yol
+    for yontem, yol in (("get", "/api/duyurular"), ("get", "/api/faaliyetler"), ("post", "/api/faaliyet-birimleri"),
+                        ("post", "/api/faaliyet-kayitlari"), ("put", "/api/faaliyetler/{faaliyet_id}")):
+        assert "200" in sema[yol][yontem]["responses"], (yontem, yol)
 
 
 # --------------------------------------------------------------------------- yetkiyle_bagla
