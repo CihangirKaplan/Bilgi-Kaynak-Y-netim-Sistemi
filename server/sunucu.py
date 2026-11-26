@@ -5945,13 +5945,14 @@ def duyurulari_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
                    (d.olusturma_zamani >= CURRENT_TIMESTAMP - make_interval(days => %s)) AS yeni,
                    (SELECT COALESCE(MAX(ri.izin_var), 0) FROM kullanicilar kk
                       JOIN rol_izinleri ri ON kk.rol_id = ri.rol_id JOIN izinler i ON ri.izin_id = i.izin_id
-                     WHERE kk.kullanici_id = %s AND i.izin_adi = 'DUYURU_YONET') AS yonetebilir
+                     WHERE kk.kullanici_id = %s AND i.izin_adi = 'DUYURU_YONET') AS yonetebilir,
+                   EXISTS (SELECT 1 FROM duyuru_okundu o WHERE o.duyuru_id = d.duyuru_id AND o.kullanici_id = %s) AS okundu
             FROM duyurular d
             LEFT JOIN kullanicilar k ON k.kullanici_id = d.olusturan_kullanici_id
             WHERE d.son_gecerlilik_tarihi IS NULL OR d.son_gecerlilik_tarihi >= CURRENT_DATE
             ORDER BY d.olusturma_zamani DESC, d.duyuru_id DESC
             LIMIT %s;
-        """, (DUYURU_YENI_GUN, kullanici_id, DUYURU_UST_SINIR))
+        """, (DUYURU_YENI_GUN, kullanici_id, kullanici_id, DUYURU_UST_SINIR))
         return [{
             "duyuru_id": s[0],
             "baslik": s[1],
@@ -5961,9 +5962,79 @@ def duyurulari_getir(kullanici_id: int = Depends(mevcut_kullanici_id)):
             "yazan": s[5] if s[7] == 1 else None,
             "yeni": bool(s[6]),
             "yonetebilir": s[7] == 1,
+            "okundu": bool(s[8]),                      # BU kullanıcı okundu işaretledi mi (başkalarını etkilemez)
         } for s in cursor.fetchall()]
     except Exception:
         raise HTTPException(status_code=500, detail="Duyurular alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+# Duyuruyu "okundu" işaretleme: kullanıcı kendi ekranında gizler; duyuru SİLİNMEZ ve diğer kullanıcılar için yayında kalır. Yalnızca çağıranın kendi okundu bilgisini
+# değiştirir (başkasınınkine dokunamaz), bu yüzden ayrı bir izin aramaz.
+@app.post("/api/duyurular/okundu")
+def duyurulari_okundu_isaretle(kullanici_id: int = Depends(mevcut_kullanici_id)):
+    """Yayındaki bütün duyuruları (çağıran için) okundu işaretler."""
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO duyuru_okundu (duyuru_id, kullanici_id)
+            SELECT d.duyuru_id, %s FROM duyurular d
+            WHERE d.son_gecerlilik_tarihi IS NULL OR d.son_gecerlilik_tarihi >= CURRENT_DATE
+            ON CONFLICT (duyuru_id, kullanici_id) DO NOTHING;
+        """, (kullanici_id,))
+        conn.commit()
+        return {"mesaj": "Duyurular okundu olarak işaretlendi."}
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="Duyurular okundu işaretlenemedi.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.post("/api/duyurular/{duyuru_id}/okundu")
+def duyuruyu_okundu_isaretle(duyuru_id: int, kullanici_id: int = Depends(mevcut_kullanici_id)):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM duyurular WHERE duyuru_id = %s;", (duyuru_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Duyuru bulunamadı.")
+        cursor.execute("INSERT INTO duyuru_okundu (duyuru_id, kullanici_id) VALUES (%s, %s) ON CONFLICT (duyuru_id, kullanici_id) DO NOTHING;",
+                       (duyuru_id, kullanici_id))
+        conn.commit()
+        return {"mesaj": "Duyuru okundu olarak işaretlendi."}
+    except HTTPException:
+        raise
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="Duyuru okundu işaretlenemedi.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
+@app.delete("/api/duyurular/{duyuru_id}/okundu")
+def duyuruyu_tekrar_goster(duyuru_id: int, kullanici_id: int = Depends(mevcut_kullanici_id)):
+    """Okundu işaretini kaldırır (duyuru bu kullanıcıya yeniden görünür). İşaret yoksa da başarılıdır."""
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM duyuru_okundu WHERE duyuru_id = %s AND kullanici_id = %s;", (duyuru_id, kullanici_id))
+        conn.commit()
+        return {"mesaj": "Duyuru yeniden gösterilecek."}
+    except Exception:
+        if conn is not None: conn.rollback()
+        raise HTTPException(status_code=500, detail="Duyuru yeniden gösterilemedi.")
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()

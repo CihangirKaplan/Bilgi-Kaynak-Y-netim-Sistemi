@@ -34,11 +34,15 @@ def _ikonlu_baslik(ikon, renk, metin, stil):
 class BildirimPaneli(QFrame):
     """TKYS merkezi bildirim acilir paneli."""
 
-    def __init__(self, bildirimler, toplam, hata, sayfa_ac, parent=None):
+    def __init__(self, bildirimler, toplam, hata, sayfa_ac, parent=None, duyuru_okundu=None):
+        """bildirimler: (grup, metin, hedef) ya da (grup, metin, hedef, ek) satırları. Duyurular grubunda ek={"duyuru_id": n} varsa satırın yanında
+        "Okudum" düğmesi çıkar; düğme duyuru_okundu(duyuru_id) işlevini çağırır (True dönerse satır kalkar). Duyuru silinmez, yalnızca bu kullanıcıdan gizlenir."""
         super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         self._sayfa_ac = sayfa_ac
+        self._duyuru_okundu = duyuru_okundu
+        self._toplam = toplam
         self.setObjectName("bildirimPaneli")
         self.setFixedWidth(440)
 
@@ -80,6 +84,18 @@ class BildirimPaneli(QFrame):
             QPushButton#bildirimKapat:hover {
                 color: #102A56;
             }
+            QPushButton#duyuruOkunduDugmesi {
+                background: #DCFCE7;
+                color: #166534;
+                border: none;
+                border-radius: 9px;
+                padding: 6px 10px;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            QPushButton#duyuruOkunduDugmesi:hover {
+                background: #BBF7D0;
+            }
         """)
 
         dis = QVBoxLayout(self)
@@ -106,6 +122,7 @@ class BildirimPaneli(QFrame):
             "bell", MAVI, f"Bildirimler ({toplam})",
             "color: #102A56; font-size: 16px; font-weight: 800;"
         )
+        self._baslik_etiketi = baslik.findChildren(QLabel)[-1]
         baslik_satiri.addWidget(baslik)
         baslik_satiri.addStretch()
 
@@ -125,6 +142,7 @@ class BildirimPaneli(QFrame):
         aciklama.setStyleSheet(
             "color: #6B7FA8; font-size: 12px;"
         )
+        self._aciklama_etiketi = aciklama
         ana.addWidget(aciklama)
 
         kaydirma = QScrollArea()
@@ -140,14 +158,15 @@ class BildirimPaneli(QFrame):
 
         gruplar = OrderedDict()
 
-        for grup, metin, hedef in bildirimler:
-            gruplar.setdefault(grup, []).append((metin, hedef))
+        for oge in bildirimler:
+            grup, metin, hedef = oge[:3]
+            gruplar.setdefault(grup, []).append((metin, hedef, (oge[3] if len(oge) > 3 else None) or {}))   # 3. öğe: ek bilgi (örn. duyuru kimliği)
 
         satir_sayisi = 0
 
         for grup, satirlar in gruplar.items():
             if grup == "Danışma Masası":
-                satirlar = self._ogrenci_bildirimlerini_grupla(satirlar)
+                satirlar = [(m, h, {}) for m, h in self._ogrenci_bildirimlerini_grupla([(m, h) for m, h, _ in satirlar])]
 
             baslik_metni, grup_ikonu, grup_rengi = grup_basligi(grup)
 
@@ -157,7 +176,7 @@ class BildirimPaneli(QFrame):
             )
             liste.addWidget(grup_baslik)
 
-            for metin, hedef in satirlar:
+            for metin, hedef, ek in satirlar:
                 temiz, ikon_adi, ikon_rengi = bildirim_ikonu(grup, metin)
                 buton = QPushButton(f"{temiz}   →")
                 buton.setIcon(cizgi_ikonu(ikon_adi, ikon_rengi))
@@ -171,7 +190,26 @@ class BildirimPaneli(QFrame):
                     lambda _=False, h=hedef: self._git(h)
                 )
 
-                liste.addWidget(buton)
+                duyuru_id = ek.get("duyuru_id")
+                if duyuru_id is not None and self._duyuru_okundu is not None:
+                    satir_kap = QWidget()
+                    satir_lay = QHBoxLayout(satir_kap)
+                    satir_lay.setContentsMargins(0, 0, 0, 0)
+                    satir_lay.setSpacing(6)
+                    satir_lay.addWidget(buton, 1)
+                    okundu = QPushButton("Okudum")
+                    okundu.setIcon(cizgi_ikonu("circle-check", "#166534"))
+                    okundu.setIconSize(ikon_boyutu())
+                    okundu.setObjectName("duyuruOkunduDugmesi")
+                    okundu.setProperty("duyuru_id", duyuru_id)
+                    okundu.setToolTip("Okundu olarak işaretle: duyuru sizin için gizlenir (silinmez, diğer kullanıcılarda kalır)")
+                    okundu.setCursor(Qt.PointingHandCursor)
+                    okundu.setMinimumHeight(45)
+                    okundu.clicked.connect(self._okundu_tiklandi)          # lambda yok: düğme kimliği özellikten okunur
+                    satir_lay.addWidget(okundu, 0)
+                    liste.addWidget(satir_kap)
+                else:
+                    liste.addWidget(buton)
                 satir_sayisi += 1
 
         if not bildirimler:
@@ -237,6 +275,21 @@ class BildirimPaneli(QFrame):
             sonuc.append((metin, hedef))
 
         return sonuc + digerleri
+
+    def _okundu_tiklandi(self):
+        """"Okudum": işlev başarılıysa satır kalkar ve sayaç bir azalır (duyuru silinmez)."""
+        dugme = self.sender()
+        if dugme is None or self._duyuru_okundu is None:
+            return
+        if not self._duyuru_okundu(dugme.property("duyuru_id")):
+            return
+        satir = dugme.parentWidget()
+        if satir is not None:
+            satir.hide()
+            satir.deleteLater()
+        self._toplam = max(0, self._toplam - 1)
+        self._baslik_etiketi.setText(f"Bildirimler ({self._toplam})")
+        self._aciklama_etiketi.setText(f"{self._toplam} bildirim işlem bekliyor" if self._toplam else "Bekleyen bildirim bulunmuyor")
 
     def _git(self, hedef):
         self.close()

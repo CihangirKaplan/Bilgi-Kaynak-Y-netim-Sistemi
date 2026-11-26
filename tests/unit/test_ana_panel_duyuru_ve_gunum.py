@@ -88,11 +88,12 @@ def test_duyuru_yazan_adi_yalniz_yonetene_gosterilir():
     import server.sunucu as sunucu
     conn = MagicMock()
     imlec = conn.cursor.return_value
-    imlec.fetchall.return_value = [(1, "Bakım", "Yarın bakım var", datetime(2026, 1, 2, 9, 30), None, "mudur1", True, 0),
-                                   (2, "Diğer", "Metin", datetime(2026, 1, 1, 9, 30), date(2026, 2, 1), "mudur1", False, 1)]
+    imlec.fetchall.return_value = [(1, "Bakım", "Yarın bakım var", datetime(2026, 1, 2, 9, 30), None, "mudur1", True, 0, False),
+                                   (2, "Diğer", "Metin", datetime(2026, 1, 1, 9, 30), date(2026, 2, 1), "mudur1", False, 1, True)]
     with patch("server.sunucu.psycopg2.connect", return_value=conn):
         liste = sunucu.duyurulari_getir(kullanici_id=4)
-    assert liste[0]["yazan"] is None and liste[0]["yonetebilir"] is False and liste[0]["yeni"] is True
+    assert liste[0]["yazan"] is None and liste[0]["yonetebilir"] is False and liste[0]["yeni"] is True and liste[0]["okundu"] is False
+    assert liste[1]["okundu"] is True
     assert liste[1]["yazan"] == "mudur1" and liste[1]["yonetebilir"] is True and liste[1]["son_gecerlilik"] == "01.02.2026"
 
 
@@ -122,7 +123,7 @@ def test_duyuru_yayinla_ve_kaldir_denetim_kaydi_yazar():
 
 # ---------------------------------------------------------------- istemci
 DUYURULAR = [{"duyuru_id": 5, "baslik": "Yarın bakım", "metin": "Sistem 18:00'de kapanır.", "tarih": "01.01.2026 09:00",
-              "son_gecerlilik": None, "yazan": "mudur1", "yeni": True, "yonetebilir": True}]
+              "son_gecerlilik": None, "yazan": "mudur1", "yeni": True, "yonetebilir": True, "okundu": False}]
 GUNUM = {"randevular": [{"gun": "bugun", "saat": "09:00 – 10:00", "danisan_kod_id": "K1", "oda": "Oda 1"},
                         {"gun": "yarin", "saat": "11:00 – 12:00", "danisan_kod_id": "K2", "oda": "Oda 1"}],
          "rezervasyonlar": [{"gun": "bugun", "saat": "13:00 – 14:00", "cihaz": "E-1 - EEG", "oda": "Oda 1"}]}

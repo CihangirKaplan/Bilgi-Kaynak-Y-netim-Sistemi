@@ -45,6 +45,7 @@ Sunucuda, sunucu durdurulduktan sonra:
    bilerek kapatılmışsa yükseltmeden sonra yeniden kapatın.
    Aynı adım **duyurular** tablosunu ve **DUYURU_YONET** iznini ekler (varsayılan: Danışma Öğrencisi dışında herkes yayınlayabilir); duyuru yayınlama yetkisini başka role
    vermek için Rol & İzin Yönetimi'ni kullanın.
+   Aynı adım **duyuru okundu işaretleri** için `duyuru_okundu` tablosunu da ekler (kullanıcı başına gizleme; duyuru silinmez).
 3. Görevleri yeni ayarlarla yeniden kurun (yönetici PowerShell):
    `python scripts/windows/sunucu_kurulum.py` ve `python scripts/windows/kurulum.py`.
 4. Sunucuyu başlatın: `schtasks /Run /TN TKYS_Sunucu`.
