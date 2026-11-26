@@ -52,7 +52,8 @@ def test_sunucu_uc_noktasi_giris_yapmis_herkese_aciktir_tokensiz_401():
     """Ana paneldeki salt okunur bilgi: ayrı görüntüleme izni aramaz (Proje Asistanı'nın Oda Etkinlikleri sayfası yoktur ama görür); token yine şart."""
     import server.sunucu as sunucu
     from fastapi.testclient import TestClient
-    assert "mevcut_kullanici_id" in inspect.getsource(sunucu.dashboard_bugunku_etkinlikler) and "izin_kontrol" not in inspect.getsource(sunucu.dashboard_bugunku_etkinlikler)
+    from server import anasayfa_api                                          # uç server/anasayfa_api.py'ye taşındı
+    assert next(u[4] for u in anasayfa_api.UCLAR if u[2] is sunucu.dashboard_bugunku_etkinlikler) is None   # izin yok, yalnızca oturum (kimlik) bağımlılığı
     conn = MagicMock()
     conn.cursor.return_value.fetchall.return_value = [(1, "Seminer", "Oda 2", _bugun(18), _bugun(19), None)]
     sunucu.app.dependency_overrides[sunucu.mevcut_kullanici_id] = lambda: 9                  # hiçbir izni olmayan, giriş yapmış kullanıcı

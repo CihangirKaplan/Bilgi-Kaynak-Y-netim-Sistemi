@@ -115,11 +115,17 @@ def test_isler_hatasi_gunumu_bozmaz():
     assert sunucu._benim_islerim(imlec, 7) == []
 
 
+def _gereken_yetki(fonksiyon):
+    """Ana panel/duyuru ucunun gerektirdiği yetki (server/anasayfa_api.py UCLAR tablosundan): izin adı, izin tuple'ı (biri yeter) ya da None (yalnızca oturum)."""
+    from server import anasayfa_api
+    return next(u[4] for u in anasayfa_api.UCLAR if u[2] is fonksiyon)
+
+
 def test_duyuru_okuma_herkese_acik_yazma_izinli():
     import server.sunucu as sunucu
-    assert "izin_kontrol" not in inspect.getsource(sunucu.duyurulari_getir)
-    assert "DUYURU_YONET" in inspect.getsource(sunucu.duyuru_yayinla)
-    assert "DUYURU_YONET" in inspect.getsource(sunucu.duyuru_kaldir)
+    assert _gereken_yetki(sunucu.duyurulari_getir) is None                 # yalnızca oturum açmış olmak
+    assert _gereken_yetki(sunucu.duyuru_yayinla) == "DUYURU_YONET"
+    assert _gereken_yetki(sunucu.duyuru_kaldir) == "DUYURU_YONET"
 
 
 def test_duyuru_yazan_adi_yalniz_yonetene_gosterilir():
