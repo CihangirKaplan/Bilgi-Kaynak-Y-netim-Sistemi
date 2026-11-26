@@ -60,16 +60,39 @@ def _bagimlilik_adlari(bagimlilik):
     return adlar
 
 
-def _tum_uclar():
-    for rota in app.routes:
-        if not isinstance(rota, APIRoute):
+def _api_rotalari(rotalar, onek="", ek_bagimliliklar=()):
+    """`include_router` ile eklenen yönlendiricileri de gezer (FastAPI bunları `_IncludedRouter` olarak sarar ve `app.routes`
+    içinde APIRoute olarak göstermez). Yönlendirici düzeyindeki bağımlılıklar da uç korumasına sayılır."""
+    for rota in rotalar:
+        if isinstance(rota, APIRoute):
+            yield rota, onek, [getattr(d.dependency, "__name__", "") for d in ek_bagimliliklar]
             continue
+        asil = getattr(rota, "original_router", None)
+        if asil is not None:
+            baglam = getattr(rota, "include_context", None)
+            yield from _api_rotalari(
+                asil.routes,
+                onek + (getattr(baglam, "prefix", "") or ""),
+                tuple(ek_bagimliliklar) + tuple(getattr(baglam, "dependencies", None) or ()),
+            )
+
+
+def _tum_uclar():
+    for rota, onek, ek_adlar in _api_rotalari(app.routes):
         for yontem in sorted(rota.methods - {"HEAD", "OPTIONS"}):
-            yield yontem, rota.path, _bagimlilik_adlari(rota.dependant)
+            yield yontem, onek + rota.path, _bagimlilik_adlari(rota.dependant) + ek_adlar
 
 
 def test_uygulamada_taranacak_uc_var():
     assert len(list(_tum_uclar())) > 50
+
+
+def test_tarama_uygulamanin_butun_uclarini_gorur_hicbiri_gizli_kalmaz():
+    """Tarama, OpenAPI şemasındaki her (yöntem, yol) ikilisini görmeli: yönlendirici (include_router) ile eklenen uçlar taramanın dışında
+    kalırsa korumasız bir uç fark edilmeden eklenebilir (FastAPI bunları `app.routes` içinde APIRoute olarak göstermez)."""
+    sema = {(yontem.upper(), yol) for yol, islemler in app.openapi()["paths"].items() for yontem in islemler}
+    taranan = {(yontem, yol) for yontem, yol, _ in _tum_uclar()}
+    assert sema == taranan, f"şemada olup taramada olmayan: {sorted(sema - taranan)}; taramada olup şemada olmayan: {sorted(taranan - sema)}"
 
 
 def test_her_uc_izinle_korunur_veya_bilincli_istisnadir():

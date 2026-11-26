@@ -143,7 +143,7 @@ def test_iptal_edilen_rezervasyon_sorguda_elenir():
 
 
 def test_varsayilan_aralik_bugunden_yedi_gundur_tek_uc_verilince_digeri_hesaplanir():
-    with patch("server.sunucu.date") as d:
+    with patch("server.cihaz_uygunluk_api.date") as d:
         d.today.return_value = BUGUN
         d.side_effect = lambda *a, **k: D(*a, **k)
         sonuc, _ = cagir()

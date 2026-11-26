@@ -12,9 +12,22 @@ KAYNAK = Path(sunucu.__file__).read_text(encoding="utf-8")
 AGAC = ast.parse(KAYNAK)
 
 
+def _rota_bul(yol, rotalar=None):
+    """`include_router` ile eklenen uçlar `app.routes` içinde doğrudan görünmez; yönlendirici sarmalayıcılarının içine de bakılır."""
+    for r in (sunucu.app.routes if rotalar is None else rotalar):
+        if getattr(r, "path", None) == yol:
+            return r
+        asil = getattr(r, "original_router", None)
+        if asil is not None:
+            bulunan = _rota_bul(yol, asil.routes)
+            if bulunan is not None:
+                return bulunan
+    return None
+
+
 def test_sistem_durumu_alinamazsa_planlanan_mesajla_500_doner_ve_neden_gunluge_yazilir(caplog):
     """Eskiden hata yolunda `logging` tanımsızdı: NameError asıl hatayı gizleyip beklenmeyen bir çökmeye yol açıyordu."""
-    rota = next(r for r in sunucu.app.routes if getattr(r, "path", None) == "/api/sistem-durumu")
+    rota = _rota_bul("/api/sistem-durumu")
     izin_bagimliligi = rota.dependant.dependencies[0].call                              # izin_kontrol(...) (kendi veritabanı sorgusunu yapar)
     sunucu.app.dependency_overrides[izin_bagimliligi] = lambda: 1
 
