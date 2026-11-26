@@ -146,6 +146,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 import server.sunucu as sunucu
+from server import ogrenci_api                         # öğrenci uçları server/ogrenci_api.py'ye taşındı
 
 
 @pytest.fixture
@@ -287,7 +288,7 @@ def test_erteleme_audit_hatasinda_rollback(gecici_gonullu):
         raise RuntimeError("QA_ERTELEME_ROLLBACK")
 
     with patch.object(
-        sunucu,
+        ogrenci_api,
         "denetim_kaydi_olustur",
         side_effect=audit_ve_hata,
     ):
@@ -545,7 +546,7 @@ def test_faaliyet_silme_audit_hatasinda_rollback(gecici_gonullu):
             raise RuntimeError("QA_FAALIYET_ROLLBACK")
 
         with patch.object(
-            sunucu,
+            ogrenci_api,
             "denetim_kaydi_olustur",
             side_effect=audit_ve_hata,
         ):
@@ -598,7 +599,7 @@ def test_silme_audit_hatasinda_rollback(gecici_gonullu):
         raise RuntimeError("QA_SILME_ROLLBACK")
 
     with patch.object(
-        sunucu,
+        ogrenci_api,
         "denetim_kaydi_olustur",
         side_effect=audit_ve_hata,
     ):
