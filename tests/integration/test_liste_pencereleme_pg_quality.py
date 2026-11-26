@@ -63,7 +63,7 @@ def test_suzgec_yoksa_hepsi_eskisi_gibi_zaman_sirasiyla(veri):
     sonuc, yanit = _liste(veri)
     assert len(sonuc) == 10
     assert [r["baslangic_zamani"].day for r in sonuc] == list(range(1, 11))
-    assert "X-Toplam-Kayit" not in yanit.headers
+    assert yanit.headers["X-Toplam-Kayit"] == "10"                       # süzgeçsiz liste en yeni 5000 kayıtla sınırlıdır; gerçek toplam bildirilir (sıra yine artan)
 
 
 def test_tarih_araligi_iki_ucu_dahil(veri):

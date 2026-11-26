@@ -154,7 +154,9 @@ class DanisanlarEkrani(QWidget):
         self.psikolog_adlari = {}
         self.pasif_psikologlar = set()          # adı gösterilen ama artık aktif olmayan (pasif / başka role geçmiş) psikologlar
         self.oda_adlari = {}
-        self.randevu_gruplari = {}
+        self.randevu_gruplari = {}      # danışan kodu -> randevu listesi (yalnızca açılmış/yüklenmiş danışanlar; sayılar için randevu_sayilari)
+        self.randevu_sayilari = {}      # danışan kodu -> toplam randevu sayısı (hafif sunucu özeti)
+        self._randevular_tek_tek = False  # True: randevu geçmişi danışan seçilince istenir; False: eski sunucu, tümü baştan yüklendi
 
         kok = QVBoxLayout(self)
         kok.setContentsMargins(0, 0, 0, 0)
@@ -469,13 +471,45 @@ class DanisanlarEkrani(QWidget):
             self.cmb_psikolog.setCurrentIndex(max(self.cmb_psikolog.findData(secili), 0))
         self.cmb_psikolog.blockSignals(False)
 
+    def _api_sozluk_getir(self, yol):
+        """Sözlük döndüren hafif uç (danışan -> sayı). Yanıt sözlük değilse (eski sunucu: 404 ya da liste) None döner; hata ekranda gösterilmez."""
+        try:
+            cevap = oturum_kontrollu_istek("GET", f"{self.api_url}{yol}", headers={"Authorization": f"Bearer {self.token}"}, timeout=10)
+            if oturum_hatasi_mi(cevap) or cevap.status_code != 200:
+                return None
+            veri = cevap.json()
+            if isinstance(veri, dict) and all(isinstance(k, str) and isinstance(v, int) for k, v in veri.items()):
+                return veri
+        except Exception:
+            pass
+        return None
+
     def _randevulari_yukle(self):
+        """Randevu sayıları hafif bir uçtan gelir; geçmiş, danışan seçilince yalnızca o danışan için istenir.
+        (Eskiden tüm randevu geçmişi tek istekte çekiliyordu: yıllar içinde onlarca MB olup 5 sn'lik zaman aşımını aşıyor ve sunucuyu donduruyordu.)
+        Sunucu eskiyse (özet ucu yoksa) önceki davranışa dönülür."""
+        sayilar = self._api_sozluk_getir("/api/danisan-randevu-sayilari")
+        if sayilar is not None:
+            self._randevular_tek_tek = True
+            self.randevu_sayilari = sayilar
+            self.randevu_gruplari = {}
+            self._yukleme_durumu("/api/randevular")
+            return
+        self._randevular_tek_tek = False
         liste = self._api_liste_getir("/api/randevular")
         if liste is not None:
             self.randevular = liste
-        self.randevu_gruplari = randevulari_danisana_gore(
-            self.randevular
-        )
+        self.randevu_gruplari = randevulari_danisana_gore(self.randevular)
+        self.randevu_sayilari = {k: len(v) for k, v in self.randevu_gruplari.items()}
+
+    def _danisan_randevulari(self, kod):
+        """Bir danışanın randevuları (önbellekte yoksa yalnızca o danışan için sunucudan istenir)."""
+        if kod not in self.randevu_gruplari and self._randevular_tek_tek and kod is not None:
+            liste = self._api_liste_getir("/api/randevular", params={"danisan_kod_id": kod})
+            if liste is None:
+                return []                      # yüklenemedi: ekranda hata satırı çıkar, önbelleğe yazılmaz (sonraki seçimde yeniden denenir)
+            self.randevu_gruplari[kod] = liste
+        return self.randevu_gruplari.get(kod, [])
 
 
     def _danisanlari_yukle(self):
@@ -530,8 +564,7 @@ class DanisanlarEkrani(QWidget):
 
     def tabloyu_guncelle(self, *_):
         onceki = (self.secili_danisan() or {}).get("danisan_kod_id")
-        liste = danisanlari_filtrele(self.danisanlar, self.psikolog_adlari, self.arama.text(),
-                                     {k: len(v) for k, v in self.randevu_gruplari.items()})
+        liste = danisanlari_filtrele(self.danisanlar, self.psikolog_adlari, self.arama.text(), self.randevu_sayilari)
 
         self.gorunen_danisanlar = list(liste)   # Excel'e aktarılan, ekranda görünen danışanlar
         self.tablo.blockSignals(True)
@@ -539,7 +572,7 @@ class DanisanlarEkrani(QWidget):
         self.tablo.setRowCount(len(liste))
         for satir, danisan in enumerate(liste):
             kod = danisan.get("danisan_kod_id")
-            randevu_sayisi = len(self.randevu_gruplari.get(kod, []))
+            randevu_sayisi = self.randevu_sayilari.get(kod, 0)
             metinler = danisan_satir_metinleri(danisan, self._psikolog_adi(danisan.get("olusturan_psikolog_id")), randevu_sayisi)
             kod_hucresi = self._hucre(metinler[0])
             kod_hucresi.setData(Qt.UserRole, danisan)
@@ -564,7 +597,7 @@ class DanisanlarEkrani(QWidget):
         liste = getattr(self, "gorunen_danisanlar", [])
         satirlar = []
         for danisan in liste:
-            sayi = len(self.randevu_gruplari.get(danisan.get("danisan_kod_id"), []))
+            sayi = self.randevu_sayilari.get(danisan.get("danisan_kod_id"), 0)
             metin = danisan_satir_metinleri(danisan, self._psikolog_adi(danisan.get("olusturan_psikolog_id")), sayi)
             satirlar.append([*metin[:4], sayi, metin[5]])
         filtre = [
@@ -599,7 +632,7 @@ class DanisanlarEkrani(QWidget):
             return
         simdi = datetime.now()
         planli_oyun = sum(
-            1 for r in self.randevu_gruplari.get(danisan.get("danisan_kod_id"), [])
+            1 for r in self._danisan_randevulari(danisan.get("danisan_kod_id"))
             if r.get("durum") == "PLANLANDI" and r.get("terapi_turu") == "OYUN_TERAPISI"
             and (randevu_zamani(r.get("baslangic_zamani")) or simdi) > simdi
         )
@@ -659,7 +692,7 @@ class DanisanlarEkrani(QWidget):
         self.bilgi_alanlari["psikolog"].setText(psikolog)
         self.bilgi_alanlari["tarih"].setText(tarih_metni(danisan.get("olusturulma_tarihi")))
 
-        randevular = self.randevu_gruplari.get(kod, [])
+        randevular = self._danisan_randevulari(kod)
         ozet = danisan_ozeti(randevular, datetime.now())
         for durum, sayi in self.ozet_sayilari.items():
             sayi.setText(str(ozet["sayilar"][durum]))

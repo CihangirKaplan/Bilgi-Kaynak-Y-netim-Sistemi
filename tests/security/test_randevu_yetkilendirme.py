@@ -191,18 +191,18 @@ def test_psikolog_tum_randevulari_goruntuleyebilir():
     # Giriş yapan kullanıcı psikolog rolünde
     mock_cursor.fetchone.return_value = ("PSIKOLOG",)
 
-    # İki farklı psikoloğa ait sahte randevular
+    # İki farklı psikoloğa ait sahte randevular (süzgeçsiz liste en yeniden başlayan sınırlı sorgudur; uç artan sıraya çevirir)
     mock_cursor.fetchall.return_value = [
-        (
-            2, "TEST-D-001", 1, 1,
-            "2031-10-16T10:00:00",
-            "2031-10-16T11:00:00",
-            "PLANLANDI",
-        ),
         (
             5, "TEST-D-002", 2, 1,
             "2031-10-16T15:00:00",
             "2031-10-16T16:00:00",
+            "PLANLANDI",
+        ),
+        (
+            2, "TEST-D-001", 1, 1,
+            "2031-10-16T10:00:00",
+            "2031-10-16T11:00:00",
             "PLANLANDI",
         ),
     ]

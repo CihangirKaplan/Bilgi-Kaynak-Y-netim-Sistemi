@@ -2530,6 +2530,11 @@ def randevulari_listele(
             parametreler.append(oda_id)
         nerede = (" WHERE " + " AND ".join(kosullar)) if kosullar else ""
 
+        # Hiçbir süzgeç ve limit verilmediyse (tüm geçmiş) liste en yeni RANDEVU_LISTE_ENCOK kayıtla sınırlanır: yıllar içinde tek istek onlarca MB
+        # olup sunucuyu ve istemciyi kilitliyordu (10 yıllık veride 47 MB, 5 sn). Kesilmişse X-Toplam-Kayit başlığı gerçek toplamı bildirir; sıra eskisi gibi artandır.
+        sinirsiz_istek = limit is None and not (baslangic or bitis or durum or danisan_kod_id or oda_id)
+        if sinirsiz_istek:
+            limit = RANDEVU_LISTE_ENCOK
         if limit is None:
             cursor.execute(
                 f"SELECT {RANDEVU_LISTE_SUTUNLARI} FROM randevular r {gelen}{nerede} ORDER BY r.baslangic_zamani;",
@@ -2547,6 +2552,8 @@ def randevulari_listele(
             )
 
         kayitlar = cursor.fetchall()
+        if sinirsiz_istek:
+            kayitlar = list(reversed(kayitlar))        # sınırlı sorgu en yeniden başlar; eski davranış gibi artan sırada döndür
 
         return [
             {
@@ -2567,6 +2574,32 @@ def randevulari_listele(
     finally:
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
+
+# Danışanlar ekranı: danışan başına toplam randevu sayısı (tüm geçmişi indirmeden). Görünürlük /api/randevular ile aynıdır: psikolog yalnızca kendi randevularının sayısını görür.
+@app.get("/api/danisan-randevu-sayilari")
+def danisan_randevu_sayilari(kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE"))):
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
+        rol = cursor.fetchone()
+        if not rol:
+            return {}
+        if psikolog_rolu_mu(str(rol[0]).lower()):
+            cursor.execute(
+                "SELECT r.danisan_kod_id, COUNT(*) FROM randevular r JOIN personel p ON p.personel_id = r.psikolog_id "
+                "WHERE p.kullanici_id = %s GROUP BY r.danisan_kod_id;", (kullanici_id,))
+        else:
+            cursor.execute("SELECT r.danisan_kod_id, COUNT(*) FROM randevular r GROUP BY r.danisan_kod_id;")
+        return {kod: int(sayi) for kod, sayi in cursor.fetchall()}
+    except psycopg2.Error:
+        raise HTTPException(status_code=500, detail="Randevu sayıları alınamadı.")
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
 
 HAFTA_SONU_MESAJI = "Hafta sonu randevu verilemez. Lütfen hafta içi bir gün seçin."
 

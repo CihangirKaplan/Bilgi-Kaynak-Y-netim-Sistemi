@@ -85,7 +85,8 @@ def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
                for yol in [yol_nesnesi.path] if "danisan" in yol.lower() for metot in yol_nesnesi.methods}
     assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari"),
                        ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/durum"),
-                       ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/bilgiler")}      # yalnızca aktif/pasif durumu
+                       ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/bilgiler"),      # yalnızca aktif/pasif durumu
+                       ("GET", "/api/danisan-randevu-sayilari")}                         # yalnızca danışan KODU -> randevu sayısı (kişisel veri yok)
 
 
 def _kod_olustur(sorgu_dizesi=""):

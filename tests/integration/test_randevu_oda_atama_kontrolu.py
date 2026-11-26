@@ -148,7 +148,8 @@ def test_psikolog_yalnizca_kendi_randevularini_gorur():
     sorgu = sorgular(cursor)[-1]
     assert "p.kullanici_id = %s" in sorgu
     assert "psikolog_odalar" not in sorgu
-    assert cursor.execute.call_args.args[1] == (11,)
+    from server.sunucu import RANDEVU_LISTE_ENCOK
+    assert cursor.execute.call_args.args[1] == (11, RANDEVU_LISTE_ENCOK, 0)          # süzgeçsiz liste sınırlıdır (LIMIT, OFFSET)
 
 
 def test_admin_tum_randevulari_gorur():
