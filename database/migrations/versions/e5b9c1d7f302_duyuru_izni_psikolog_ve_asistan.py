@@ -8,13 +8,13 @@ Not: Bu geçiş, iki rol için varsayılanı belirler; Rol & İzin Yönetimi'nde
 saklanmaz). Geri alma (downgrade) iki rol için izni yeniden kapatır.
 
 Revision ID: e5b9c1d7f302
-Revises: d4a8b6c2e913
+Revises: b3f7d9a1c452
 """
 
 from alembic import op
 
 revision = "e5b9c1d7f302"
-down_revision = "d4a8b6c2e913"
+down_revision = "b3f7d9a1c452"
 branch_labels = None
 depends_on = None
 

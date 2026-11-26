@@ -8,7 +8,7 @@ MIGRASYON = KOK / "database" / "migrations" / "versions" / "e5b9c1d7f302_duyuru_
 
 def test_migrasyon_zinciri_ve_roller():
     kaynak = MIGRASYON.read_text(encoding="utf-8")
-    assert 'revision = "e5b9c1d7f302"' in kaynak and 'down_revision = "d4a8b6c2e913"' in kaynak
+    assert 'revision = "e5b9c1d7f302"' in kaynak and 'down_revision = "b3f7d9a1c452"' in kaynak
     assert "UPPER(r.rol_adi) IN ('PSIKOLOG', 'PROJE_ASISTANI')" in kaynak and "i.izin_adi = 'DUYURU_YONET'" in kaynak
     assert "DANISMA" not in kaynak.split("def _izni_ayarla")[1]                      # Danışma Öğrencisi'ne dokunulmaz
     assert "_izni_ayarla(1)" in kaynak.split("def upgrade")[1].split("def downgrade")[0]
@@ -21,7 +21,7 @@ def test_zincirde_tek_head_vardir():
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
     kod, mesaj = modul.kontrol_et()
-    assert kod == 0 and "e5b9c1d7f302" in mesaj, mesaj
+    assert kod == 0, mesaj                       # head sabit bir değere bağlanmaz: sonraki migration'lar zinciri uzatır
 
 
 def test_istemci_yedek_maskesi_sunucu_varsayilaniyla_ayni():
