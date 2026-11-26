@@ -11,6 +11,7 @@ import requests
 from client.tablo_tasarimi import cihaz_hucresi_uygula
 from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 
+from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDateEdit, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
@@ -45,6 +46,7 @@ class RaporSayfasiTaban(QWidget):
 
     NESNE_ADI = "ayrintiliRapor"
     BASLIK = "Rapor"
+    ROZET_ACIKLAMASI = None       # doluysa süzgeç satırında "Görüntüleme sayfası" rozeti gösterilir (tıklayınca bu açıklama açılır)
     RAPOR_YOLU = ""
     DOSYA_ONEKI = "rapor"
     DONEM_VAR = True
@@ -178,6 +180,9 @@ class RaporSayfasiTaban(QWidget):
             satir.addSpacing(10)
         self.ek_suzgecleri_olustur(satir)
         satir.addStretch(1)
+        if self.ROZET_ACIKLAMASI:                         # değişiklik yapılmayan sayfa: küçük bilgi rozeti (açıklama tıklayınca açılır)
+            self.rozet = BilgiRozeti(ROZET_METNI, self.ROZET_ACIKLAMASI)
+            satir.addWidget(self.rozet)
         self.excel_btn = QPushButton("⬇ Excel'e Aktar")
         self.excel_btn.setMinimumWidth(150)
         self.excel_btn.setEnabled(False)

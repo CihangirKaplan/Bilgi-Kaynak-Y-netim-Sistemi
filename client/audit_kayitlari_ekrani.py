@@ -12,11 +12,18 @@ from PySide6.QtWidgets import (
     QMenu, QWidgetAction, QApplication, QFileDialog, QMessageBox,
     QStyledItemDelegate, QGraphicsDropShadowEffect, QStyle, QSizePolicy
 )
+from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI
 from client.liste_excel import aktarimi_denetime_yaz
 from client.sayfa_tema import (
     DurumRozetiDelegate, TABLO_STILI, VARSAYILAN_DURUM_RENGI, dialog_stili, kart_olustur, liste_sayfasi_stili, ozet_karti_olustur,
 )
 
+
+
+ROZET_ACIKLAMASI = (
+    "Burada sistemde kimin, ne zaman, ne yaptığına bakarsınız; kayıtlar değiştirilemez ve silinemez.\n"
+    "Ayrıntı için bir satıra çift tıklayın ya da Görüntüle düğmesine basın."
+)
 
 
 OLAY_ADLARI = {
@@ -325,9 +332,15 @@ class AuditKayitlariEkrani(QWidget):
         basliklar.setSpacing(3)
         sayfa_baslik = QLabel("Denetim Kayıtları")
         sayfa_baslik.setObjectName("baslik")
-        sayfa_alt = QLabel("Sistemde yapılan giriş, değişiklik ve silme işlemlerinin salt okunur geçmişi.")
+        sayfa_alt = QLabel("Sistemde yapılan giriş, değişiklik ve silme işlemlerinin geçmişi.")
         sayfa_alt.setObjectName("altBaslik")
-        basliklar.addWidget(sayfa_baslik)
+        baslik_satiri = QHBoxLayout()
+        baslik_satiri.setSpacing(10)
+        baslik_satiri.addWidget(sayfa_baslik)
+        self.rozet = BilgiRozeti(ROZET_METNI, ROZET_ACIKLAMASI)
+        baslik_satiri.addWidget(self.rozet, 0, Qt.AlignBottom)
+        baslik_satiri.addStretch()
+        basliklar.addLayout(baslik_satiri)
         basliklar.addWidget(sayfa_alt)
         ust.addLayout(basliklar, 1)
 
@@ -481,7 +494,7 @@ class AuditKayitlariEkrani(QWidget):
         self.sayac_rozeti.setObjectName("rozet")
         tablo_ust.addWidget(self.sayac_rozeti)
         tablo_ust.addStretch()
-        tablo_aciklama = QLabel("Salt okunur işlem geçmişi · ayrıntı için satıra çift tıklayın")
+        tablo_aciklama = QLabel("İşlem geçmişi · ayrıntı için satıra çift tıklayın")
         tablo_aciklama.setObjectName("altBilgi")
         tablo_ust.addWidget(tablo_aciklama)
         tablo_duzen.addLayout(tablo_ust)

@@ -14,6 +14,10 @@ class YetkiRaporuEkrani(RaporSayfasiTaban):
     RAPOR_YOLU = "/api/yetki-raporu"
     DOSYA_ONEKI = "yetki_raporu"
     DONEM_VAR = False
+    ROZET_ACIKLAMASI = (
+        "Burada kullanıcıların rollerine, son girişlerine ve rol-izin dağılımına bakarsınız; değişiklik yapılmaz.\n"
+        "Rol ve izinleri değiştirmek için Rol & İzin Yönetimi, kullanıcılar için Kullanıcı & Personel sayfasını kullanın."
+    )
     KARTLAR = [
         ("kullanici", "Kullanıcı", RaporSayfasiTaban.NAVY),
         ("kilitli", "Kilitli Hesap", "#BE185D"),
