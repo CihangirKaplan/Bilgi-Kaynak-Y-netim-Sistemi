@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **137** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **140** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -45,6 +45,14 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | POST | `/api/bakimlar` | BAKIM_KAYITLARI_YONET | bakim_kaydi_ekle |
 | DELETE | `/api/bakimlar/{bakim_id}` | BAKIM_KAYITLARI_YONET | bakim_kaydi_sil |
 | PUT | `/api/bakimlar/{bakim_id}` | BAKIM_KAYITLARI_YONET | bakim_guncelle |
+
+## /api/bildirim
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| GET | `/api/bildirim/ogrenci-saklama` | FAALIYET_KAYITLARI_DUZENLE | Zil: saklama süresi dolmuş Gönüllü öğrenci sayıları (`bekleyen`, `ertelenen`); kişisel veri içermez. |
+| GET | `/api/bildirim/sonucu-girilmemis-randevu` | RANDEVU_DUZENLE | Zil: tarihi geçmiş ama hâlâ "Planlandı" olan randevu sayısı (psikolog yalnızca kendi randevularını sayar). |
+| GET | `/api/bildirim/yedek` | AUDIT_KAYITLARI_INCELE | Zil: son yedeğin durumu (var mı, kaç saat önce, eski mi). |
 
 ## /api/bolumler
 

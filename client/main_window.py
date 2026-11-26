@@ -1197,6 +1197,11 @@ QLabel {
                     ))
                     self._bildirim_sayisi += 1
 
+        # Unutulunca bir şey kaybettiren işler: yalnızca ilgili sayfaya ve işleme yetkisi olan kullanıcı görür (hafif sayı uçları).
+        for grup, metin, hedef in self._eylem_bildirimleri(getir):
+            self._bildirimler.append((grup, metin, hedef))
+            self._bildirim_sayisi += 1
+
         # Kişisel ve genel bildirimler (HER ROL): kişinin kendi bugünkü/yarınki randevu ve cihaz rezervasyonları, yeni duyurular.
         # Sunucu uçları izin aramaz: yalnızca kişinin kendi kaydı ya da herkese açık duyuru döner.
         gunum = getir("/api/dashboard/benim-gunum")
@@ -1312,6 +1317,52 @@ QLabel {
         if dakika < 1440:
             return f"{dakika // 60} saat önce"
         return f"{dakika // 1440} gün önce"
+
+    @staticmethod
+    def _yedek_yasi_metni(saat):
+        saat = max(float(saat or 0), 0)
+        return f"{int(saat)} saat" if saat < 48 else f"{int(saat // 24)} gün"
+
+    def _eylem_bildirimleri(self, getir):
+        """Zil için (grup, metin, hedef) satırları: süresi dolan öğrenci kayıtları, sonucu girilmemiş randevular, eski yedek.
+
+        Her biri yalnızca kullanıcının ilgili sayfaya (ve randevuda düzenleme iznine) sahip olduğu durumda sorgulanır ve gösterilir.
+        Sunucu eski sürümdeyse (uç yoksa) ya da sayı 0 ise bildirim çıkmaz.
+        """
+        satirlar = []
+
+        if self._sayfa_izinli_mi("Öğrenciler"):
+            ozet = getir("/api/bildirim/ogrenci-saklama")
+            sayi = int(ozet.get("bekleyen", 0) or 0) if isinstance(ozet, dict) else 0
+            if sayi > 0:
+                satirlar.append((
+                    "Öğrenci Kayıtları",
+                    f"{sayi} gönüllü öğrencinin saklama süresi doldu",
+                    "Öğrenciler",
+                ))
+
+        if self._sayfa_izinli_mi("Randevu Yönetimi") and izin_var(self.aktif_rol, "Randevu düzenleme"):
+            ozet = getir("/api/bildirim/sonucu-girilmemis-randevu")
+            sayi = int(ozet.get("sayi", 0) or 0) if isinstance(ozet, dict) else 0
+            if sayi > 0:
+                satirlar.append((
+                    "Randevu Sonuçları",
+                    f"{sayi} randevunun sonucu girilmedi",
+                    "Randevu Yönetimi",
+                ))
+
+        if self._sayfa_izinli_mi("Sistem Durumu"):
+            yedek = getir("/api/bildirim/yedek")
+            if isinstance(yedek, dict):
+                if yedek.get("var") is False:
+                    satirlar.append(("Sistem", "Hiç yedek bulunamadı", "Sistem Durumu"))
+                elif yedek.get("eski"):
+                    satirlar.append((
+                        "Sistem",
+                        f"Son yedek {self._yedek_yasi_metni(yedek.get('gecen_saat'))} önce alındı",
+                        "Sistem Durumu",
+                    ))
+        return satirlar
 
     def _sayfa_izinli_mi(self, sayfa_adi):
         """Kullanıcının menüdeki bir sayfaya yetkisi var mı? Yetkisiz olunan sayfanın bildirimi gösterilmez.
