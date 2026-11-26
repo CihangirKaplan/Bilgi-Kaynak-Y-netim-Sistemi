@@ -286,8 +286,10 @@ def test_sunucu_ogrenci_aktiflik_bilgisini_ozet_ve_gorevlerde_dondurur(istemci):
 
 
 def test_sunucu_sorgusu_ogrenci_aktiflik_sutununu_okur_ve_pasifleri_elemez():
-    kaynak = Path(sunucu.__file__).read_text(encoding="utf-8")
-    govde = kaynak[kaynak.index("def danisma_raporlari("):kaynak.index("@app.post(\"/api/faaliyet-birimleri\")")]
+    import inspect
+
+    from server import danisma_raporlari_api                      # uç server/danisma_raporlari_api.py'ye taşındı
+    govde = inspect.getsource(danisma_raporlari_api.danisma_raporlari)
     assert "o.aktif_mi" in govde
     assert "aktif_mi = TRUE" not in govde and "aktif_mi = true" not in govde.lower().replace("o.aktif_mi,", "")
 
