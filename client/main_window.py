@@ -1212,10 +1212,16 @@ QLabel {
 
         duyurular = getir("/api/duyurular")
         if isinstance(duyurular, list):
-            for duyuru in [d for d in duyurular if d.get("yeni")][:5]:
+            # Zilde yalnızca bu kullanıcının OKUMADIĞI duyurular görünür (okundu işaretleyince kaybolur; duyuru silinmez). Her satır panelde
+            # "Okudum" düğmesi için duyuru kimliğini 4. öğe olarak taşır.
+            okunmamis = [d for d in duyurular if d.get("okundu") is False]          # alan yoksa (eski sunucu) zilde duyuru gösterilmez
+            for duyuru in okunmamis[:5]:
                 self._bildirimler.append((
-                    "Duyurular", f"{duyuru.get('baslik', 'Duyuru')}", "Ana Kontrol Paneli"
+                    "Duyurular", f"{duyuru.get('baslik', 'Duyuru')}", "Ana Kontrol Paneli", {"duyuru_id": duyuru.get("duyuru_id")}
                 ))
+                self._bildirim_sayisi += 1
+            if len(okunmamis) > 5:
+                self._bildirimler.append(("Duyurular", f"{len(okunmamis) - 5} duyuru daha var", "Ana Kontrol Paneli"))
                 self._bildirim_sayisi += 1
 
         if "Danışma Masası Yönetimi" in self.nav_btnler:
@@ -1315,6 +1321,23 @@ QLabel {
                     return oge["izin"] is None or izin_var(self.aktif_rol, oge["izin"])
         return False
 
+    def _duyuruyu_okundu_isaretle(self, duyuru_id):
+        """Zil panelinden: duyuruyu bu kullanıcı için okundu işaretler (duyuru silinmez). Başarılıysa True; ana paneldeki duyuru kutusu da yenilenir."""
+        try:
+            yanit = oturum_kontrollu_istek(
+                "POST", f"{self.api_url}/api/duyurular/{int(duyuru_id)}/okundu",
+                headers={"Authorization": f"Bearer {self.token}"}, timeout=self.BILDIRIM_ISTEK_ZAMAN_ASIMI)
+            if oturum_hatasi_mi(yanit):
+                return False
+            yanit.raise_for_status()
+        except (requests.RequestException, ValueError, TypeError):
+            return False
+        panel = getattr(self, "istatistik_paneli", None)
+        if panel is not None and hasattr(panel, "duyurulari_yenile"):
+            panel.duyurulari_yenile()
+        self._bildirimleri_yenile()
+        return True
+
     def _bildirimden_sayfaya_git(self, sayfa_adi):
         """Bildirimin ilgili oldugu mevcut modulu acar."""
         btn = self.nav_btnler.get(sayfa_adi)
@@ -1355,6 +1378,7 @@ QLabel {
             toplam=self._bildirim_sayisi,
             hata=self._bildirim_hata,
             sayfa_ac=self._bildirimden_sayfaya_git,
+            duyuru_okundu=self._duyuruyu_okundu_isaretle,
             parent=self
         )
 
@@ -2343,6 +2367,7 @@ QLabel {
             kart_ac=self._karttan_sayfaya_git,
             parola_talepleri_goster=self._parola_talepleri_gorebilir_mi(),
         )
+        self.istatistik_paneli.duyuru_degisti.connect(self._bildirimleri_yenile)         # panelde duyuru okundu/yayınlandı: zil sayısı güncellensin
         lay.addWidget(self.istatistik_paneli)
 
         baslik = QLabel("Hızlı Erişim")

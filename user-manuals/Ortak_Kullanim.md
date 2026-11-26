@@ -55,7 +55,9 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   gösterilmez) listelenir. Bu bölümler yalnızca bilgi verir; etkinlik eklemek ya da cihaz rezervasyonu yapmak için ilgili sayfanın izni gerekir.
   - **Bugün | Yarın | Bu hafta (7 gün):** Randevu, cihaz rezervasyonu ve oda etkinliği panelleri seçtiğiniz güne göre değişir. Üstteki özet kartları her zaman **bugünü** sayar.
   - **🙋 Benim Günüm:** Size ait bugünkü ve yarınki randevular ile cihaz rezervasyonları (yalnızca kendi kayıtlarınız). Kaydınız yoksa bu kutu görünmez.
-  - **📢 Duyurular:** Kurum içi duyurular **herkesin** panelinde görünür (yeni olanlar 🆕 ile). **Duyuru yönetme** izni olanlar (varsayılan: Danışma Öğrencisi dışında herkes)
+  - **📢 Duyurular:** Kurum içi duyurular **herkesin** panelinde görünür. Okumadıklarınız 🆕 ile en üstte durur; her duyurunun yanındaki **Okudum** düğmesi duyuruyu
+    **yalnızca sizin için** gizler (duyuru silinmez, diğer kullanıcılarda yayında kalır). Birden fazla okunmamış varsa **Hepsini okudum** çıkar. Gizlediklerinize
+    **Okunan duyurular** bölümünden ulaşır, **Tekrar göster** ile yeniden öne çıkarabilirsiniz. **Duyuru yönetme** izni olanlar (varsayılan: Danışma Öğrencisi dışında herkes)
     **＋ Yeni duyuru** ile yayınlar, isteğe bağlı son geçerlilik tarihi verir (tarih geçince kendiliğinden kalkar) ve **Kaldır** ile siler. Duyuruya kişisel bilgi
     (danışan adı, telefon vb.) yazmayın; duyuruyu kimin yazdığı yalnızca duyuru yönetenlere gösterilir.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
@@ -95,7 +97,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
 - İşlem başarılı olunca ekranın altında kısa süre **yeşil bir bildirim** görünür ve kendiliğinden kaybolur; tıklamanız gerekmez.
 - **Uyarı ve hata** pencereleri ise okumanız gerektiği için pencere olarak kalır; mesajı okuyup **Tamam**'a basın.
 - Üst çubuktaki **🔔** bildirimleri listeler. Bildirime tıklamak sizi ilgili sayfaya götürür. Herkes için: **🙋 Benim günüm** (bugünkü/yarınki randevu ve
-  cihaz rezervasyonlarınızın sayısı) ve son 3 günde yayınlanan **📢 duyurular**. Yetkinize göre ayrıca: bekleyen danışma görevi onayları, parola talepleri,
+  cihaz rezervasyonlarınızın sayısı) ve **okumadığınız duyurular** (satırın yanındaki **Okudum** düğmesiyle zilden de okundu işaretleyebilirsiniz; işaretlediğiniz duyuru zilde ve ana panelde sizin için gizlenir). Yetkinize göre ayrıca: bekleyen danışma görevi onayları, parola talepleri,
   açık arızalar, yaklaşan/geciken bakım ve kalibrasyonlar (yetkiniz olmayan sayfanın bildirimi gösterilmez).
 
 ## 6. Hakkında / Yardım

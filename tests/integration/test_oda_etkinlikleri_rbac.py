@@ -318,3 +318,43 @@ def test_psikolog_duyuru_yayinlar_ve_kaldirir_gercek_sql():
     finally:
         temizle()
         izinsiz_temizle()
+
+
+def test_duyuru_okundu_kullanici_basina_gizler_silmez_gercek_sql():
+    """Okundu işareti yalnızca işaretleyen kullanıcının listesini etkiler; duyuru silinmez, başkasında yayında kalır; geri alınabilir."""
+    yazan_id, _ad, yazan_temizle = _mevcut_kullanici("ADMIN")
+    okuyan_id, _ad2, okuyan_temizle = _mevcut_kullanici("PSIKOLOG")
+    kimlik = None
+    try:
+        kimlik = istek_yap(yazan_id, "POST", "/api/duyurular", json={"baslik": "Okundu denemesi", "metin": "Metin"}).json()["duyuru_id"]
+
+        def okundu(kullanici):
+            return {d["duyuru_id"]: d["okundu"] for d in istek_yap(kullanici, "GET", "/api/duyurular").json()}[kimlik]
+
+        assert okundu(okuyan_id) is False and okundu(yazan_id) is False
+        assert istek_yap(okuyan_id, "POST", f"/api/duyurular/{kimlik}/okundu").status_code == 200
+        assert istek_yap(okuyan_id, "POST", f"/api/duyurular/{kimlik}/okundu").status_code == 200       # tekrar işaretlemek hata vermez
+        assert okundu(okuyan_id) is True and okundu(yazan_id) is False                                   # başkasını etkilemez; duyuru listede KALIR
+        assert istek_yap(okuyan_id, "DELETE", f"/api/duyurular/{kimlik}/okundu").status_code == 200
+        assert okundu(okuyan_id) is False                                                                # geri alındı
+        assert istek_yap(okuyan_id, "POST", "/api/duyurular/okundu").status_code == 200                  # hepsini okundu işaretle
+        assert okundu(okuyan_id) is True and okundu(yazan_id) is False
+        assert istek_yap(okuyan_id, "POST", "/api/duyurular/99999999/okundu").status_code == 404
+
+        conn = psycopg2.connect(**VT_AYARLARI)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM duyuru_okundu WHERE duyuru_id = %s", (kimlik,))
+            assert cursor.fetchone()[0] == 1
+        conn.close()
+        assert istek_yap(yazan_id, "DELETE", f"/api/duyurular/{kimlik}").status_code == 200              # duyuru kaldırılınca okundu kayıtları temizlenir
+        conn = psycopg2.connect(**VT_AYARLARI)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM duyuru_okundu WHERE duyuru_id = %s", (kimlik,))
+            assert cursor.fetchone()[0] == 0
+        conn.close()
+        kimlik = None
+    finally:
+        if kimlik is not None:
+            istek_yap(yazan_id, "DELETE", f"/api/duyurular/{kimlik}")
+        yazan_temizle()
+        okuyan_temizle()

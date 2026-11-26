@@ -5,11 +5,12 @@ from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu
 from client.ikon_kutusu import renkli_ikon_pixmap, ikon_pixmap
 from client.bildirim_ikonlari import cizgi_ikonu, ikon_boyutu
 from client.api_yoneticisi import (
+    istek_hatasi_metni,
     oturum_kontrollu_istek,
     oturum_hatasi_mi,
 )
 from client.duyuru_diyaloglari import DuyuruDiyalogu, duyuru_kaldir
-from PySide6.QtWidgets import (QDialog, QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
+from PySide6.QtWidgets import (QDialog, QMessageBox, QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QGridLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
                                QSizePolicy)
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -182,6 +183,8 @@ class DashboardEkrani(QWidget):
     Bugünkü randevu listesi her rolde gösterilir.
     """
 
+    duyuru_degisti = Signal()           # duyuru yayınlandı/kaldırıldı/okundu işaretlendi: ana pencere zil sayısını yeniler
+
     def __init__(self, api_url, token, cihaz_ozeti=True, sayfa_ac=None, sayfa_izinli_mi=None,
                  parola_talepleri_goster=False, kart_ac=None, rezervasyon_paneli=False, etkinlik_paneli=False,
                  duyuru_yonetebilir=False):
@@ -226,6 +229,7 @@ class DashboardEkrani(QWidget):
 
         # ---- 1b. DUYURULAR (herkes okur) ve BENİM GÜNÜM (yalnızca kişinin kendi kaydı varsa görünür) ----
         self.duyurular = []
+        self._okunanlar_acik = False                # "Okunan duyurular" bölümü açık mı (yenilemelerde korunur)
         self.benim_gunum = {}
         self.panel_duyuru = QFrame()
         self.panel_duyuru.setObjectName("kart")
@@ -654,16 +658,76 @@ class DashboardEkrani(QWidget):
         self.duyurular = duyurular
         self._duyurulari_ciz()
 
+    DUGME_STILI = ("QPushButton { background: %s; color: %s; border: none; border-radius: 8px; "
+                   "font-size: 11px; font-weight: 700; padding: 4px 10px; } QPushButton:hover { background: %s; }")
+
+    def _duyuru_dugmesi(self, metin, ad, duyuru_id, renkler, yuva):
+        dugme = QPushButton(metin)
+        dugme.setObjectName(ad)
+        dugme.setProperty("duyuru_id", duyuru_id)
+        dugme.setCursor(Qt.PointingHandCursor)
+        dugme.setStyleSheet(self.DUGME_STILI % renkler)
+        dugme.clicked.connect(yuva)                                   # lambda KULLANILMAZ (panelle döngü kurar); düğme kimliği özellikten okunur
+        return dugme
+
+    def _duyuru_karti(self, d, okundu):
+        """Tek duyuru kartı. Okunmamış: "Okudum" düğmesi; okunmuş (sönük): "Tekrar göster". Yetkili kişide ayrıca "Kaldır" (herkesten siler)."""
+        kutu = QFrame()
+        kutu.setObjectName("duyuruSatiri")
+        kutu.setStyleSheet("QFrame#duyuruSatiri { background: %s; border-radius: 10px; }" % ("#F8FAFC" if okundu else "#F3F7FF"))
+        lay = QVBoxLayout(kutu)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(3)
+        ust_satir = QHBoxLayout()
+        ad = QLabel(("🆕 " if not okundu else "") + str(d.get("baslik", "")))
+        ad.setStyleSheet("font-size: 14px; font-weight: 800; color: %s;" % ("#64748B" if okundu else "#0A1F5C"))
+        ad.setWordWrap(True)
+        ust_satir.addWidget(ad, 1)
+        kimlik = d.get("duyuru_id")
+        if "okundu" not in d:
+            pass                                                        # eski sunucu: okundu işareti desteklenmez, düğme gösterilmez
+        elif okundu:
+            ust_satir.addWidget(self._duyuru_dugmesi("Tekrar göster", "tekrarGosterDugmesi", kimlik, ("#E2E8F0", "#334155", "#CBD5E1"),
+                                                     self._duyuru_geri_al_tiklandi), 0)
+        else:
+            ust_satir.addWidget(self._duyuru_dugmesi("Okudum", "okunduDugmesi", kimlik, ("#DCFCE7", "#166534", "#BBF7D0"),
+                                                     self._duyuru_okundu_tiklandi), 0)
+        if self.duyuru_yonetebilir and d.get("yonetebilir"):
+            ust_satir.addWidget(self._duyuru_dugmesi("Kaldır", "kaldirDugmesi", kimlik, ("#FEE2E2", "#991B1B", "#FECACA"),
+                                                     self._duyuru_kaldir_tiklandi), 0)
+        lay.addLayout(ust_satir)
+        metin = QLabel(str(d.get("metin", "")))
+        metin.setWordWrap(True)
+        metin.setStyleSheet("font-size: 13px; color: %s;" % ("#64748B" if okundu else "#0F2552"))
+        lay.addWidget(metin)
+        ayrinti = d.get("tarih", "")
+        if d.get("yazan"):
+            ayrinti += f"  ·  {d['yazan']}"
+        if d.get("son_gecerlilik"):
+            ayrinti += f"  ·  {d['son_gecerlilik']} tarihine kadar"
+        alt = QLabel(ayrinti)
+        alt.setStyleSheet("font-size: 11px; color: #6B7FA8;")
+        lay.addWidget(alt)
+        return kutu
+
     def _duyurulari_ciz(self):
+        """Okunmamış duyurular üstte; okunanlar "Okunan duyurular" düğmesinin arkasında gizli (silinmez, istenirse yeniden gösterilir)."""
         self._kutuyu_bosalt(self.duyuru_lay)
-        # Yönetebilen kişi duyuru yoksa da "Yeni duyuru" düğmesine ulaşabilsin diye panel onda hep görünür.
+        okunmamis = [d for d in self.duyurular if not d.get("okundu")]          # "okundu" alanı yoksa (eski sunucu) hepsi okunmamış sayılır
+        okunan = [d for d in self.duyurular if d.get("okundu")]
+        # Yönetebilen kişi duyuru yoksa da "Yeni duyuru" düğmesine ulaşabilsin diye panel onda hep görünür; okuyan kişide hepsi okunduysa da
+        # (okunanları geri getirebilsin diye) görünür.
         self.panel_duyuru.setVisible(bool(self.duyurular) or self.duyuru_yonetebilir)
 
         ust = QHBoxLayout()
-        baslik = QLabel("📢  Duyurular")
+        baslik = QLabel("📢  Duyurular" + (f"  ({len(okunmamis)} yeni)" if okunmamis else ""))
+        baslik.setObjectName("duyuruBasligi")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         ust.addWidget(baslik)
         ust.addStretch()
+        if len(okunmamis) > 1 and all("okundu" in d for d in okunmamis):
+            ust.addWidget(self._duyuru_dugmesi("Hepsini okudum", "hepsiniOkuduDugmesi", None, ("#DCFCE7", "#166534", "#BBF7D0"),
+                                               self._tumunu_okundu_tiklandi))
         if self.duyuru_yonetebilir:
             yeni = QPushButton("＋ Yeni duyuru")
             yeni.setObjectName("yeniDuyuruDugmesi")
@@ -683,49 +747,74 @@ class DashboardEkrani(QWidget):
             self.duyuru_lay.addWidget(bos)
             return
 
-        for d in self.duyurular:
-            kutu = QFrame()
-            kutu.setObjectName("duyuruSatiri")
-            kutu.setStyleSheet("QFrame#duyuruSatiri { background: #F3F7FF; border-radius: 10px; }")
-            lay = QVBoxLayout(kutu)
-            lay.setContentsMargins(14, 10, 14, 10)
-            lay.setSpacing(3)
-            ust_satir = QHBoxLayout()
-            ad = QLabel(("🆕 " if d.get("yeni") else "") + str(d.get("baslik", "")))
-            ad.setStyleSheet("font-size: 14px; font-weight: 800; color: #0A1F5C;")
-            ad.setWordWrap(True)
-            ust_satir.addWidget(ad, 1)
-            if self.duyuru_yonetebilir and d.get("yonetebilir"):
-                kaldir = QPushButton("Kaldır")
-                kaldir.setProperty("duyuru_id", d.get("duyuru_id"))
-                kaldir.setCursor(Qt.PointingHandCursor)
-                kaldir.setStyleSheet("QPushButton { background: #FEE2E2; color: #991B1B; border: none; border-radius: 8px; "
-                                     "font-size: 11px; font-weight: 700; padding: 4px 10px; }")
-                kaldir.clicked.connect(self._duyuru_kaldir_tiklandi)
-                ust_satir.addWidget(kaldir, 0)
-            lay.addLayout(ust_satir)
-            metin = QLabel(str(d.get("metin", "")))
-            metin.setWordWrap(True)
-            metin.setStyleSheet("font-size: 13px; color: #0F2552;")
-            lay.addWidget(metin)
-            ayrinti = d.get("tarih", "")
-            if d.get("yazan"):
-                ayrinti += f"  ·  {d['yazan']}"
-            if d.get("son_gecerlilik"):
-                ayrinti += f"  ·  {d['son_gecerlilik']} tarihine kadar"
-            alt = QLabel(ayrinti)
-            alt.setStyleSheet("font-size: 11px; color: #6B7FA8;")
-            lay.addWidget(alt)
-            self.duyuru_lay.addWidget(kutu)
+        for d in okunmamis:
+            self.duyuru_lay.addWidget(self._duyuru_karti(d, okundu=False))
+        if not okunmamis:
+            tamam = QLabel("✅  Tüm duyuruları okudunuz.")
+            tamam.setObjectName("duyuruHepsiOkundu")
+            tamam.setStyleSheet("background: #DCFCE7; color: #166534; border-radius: 10px; font-size: 13px; font-weight: 600; padding: 10px 14px;")
+            self.duyuru_lay.addWidget(tamam)
+
+        if okunan:
+            dugme = QPushButton(f"{'▴' if self._okunanlar_acik else '▾'}  Okunan duyurular ({len(okunan)})")
+            dugme.setObjectName("okunanlariGosterDugmesi")
+            dugme.setCursor(Qt.PointingHandCursor)
+            dugme.setStyleSheet("QPushButton { background: transparent; color: #3B5BA9; border: none; font-size: 12px; font-weight: 700; "
+                                "text-align: left; padding: 4px 2px; } QPushButton:hover { color: #1D4ED8; }")
+            dugme.clicked.connect(self._okunanlari_degistir)
+            self.duyuru_lay.addWidget(dugme)
+            if self._okunanlar_acik:
+                for d in okunan:
+                    self.duyuru_lay.addWidget(self._duyuru_karti(d, okundu=True))
+
+    def _okunanlari_degistir(self):
+        self._okunanlar_acik = not self._okunanlar_acik
+        self._duyurulari_ciz()
+
+    def duyurulari_yenile(self):
+        """Dışarıdan (örn. zil panelinde okundu işaretlenince) duyuru kutusunu sunucudan yeniden yükler."""
+        self._duyurulari_yukle()
+
+    def _okundu_istegi(self, yontem, yol):
+        """Okundu işareti isteği; başarısızsa kullanıcıya uyarı gösterilir. Başarılıysa True."""
+        try:
+            yanit = oturum_kontrollu_istek(yontem, f"{self.api_url}{yol}", headers=self.basliklar, timeout=10)
+            if oturum_hatasi_mi(yanit):
+                return False
+            yanit.raise_for_status()
+            return True
+        except Exception as hata:
+            logger.warning("Duyuru okundu işareti başarısız: %s", hata)
+            QMessageBox.warning(self, "İşlem yapılamadı", istek_hatasi_metni(hata, "Duyuru işaretlenemedi."))
+            return False
+
+    def _duyuru_okundu_tiklandi(self):
+        kimlik = self.sender().property("duyuru_id") if self.sender() is not None else None
+        if kimlik is not None and self._okundu_istegi("POST", f"/api/duyurular/{int(kimlik)}/okundu"):
+            self._duyurulari_yukle()
+            self.duyuru_degisti.emit()                                   # zil sayısı güncellensin
+
+    def _duyuru_geri_al_tiklandi(self):
+        kimlik = self.sender().property("duyuru_id") if self.sender() is not None else None
+        if kimlik is not None and self._okundu_istegi("DELETE", f"/api/duyurular/{int(kimlik)}/okundu"):
+            self._duyurulari_yukle()
+            self.duyuru_degisti.emit()
+
+    def _tumunu_okundu_tiklandi(self):
+        if self._okundu_istegi("POST", "/api/duyurular/okundu"):
+            self._duyurulari_yukle()
+            self.duyuru_degisti.emit()
 
     def _yeni_duyuru(self):
         if DuyuruDiyalogu(self.api_url, self.token, self).exec() == QDialog.Accepted:
             self._duyurulari_yukle()
+            self.duyuru_degisti.emit()
 
     def _duyuru_kaldir_tiklandi(self):
         duyuru_id = self.sender().property("duyuru_id") if self.sender() is not None else None
         if duyuru_id is not None and duyuru_kaldir(self.api_url, self.token, duyuru_id, self):
             self._duyurulari_yukle()
+            self.duyuru_degisti.emit()
 
     def _benim_gunumu_yukle(self):
         try:

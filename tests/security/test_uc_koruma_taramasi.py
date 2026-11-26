@@ -43,6 +43,9 @@ ISTISNALAR = {
     ("GET", "/api/dashboard/benim-gunum"): "Ana panel: yalnızca giriş yapan kişinin KENDİ bugünkü/yarınki randevu ve cihaz rezervasyonları; başkasının kaydı dönmez, izin gerektirmez.",
     ("GET", "/api/duyurular"): "Kurum içi duyuruları giriş yapmış herkes okur; yazan kişinin adı yalnızca DUYURU_YONET sahibine gösterilir "
                                "(yayınlama ve kaldırma DUYURU_YONET ister).",
+    ("POST", "/api/duyurular/okundu"): "Çağıranın KENDİ okundu bilgisini değiştirir (duyuru silinmez, başkalarını etkilemez); yalnızca token yeterli.",
+    ("POST", "/api/duyurular/{duyuru_id}/okundu"): "Çağıranın KENDİ okundu bilgisini değiştirir (duyuru silinmez, başkalarını etkilemez); yalnızca token yeterli.",
+    ("DELETE", "/api/duyurular/{duyuru_id}/okundu"): "Çağıranın KENDİ okundu işaretini kaldırır; yalnızca token yeterli.",
     ("GET", "/api/surum"): "Hakkında penceresi için sürüm bilgisi; giriş yapmış herkes görebilir, kişisel veri ve ayar döndürmez.",
     ("POST", "/api/liste-aktarim-kaydi"): "JWT ile kimlik doğrulanır; kaydı yazmadan önce listenin kendi görüntüleme izni "
                                            "(LISTE_AKTARIM_HEDEFLERI) sunucuda denetlenir, izin yoksa 403 döner.",
