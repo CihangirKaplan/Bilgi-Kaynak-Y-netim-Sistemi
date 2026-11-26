@@ -6,6 +6,7 @@ dosya yolu içermez.
 from datetime import datetime
 
 import requests
+from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from client.api_yoneticisi import istek_hatasi_metni, api_hata_mesaji, oturum_hatasi_mi, oturum_kontrollu_istek
@@ -14,6 +15,10 @@ from client.surum import SURUM
 
 IYI, UYARI, KOTU = ("#166534", "#DCFCE7"), ("#854D0E", "#FEF3C7"), ("#991B1B", "#FEE2E2")
 ALT_BASLIK = "Sürüm, veritabanı şeması, son yedek ve son girişler"
+ROZET_ACIKLAMASI = (
+    "Burada sunucu sürümüne, veritabanı şemasına, son yedeğe ve son girişlere bakarsınız; değişiklik yapılmaz.\n"
+    "Bir sorun görürseniz sistem sorumlusuna bildirin."
+)
 
 
 def zaman_metni(deger):
@@ -69,7 +74,13 @@ class SistemDurumuEkrani(QWidget):
         baslik.setStyleSheet("font-size: 18px; font-weight: 800; color: #0A1F5C;")
         self.alt_baslik = QLabel(ALT_BASLIK)
         self.alt_baslik.setStyleSheet("font-size: 12px; color: #6B7FA8;")
-        metinler.addWidget(baslik)
+        baslik_satiri = QHBoxLayout()
+        baslik_satiri.setSpacing(10)
+        baslik_satiri.addWidget(baslik)
+        self.rozet = BilgiRozeti(ROZET_METNI, ROZET_ACIKLAMASI)
+        baslik_satiri.addWidget(self.rozet)
+        baslik_satiri.addStretch()
+        metinler.addLayout(baslik_satiri)
         metinler.addWidget(self.alt_baslik)
         ust.addLayout(metinler)
         ust.addStretch()

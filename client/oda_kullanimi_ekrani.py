@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 import requests
 from client.api_yoneticisi import istek_hatasi_metni, oturum_hatasi_mi, oturum_kontrollu_istek
 from client.randevu_ekranlari import DURUM_ETIKETLERI, DURUM_RENKLERI
+from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI, TiklaninceAciklayanKutu
 from client.siniflandirma import gorusme_etiketi
 
 from PySide6.QtCore import Qt
@@ -235,6 +236,18 @@ def baslik_yuksekligi(basliklar):
 
 
 # ------------------------------------------------------------------ arayüz
+TAKIP_ACIKLAMASI = (
+    "Burada oda doluluğuna, randevulara, cihaz rezervasyonlarına ve oda etkinliklerine bakabilirsiniz; kayıt eklenmez ya da değiştirilmez.\n"
+    "İşlem yapmak için Randevu Yönetimi, Cihaz Rezervasyonu ya da Oda Etkinlikleri sayfasına gidin."
+)
+
+BLOK_ACIKLAMALARI = {
+    "randevu": "Randevuyu düzenlemek için Randevu Yönetimi sayfasına gidin.",
+    "cihaz": "Rezervasyonu düzenlemek için Cihaz Rezervasyonu sayfasına gidin.",
+    "etkinlik": "Etkinliği düzenlemek için Oda Etkinlikleri sayfasına gidin.",
+}
+
+
 class OdaKullanimiEkrani(QWidget):
     NAVY = "#16294B"
     SATIR_YUKSEKLIGI = 44
@@ -311,6 +324,9 @@ class OdaKullanimiEkrani(QWidget):
         ust.addWidget(self.btn_geri)
         ust.addWidget(self.btn_ileri)
         ust.addWidget(self.lbl_baslik)
+        # Bu sayfadan kayıt eklenmez/değiştirilmez: küçük bir rozetle belirtilir, ayrıntı ipucundadır (sayfa kalabalıklaşmasın).
+        self.takip_rozeti = BilgiRozeti(ROZET_METNI, TAKIP_ACIKLAMASI)
+        ust.addWidget(self.takip_rozeti)
         ust.addStretch(1)
         self.etiket_oda = QLabel("Oda:")
         self.oda_sec = QComboBox()
@@ -603,7 +619,7 @@ class OdaKullanimiEkrani(QWidget):
         bg, fg = CIHAZ_RENK if cihaz else (GIZLI_RENK if gizli else DURUM_RENKLERI.get(r.get("durum"), DURUM_RENKLERI["PLANLANDI"]))
         if etkinlik:
             bg, fg = ETKINLIK_RENK
-        kutu = QFrame()
+        kutu = TiklaninceAciklayanKutu(BLOK_ACIKLAMALARI["etkinlik" if etkinlik else "cihaz" if cihaz else "randevu"])
         kutu.setObjectName("blok")
         kutu.setStyleSheet(f"QFrame#blok {{ background: {bg}; border-left: 4px solid {fg}; border-radius: 6px; }} QLabel {{ background: transparent; border: none; }}")
         yerlesim = QVBoxLayout(kutu)

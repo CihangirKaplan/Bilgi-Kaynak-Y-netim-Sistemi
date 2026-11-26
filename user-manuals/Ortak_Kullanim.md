@@ -61,6 +61,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
     **＋ Yeni duyuru** ile yayınlar, isteğe bağlı son geçerlilik tarihi verir (tarih geçince kendiliğinden kalkar) ve **Kaldır** ile siler. Duyuruya kişisel bilgi
     (danışan adı, telefon vb.) yazmayın; duyuruyu kimin yazdığı yalnızca duyuru yönetenlere gösterilir.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.
+- **Görüntüleme sayfası rozeti:** Sayfa başlığının yanında göz simgeli küçük bir **Görüntüleme sayfası** rozeti görürseniz o sayfa yalnızca bakmak içindir (Oda Kullanımı, Cihaz Uygunluğu, Denetim Kayıtları, Yetki Raporu, Sistem Durumu); buradan kayıt eklenmez ya da değiştirilmez. Rozete tıklayın: açılan küçük kutuda işlemi hangi sayfadan yapacağınız yazar. Oda Kullanımı takviminde bir randevu, rezervasyon ya da etkinlik kutusuna tıklayınca da onu hangi sayfadan düzenleyeceğiniz yazar.
 
 ## 3. Listelerle çalışmak
 

@@ -17,12 +17,18 @@ from PySide6.QtWidgets import (QComboBox, QDateEdit, QDialog, QFrame, QHBoxLayou
                                QLineEdit, QPushButton, QStyledItemDelegate, QTableWidgetItem, QVBoxLayout, QWidget)
 
 import client.cihaz_uygunluk_mantigi as mantik
+from client.bilgi_rozeti import BilgiRozeti, ROZET_METNI
 from client.api_yoneticisi import oturum_hatasi_mi, oturum_kontrollu_istek
 from client.cihaz_rezervasyon_ekranlari import varsayilan_rezervasyon_zamanlari
 from client.tablo_tasarimi import (cihaz_hucresi_uygula, FORM_STIL, bos_mesaj_olustur, sayfa_basligi, sayi_cipi, tablo_olustur,
                             yenile_butonu_olustur)
 
 logger = logging.getLogger(__name__)
+
+UYGUNLUK_ACIKLAMASI = (
+    "Burada cihazların hangi gün ve saatte müsait olduğuna bakarsınız. Bir güne tıklayınca saat çizelgesi ve nedenleri açılır.\n"
+    "Rezervasyon yapmak istediğinizde açılan penceredeki \"Rezervasyon yap\" düğmesini kullanın."
+)
 
 # durum kodu -> (yazı rengi, arka plan)
 RENKLER = {
@@ -350,7 +356,8 @@ class CihazUygunlukEkrani(QWidget):
         ana.addWidget(sayfa_basligi(
             "Cihaz Uygunluğu", "Cihazların haftalık durumu: rezervasyon, bakım, kalibrasyon ve arıza",
             self.arama, yenile_butonu_olustur(self.verileri_yukle),
-            [self.cip_musait, self.cip_dolu, self.cip_bakim, self.cip_kalibrasyon, self.cip_ariza, self.cip_kdisi]))
+            [self.cip_musait, self.cip_dolu, self.cip_bakim, self.cip_kalibrasyon, self.cip_ariza, self.cip_kdisi],
+            rozet=BilgiRozeti(ROZET_METNI, UYGUNLUK_ACIKLAMASI)))
 
         # --- hafta gezintisi ve filtre
         gezinti = QFrame()

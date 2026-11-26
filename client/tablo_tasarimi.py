@@ -409,8 +409,8 @@ def hatirlatma_metni(gun):
     return "Geldiği gün" if gun == 0 else f"{gun} gün kala"
 
 
-def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler, ek_butonlar=()):
-    """Ekranın üstündeki beyaz araç çubuğu kartı."""
+def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler, ek_butonlar=(), rozet=None):
+    """Ekranın üstündeki beyaz araç çubuğu kartı. `rozet`: başlığın yanında duran küçük bilgi rozeti (örn. BilgiRozeti)."""
     kart = QFrame()
     kart.setObjectName("kart")
     ana = QVBoxLayout(kart)
@@ -424,7 +424,15 @@ def sayfa_basligi(baslik, alt_baslik, arama_kutusu, yenile_butonu, cipler, ek_bu
     b.setStyleSheet("font-size: 18px; font-weight: 800; color: #0A1F5C;")
     a = QLabel(alt_baslik)
     a.setStyleSheet("font-size: 12px; color: #6B7FA8;")
-    metinler.addWidget(b)
+    if rozet is None:
+        metinler.addWidget(b)
+    else:
+        baslik_satiri = QHBoxLayout()
+        baslik_satiri.setSpacing(10)
+        baslik_satiri.addWidget(b)
+        baslik_satiri.addWidget(rozet)
+        baslik_satiri.addStretch()
+        metinler.addLayout(baslik_satiri)
     metinler.addWidget(a)
     ust.addLayout(metinler)
     ust.addStretch()
