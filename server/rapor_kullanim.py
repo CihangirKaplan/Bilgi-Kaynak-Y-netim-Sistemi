@@ -261,7 +261,7 @@ def yetki_raporu(cursor, rol_id: int | None = None, durum: str | None = None, ma
     cursor.execute(f"""
         SELECT k.kullanici_id, k.kullanici_adi, r.rol_adi, k.aktif_mi, p.personel_kodu,
                (SELECT MAX(d.olusturulma_tarihi) FROM denetim_kayitlari d
-                 WHERE d.kullanici_id = k.kullanici_id AND d.olay_turu::text = 'LOGIN'),
+                 WHERE d.kullanici_id = k.kullanici_id AND d.olay_turu = 'LOGIN'),       -- ::text dönüşümü YOK: kısmi indeks (ix_denetim_login_kullanici_tarih) kullanılsın
                k.basarisiz_giris_sayisi, (k.kilit_bitis_zamani IS NOT NULL AND k.kilit_bitis_zamani > NOW()),
                COALESCE(k.ilk_giris_mi, FALSE)
         FROM kullanicilar k

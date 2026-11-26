@@ -105,6 +105,10 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 - Sistem Durumu sayfası (sürüm, şema, son yedek); veritabanı şeması uyumsuzsa anlaşılır uyarı ve doğrulama aracı.
 - İlk yönetici oluşturma, kısıtlı veritabanı kullanıcısı ve personel/kullanıcı geçiş araçları.
 
+### Performans ve ölçeklenme
+
+- Yetki Raporu'nun "son giriş" sorgusu için denetim tablosunda kısmi indeks (`ix_denetim_login_kullanici_tarih`); 1 milyon denetim kaydında rapor 3,5 sn → 50 ms. Yeni migration: `d4a8b6c2e913` (`alembic upgrade head`).
+
 ### Test ve kalite
 
 - Birim, entegrasyon, kabul ve güvenlik testleri (SEC-T01 … SEC-T15); gerçek PostgreSQL testleri; GitHub Actions'ta her PR'da.
