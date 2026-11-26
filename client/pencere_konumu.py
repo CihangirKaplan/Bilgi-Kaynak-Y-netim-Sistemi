@@ -40,7 +40,20 @@ class _Ortalayici(QObject):
         if olay.type() == QEvent.Show and isinstance(nesne, QWidget) and nesne.isWindow():
             if self.ortala(nesne):
                 QTimer.singleShot(0, lambda n=nesne: self._gecikmeli(n))   # çerçeve boyutu kesinleşince düzelt
+        elif olay.type() == QEvent.Resize and isinstance(nesne, QWidget) and nesne.isWindow() and nesne.isVisible():
+            # Pencere açıldıktan sonra içeriği değişip büyürse (ör. rol seçilince yetki özeti açılır) ekranın altına taşmasın.
+            if nesne.property("tkys_ortalandi") and not nesne.property("tkys_ortalama_bekliyor"):
+                nesne.setProperty("tkys_ortalama_bekliyor", True)
+                QTimer.singleShot(0, lambda n=nesne: self._boyut_degisti(n))
         return False
+
+    def _boyut_degisti(self, pencere):
+        try:
+            pencere.setProperty("tkys_ortalama_bekliyor", False)
+            if pencere.isVisible():
+                self.ortala(pencere)
+        except RuntimeError:
+            pass
 
     def _gecikmeli(self, pencere):
         try:
@@ -70,6 +83,7 @@ class _Ortalayici(QObject):
                 sol = max(a.left(), min(sol, a.right() - cerceve.width() + 1))
                 ust = max(a.top(), min(ust, a.bottom() - cerceve.height() + 1))
             pencere.move(QPoint(sol, ust))
+            pencere.setProperty("tkys_ortalandi", True)
             return True
         except RuntimeError:
             return False
