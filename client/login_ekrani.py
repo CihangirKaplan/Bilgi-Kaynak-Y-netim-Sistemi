@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPixmap
 from client.main_window import AnaPencere, dinamik_rol_tanimla
-from client.sayfa_tema import ACILIR_OK_STILI
+from client.sayfa_tema import ACILIR_OK_STILI, KAYDIRMA_CUBUGU_STILI
 from client.sifre_degistir_ekrani import SifreDegistirEkrani
 from client.parola_talebi_dialog import ParolaTalebiDialog
 from client.istemci_gunlugu import GUNLUK_DOSYASI, gunlugu_kur
@@ -609,7 +609,7 @@ if __name__ == "__main__":
     if not turkce_ceviriyi_yukle(app):
         logger.warning("Qt Türkçe çevirisi yüklenemedi.")
     app.setStyle("Fusion")
-    app.setStyleSheet(ACILIR_OK_STILI)      # uygulama genelinde: ana pencereye bağlı olmayan pencereler dahil tüm açılır kutularda aşağı ok
+    app.setStyleSheet(ACILIR_OK_STILI + KAYDIRMA_CUBUGU_STILI)      # uygulama genelinde: ana pencereye bağlı olmayan pencereler dahil tüm açılır kutularda aşağı ok
     pencere = LoginEkrani()
     pencere.show()
     sys.exit(app.exec())

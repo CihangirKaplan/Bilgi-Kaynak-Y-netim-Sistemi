@@ -64,7 +64,7 @@ def test_cok_satirda_cubuk_hep_gorunur_ve_buyuk_renkli_stillenir(qt_app):
     t = p.tablo_islem
     assert t.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn
     assert TABLO_STIL in t.styleSheet() and CUBUK_STILI in t.styleSheet()
-    assert "width: 18px" in CUBUK_STILI and "#2563EB" in CUBUK_STILI
+    assert "width: 12px" in CUBUK_STILI and "#A3B8E4" in CUBUK_STILI      # ortak kaydırma çubuğu
     kapat(p)
 
 

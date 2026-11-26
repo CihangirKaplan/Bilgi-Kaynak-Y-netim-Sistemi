@@ -25,6 +25,20 @@ def _simge_yolu(ad):
 
 
 # Açılır kutunun (QComboBox) ve takvimi açılan tarih kutusunun (QDateEdit/QDateTimeEdit, calendarPopup) sağındaki aşağı ok. `::drop-down` kuralı yazılınca Qt kendi okunu çizmez; ok bu kuralla geri getirilir.
+# Uygulama genelinde tek kaydırma çubuğu: belirgin iz + koyu mavi tutamaç; üzerine gelince ve sürüklerken koyulaşır.
+KAYDIRMA_CUBUGU_STILI = """
+QScrollBar:vertical { background: #EEF3FC; width: 12px; margin: 2px; border-radius: 6px; }
+QScrollBar::handle:vertical { background: #A3B8E4; min-height: 48px; border-radius: 5px; margin: 1px; }
+QScrollBar::handle:vertical:hover { background: #6F93DB; }
+QScrollBar::handle:vertical:pressed { background: #2563EB; }
+QScrollBar:horizontal { background: #EEF3FC; height: 12px; margin: 2px; border-radius: 6px; }
+QScrollBar::handle:horizontal { background: #A3B8E4; min-width: 48px; border-radius: 5px; margin: 1px; }
+QScrollBar::handle:horizontal:hover { background: #6F93DB; }
+QScrollBar::handle:horizontal:pressed { background: #2563EB; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+"""
+
 ACILIR_OK_STILI = f"""
 QComboBox::down-arrow {{ image: url("{_simge_yolu('tkys_ok_asagi.svg')}"); width: 14px; height: 14px; }}
 QComboBox::down-arrow:disabled {{ image: url("{_simge_yolu('tkys_ok_asagi_pasif.svg')}"); }}
@@ -54,11 +68,6 @@ QTableWidget::item:selected {{ background: #EEF4FF; color: {METIN}; }}
 QTableWidget::item:hover {{ background: #F7FAFF; }}
 QHeaderView::section {{ background: #F3F7FF; color: {SOLUK}; padding: 12px 12px; font-size: 11px; font-weight: 800;
                        border: none; border-bottom: 1px solid #E3EAF5; }}
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: #C5D3EE; border-radius: 4px; min-height: 36px; }}
-QScrollBar::handle:vertical:hover {{ background: #9FB6E3; }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
 """
 
 
