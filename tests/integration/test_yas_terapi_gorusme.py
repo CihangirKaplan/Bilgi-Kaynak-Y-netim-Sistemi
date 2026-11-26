@@ -103,7 +103,7 @@ def _olustur(istemci, sorgu):
     conn = MagicMock()
     c = conn.cursor.return_value
     c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "X")]
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.danisan_api.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = istemci.post("/api/danisan-kodlari" + sorgu)
     ekleme = next((x.args[1] for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
     return yanit, ekleme

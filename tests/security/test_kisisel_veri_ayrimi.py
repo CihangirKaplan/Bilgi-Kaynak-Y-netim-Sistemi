@@ -28,7 +28,8 @@ DANISAN_KODLARI_SUTUNLARI = {"danisan_kod_id", "ucretli_mi", "istisna_turu", "ak
                              "olusturan_psikolog_id", "yas_grubu"}
 RANDEVU_SUTUNLARI = {"randevu_id", "danisan_kod_id", "psikolog_id", "oda_id", "baslangic_zamani", "bitis_zamani",
                      "durum", "olusturulma_tarihi", "gorusme_tipi", "terapi_turu"}
-KAYNAK = Path(sunucu.__file__).read_text(encoding="utf-8")
+# Uç kodu server/sunucu.py ve ondan ayrılan uç modüllerinde (server/*_api.py) bulunur: hepsi taranır.
+KAYNAK = "\n".join(d.read_text(encoding="utf-8") for d in sorted(Path(sunucu.__file__).parent.glob("*.py")))
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +82,15 @@ def test_sunucu_randevular_tablosuna_yalnizca_izinli_sutunlari_yazar():
 # ------------------------------------------------------------------ uçlar
 def test_yolunda_danisan_gecen_uclar_bilinen_listeden_ibarettir():
     """Yeni bir 'danışan' ucu eklenirse (örn. ad-soyad alan bir uç) bu liste bilerek güncellenmek zorundadır."""
-    bulunan = {(metot, yol) for yol_nesnesi in app.routes if hasattr(yol_nesnesi, "methods")
+    def rotalar(liste):
+        """`include_router` ile eklenen uçlar `app.routes` içinde yönlendirici sarmalayıcısının içindedir."""
+        for r in liste:
+            yield r
+            asil = getattr(r, "original_router", None)
+            if asil is not None:
+                yield from rotalar(asil.routes)
+
+    bulunan = {(metot, yol) for yol_nesnesi in rotalar(app.routes) if hasattr(yol_nesnesi, "methods")
                for yol in [yol_nesnesi.path] if "danisan" in yol.lower() for metot in yol_nesnesi.methods}
     assert bulunan == {("GET", "/api/danisan-kodlari"), ("POST", "/api/danisan-kodlari"),
                        ("PATCH", "/api/danisan-kodlari/{danisan_kod_id}/durum"),
@@ -95,7 +104,7 @@ def _kod_olustur(sorgu_dizesi=""):
     c.fetchone.side_effect = [(1,), (7, "PSIKOLOG"), ("DAN-2026-0099", True, "YOK", True, None, 7, "YETISKIN")]   # izin, kimlik, kayıt
     sorgu_dizesi = (sorgu_dizesi + "&" if sorgu_dizesi else "?") + "yas_grubu=YETISKIN"      # yaş grubu zorunludur
     with patch("server.sunucu.psycopg2.connect", return_value=conn), \
-            patch("server.sunucu.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
+            patch("server.danisan_api.otomatik_danisan_kodu_uret", return_value="DAN-2026-0099"):
         yanit = TestClient(app).post("/api/danisan-kodlari" + sorgu_dizesi)
     ekleme = next((x for x in c.execute.call_args_list if "INSERT INTO danisan_kodlari" in x.args[0]), None)
     return yanit, (ekleme.args[1] if ekleme else None)           # doğrulama reddederse kayıt sorgusu hiç çalışmaz

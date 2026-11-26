@@ -157,8 +157,8 @@ def test_liste_pasifler_dahil_isteginde_pasifleri_de_getirir(istemci):
 
 
 def test_randevu_olusturma_danisan_satirini_kilitler_pasife_alma_ile_yaris_olmaz():
-    import server.sunucu as sunucu
-    kaynak = open(sunucu.__file__, encoding="utf-8").read()
+    from server import randevu_api                               # uç server/randevu_api.py'ye taşındı
+    kaynak = open(randevu_api.__file__, encoding="utf-8").read()
     assert "AND aktif_mi = TRUE FOR SHARE;\", (randevu.danisan_kod_id,)" in kaynak
 
 

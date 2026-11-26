@@ -46,3 +46,8 @@ CIHAZ_ODALARI_SORGUSU = (
     "JOIN roller r ON r.rol_id = k.rol_id "
     "WHERE po.oda_id = o.oda_id AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') ORDER BY o.oda_adi"
 )
+
+
+# "Planlı randevu" her yerde aynı anlama gelir: durumu PLANLANDI ve başlangıç günü bugün ya da sonrası. Bugünün geçmiş saatindeki
+# ama sonucu girilmemiş randevu da sayılır; böylece unutulan "Tamamlandı / Gelmedi" işareti pasife almayı engelleyerek fark ettirilir.
+PLANLI_RANDEVU_COZUMU = "bugünkü randevuların sonucunu (Tamamlandı / Gelmedi) girin, sonraki günlerin randevularını iptal edin."
