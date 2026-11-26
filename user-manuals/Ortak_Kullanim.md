@@ -55,7 +55,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   gösterilmez) listelenir. Bu bölümler yalnızca bilgi verir; etkinlik eklemek ya da cihaz rezervasyonu yapmak için ilgili sayfanın izni gerekir.
   - **Bugün | Yarın | Bu hafta (7 gün):** Randevu, cihaz rezervasyonu ve oda etkinliği panelleri seçtiğiniz güne göre değişir. Üstteki özet kartları her zaman **bugünü** sayar.
   - **🙋 Benim Günüm:** Size ait bugünkü ve yarınki randevular ile cihaz rezervasyonları (yalnızca kendi kayıtlarınız). Kaydınız yoksa bu kutu görünmez.
-  - **📢 Duyurular:** Kurum içi duyurular **herkesin** panelinde görünür (yeni olanlar 🆕 ile). **Duyuru yönetme** izni olanlar (varsayılan: Admin, Müdür, Memur)
+  - **📢 Duyurular:** Kurum içi duyurular **herkesin** panelinde görünür (yeni olanlar 🆕 ile). **Duyuru yönetme** izni olanlar (varsayılan: Danışma Öğrencisi dışında herkes)
     **＋ Yeni duyuru** ile yayınlar, isteğe bağlı son geçerlilik tarihi verir (tarih geçince kendiliğinden kalkar) ve **Kaldır** ile siler. Duyuruya kişisel bilgi
     (danışan adı, telefon vb.) yazmayın; duyuruyu kimin yazdığı yalnızca duyuru yönetenlere gösterilir.
 - **Sayfanın sağ üstündeki işlem düğmeleri:** Yetkinize göre görünür; örneğin **＋ Yeni Randevu**.

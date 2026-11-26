@@ -103,7 +103,7 @@ IZIN_LISTESI = [
     ("Danışma masası oturumunu yönetme",     "Kullanıcı & Denetim","HHHEHH"),
     ("Danışma masası yönetimi",               "Kullanıcı & Denetim","HEHHHE"),
     ("Danışma masası raporlarını görüntüleme", "Kullanıcı & Denetim","HEEHHE"),
-    ("Duyuruları yönetme",                   "Kullanıcı & Denetim","HEEHHE"),
+    ("Duyuruları yönetme",                   "Kullanıcı & Denetim","EEEHEE"),     # Danışma Öğrencisi dışında herkes
     ("İzin düzenleme",                       "Sistem Yönetimi",   "HHHHHE"),
     ("Rol-izin yönetme",                     "Sistem Yönetimi",   "HHHHHE"),
     ("Rol oluşturma",                        "Sistem Yönetimi",   "HHHHHE"),

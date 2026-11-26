@@ -51,7 +51,7 @@ yetkileri değiştirebilir; bu durumda menünüz farklı olabilir. Menüde göre
 | Audit Kayıtları, Yetki Raporu, Sistem Durumu | – | – | – | – | ✔ | ✔ |
 | Oda Yönetimi | – | – | – | ✔ | ✔ | ✔ |
 | Rol & İzin Yönetimi | – | – | – | – | – | ✔ |
-| Ana panelde duyuru yayınlama (＋ Yeni duyuru) | – | – | – | ✔ | ✔ | ✔ |
+| Ana panelde duyuru yayınlama (＋ Yeni duyuru) | ✔ | – | ✔ | ✔ | ✔ | ✔ |
 
 Not: Psikolog yalnızca **kendi** randevularını ve **kendi** danışanlarını görür.
 

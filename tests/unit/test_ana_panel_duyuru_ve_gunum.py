@@ -218,7 +218,7 @@ def test_hafta_gorunumunde_saatin_onune_tarih_eklenir():
 def test_duyuru_yonetme_izni_rol_maskesi_ve_ana_pencereye_baglanti():
     import client.main_window as mw
     assert mw.IZIN_KODLARI["Duyuruları yönetme"] == ("DUYURU_YONET",)
-    assert [r for r in mw.ROLLER if mw.izin_var(r, "Duyuruları yönetme")] == ["memur", "mudur", "admin"]
+    assert [r for r in mw.ROLLER if mw.izin_var(r, "Duyuruları yönetme")] == ["psikolog", "memur", "mudur", "asistan", "admin"]      # Danışma Öğrencisi (ogrenci) dışında herkes
     assert "duyuru_yonetebilir=izin_var(rol," in inspect.getsource(mw.AnaPencere.sayfa_dashboard)
 
 
