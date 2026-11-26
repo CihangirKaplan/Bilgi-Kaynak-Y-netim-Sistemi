@@ -158,7 +158,9 @@ def test_ayrinti_penceresinde_etiket_ve_deger_ayni_hizada(tkys_qapplication):
     kontrol = {}
 
     def sahte_exec(pencere):
-        etiketler = [e for e in pencere.findChildren(modul.QLabel) if e.objectName() != "formBaslik"]
+        # Özet kartındaki rozet/cümle/zaman satırı ızgara dışındadır; ızgaradaki alan adı ve değer etiketleri karşılaştırılır.
+        etiketler = [e for e in pencere.findChildren(modul.QLabel)
+                     if e.objectName() not in ("formBaslik", "islemRozeti", "olayCumlesi", "ipucu")]
         kontrol["hepsi_ustten"] = all(e.alignment() & Qt.AlignTop for e in etiketler)
         kontrol["sayi"] = len(etiketler)
         return 0
