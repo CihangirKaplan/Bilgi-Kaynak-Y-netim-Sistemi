@@ -193,9 +193,8 @@ def test_yetkisiz_kullanici_403_alir_ve_hicbir_rapor_sorgusu_calismaz():
 
 
 def test_yetki_faaliyet_kayitlari_duzenleme_iznine_baglidir():
-    kaynak = Path(sunucu.__file__).read_text(encoding="utf-8")
-    govde = kaynak[kaynak.index("def puan_raporu("):kaynak.index("def _ogrenci_saklama_suresi_kontrol")]
-    assert 'izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")' in govde
+    from server import puan_raporu_api                           # uç server/puan_raporu_api.py'ye taşındı
+    assert ("/api/puan-raporu", puan_raporu_api.puan_raporu, "yetkili_id", "FAALIYET_KAYITLARI_DUZENLE") in puan_raporu_api.UCLAR
 
 
 def test_veritabani_hatasinda_ic_hata_metni_sizmaz():

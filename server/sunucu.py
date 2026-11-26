@@ -117,6 +117,7 @@ bearer_scheme = HTTPBearer()
 
 
 from server.ortak_sabitler import ETKIN_CIHAZ_DURUMU_SQL, OGRENCI_TUR_ETIKETLERI
+from server.ortak_yardimcilar import psikolog_rolu_mu
 from server.vt_ayarlari import VT_AYARLARI          # tek tanım yeri; ayrılan modüller de aynı sözlüğü kullanır
 
 def otomatik_danisan_kodu_uret(cursor, yil=None, kilitle=True) -> str:
@@ -144,9 +145,6 @@ def _sahte_parola_hash() -> str:
     return parola_hashle("zamanlama-korumasi-sahte-parola")
 
 
-def psikolog_rolu_mu(rol_adi) -> bool:
-    """Rol adı PSIKOLOG mu? Tek karşılaştırma yeri: büyük/küçük harf ve boşluk farkı önemsenmez, alt metin eşleşmesi yapılmaz."""
-    return str(rol_adi or "").strip().upper() == "PSIKOLOG"
 
 
 def token_kullanici_id(
@@ -4071,160 +4069,6 @@ def cihaz_detayi_getir(cihaz_id: int, kullanici_id: int = Depends(izin_kontrol("
         if cursor is not None: cursor.close()
         if conn is not None: conn.close()
 
-# ==========================================
-# CİHAZ UYGUNLUK TAKVİMİ (salt okunur)
-# ==========================================
-# Cihaz Uygunluğu sayfasının verisi. Yalnızca "ne zaman, ne yüzden uygun değil" bilgisini verir:
-# kişi adı, rezervasyonu yapan, işlem açıklaması, maliyet, sertifika no gibi ayrıntılar bilerek
-# DÖNMEZ; bu yüzden yalnızca CIHAZ_UYGUNLUK_GORUNTULE izni yeterlidir.
-UYGUNLUK_EN_FAZLA_GUN = 62
-UYGUNLUK_ACIK_UCLU_DURUMLAR = {          # cihazın şu anki durumundan türeyen, bitişi belli olmayan dönemler
-    "Bakimda": "BAKIM",
-    "Kalibrasyonda": "KALIBRASYON",
-    "Arizali": "ARIZA",
-    "Kullanim_Disi": "KULLANIM_DISI",
-}
-
-
-def _uygunluk_uyari(hedef_tarih, uyari_gun, bugun, gecmis_kodu):
-    """Tarih geçmişse gecmis_kodu, uyarı süresi içindeyse 'YAKLASIYOR', değilse None (zil/dashboard kuralı)."""
-    if hedef_tarih is None:
-        return None
-    kalan = (hedef_tarih - bugun).days
-    if kalan < 0:
-        return gecmis_kodu
-    return "YAKLASIYOR" if kalan <= (uyari_gun if uyari_gun is not None else 30) else None
-
-
-def cihaz_uygunluk_hazirla(bugun, bas, bit, cihazlar, rezervasyonlar, bakimlar, kalibrasyonlar,
-                           arizalar, son_kalibrasyonlar, son_bakimlar):
-    """Veritabanı satırlarından cihaz başına dönem listesini ve uyarıları üretir (saf fonksiyon)."""
-    def gun_basi(gun):
-        return datetime.combine(gun, datetime.min.time())
-
-    def iso(deger):
-        return deger.isoformat() if hasattr(deger, "isoformat") else str(deger)
-
-    donemler = {c[0]: [] for c in cihazlar}
-
-    def ekle(cihaz_id, tur, baslangic, bitis, kaynak="kayit"):
-        if cihaz_id in donemler:
-            donemler[cihaz_id].append({"tur": tur, "baslangic": iso(baslangic),
-                                       "bitis": None if bitis is None else iso(bitis), "kaynak": kaynak})
-
-    for cihaz_id, baslangic, bitis in rezervasyonlar:
-        ekle(cihaz_id, "REZERVASYON", baslangic, bitis)
-    for cihaz_id, gun1, gun2 in bakimlar:                       # gün aralığı, bitiş günü dahil
-        ilk_gun = max(gun1, bas)
-        son_gun = min(gun2, bit)
-        if ilk_gun <= son_gun:
-            ekle(cihaz_id, "BAKIM", gun_basi(ilk_gun),
-                 gun_basi(son_gun) + timedelta(days=1))
-    for cihaz_id, gun1, gun2 in kalibrasyonlar:
-        ilk_gun = max(gun1, bas)
-        son_gun = min(gun2, bit)
-        if ilk_gun <= son_gun:
-            ekle(cihaz_id, "KALIBRASYON", gun_basi(ilk_gun),
-                 gun_basi(son_gun) + timedelta(days=1))
-    for cihaz_id, bildirim, cozum, cozuldu in arizalar:         # açık arızanın bitişi yoktur
-        if cozuldu and cozum is None:                            # çözüldü ama çözüm zamanı yok: süresi belirsiz, gösterme
-            continue
-        ekle(cihaz_id, "ARIZA", bildirim, None if not cozuldu else cozum)
-
-    baslangic_sinir = gun_basi(max(bas, bugun))                 # durumdan türeyen dönem bugünden başlar
-    bitis_sinir = gun_basi(bit + timedelta(days=1))
-    for cihaz_id, _kod, _ad, durum in cihazlar:
-        tur = UYGUNLUK_ACIK_UCLU_DURUMLAR.get(durum)
-        if tur and baslangic_sinir < bitis_sinir:
-            ekle(cihaz_id, tur, baslangic_sinir, None, kaynak="durum")
-
-    kal = {k[0]: (k[1], k[2]) for k in son_kalibrasyonlar}
-    bak = {b[0]: (b[1], b[2]) for b in son_bakimlar}
-    sonuc = []
-    for cihaz_id, kod, ad, durum in cihazlar:
-        gecerlilik, kal_uyari = kal.get(cihaz_id, (None, None))
-        sonraki, bak_uyari = bak.get(cihaz_id, (None, None))
-        sonuc.append({
-            "cihaz_id": cihaz_id, "envanter_kodu": kod, "cihaz_adi": ad, "durum": durum,
-            "kalibrasyon_gecerlilik": gecerlilik.isoformat() if gecerlilik else None,
-            "kalibrasyon_uyari": _uygunluk_uyari(gecerlilik, kal_uyari, bugun, "SURESI_DOLDU"),
-            "sonraki_bakim": sonraki.isoformat() if sonraki else None,
-            "bakim_uyari": _uygunluk_uyari(sonraki, bak_uyari, bugun, "GECIKTI"),
-            "donemler": sorted(donemler[cihaz_id], key=lambda d: (d["baslangic"], d["tur"])),
-        })
-    return {"bugun": bugun.isoformat(), "baslangic": bas.isoformat(), "bitis": bit.isoformat(), "cihazlar": sonuc}
-
-
-@app.get("/api/cihaz-uygunluk")
-def cihaz_uygunluk_getir(
-    baslangic: date | None = None,
-    bitis: date | None = None,
-    kullanici_id: int = Depends(izin_kontrol("CIHAZ_UYGUNLUK_GORUNTULE")),
-):
-    """Seçilen tarih aralığında her cihazın rezervasyon, bakım, kalibrasyon, arıza ve kullanım dışı dönemleri."""
-    bugun = date.today()
-    if baslangic is None and bitis is None:
-        baslangic = bugun
-    if baslangic is None:
-        baslangic = bitis - timedelta(days=6)
-    if bitis is None:
-        bitis = baslangic + timedelta(days=6)
-    if bitis < baslangic:
-        raise HTTPException(status_code=422, detail="Bitiş tarihi, başlangıç tarihinden önce olamaz.")
-    if (bitis - baslangic).days + 1 > UYGUNLUK_EN_FAZLA_GUN:
-        raise HTTPException(status_code=422, detail=f"En fazla {UYGUNLUK_EN_FAZLA_GUN} günlük aralık sorgulanabilir.")
-
-    aralik_basi = datetime.combine(baslangic, datetime.min.time())
-    aralik_sonu = datetime.combine(bitis + timedelta(days=1), datetime.min.time())
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        cursor.execute("SELECT cihaz_id, envanter_kodu, cihaz_adi, durum::text FROM cihazlar ORDER BY envanter_kodu, cihaz_id;")
-        cihazlar = cursor.fetchall()
-        cursor.execute(
-            "SELECT cihaz_id, baslangic_zamani, bitis_zamani FROM cihaz_rezervasyonlari "
-            "WHERE COALESCE(iptal_edildi_mi, FALSE) = FALSE AND baslangic_zamani < %s AND bitis_zamani > %s;",
-            (aralik_sonu, aralik_basi))
-        rezervasyonlar = cursor.fetchall()
-        cursor.execute(
-            "SELECT cihaz_id, COALESCE(bakim_baslangic_tarihi, bakim_tarihi::date), "
-            "COALESCE(bakim_bitis_tarihi, bakim_tarihi::date) FROM cihaz_bakimlari "
-            "WHERE COALESCE(bakim_baslangic_tarihi, bakim_tarihi::date) <= %s "
-            "AND COALESCE(bakim_bitis_tarihi, bakim_tarihi::date) >= %s;",
-            (bitis, baslangic))
-        bakimlar = cursor.fetchall()
-        cursor.execute(
-            "SELECT cihaz_id, kalibrasyon_baslangic_tarihi, kalibrasyon_bitis_tarihi FROM cihaz_kalibrasyonlari "
-            "WHERE kalibrasyon_baslangic_tarihi IS NOT NULL AND kalibrasyon_bitis_tarihi IS NOT NULL "
-            "AND kalibrasyon_baslangic_tarihi <= %s AND kalibrasyon_bitis_tarihi >= %s;",
-            (bitis, baslangic))
-        kalibrasyonlar = cursor.fetchall()
-        cursor.execute(
-            "SELECT cihaz_id, bildirim_tarihi, cozum_tarihi, COALESCE(cozuldu_mu, FALSE) FROM cihaz_arizalari "
-            "WHERE bildirim_tarihi IS NOT NULL AND bildirim_tarihi < %s "
-            "AND (NOT COALESCE(cozuldu_mu, FALSE) OR (cozum_tarihi IS NOT NULL AND cozum_tarihi > %s));",
-            (aralik_sonu, aralik_basi))
-        arizalar = cursor.fetchall()
-        # Her cihazın güncel kalibrasyonu (geçerliliği en ileri olan) ve son bakım kaydı; dashboard/zil ile aynı kural.
-        cursor.execute(
-            "SELECT DISTINCT ON (cihaz_id) cihaz_id, gecerlilik_tarihi, uyari_suresi_gun FROM cihaz_kalibrasyonlari "
-            "WHERE gecerlilik_tarihi IS NOT NULL ORDER BY cihaz_id, gecerlilik_tarihi DESC, kalibrasyon_id DESC;")
-        son_kalibrasyonlar = cursor.fetchall()
-        cursor.execute(
-            "SELECT DISTINCT ON (cihaz_id) cihaz_id, sonraki_bakim_tarihi, uyari_suresi_gun FROM cihaz_bakimlari "
-            "ORDER BY cihaz_id, COALESCE(bakim_baslangic_tarihi::date, bakim_tarihi::date) DESC, bakim_id DESC;")
-        son_bakimlar = cursor.fetchall()
-        return cihaz_uygunluk_hazirla(bugun, baslangic, bitis, cihazlar, rezervasyonlar, bakimlar,
-                                      kalibrasyonlar, arizalar, son_kalibrasyonlar, son_bakimlar)
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="İşlem sırasında beklenmeyen bir sunucu hatası oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
 def rezervasyon_uygunlugunu_denetle(cursor, rez, haric_rezervasyon_id=None):
@@ -6501,456 +6345,10 @@ def ogrenci_puan_detayi(
         conn.close()
 
 
-PUAN_RAPORU_DURUMLARI = ("aktif", "pasif")
 
 
-@app.get("/api/randevu-raporu/secenekler")
-def randevu_raporu_secenekleri(
-    psikolog_id: int | None = None,
-    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
-):
-    """Randevu raporu süzgeç listeleri: aktif psikologlar ve onların aktif odaları, ayrıca randevu geçmişi olan pasif/eski psikologlar
-    ve odalar ("(pasif)" etiketiyle); böylece geçmiş kayıtlar da süzülebilir. psikolog_id verilirse odalar o psikologa daralır.
-    Psikolog yalnızca kendisini ve kendi odalarını görür."""
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
-        rol = cursor.fetchone()
-        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
-
-        kosullar, parametreler = [], []
-        if psikolog_mu:
-            kosullar.append("p.kullanici_id = %s")
-            parametreler.append(kullanici_id)
-        elif psikolog_id is not None:
-            kosullar.append("p.personel_id = %s")
-            parametreler.append(psikolog_id)
-        ek_kosul = "".join(f" AND {k}" for k in kosullar)
-
-        # Aktif psikologlar + randevusu olan (pasif, ya da psikolog rolünden ayrılmış) eski psikologlar
-        cursor.execute(f"""
-            SELECT DISTINCT p.personel_id, k.kullanici_adi,
-                   (p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG') AS aktif
-            FROM personel p
-            JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
-            JOIN roller r ON r.rol_id = k.rol_id
-            WHERE ((p.aktif_mi = TRUE AND k.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG')
-                   OR EXISTS (SELECT 1 FROM randevular x WHERE x.psikolog_id = p.personel_id)){" AND p.kullanici_id = %s" if psikolog_mu else ""}
-            ORDER BY k.kullanici_adi;
-        """, ((kullanici_id,) if psikolog_mu else ()))
-        psikologlar = [
-            {"personel_id": s[0], "ad_soyad": s[1] if s[2] else f"{s[1]} (pasif)", "aktif_mi": bool(s[2])}
-            for s in cursor.fetchall()
-        ]
-
-        # Aktif psikologlara atanmış aktif odalar + (seçilen) psikologların randevu yaptığı odalar (pasif oda "(pasif)" etiketiyle)
-        cursor.execute(f"""
-            SELECT DISTINCT o.oda_id, o.oda_adi, o.aktif_mi
-            FROM odalar o
-            WHERE EXISTS (
-                      SELECT 1 FROM psikolog_odalar po
-                      JOIN personel p ON p.kullanici_id = po.kullanici_id
-                      JOIN kullanicilar k ON k.kullanici_id = p.kullanici_id
-                      JOIN roller r ON r.rol_id = k.rol_id
-                      WHERE po.oda_id = o.oda_id AND o.aktif_mi = TRUE AND p.aktif_mi = TRUE AND UPPER(r.rol_adi) = 'PSIKOLOG'{ek_kosul})
-               OR EXISTS (
-                      SELECT 1 FROM randevular x
-                      JOIN personel p ON p.personel_id = x.psikolog_id
-                      WHERE x.oda_id = o.oda_id{ek_kosul})
-            ORDER BY o.oda_adi;
-        """, tuple(parametreler) * 2)
-        odalar = [
-            {"oda_id": o[0], "oda_adi": o[1] if o[2] else f"{o[1]} (pasif)", "aktif_mi": bool(o[2])}
-            for o in cursor.fetchall()
-        ]
-        return {"psikologlar": psikologlar, "odalar": odalar}
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
-@app.get("/api/oda-kullanimi")
-def oda_kullanimi(
-    baslangic: date,
-    bitis: date,
-    kullanici_id: int = Depends(izin_kontrol("ODA_DURUMU_GORUNTULE")),
-):
-    """Oda Kullanımı sayfası: odalar, seçilen tarih aralığındaki (başlangıç ve bitiş günü dahil) iptal edilmemiş randevular ve
-    odası seçilmiş iptal edilmemiş cihaz rezervasyonları.
-
-    Psikolog, başkalarının randevularında yalnızca "dolu" bilgisini görür: o satırlarda psikolog adı, danışan kodu ve görüşme tipi
-    boş döner (kendi randevularında hepsi dolu). Diğer roller tüm bilgiyi görür. Cihaz rezervasyonunda odanın o saatlerde cihaz
-    kullanımı nedeniyle dolu olduğu herkese görünür; cihaz adı ve bölüm yalnızca CIHAZ_REZERVASYON iznine sahip rollere gelir
-    (izni olmayanda bu iki alan boş döner). En çok 62 günlük aralık istenebilir."""
-    if baslangic > bitis:
-        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
-    if (bitis - baslangic).days > 62:
-        raise HTTPException(status_code=422, detail="En çok 62 günlük aralık istenebilir.")
-
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT r.rol_adi,
-                   COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
-                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'CIHAZ_REZERVASYON'), 0),
-                   COALESCE((SELECT ri.izin_var FROM rol_izinleri ri JOIN izinler i ON i.izin_id = ri.izin_id
-                             WHERE ri.rol_id = k.rol_id AND i.izin_adi = 'ODA_ETKINLIK_GORUNTULE'), 0)
-            FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;
-            """,
-            (kullanici_id,),
-        )
-        rol = cursor.fetchone()
-        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
-        cihaz_detayi_gorur = rol is not None and rol[1] == 1
-        etkinlik_detayi_gorur = (
-            rol is not None and len(rol) > 2 and rol[2] == 1
-        )
-
-        cursor.execute("SELECT oda_id, oda_adi, kapasite, aktif_mi FROM odalar ORDER BY oda_adi, oda_id;")
-        odalar = [{"oda_id": o[0], "oda_adi": o[1], "kapasite": o[2], "aktif_mi": o[3]} for o in cursor.fetchall()]
-
-        cursor.execute("""
-            SELECT r.randevu_id, r.oda_id, r.baslangic_zamani, r.bitis_zamani, r.durum, ku.kullanici_adi, r.danisan_kod_id,
-                   r.gorusme_tipi, (p.kullanici_id = %s) AS benim
-            FROM randevular r
-            LEFT JOIN personel p ON p.personel_id = r.psikolog_id
-            LEFT JOIN kullanicilar ku ON ku.kullanici_id = p.kullanici_id
-            WHERE r.durum <> 'IPTAL_EDILDI' AND r.baslangic_zamani >= %s AND r.baslangic_zamani < %s
-            ORDER BY r.baslangic_zamani, r.randevu_id;
-        """, (kullanici_id, datetime.combine(baslangic, datetime.min.time()), datetime.combine(bitis, datetime.min.time()) + timedelta(days=1)))
-        randevular = []
-        for k in cursor.fetchall():
-            gorunur = (not psikolog_mu) or bool(k[8])
-            randevular.append({
-                "randevu_id": k[0], "oda_id": k[1], "baslangic_zamani": k[2], "bitis_zamani": k[3], "durum": k[4],
-                "psikolog": k[5] if gorunur else None, "danisan_kod_id": k[6] if gorunur else None,
-                "gorusme_tipi": k[7] if gorunur else None, "benim": bool(k[8]),
-            })
-
-        # Cihaz rezervasyonu odayı seçilen saatlerde tamamen doldurur. Aralıkla kesişen (gün sınırını aşanlar dahil) iptal edilmemiş,
-        # odası seçilmiş rezervasyonlar döner.
-        cursor.execute("""
-            SELECT cr.rezervasyon_id, cr.kullanilacak_oda_id, cr.baslangic_zamani, cr.bitis_zamani, c.cihaz_adi, b.bolum_adi
-            FROM cihaz_rezervasyonlari cr
-            JOIN cihazlar c ON c.cihaz_id = cr.cihaz_id
-            LEFT JOIN bolumler b ON b.bolum_id = cr.bolum_id
-            WHERE COALESCE(cr.iptal_edildi_mi, FALSE) = FALSE AND cr.kullanilacak_oda_id IS NOT NULL
-              AND cr.baslangic_zamani < %s AND cr.bitis_zamani > %s
-            ORDER BY cr.baslangic_zamani, cr.rezervasyon_id;
-        """, (datetime.combine(bitis, datetime.min.time()) + timedelta(days=1), datetime.combine(baslangic, datetime.min.time())))
-        rezervasyonlar = [
-            {"rezervasyon_id": k[0], "oda_id": k[1], "baslangic_zamani": k[2], "bitis_zamani": k[3],
-             "cihaz_adi": k[4] if cihaz_detayi_gorur else None, "bolum_adi": k[5] if cihaz_detayi_gorur else None}
-            for k in cursor.fetchall()
-        ]
-        # Oda etkinlikleri: seçilen tarihlerle kesişen, iptal edilmemiş kayıtlar.
-        cursor.execute("""
-            SELECT
-                e.etkinlik_id,
-                e.oda_id,
-                e.etkinlik_adi,
-                e.katilimci_sayisi,
-                g.baslangic_zamani,
-                g.bitis_zamani,
-                e.organize_eden_personel_id,
-                COALESCE(e.iptal_edildi_mi, FALSE)
-            FROM oda_etkinlikleri e
-            JOIN oda_etkinlik_gunleri g
-              ON g.etkinlik_id = e.etkinlik_id
-            WHERE g.baslangic_zamani < %s
-              AND g.bitis_zamani > %s
-            ORDER BY g.baslangic_zamani, e.etkinlik_id;
-        """, (
-            datetime.combine(bitis, datetime.min.time()) + timedelta(days=1),
-            datetime.combine(baslangic, datetime.min.time()),
-        ))
-
-        etkinlikler = [
-            {
-                "etkinlik_id": k[0],
-                "oda_id": k[1],
-                "etkinlik_adi": k[2] if etkinlik_detayi_gorur else None,
-                "katilimci_sayisi": k[3] if etkinlik_detayi_gorur else None,
-                "baslangic_zamani": k[4],
-                "bitis_zamani": k[5],
-                "organize_eden_personel_id": (
-                    k[6] if etkinlik_detayi_gorur else None
-                ),
-                "iptal_edildi_mi": bool(k[7]),
-            }
-            for k in cursor.fetchall()
-        ]
-
-        return {
-            "odalar": odalar,
-            "randevular": randevular,
-            "rezervasyonlar": rezervasyonlar,
-            "etkinlikler": etkinlikler,
-        }
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-
-@app.get("/api/randevu-raporu")
-def randevu_raporu(
-    baslangic: _ogr_date | None = None,
-    bitis: _ogr_date | None = None,
-    psikolog_id: int | None = None,
-    oda_id: int | None = None,
-    detay: bool = False,
-    kullanici_id: int = Depends(izin_kontrol("TAKVIM_GORUNTULE")),
-):
-    """Randevu raporu: seçilen dönemde (randevunun başlangıç günü) durum sayıları, psikolog bazlı döküm, iptal nedenleri ve
-    görüşme tipi / terapi türü / yaş grubu dağılımı. Psikolog yalnızca kendi randevularını görür. detay=true ise tek tek
-    randevular da döner (Excel için). Danışanlar yalnızca kodla görünür (kişisel veri yok)."""
-    if baslangic is not None and bitis is not None and baslangic > bitis:
-        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
-
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        cursor.execute("SELECT r.rol_adi FROM kullanicilar k JOIN roller r ON k.rol_id = r.rol_id WHERE k.kullanici_id = %s;", (kullanici_id,))
-        rol = cursor.fetchone()
-        psikolog_mu = rol is not None and psikolog_rolu_mu(rol[0])
-
-        kosullar, parametreler = [], []
-        if baslangic is not None:
-            kosullar.append("r.baslangic_zamani >= %s")
-            parametreler.append(datetime.combine(baslangic, datetime.min.time()))
-        if bitis is not None:
-            kosullar.append("r.baslangic_zamani < %s")
-            parametreler.append(datetime.combine(bitis, datetime.min.time()) + timedelta(days=1))
-        if psikolog_mu:
-            kosullar.append("p.kullanici_id = %s")      # psikolog yalnızca kendi randevularını raporlar
-            parametreler.append(kullanici_id)
-        elif psikolog_id is not None:
-            kosullar.append("r.psikolog_id = %s")
-            parametreler.append(psikolog_id)
-        if oda_id is not None:
-            kosullar.append("r.oda_id = %s")
-            parametreler.append(oda_id)
-        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
-
-        etiketler = {"iptal": IPTAL_NEDENLERI, "gorusme": GORUSME_TIPLERI, "terapi": TERAPI_TURLERI, "yas": YAS_GRUPLARI}
-        birlestirme = """
-            FROM randevular r
-            LEFT JOIN personel p ON p.personel_id = r.psikolog_id
-            LEFT JOIN kullanicilar ku ON ku.kullanici_id = p.kullanici_id
-            LEFT JOIN odalar o ON o.oda_id = r.oda_id
-            LEFT JOIN danisan_kodlari d ON d.danisan_kod_id = r.danisan_kod_id
-        """
-        if not detay:
-            # Özet rapor tek tek randevuyu Python'a taşımaz: SQL'de gruplanır (10 yıllık veride 1,6 sn -> milisaniyeler; sonuç satır satır hesapla aynıdır).
-            bugun = date.today()
-            cursor.execute(f"""
-                SELECT r.psikolog_id, ku.kullanici_adi, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu,
-                       (r.baslangic_zamani::date < %s::date) AS gecmis, COUNT(*) AS adet
-                {birlestirme}
-                {where}
-                GROUP BY r.psikolog_id, ku.kullanici_adi, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu, gecmis;
-            """, (bugun, *parametreler))
-            gruplar = [
-                {"psikolog_id": g[0], "psikolog_adi": g[1], "durum": g[2], "iptal_nedeni": g[3], "gorusme_tipi": g[4],
-                 "terapi_turu": g[5], "yas_grubu": g[6], "gecmis": bool(g[7]), "adet": int(g[8])}
-                for g in cursor.fetchall()
-            ]
-            cursor.execute(f"SELECT COUNT(DISTINCT r.danisan_kod_id) {birlestirme} {where};", tuple(parametreler))
-            danisan_sayisi = int((cursor.fetchone() or (0,))[0])
-            return randevu_raporu_hesapla(gruplar, etiketler, detay=False, bugun=bugun, danisan_sayisi=danisan_sayisi)
-
-        cursor.execute(f"""
-            SELECT r.randevu_id, r.danisan_kod_id, r.psikolog_id, ku.kullanici_adi, r.oda_id, o.oda_adi,
-                   r.baslangic_zamani, r.bitis_zamani, r.durum, r.iptal_nedeni, r.gorusme_tipi, r.terapi_turu, d.yas_grubu
-            {birlestirme}
-            {where}
-            ORDER BY r.baslangic_zamani, r.randevu_id;
-        """, tuple(parametreler))
-        anahtarlar = ("randevu_id", "danisan_kod_id", "psikolog_id", "psikolog_adi", "oda_id", "oda_adi",
-                      "baslangic_zamani", "bitis_zamani", "durum", "iptal_nedeni", "gorusme_tipi", "terapi_turu", "yas_grubu")
-        satirlar = [dict(zip(anahtarlar, kayit)) for kayit in cursor.fetchall()]
-        return randevu_raporu_hesapla(satirlar, etiketler, detay=detay)
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-
-@app.get("/api/puan-raporu")
-def puan_raporu(
-    baslangic: _ogr_date | None = None,
-    bitis: _ogr_date | None = None,
-    tur: str | None = None,
-    durum: str | None = None,
-    puansizlari_goster: bool = True,
-    detay: bool = False,
-    yetkili_id: int = Depends(
-        izin_kontrol("FAALIYET_KAYITLARI_DUZENLE")
-    )
-):
-    """Öğrenci puan sıralaması: seçilen dönemdeki toplam puana göre en yüksekten en düşüğe.
-
-    Puan = adet x kaydın girildiği andaki faaliyet puanı. Pasif öğrenciler listede kalır (durum alanıyla).
-    Eşit puanlılar aynı sırayı alır (1, 2, 2, 4); puanı olmayanın sırası yoktur (None).
-    detay=true ise listedeki öğrencilerin tek tek faaliyet kayıtları da döner (Excel için)."""
-    if baslangic is not None and bitis is not None and baslangic > bitis:
-        raise HTTPException(status_code=422, detail="Başlangıç tarihi bitişten büyük olamaz.")
-    if tur is not None and tur not in OGRENCI_TUR_ETIKETLERI:
-        raise HTTPException(status_code=422, detail="Geçersiz öğrenci türü.")
-    if durum is not None and durum not in PUAN_RAPORU_DURUMLARI:
-        raise HTTPException(status_code=422, detail="Geçersiz öğrenci durumu.")
-
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-
-        tarih_kosullari = []
-        tarih_parametreleri = []
-        if baslangic is not None:
-            tarih_kosullari.append("t.faaliyet_tarihi >= %s")
-            tarih_parametreleri.append(baslangic)
-        if bitis is not None:
-            tarih_kosullari.append("t.faaliyet_tarihi <= %s")
-            tarih_parametreleri.append(bitis)
-
-        kosullar = []
-        kosul_parametreleri = []
-        if tur is not None:
-            kosullar.append("o.tur::text = %s")
-            kosul_parametreleri.append(tur)
-        if durum is not None:
-            kosullar.append("o.aktif_mi = %s")
-            kosul_parametreleri.append(durum == "aktif")
-
-        birlesim = " AND ".join(["t.ogrenci_id = o.ogrenci_id"] + tarih_kosullari)
-        where = "WHERE " + " AND ".join(kosullar) if kosullar else ""
-        having = "" if puansizlari_goster else "HAVING COUNT(t.takip_id) > 0"
-
-        cursor.execute(f"""
-            SELECT
-                o.ogrenci_id,
-                o.ad_soyad,
-                o.ogrenci_numarasi,
-                o.tur::text,
-                o.aktif_mi,
-                COALESCE(SUM(t.adet * t.kayit_puani), 0) AS toplam_puan,
-                COUNT(t.takip_id),
-                MAX(t.faaliyet_tarihi)
-            FROM ogrenciler o
-            LEFT JOIN ogrenci_faaliyet_takip t
-                ON {birlesim}
-            {where}
-            GROUP BY o.ogrenci_id, o.ad_soyad, o.ogrenci_numarasi, o.tur, o.aktif_mi
-            {having}
-            ORDER BY toplam_puan DESC, o.ad_soyad, o.ogrenci_id;
-        """, tarih_parametreleri + kosul_parametreleri)
-
-        ogrenciler = []
-        onceki_puan = None
-        onceki_sira = None
-        for sira_no, (ogr_id, ad, numara, ogr_tur, aktif, puan, adet, son) in enumerate(cursor.fetchall(), start=1):
-            puan = float(puan)
-            if puan > 0:
-                sira = onceki_sira if puan == onceki_puan else sira_no
-                onceki_puan, onceki_sira = puan, sira
-            else:
-                sira = None
-            ogrenciler.append({
-                "sira": sira,
-                "ogrenci_id": ogr_id,
-                "ad_soyad": ad,
-                "ogrenci_numarasi": numara,
-                "tur": ogr_tur,
-                "tur_etiketi": OGRENCI_TUR_ETIKETLERI.get(ogr_tur, ogr_tur),
-                "aktif_mi": bool(aktif),
-                "toplam_puan": puan,
-                "faaliyet_sayisi": int(adet),
-                "son_faaliyet_tarihi": son.isoformat() if son else None,
-            })
-
-        puanlilar = [o for o in ogrenciler if o["toplam_puan"] > 0]
-        toplam = sum(o["toplam_puan"] for o in ogrenciler)
-        en_yuksek = max((o["toplam_puan"] for o in ogrenciler), default=0)
-        ozet = {
-            "ogrenci_sayisi": len(ogrenciler),
-            "puanli_ogrenci_sayisi": len(puanlilar),
-            "faaliyet_kaydi_sayisi": sum(o["faaliyet_sayisi"] for o in ogrenciler),
-            "toplam_puan": toplam,
-            "ortalama_puan": (toplam / len(puanlilar)) if puanlilar else 0,
-            "en_yuksek_puan": en_yuksek,
-            "en_yuksek_ogrenciler": [o["ad_soyad"] for o in puanlilar if o["toplam_puan"] == en_yuksek],
-        }
-
-        sonuc = {
-            "filtre": {
-                "baslangic": baslangic.isoformat() if baslangic else None,
-                "bitis": bitis.isoformat() if bitis else None,
-                "tur": tur,
-                "durum": durum,
-                "puansizlari_goster": puansizlari_goster,
-            },
-            "ozet": ozet,
-            "ogrenciler": ogrenciler,
-        }
-
-        if detay:
-            detaylar = []
-            tarih_sql = "".join(" AND " + k for k in tarih_kosullari)      # yalnızca sabit parçalar
-            if ogrenciler:
-                cursor.execute(f"""
-                    SELECT
-                        t.ogrenci_id,
-                        t.faaliyet_tarihi,
-                        f.faaliyet_adi,
-                        t.adet,
-                        COALESCE(b.birim_adi, ''),
-                        t.kayit_puani,
-                        (t.adet * t.kayit_puani)
-                    FROM ogrenci_faaliyet_takip t
-                    JOIN faaliyetler f ON f.faaliyet_id = t.faaliyet_id
-                    LEFT JOIN faaliyet_birimleri b ON b.birim_id = t.birim_id
-                    WHERE t.ogrenci_id = ANY(%s)
-                    {tarih_sql}
-                    ORDER BY t.ogrenci_id, t.faaliyet_tarihi DESC, t.takip_id DESC;
-                """, [[o["ogrenci_id"] for o in ogrenciler]] + tarih_parametreleri)
-                for ogr_id, tarih, faaliyet, adet, birim, birim_puan, toplam_puan in cursor.fetchall():
-                    detaylar.append({
-                        "ogrenci_id": ogr_id,
-                        "tarih": tarih.isoformat(),
-                        "faaliyet": faaliyet,
-                        "adet": adet,
-                        "birim": birim,
-                        "birim_puan": float(birim_puan),
-                        "toplam_puan": float(toplam_puan),
-                    })
-            sonuc["detaylar"] = detaylar
-
-        return sonuc
-
-    except HTTPException:
-        raise
-
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Puan raporu alınamadı."
-        )
-
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
 
 
 def _ogrenci_saklama_suresi_kontrol(cursor, ogrenci_id):
@@ -9457,15 +8855,45 @@ app.include_router(router_olustur(izin_kontrol, VT_AYARLARI))
 
 # Ayrılan modüller (server/sunucu.py'nin parçalanması): uçlar kendi dosyalarında; yetki bağımlılığı buradan verilir.
 # Fonksiyon adları geriye dönük olarak burada da erişilebilir kalır (testler `server.sunucu.<ad>` ile içe aktarır).
-from server import audit_api, cihaz_raporlari_api, danisma_raporlari_api, yonetim_raporlari_api
+from server import (
+    audit_api, cihaz_raporlari_api, cihaz_uygunluk_api, danisma_raporlari_api, puan_raporu_api, randevu_oda_raporlari_api,
+    surum_api, yonetim_raporlari_api,
+)
 
 app.include_router(audit_api.router_olustur(izin_kontrol))
 app.include_router(cihaz_raporlari_api.router_olustur(izin_kontrol))
 app.include_router(yonetim_raporlari_api.router_olustur(izin_kontrol))
 app.include_router(danisma_raporlari_api.router_olustur(izin_kontrol))
+app.include_router(cihaz_uygunluk_api.router_olustur(izin_kontrol))
+app.include_router(randevu_oda_raporlari_api.router_olustur(izin_kontrol))
+app.include_router(puan_raporu_api.router_olustur(izin_kontrol))
+app.include_router(surum_api.router_olustur(izin_kontrol, mevcut_kullanici_id))
 audit_kayitlarini_getir = audit_api.audit_kayitlarini_getir
 cihaz_raporlari = cihaz_raporlari_api.cihaz_raporlari
 danisma_raporlari = danisma_raporlari_api.danisma_raporlari
+from server.cihaz_uygunluk_api import (  # noqa: E402  (geriye dönük adlar)
+    UYGUNLUK_EN_FAZLA_GUN,
+    UYGUNLUK_ACIK_UCLU_DURUMLAR,
+    _uygunluk_uyari,
+    cihaz_uygunluk_hazirla,
+    cihaz_uygunluk_getir,
+)
+from server.randevu_oda_raporlari_api import (  # noqa: E402  (geriye dönük adlar)
+    randevu_raporu_secenekleri,
+    oda_kullanimi,
+    randevu_raporu,
+)
+from server.puan_raporu_api import (  # noqa: E402  (geriye dönük adlar)
+    PUAN_RAPORU_DURUMLARI,
+    puan_raporu,
+)
+from server.surum_api import (  # noqa: E402  (geriye dönük adlar)
+    _sistem_durumu,
+    _SURUM,
+    _UYGULAMA_ADI,
+    surum_bilgisi,
+    sistem_durumu_getir,
+)
 from server.yonetim_raporlari_api import (  # noqa: E402  (geriye dönük adlar: testler `server.sunucu.<ad>` ile içe aktarır)
     _yonetim_onceki_donem,
     _rapor_donemi_dogrula,
@@ -9490,42 +8918,8 @@ from server.yonetim_raporlari_api import (  # noqa: E402  (geriye dönük adlar:
 # ==========================================
 from typing import Literal as _Literal
 
-from server import sistem_durumu as _sistem_durumu
-from server.surum import SURUM as _SURUM, UYGULAMA_ADI as _UYGULAMA_ADI
 
 
-@app.get("/api/surum")
-def surum_bilgisi(kullanici_id: int = Depends(mevcut_kullanici_id)):
-    """Hakkında penceresi için sunucu sürümü ve veritabanı şema sürümü (giriş yapmış herkes görebilir; kişisel veri içermez)."""
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        return {"uygulama": _UYGULAMA_ADI, "surum": _SURUM, "sema_surumu": _sistem_durumu.sema_surumu(cursor)}
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
-
-
-@app.get("/api/sistem-durumu")
-def sistem_durumu_getir(kullanici_id: int = Depends(izin_kontrol("AUDIT_KAYITLARI_INCELE"))):
-    """Yönetici için sistem durumu: sürüm, şema, son yedek, son girişler, başarısız girişler ve temel sayılar."""
-    conn = None
-    cursor = None
-    try:
-        conn = vt_baglan(VT_AYARLARI)
-        cursor = conn.cursor()
-        return _sistem_durumu.sistem_durumu(cursor, VT_AYARLARI["dbname"])
-    except HTTPException:
-        raise
-    except Exception:
-        if conn is not None: conn.rollback()
-        logging.getLogger(__name__).exception("Sistem durumu alınamadı")
-        raise HTTPException(status_code=500, detail="Sistem durumu alınırken bir hata oluştu.")
-    finally:
-        if cursor is not None: cursor.close()
-        if conn is not None: conn.close()
 
 
 # Liste ekranlarındaki "Excel'e Aktar" işleminin denetim kaydı: kim, ne zaman, hangi liste, kaç satır.
