@@ -46,6 +46,10 @@ bu gün orada yazan sunucu güncelleme ve smoke test adımlarının **provasıd�
 
 Önce geri dönüş bilgilerini yukarıdaki tabloya yazın: `git log -1 --format=%h` ve `python -m alembic current`.
 
+**Not:** Canlı sunucu 27.11.2026'da `develop` `f1efdb2` sürümüne güncellenmişti (SEC-001 kanıt dosyası). O günden bu yana kodda değişiklikler oldu
+(rapor çıktıları, oda silme, ana panelde iptal randevular, kaydırmalı formlar) ama **yeni migration eklenmedi**: şema zaten head'de olmalı ve
+`alembic upgrade head` "zaten güncel" demeli. Bu bölüm bu yüzden hem **güncel develop'a geçiş provası** hem de **şemanın gerçekten head'de olduğunun doğrulamasıdır**.
+
 - [ ] Kullanıcılara haber verildi; kimsenin işlem yapmadığından emin olundu.
 - [ ] **Elle yedek** alındı ve dosya adı tabloya yazıldı (sunucu çalışırken):
 
@@ -64,8 +68,9 @@ bu gün orada yazan sunucu güncelleme ve smoke test adımlarının **provasıd�
       python -m alembic upgrade head
       python scripts/sema_dogrula.py
 
-  `python -m alembic current` ile `python -m alembic heads` çıktıları **aynı** olmalı (tek head). Canlı sunucu en son 24.11.2026'da `f4c8a2e6b917` şemasındaydı
-  (SMOKE-001). O sürümden bu yana eklenenler, sırayla (sunucunuzun `alembic current` çıktısı farklıysa yalnızca o noktadan sonrakiler çalışır):
+  `python -m alembic current` ile `python -m alembic heads` çıktıları **aynı** olmalı (tek head). Canlı sunucu 24.11.2026'da `f4c8a2e6b917` şemasındaydı
+  (SMOKE-001); aşağıdaki migrasyonlar 27.11.2026'daki güncellemeyle uygulanmış olmalıdır: `alembic current` çıktısı `f6c2d8a4b715` (head) **değilse** çalıştırılır.
+  Başka bir sunucuda (ikinci kurulum, test) bu sırayla uygulanırlar (çıktı farklıysa yalnızca o noktadan sonrakiler çalışır):
 
   | Migration | Ne yapar |
   |---|---|
@@ -77,6 +82,10 @@ bu gün orada yazan sunucu güncelleme ve smoke test adımlarının **provasıd�
   | `f6c2d8a4b715` | Duyuru "Okudum" işaretleri (`duyuru_okundu` tablosu) |
 
   Her biri sonunda hatasız bitmeli. Hata çıkarsa **durun**, çıktıyı kaydedin ve bölüm 8'e bakın; veritabanını yedekten geri yükleyin (bölüm 3).
+
+  **Kısıtlı veritabanı kullanıcısı (Sunucu Kurulum Kılavuzu 6A):** canlı sunucu 27.11.2026'dan beri `tkys_uygulama` kullanıcısıyla çalışıyor; bu yüzden `.env` içindeki `DB_MIGRATION_USER` /
+  `DB_MIGRATION_PASSWORD` satırları **durmalıdır**: `alembic upgrade head` ve `sema_dogrula.py` tam yetkiyi bu bilgiyle kendiliğinden kullanır (yoksa "tam yetkili kullanıcı
+  gerekir" diye durur). Yeni tablolar `tkys_uygulama`'ya otomatik yetkilendirilir; bunu 2.4'teki **duyuru Okudum** denemesi dolaylı kanıtlar (`duyuru_okundu` tablosuna yazılabiliyor).
 - [ ] Görevler yeniden kuruldu (yönetici PowerShell): `python scripts/windows/sunucu_kurulum.py` ve `python scripts/windows/kurulum.py`
 - [ ] Sunucu başlatıldı: `schtasks /Run /TN TKYS_Sunucu`; `/api/saglik` açılıyor; `logs\sunucu.log` içinde hata yok.
 - [ ] İstemciden **Yönetici → Sistem Durumu**: sürüm, şema ve veritabanı **yeşil**; **Hakkında** penceresinde istemci ve sunucu sürümü aynı.
@@ -105,7 +114,8 @@ SMOKE-001 (`docs/test-reports/SMOKE-001_Canli_Ortam_Smoke_Test.md`) içinde boş
 
 - [ ] Cihaz rezervasyonu oluştur ve iptal et (aynı cihaz/saat için çakışma reddediliyor).
 - [ ] `sec_memur`: bakım kaydı ekle → listede görünüyor; arıza bildir ve çözüldü yap.
-- [ ] **Oda Yönetimi → odayı sil**: **test için açılmış, hiç kullanılmamış** bir odada uyarı çıkıyor ve silinince listeden kalkıyor (denetim kaydına yazılıyor). Randevusu/rezervasyonu/etkinliği olan bir odanın **silinemediği** ("... kaydı var", pasife alma önerilir) ve bir psikologun tek aktif odasının silinemediği doğrulanıyor; **gerçek odaları silmeyin**.
+- [ ] **Oda Yönetimi → odayı sil** (yalnızca **pasif** oda silinir): **test için açılmış, hiç kullanılmamış** bir odayı önce **pasife alın**, sonra **"Pasif odaları da göster"** kutusunu işaretleyip seçin; **"Odayı Sil"** düğmesi yalnızca pasif oda seçiliyken etkindir, onay kutusu uyarır, silinince oda listeden kalkar (denetim kaydına yazılır).
+  **Aktif** odada düğme gridir ("Önce odayı pasife alın…"); sunucu aktif oda silme isteğini de 409 ile reddeder. Randevusu, rezervasyonu ya da etkinliği olan bir oda pasif olsa bile **silinemez** ("… kaydı var"); pasife alma, planlı kaydı olan ya da bir psikologun tek aktif odası olan odayı zaten engeller. **Gerçek odaları silmeyin**.
 
 **2.4 Ana panel ve bildirimler**
 
@@ -139,12 +149,23 @@ SMOKE-001 (`docs/test-reports/SMOKE-001_Canli_Ortam_Smoke_Test.md`) içinde boş
 
 ## 4. Güvenlik denemeleri (SEC-001 canlı satırları; GO/NO-GO 5–7 ve 11)
 
-Adım adım yönerge: **`docs/test-reports/SEC-001_Canli_Deneme_Rehberi.md`**. Burada yalnızca sırası ve kanıt yeri özetlenir.
+Adım adım yönerge: **`docs/test-reports/SEC-001_Canli_Deneme_Rehberi.md`**. Bu denemeler **27.11.2026'da canlı sunucuda (`develop` `f1efdb2`) yapıldı**; sonuçlar
+`docs/test-reports/SEC-001_Guvenlik_Test_Raporu.md` ve kanıtlar `docs/test-reports/kanit/` altındadır. Bu günün işi, sonuçları **yayın adayı sürümde doğrulamak**tır.
 
-- [ ] **API denemeleri (istemciden):** önce veri değiştirmeyenler (`--adimlar T01,T02,T08`), sonra `--onay` ile T03, T07, T08. Hepsi **PASS**, `FAIL` yok; `ATLANDI` varsa nedeni giderilip tekrarlandı. Kanıt: `sec001_canli_kanit_<tarih>.txt`.
-- [ ] **Sunucuda elle:** SEC-T10 (`.env` gizli ve anahtar uzun), SEC-T11 (`pip-audit` temiz), SEC-T12 (denetim kaydı UPDATE/DELETE/TRUNCATE engelli, kayıt sayısı değişmedi), SEC-T13 (yedek klasörü yalnızca yönetici/sistem, ağda paylaşılmıyor).
-- [ ] **İstemcide elle:** SEC-T08 son adımı (pasife alınan kullanıcının açık oturumu giriş ekranına dönüyor).
-- [ ] `SEC-001_Guvenlik_Test_Raporu.md` içindeki `Canlı: ⏳` ifadeleri sonuç ve tarihle değiştirildi (rehberin 5. bölümü).
+| Madde | 27.11.2026 sonucu (rapora göre) |
+|---|---|
+| SEC-T01, T02, T03, T07, T08 (betik; T08'in istemci adımı da elle) | PASS (23 PASS, 0 FAIL) |
+| SEC-T10 (`.env` gizli, anahtar uzun) | PASS; `.env` ve `anahtar.pem` izinleri daraltıldı (Bulgu #4) |
+| SEC-T11 (`pip-audit`) | PASS: bilinen açık yok |
+| SEC-T12 (denetim kaydı değiştirilemez) | PASS: UPDATE/DELETE/TRUNCATE engellendi, kayıt sayısı değişmedi; sunucu `tkys_uygulama` kullanıcısına geçtikten sonra tekrarlandı: DROP dahil engelli |
+| SEC-T13 (yedek klasörü izni) | PASS düzeltmeden sonra (Bulgu #3: miras izinler) |
+| Bulgu #5 (P2) | (b) kısıtlı veritabanı kullanıcısı: **kapatıldı** (sunucu `tkys_uygulama` ile çalışıyor); (a) `C:\TKYS` klasörü izinleri: **açık, ekip kararı** |
+
+- [ ] **Yayın adayı sürümde kısa tekrar (veri değiştirmeyen):** `python scripts/canli_guvenlik_denemesi.py --adres https://172.24.4.66:8443 --ca sertifika.pem --adimlar T01,T02,T08 --yetkisiz sec_psikolog_a`; hepsi **PASS**, `FAIL` yok. Kimlik doğrulama ya da yetki koduna dokunan bir değişiklik girdiyse T03 ve T07'yi de `--onay` ile tekrarlayın.
+- [ ] **SEC-T12, uygulama kullanıcısıyla:** sunucu `tkys_uygulama` ile çalışıyor (27.11.2026): denetim kaydı denemelerini (UPDATE/DELETE/TRUNCATE) `.env` içindeki **uygulama kullanıcısıyla** tekrarlayın: üçü de engellenmeli, kayıt sayısı değişmemeli.
+- [ ] **Sunucu izinleri bozulmadı:** güncellemeden sonra `.env`, `anahtar.pem` ve yedek klasörünün izinleri (Bulgu #3, #4 düzeltmeleri) hâlâ yalnızca Administrators/SYSTEM (`icacls`); `git pull` bu izinleri geri açmamış.
+- [ ] **Açık bulgu #5(a)** (`C:\TKYS` klasörü izinleri): ekip kararı verildi (düzeltildi ya da kabul edilen risk olarak raporda bırakıldı).
+- [ ] Yeni bulgu çıktıysa `SEC-001_Guvenlik_Test_Raporu.md` içindeki Bulgular tablosuna eklendi (bölüm 8).
 
 ## 5. Kurulum ve istemci kontrolü (GO/NO-GO 13)
 
@@ -178,7 +199,7 @@ Bu günün çıktısı, `docs/test-reports/GO-NO-GO_Kontrol_Listesi.md` içindek
 |---|---|---|
 | 1 Build PASS, 2 Unit/Integration PASS | Bölüm 0: develop son CI koşusu yeşil | ☐ |
 | 3 P0 = 0, 4 P1 = 0 | Bölüm 8: açık P0/P1 issue yok | ☐ |
-| 5 Authentication, 6 Authorization, 7 Security | Bölüm 4 (SEC-001 canlı satırları) | ☐ |
+| 5 Authentication, 6 Authorization, 7 Security | Bölüm 4 (27.11.2026 canlı sonuçları + aday sürümde kısa tekrar) | ☐ |
 | 8 Concurrency | SEC-T15 testleri (CI'da PASS) + bölüm 5'teki iki bilgisayarlı deneme | ☐ |
 | 9 Backup, 10 Restore | Bölüm 3 (yedek günlüğü + geri yükleme çıktısı) | ☐ |
 | 11 Audit | Bölüm 2.6 ve SEC-T12 | ☐ |
