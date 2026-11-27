@@ -48,7 +48,7 @@ Yarım kalan bir formu kaydetmeden önce oturumunuzun süresine dikkat edin.
   Menüde bir sayfayı göremiyorsanız o sayfa için yetkiniz yoktur.
 - **Üst çubuk:** Açık sayfanın adı, bildirimler (🔔), **?** (Hakkında / Yardım) ve **🏠 Ana Sayfa** düğmesi.
 - **Ana Kontrol Paneli:** Günün özeti ve sayfanın altında **Hızlı Erişim** kutuları (sık kullanılan sayfalara kısayol). Bir kutuya tıklayınca ilgili sayfa açılır.
-  Panelde **bugünkü danışan randevuları** ve, cihaz rezervasyonlarını görme yetkisi olanlarda (Cihaz Uygunluğu'nu görenler ve rezervasyon yapanlar dahil)
+  Panelde **bugünkü danışan randevuları** (**iptal edilenler listelenmez** ve "Bugün planlanan seans" sayısına girmez) ve, cihaz rezervasyonlarını görme yetkisi olanlarda (Cihaz Uygunluğu'nu görenler ve rezervasyon yapanlar dahil)
   **bugünkü cihaz rezervasyonları** listelenir; böylece merkezde o gün neyin ne zaman kullanıldığını herkes bilir. **Rezerve eden** adı yalnızca cihazı
   yönetenlere ve rezervasyon yapanlara gösterilir; yalnızca Cihaz Uygunluğu'nu görenlerde bu sütun yoktur (kişi adı verilmez).
   Ayrıca **herkesin** panelinde **bugünkü oda etkinlikleri** (saat, etkinlik adı, oda, katılımcı sayısı; iptal edilenler listelenmez, organize eden adı

@@ -84,6 +84,8 @@ python -m client.login_ekrani
 $env:TKYS_API_URL = "http://SUNUCU_ADRESI:8000"
 python -m client.login_ekrani
 ```
+Sunucuda HTTPS kuruluysa adres `https://SUNUCU_ADRESI:8443` olur ve kendi imzalı sertifika için `TKYS_CA_BUNDLE` (sertifika dosyasının yolu) de verilir:
+[TLS Kurulum Rehberi](docs/deployment/TLS_Kurulum_Rehberi.md).
 
 ## Roller
 

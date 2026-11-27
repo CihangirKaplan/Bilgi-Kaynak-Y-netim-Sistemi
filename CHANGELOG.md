@@ -76,7 +76,8 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
   Liste boşken "Yok" tekrarı yazılmaz; PDF yüksek çözünürlükte (eşit harf aralığı), başlık şeritli, bölüm başlığı altındaki içerikle birlikte ve satırlar sayfa sonunda
   bölünmeden yerleşir, tablo başlığı her sayfada tekrarlanır. Excel dosyaları A4 yatay, sayfaya sığdırılmış, altbilgide sayfa numarasıyla yazdırılır.
 - **🔔 Zil bildirimleri:** süresi dolan öğrenci kayıtları, sonucu girilmemiş randevular ve yedek uyarısı.
-- Oda Yönetimi: kullanılmamış odayı uyarıyla veritabanından kalıcı silme.
+- Oda Yönetimi: **yalnızca pasif ve hiç kullanılmamış** odayı (randevu, cihaz rezervasyonu ya da etkinlik kaydı olmayan) uyarıyla veritabanından kalıcı silme.
+  Aktif oda silinemez: önce pasife alınır; "Odayı Sil" düğmesi yalnızca pasif oda seçiliyken etkindir (sunucu da aynı kuralı uygular).
 
 ### Öğrenci, faaliyet ve danışma masası
 
@@ -87,7 +88,10 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 ### Panel, bildirimler ve raporlar
 
-- Ana panel: tıklanabilir özet kartları, bugünkü randevular, yaklaşan işlemler, günlük akış.
+- Ana panel: tıklanabilir özet kartları, bugünkü randevular, yaklaşan işlemler, günlük akış. **İptal edilen randevular ana panelde listelenmez** ve
+  "Bugün planlanan seans" kartında sayılmaz (Randevu Yönetimi ve raporlar iptalleri eskisi gibi gösterir).
+- Uzun form pencerelerinde (ör. Kullanıcı Oluştur, bakım/kalibrasyon/rezervasyon formları) alanlar kaydırılır, **İptal / Kaydet düğmeleri altta sabit** kalır;
+  küçük ekranda ve yüksek Windows ekran ölçeğinde düğmeler ekranın dışında kalmaz. İçerik sığıyorsa kaydırma çubuğu çıkmaz.
 - Bildirim merkezi (bakım/kalibrasyon, parola talepleri, onay bekleyen görevler).
 - Yönetim Raporları: dönem karşılaştırması (önceki dönem kuralıyla), grafikler (sütun/çizgi/pasta), PDF/Excel;
   Bugün Merkezde, öğrenci, faaliyet, oda ve cihaz kullanım raporları.
@@ -117,6 +121,8 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 ### Performans ve ölçeklenme
 
+- **Veritabanı bağlantı havuzu** (`TKYS_DB_HAVUZ_BOYUTU`, varsayılan 10): Windows'ta her istek için yeni veritabanı bağlantısı açmanın maliyeti kalktı; kapatılan bağlantılar
+  yeniden kullanılır, program ve sayfalar daha hızlı açılır. `0` havuzu kapatır (eski davranış). Eşzamanlı bağlantı sayısını sınırlamaz.
 - Yetki Raporu'nun "son giriş" sorgusu için denetim tablosunda kısmi indeks (`ix_denetim_login_kullanici_tarih`); 1 milyon denetim kaydında rapor 3,5 sn → 50 ms. Yeni migration: `d4a8b6c2e913` (`alembic upgrade head`).
 - Danışanlar ekranı tüm randevu geçmişini tek istekte çekmez: danışan başına randevu sayısı hafif bir uçtan (`/api/danisan-randevu-sayilari`) gelir, geçmiş danışan seçilince yalnızca o danışan için istenir (10 yıllık veride 47,7 MB / 5 sn → 216 KB / 92 ms). Süzgeçsiz `/api/randevular` en yeni 5000 kayıtla sınırlıdır; `X-Toplam-Kayit` başlığı gerçek toplamı bildirir.
 - Randevu Raporu (özet) SQL'de gruplanır; tarih seçilmeden tüm zamanlar için 1,6 sn → 0,3 sn. Sonuç, satır satır hesapla birebir aynıdır (testle doğrulanır). Excel için `detay=true` değişmedi.
@@ -125,6 +131,8 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 
 - Birim, entegrasyon, kabul ve güvenlik testleri (SEC-T01 … SEC-T15); gerçek PostgreSQL testleri; GitHub Actions'ta her PR'da.
 - Performans (Locust) ve GUI entegrasyon raporları; FR izlenebilirlik tablosu.
+- Sunucu kodu bakımı kolaylaştırmak için konulara göre modüllere bölündü (`server/sunucu.py` 11.000+ satırdan ~1.000 satıra indi; kimlik doğrulama çekirdeği orada kalır).
+  Davranış değişmedi: API şeması (OpenAPI) ve her ucun gerektirdiği izin, bölmeden önceki sürümle birebir aynıdır ve testlerle korunur.
 
 ### Bilinen sınırlar
 
