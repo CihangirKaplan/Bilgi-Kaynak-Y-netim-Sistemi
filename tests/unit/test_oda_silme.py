@@ -30,10 +30,10 @@ def test_odalar_denetim_kaydina_silinen_icerik_yazilabilir_tablolardadir():
 
 
 # ------------------------------------------------------------------ istemci
-def _pencere(secili=True):
+def _pencere(secili=True, durum="Pasif"):
     tablo = QTableWidget(1, 4)
     tablo.setSelectionBehavior(QAbstractItemView.SelectRows)
-    for sutun, deger in enumerate(["7", "Gözlem Odası", "1", "Aktif"]):
+    for sutun, deger in enumerate(["7", "Gözlem Odası", "1", durum]):
         tablo.setItem(0, sutun, QTableWidgetItem(deger))
     if secili:
         tablo.selectRow(0)
@@ -84,8 +84,42 @@ def test_onay_kutusu_kalici_ve_geri_alinamaz_oldugunu_soyler_varsayilan_vazgec(t
     _, _, _, kutular = _sil(ana, onay=False)
     kutu = kutular[0]
     assert "Gözlem Odası" in kutu.text() and "KALICI" in kutu.text()
-    assert "geri alınamaz" in kutu.informativeText() and "pasife" in kutu.informativeText()
+    assert "geri alınamaz" in kutu.informativeText() and "pasif olarak kalır" in kutu.informativeText()
     assert kutu.defaultButton().text() == "Vazgeç"                  # yanlışlıkla Enter'a basılırsa silinmez
+
+
+def test_aktif_oda_silinmez_uyarir_istek_gondermez_onay_kutusu_acilmaz(tkys_qapplication):
+    ana = _pencere(durum="Aktif")
+    istek, bildirim, uyari, kutular = _sil(ana)
+    istek.assert_not_called()
+    bildirim.assert_not_called()
+    assert kutular == [] and uyari.call_args.args[1] == "Aktif Oda Silinemez" and "pasife alın" in uyari.call_args.args[2]
+
+
+def _dugmeli_pencere(durum, secili=True):
+    from PySide6.QtWidgets import QPushButton
+    ana = _pencere(secili=secili, durum=durum)
+    ana.oda_durum_butonu, ana.oda_sil_butonu = QPushButton(), QPushButton()
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    return ana
+
+
+def test_sil_dugmesi_yalnizca_pasif_oda_secili_iken_etkindir(tkys_qapplication):
+    assert _dugmeli_pencere("Pasif").oda_sil_butonu.isEnabled()
+    aktif = _dugmeli_pencere("Aktif")
+    assert not aktif.oda_sil_butonu.isEnabled() and "Önce odayı pasife alın" in aktif.oda_sil_butonu.toolTip()
+    bos = _dugmeli_pencere("Pasif", secili=False)
+    assert not bos.oda_sil_butonu.isEnabled() and "pasif bir oda seçin" in bos.oda_sil_butonu.toolTip()
+
+
+def test_secim_degisince_sil_dugmesi_durumu_izler(tkys_qapplication):
+    ana = _dugmeli_pencere("Pasif")
+    ana.oda_tablosu.item(0, 3).setText("Aktif")                  # oda aktif edildi, liste yenilendi
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    assert not ana.oda_sil_butonu.isEnabled()
+    ana.oda_tablosu.item(0, 3).setText("Pasif")
+    mw.AnaPencere.oda_durum_butonunu_guncelle(ana)
+    assert ana.oda_sil_butonu.isEnabled()
 
 
 def test_vazgecilirse_hicbir_sey_yapilmaz(tkys_qapplication):
