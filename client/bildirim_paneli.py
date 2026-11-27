@@ -162,6 +162,9 @@ class BildirimPaneli(QFrame):
             grup, metin, hedef = oge[:3]
             gruplar.setdefault(grup, []).append((metin, hedef, (oge[3] if len(oge) > 3 else None) or {}))   # 3. öğe: ek bilgi (örn. duyuru kimliği)
 
+        if "Sistem" in gruplar:
+            gruplar.move_to_end("Sistem")           # sistem uyarıları (yedek vb.) her zaman en altta
+
         satir_sayisi = 0
 
         for grup, satirlar in gruplar.items():
