@@ -148,6 +148,7 @@ Sunucu bilgisayarındaki `.env` dosyası **gizlidir; GitHub'a yüklenmez, kimsey
 | `TKYS_DB_HAVUZ_BOYUTU` | Veritabanı bağlantı havuzunda boşta bekletilen bağlantı sayısı (varsayılan **10**). Program ve sayfalar daha hızlı açılır; **0** yazılırsa havuz kapanır. Değiştirirseniz sunucuyu yeniden başlatın |
 | `TKYS_BACKUP_DIR` | Yedeklerin yazılacağı klasör (ayarsızsa projenin `backups` klasörü) |
 | `PG_DUMP_PATH` | `pg_dump.exe` dosyasının tam yolu |
+| `PG_RESTORE_PATH` | `pg_restore.exe` dosyasının tam yolu (yedekten geri yüklerken `pg_restore bulunamadi` hatası alırsanız; PostgreSQL `bin` klasörü PATH'te değilse) |
 | `TKYS_API_DOCS` | `1` ise API belge sayfaları (`/docs`) açılır; **varsayılan kapalıdır**, yalnızca teknik kişi gerektiğinde açmalı |
 | `TKYS_SSL_CERTFILE`, `TKYS_SSL_KEYFILE` | Sunucu için HTTPS: sertifika ve gizli anahtar dosyalarının yolu (ikisi birlikte verilir). Ayarlanmazsa sunucu düz HTTP ile çalışır; ağa açıksa günlüğe uyarı yazılır. Kurulum: [TLS Kurulum Rehberi](../../docs/deployment/TLS_Kurulum_Rehberi.md) |
 | `TKYS_GUVENILIR_VEKIL` | `1` yalnızca TLS'i başka bir sunucu (ters vekil) sonlandırıyorsa verilir; denetim kaydındaki istemci adresi ve HTTPS başlığı vekilin gönderdiği bilgiden alınır. Vekil yoksa **vermeyin** |

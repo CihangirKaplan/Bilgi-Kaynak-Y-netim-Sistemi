@@ -30,6 +30,14 @@ Roller ve izinler merkeze göre Rol & İzin Yönetimi ekranından değiştirileb
 
       setx TKYS_API_URL "http://SUNUCU_ADRESI:8000"
 
+  Sunucuda **HTTPS** kuruluysa (canlı ortam için önerilir; örnek bağlantı noktası 8443) adres `https://...` olur ve kendi imzalı sertifika kullanılıyorsa
+  sertifika dosyası da tanıtılır (sertifika doğrulaması kapatılmaz):
+
+      setx TKYS_API_URL "https://SUNUCU_ADRESI:8443"
+      setx TKYS_CA_BUNDLE "C:\TKYS\sertifika\sertifika.pem"
+
+  Ayrıntı: `docs/deployment/TLS_Kurulum_Rehberi.md`. Her istemcide **Hakkında** penceresinde istemci ve sunucu sürümünün aynı olduğunu kontrol edin.
+
 - **Yedekleme ve geri yükleme:** `scripts/windows/README.md` ve sunucu kurulum kılavuzunun 10. bölümü.
 
 ## Önceki bir test kurulumundan yükseltme
