@@ -160,9 +160,17 @@ def test_dialog_dugme_izninde_not_kutusu_gorunur_ve_metni_dogrudur(qt_app):
 
 
 def test_dialog_sekme_acan_izinde_not_kutusu_gizli_ve_pencere_normal_boyda(qt_app):
+    from PySide6.QtCore import QRect
+    from client.diyalog_tabani import KaydirmaliDiyalog
     normal, notlu = dialog(1), dialog(2)
     assert normal.lbl_bagimlilik_notu.isHidden() and normal.bagimlilik_notu is None
-    assert notlu.height() == normal.height() + rid.IzinDuzenleDialog.NOT_EK_YUKSEKLIK
+    # Pencere boyutu ekran yüksekliğine göre kısılır (KaydirmaliDiyalog); karşılaştırma için yeterince uzun bir ekran varsayılır.
+    with patch.object(KaydirmaliDiyalog, "_ekran_alani", lambda self: QRect(0, 0, 1920, 1400)):
+        for d in (normal, notlu):
+            d.show()
+            QApplication.processEvents()
+        assert notlu.height() == normal.height() + rid.IzinDuzenleDialog.NOT_EK_YUKSEKLIK
+    normal.close(); notlu.close()
 
 
 def test_dialog_bilinmeyen_izinde_cokmez_ve_not_gostermez(qt_app):

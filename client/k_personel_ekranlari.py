@@ -17,6 +17,7 @@ from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
                                QComboBox, QPushButton, QMessageBox, QListWidget,
                                QListWidgetItem, QLabel, QFrame, QScrollArea)
+from client.diyalog_tabani import KaydirmaliDiyalog
 from client.tablo_siralama import siralanabilir_yap
 from client.tablo_tasarimi import ortak_liste_stili_uygula
 from client.bildirim_toast import basari_bildirimi
@@ -962,7 +963,7 @@ def atanabilir_rolleri_yukle(api_url, token, combo, islem):
         )
 
 
-class KullaniciOlusturFormu(QDialog):
+class KullaniciOlusturFormu(KaydirmaliDiyalog):
     """Kullanıcı, personel ve gerekirse öğrenci kaydını tek işlemde oluşturur."""
 
     def __init__(self, api_url, token, ebeveyn=None):
@@ -982,9 +983,9 @@ class KullaniciOlusturFormu(QDialog):
         self.rol_degisti()
 
     def arayuzu_kur(self):
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır (ekrana sığmayan formlarda da görünür)
         layout.setSpacing(12)
-        layout.setContentsMargins(20, 25, 20, 20)
+        layout.setContentsMargins(20, 25, 20, 12)
 
         layout.addWidget(QLabel("Sistem Rolü:"))
         self.combo_rol = QComboBox()
@@ -1068,7 +1069,7 @@ class KullaniciOlusturFormu(QDialog):
         
         buton_layout.addWidget(self.btn_iptal)
         buton_layout.addWidget(self.btn_kaydet)
-        layout.addLayout(buton_layout)
+        alt_yerlesim.addLayout(buton_layout)
 
         # Hesap oluşturulduktan sonra görünür.
         self.sonuc_kutusu = QFrame()
@@ -1322,7 +1323,7 @@ class KullaniciOlusturFormu(QDialog):
             QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
 
 
-class OdaYetkileriFormu(QDialog):
+class OdaYetkileriFormu(KaydirmaliDiyalog):
     """Seçili psikologun görüşme odalarını düzenler. Her psikologun en az bir odası olmalıdır."""
 
     def __init__(self, api_url, token, kullanici_id, kullanici_adi, ebeveyn=None):
@@ -1344,7 +1345,7 @@ class OdaYetkileriFormu(QDialog):
             "QPushButton#btn_kaydet:disabled { background-color: #94A3B8; }"
         )
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
@@ -1367,7 +1368,7 @@ class OdaYetkileriFormu(QDialog):
         self.btn_kaydet.clicked.connect(self.kaydet)
         butonlar.addWidget(self.btn_iptal)
         butonlar.addWidget(self.btn_kaydet)
-        layout.addLayout(butonlar)
+        alt_yerlesim.addLayout(butonlar)
 
         self.odalari_yukle()
 
@@ -1455,7 +1456,7 @@ class AktiflestirmeOdaFormu(OdaYetkileriFormu):
         self.accept()
 
 
-class RolDegistirFormu(QDialog):
+class RolDegistirFormu(KaydirmaliDiyalog):
     def __init__(self, api_url, token, kullanici_id, kullanici_adi, mevcut_rol, ebeveyn=None, mevcut_rol_gorunen=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
@@ -1494,7 +1495,7 @@ class RolDegistirFormu(QDialog):
         self.rol_degisti()
 
     def arayuzu_kur(self):
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setSpacing(15)
         layout.setContentsMargins(20, 25, 20, 20)
 
@@ -1569,7 +1570,7 @@ class RolDegistirFormu(QDialog):
 
         buton_layout.addWidget(self.btn_iptal)
         buton_layout.addWidget(self.btn_kaydet)
-        layout.addLayout(buton_layout)
+        alt_yerlesim.addLayout(buton_layout)
 
     def rol_degisti(self, *_):
         # ADMIN kullanıcısının rolü değiştirilemez.

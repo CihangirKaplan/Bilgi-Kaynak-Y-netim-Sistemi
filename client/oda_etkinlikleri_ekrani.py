@@ -1,5 +1,6 @@
 """TKYS Oda Etkinlikleri yönetim ekranı."""
 
+from client.diyalog_tabani import KaydirmaliDiyalog
 import calendar
 from datetime import datetime, time as saat_tipi, timedelta
 
@@ -54,7 +55,7 @@ def tekrar_tarihleri(baslangic, bitis, hafta_gunleri):
     return sonuc
 
 
-class TekrarliOturumDialog(QDialog):
+class TekrarliOturumDialog(KaydirmaliDiyalog):
     """Düzenli etkinlik için tarih aralığı + haftanın günleri + saat seçerek birçok oturumu tek seferde üretir."""
 
     def __init__(self, parent=None, baslangic=None):
@@ -63,7 +64,7 @@ class TekrarliOturumDialog(QDialog):
         self.setMinimumWidth(560)
         self.setStyleSheet(dialog_stili())
 
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(22, 20, 22, 18)
         ana.setSpacing(12)
 
@@ -140,7 +141,7 @@ class TekrarliOturumDialog(QDialog):
         dugmeler.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         dugmeler.accepted.connect(self.accept)
         dugmeler.rejected.connect(self.reject)
-        ana.addWidget(dugmeler)
+        alt_yerlesim.addWidget(dugmeler)
 
         for alan in (self.bas_tarih, self.bit_tarih):
             alan.dateChanged.connect(self.guncelle)
@@ -191,7 +192,7 @@ class TekrarliOturumDialog(QDialog):
         return self.tarihler(), self.saat_bas.time(), self.saat_bit.time()
 
 
-class OdaEtkinlikFormu(QDialog):
+class OdaEtkinlikFormu(KaydirmaliDiyalog):
     """Tek etkinliğe birden fazla bağımsız oturum ekleme formu."""
 
     def __init__(self, odalar, personeller, kayit=None, parent=None):
@@ -206,7 +207,7 @@ class OdaEtkinlikFormu(QDialog):
 
         self.setStyleSheet(dialog_stili())
 
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur(tercih_boyut=(720, 600))      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(22, 20, 22, 18)
         ana.setSpacing(12)
 
@@ -328,7 +329,7 @@ class OdaEtkinlikFormu(QDialog):
         dugmeler.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         dugmeler.accepted.connect(self.kaydet)
         dugmeler.rejected.connect(self.reject)
-        ana.addWidget(dugmeler)
+        alt_yerlesim.addWidget(dugmeler)
 
     def oturum_ekle(self, baslangic=None, bitis=None):
         if len(self.oturum_satirlari) >= EN_FAZLA_OTURUM:

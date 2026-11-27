@@ -4,6 +4,7 @@ Giriş yapılmamış olduğundan istek kimliksiz gönderilir; yalnızca kullanı
 kullanıcı adını (404) ve pasif hesabı (403) açıkça bildirir; kullanıcı yazım hatasını hemen anlar. Pencere sonucu
 sade bir dille gösterir; ağ ya da sunucu hatalarında kullanıcıya yöneticiye doğrudan ulaşmasını söyler.
 """
+from client.diyalog_tabani import KaydirmaliDiyalog
 import requests
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout)
@@ -33,7 +34,7 @@ QLabel#not { font-size: 12px; color: #6B7FA8; }
 ZAMAN_ASIMI_SANIYE = 8
 
 
-class ParolaTalebiDialog(QDialog):
+class ParolaTalebiDialog(KaydirmaliDiyalog):
     def __init__(self, api_url, kullanici_adi="", parent=None):
         super().__init__(parent)
         self.api_url = api_url
@@ -42,7 +43,7 @@ class ParolaTalebiDialog(QDialog):
         self.setMinimumWidth(460)
         self.setStyleSheet(STIL)
 
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(28, 26, 28, 24)
         ana.setSpacing(12)
 
@@ -112,7 +113,7 @@ class ParolaTalebiDialog(QDialog):
         dugmeler.addWidget(self.btn_vazgec)
         dugmeler.addWidget(self.btn_gonder)
         ana.addSpacing(6)
-        ana.addLayout(dugmeler)
+        alt_yerlesim.addLayout(dugmeler)
 
         self.txt_kullanici.setFocus(Qt.MouseFocusReason)        # yazı seçili gelmesin, imleç sonda dursun
 

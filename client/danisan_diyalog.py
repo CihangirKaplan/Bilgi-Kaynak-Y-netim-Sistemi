@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 OKUNUR_STIL = "background-color: #F1F5F9; color: #64748B; font-weight: bold;"
 
 
-class DanisanOlusturDialog(QDialog):
+class DanisanOlusturDialog(KaydirmaliDiyalog):
     """Yeni danışan kodu oluşturur ve dinamik ücret/istisna kurallarını uygular."""
 
     def __init__(self, api_url, token, ebeveyn=None, mevcut_psikolog_id=None, onceden_psikolog_id=None):
@@ -37,7 +38,7 @@ class DanisanOlusturDialog(QDialog):
             }
         """)
 
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(15, 15, 15, 15)
         ana.setSpacing(15)
 
@@ -116,7 +117,7 @@ class DanisanOlusturDialog(QDialog):
 
         butonlar.addWidget(btn_iptal)
         butonlar.addWidget(self.btn_kaydet)
-        ana.addLayout(butonlar)
+        alt_yerlesim.addLayout(butonlar)
 
         # Event bağlantıları ve başlangıç yüklemeleri
         self.cmb_ucret.currentIndexChanged.connect(self.ucret_durumu_degisti)

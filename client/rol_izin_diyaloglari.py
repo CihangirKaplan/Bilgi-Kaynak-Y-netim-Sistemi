@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QComboBox,
                                QLabel, QLineEdit, QPushButton, QMessageBox, 
                                QGraphicsDropShadowEffect,QCheckBox, QScrollArea, 
@@ -234,7 +235,7 @@ class KayanAnahtar(QCheckBox):
 
 # --- ROL DÜZENLE DİYALOĞU ---
 # --- ROL DÜZENLE DİYALOĞU ---
-class RolDuzenleDialog(QDialog):
+class RolDuzenleDialog(KaydirmaliDiyalog):
     def __init__(self, api_url, token, roller, rol_izin_map, ebeveyn=None):
         super().__init__(ebeveyn)
         self.api_url = api_url
@@ -243,7 +244,7 @@ class RolDuzenleDialog(QDialog):
         self.rol_izin_map = rol_izin_map
         
         self.setWindowTitle("TKYS — Rol Düzenle")
-        self.setFixedSize(450, 380) # Pencere boyutu biraz küçültülüp toparlandı
+        self.setMinimumWidth(450)
         self.setStyleSheet("QDialog { background-color: #F8FAFC; }")
         
         self.arayuzu_olustur()
@@ -252,7 +253,7 @@ class RolDuzenleDialog(QDialog):
             self.rol_secildi()
             
     def arayuzu_olustur(self):
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur(tercih_boyut=(450, 380))      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
         
@@ -378,7 +379,7 @@ class RolDuzenleDialog(QDialog):
         
         btn_layout.addWidget(btn_iptal, 1)
         btn_layout.addWidget(self.btn_kaydet, 2)
-        layout.addLayout(btn_layout)
+        alt_yerlesim.addLayout(btn_layout)
 
     def durum_metni_guncelle(self, durum):
         if durum:
@@ -450,7 +451,7 @@ class RolDuzenleDialog(QDialog):
         else:
             QMessageBox.warning(self, "Rol Güncellenemedi", hata_detayi_metni(yanit, "Rol güncellenemedi."))
 
-class IzinDuzenleDialog(QDialog):
+class IzinDuzenleDialog(KaydirmaliDiyalog):
     NOT_EK_YUKSEKLIK = 110       # not kutusu görününce pencerenin uzayacağı miktar (px)
 
     def __init__(self, api_url, token, izin_id, roller, matris_verisi, ebeveyn=None):
@@ -474,7 +475,7 @@ class IzinDuzenleDialog(QDialog):
             self.bagimlilik_notu = izin_bagimliliklari.not_getir(self.secilen_izin["izin_adi"], matris_verisi)
 
         self.setWindowTitle("TKYS — İzin ve Rol Yetki Düzenleme")
-        self.setFixedSize(480, 550 + (self.NOT_EK_YUKSEKLIK if self.bagimlilik_notu else 0))
+        self.setMinimumWidth(480)
         self.setStyleSheet("QDialog { background-color: #F8FAFC; }")
         
         self.rol_checkboxlar = {} # Hangi rolde hangi checkbox var tutmak için
@@ -482,7 +483,7 @@ class IzinDuzenleDialog(QDialog):
         self.verileri_doldur()
 
     def arayuzu_olustur(self):
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur(tercih_boyut=(480, 550 + (self.NOT_EK_YUKSEKLIK if self.bagimlilik_notu else 0)))      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
         
@@ -613,7 +614,7 @@ class IzinDuzenleDialog(QDialog):
 
         btn_layout.addWidget(btn_iptal, 1)
         btn_layout.addWidget(self.btn_kaydet, 2)
-        layout.addLayout(btn_layout)
+        alt_yerlesim.addLayout(btn_layout)
 
     def izin_bu_rolde_var_mi(self, rol_id, rol_izin_map):
         # rol_izin_map sözlüğünde str(rol_id) anahtar olarak saklanıyor olabilir

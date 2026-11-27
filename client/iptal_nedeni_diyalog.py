@@ -3,6 +3,7 @@
 Not alanı bilinçli olarak kısadır (100 karakter) ve kişisel bilgi yazılmaması için uyarı gösterir (FR-008).
 Liste ve sınır, sunucudaki modeller.IPTAL_NEDENLERI / IPTAL_NOTU_MAX ile aynı olmalıdır (testle denetlenir).
 """
+from client.diyalog_tabani import KaydirmaliDiyalog
 from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QVBoxLayout)
 
@@ -28,7 +29,7 @@ def iptal_girdisi_gecerli_mi(neden, notu):
     return True, ""
 
 
-class IptalNedeniDialog(QDialog):
+class IptalNedeniDialog(KaydirmaliDiyalog):
     def __init__(self, ebeveyn=None, randevu_kodu=None):
         super().__init__(ebeveyn)
         self.setWindowTitle("Randevu İptali")
@@ -47,7 +48,7 @@ class IptalNedeniDialog(QDialog):
             QLabel#uyari { color: #B45309; font-size: 11px; font-weight: bold; }
             QLabel#hata { color: #B42318; font-size: 12px; font-weight: bold; }
         """)
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(15, 15, 15, 15)
         ana.setSpacing(12)
 
@@ -96,7 +97,7 @@ class IptalNedeniDialog(QDialog):
         self.btn_iptal_et.clicked.connect(self.accept)
         butonlar.addWidget(btn_vazgec)
         butonlar.addWidget(self.btn_iptal_et)
-        ana.addLayout(butonlar)
+        alt_yerlesim.addLayout(butonlar)
 
         self.cmb_neden.currentIndexChanged.connect(self._dogrula)
         self.txt_not.textChanged.connect(self._dogrula)

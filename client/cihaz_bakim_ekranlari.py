@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
@@ -49,7 +50,7 @@ def tarihleri_denetle(ust, baslangic, bitis, sonraki):
     return True
 
 
-class YeniBakimFormu(QDialog):
+class YeniBakimFormu(KaydirmaliDiyalog):
     def __init__(self, api_url, token, parent=None, cihaz_id=None, plan_id=None, islem_metni=None):
         """cihaz_id / plan_id verilirse (plandan "kayıt aç" kısayolu) cihaz ve bağlı plan seçili açılır; islem_metni boş alanı doldurur."""
         super().__init__(parent)
@@ -62,7 +63,7 @@ class YeniBakimFormu(QDialog):
 
         self.setStyleSheet(FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
 
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
@@ -111,7 +112,7 @@ class YeniBakimFormu(QDialog):
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
         self.btn_kaydet.setEnabled(False)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         self.cihazlari_yukle()
         self.on_secimi_uygula()
@@ -226,7 +227,7 @@ class YeniBakimFormu(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
-class BakimDuzenleFormu(QDialog):
+class BakimDuzenleFormu(KaydirmaliDiyalog):
     def __init__(self, api_url, token, bakim_verisi, parent=None, sil_fn=None):
         super().__init__(parent)
         self.api_url = api_url
@@ -239,7 +240,7 @@ class BakimDuzenleFormu(QDialog):
 
         self.setStyleSheet(FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
 
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
@@ -287,11 +288,11 @@ class BakimDuzenleFormu(QDialog):
         btn_kaydet.setObjectName("kaydet")
         btn_kaydet.setCursor(Qt.PointingHandCursor)
         btn_kaydet.clicked.connect(self.kaydet)
-        layout.addWidget(btn_kaydet)
+        alt_yerlesim.addWidget(btn_kaydet)
         self.btn_sil = None
         if sil_fn:
             self.btn_sil = tehlike_dugmesi("Bu bakım kaydını sil", self.sil)
-            layout.addWidget(self.btn_sil)
+            alt_yerlesim.addWidget(self.btn_sil)
 
     def sil(self):
         if self.sil_fn and self.sil_fn():

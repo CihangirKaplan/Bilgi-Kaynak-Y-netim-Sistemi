@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox, QPushButton, QMessageBox,
                                QFrame, QLabel)
@@ -15,7 +16,7 @@ DANISMA_OGRENCISI_BILGISI = (
 )
 
 
-class OgrenciEkleDialog(QDialog):
+class OgrenciEkleDialog(KaydirmaliDiyalog):
     def __init__(self, api_url, token, parent=None, kullanici_sayfasi_acilabilir=False):
         super().__init__(parent)
         self.api_url = api_url
@@ -42,7 +43,7 @@ class OgrenciEkleDialog(QDialog):
             QPushButton:disabled { background-color: #DCE6F5; color: #8192AD; }
         """)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form_layout = QFormLayout()
 
         # Form Elemanları ve Kısıtlamalar
@@ -97,7 +98,7 @@ class OgrenciEkleDialog(QDialog):
 
         self.btn_kaydet = QPushButton("Öğrenciyi Kaydet")
         self.btn_kaydet.clicked.connect(self.kaydet_tiklandi)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
     def _kullanici_sayfasina_git(self):
         """Pencereyi kapatır; sayfayı pencereyi açan ekran açar (sayfa_istendi işaretine bakarak)."""

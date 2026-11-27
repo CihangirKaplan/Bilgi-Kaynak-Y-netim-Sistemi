@@ -2,6 +2,7 @@
 
 Görünüm diğer cihaz sayfalarıyla (Arıza, Bakım, Kalibrasyon) aynı ortak bileşenleri kullanır (client/tablo_tasarimi.py).
 """
+from client.diyalog_tabani import KaydirmaliDiyalog
 from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QHeaderView, QMessageBox, QDialog,
@@ -49,7 +50,7 @@ def varsayilan_rezervasyon_zamanlari(simdi=None):
     return simdi.date(), baslangic, bitis
 
 
-class YeniRezervasyonFormu(QDialog):
+class YeniRezervasyonFormu(KaydirmaliDiyalog):
     """Yeni Cihaz Rezervasyonu formu (diğer cihaz formlarıyla aynı görünüm)."""
     def __init__(self, api_url, token, parent=None, cihaz_id=None, tarih=None,
                  baslangic_saati=None, bitis_saati=None, duzenlenecek=None):
@@ -60,11 +61,11 @@ class YeniRezervasyonFormu(QDialog):
         duzenleme = duzenlenecek is not None
 
         self.setWindowTitle("Rezervasyonu Düzenle" if duzenleme else "Yeni Cihaz Rezervasyonu")
-        self.setMinimumSize(560, 620)
+        self.setMinimumWidth(560)          # yükseklik içeriğe göre; ekrana sığmazsa kaydırma çubuğu (KaydirmaliDiyalog)
         self.setObjectName("RezervasyonKutusu")
         self.setStyleSheet(FORM_STIL + KISAYOL_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(14)
 
@@ -148,7 +149,7 @@ class YeniRezervasyonFormu(QDialog):
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         self.verileri_yukle()
         self.on_degerleri_uygula(cihaz_id, tarih, baslangic_saati, bitis_saati)
