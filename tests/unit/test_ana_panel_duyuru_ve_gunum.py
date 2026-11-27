@@ -225,7 +225,7 @@ def test_benim_gunum_bugun_ve_yarini_listeler_kaydi_yoksa_da_kutu_gorunur():
     p = _panel(gunum={"randevular": [], "rezervasyonlar": []}, cihaz_ozeti=False)
     assert not p.panel_benim_gunum.isHidden()                                       # kaydı olmasa da görünür
     assert "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok." in _metinler(p.panel_benim_gunum)
-    assert "🙋  Benim Günüm" in _metinler(p.panel_benim_gunum)
+    assert "Benim Günüm" in _metinler(p.panel_benim_gunum)
     p.close()
     p = _panel(gunum=None, duyurular=None, cihaz_ozeti=False)                       # sunucu yanıtı bozuksa ekran çökmez; "boş" değil "yüklenemedi" yazar
     assert not p.panel_benim_gunum.isHidden() and not p.panel_duyuru.isHidden()
@@ -335,3 +335,51 @@ def test_bekleyen_islerim_satirlari_cizilir_yalniz_isi_olanda_gorunur():
     p = _panel(gunum={"randevular": [], "rezervasyonlar": [], "isler": gunum["isler"]}, cihaz_ozeti=False)
     assert "Bekleyen işlerim" in _metinler(p.panel_benim_gunum) and "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok." not in _metinler(p.panel_benim_gunum)
     p.close()
+
+
+# ---------------------------------------------------------------- başlık ikonları (emoji yok, kartlardaki gibi renkli kutulu çizgi ikon)
+def _ikonlu_baslik(kutu):
+    from PySide6.QtWidgets import QLabel
+    return [e for e in kutu.findChildren(QLabel) if e.objectName() == "panelBaslikIkonu"]
+
+
+@pytest.mark.parametrize("panel_adi, baslik", [("panel_duyuru", "Duyurular"), ("panel_benim_gunum", "Benim Günüm")])
+def test_panel_basliklari_emoji_yerine_cizgi_ikon_kullanir(panel_adi, baslik):
+    p = _panel(cihaz_ozeti=False)
+    kutu = getattr(p, panel_adi)
+    ikonlar = _ikonlu_baslik(kutu)
+    assert len(ikonlar) == 1 and not ikonlar[0].pixmap().isNull() and ikonlar[0].width() == ikonlar[0].height() == 30
+    basliklar = [m for m in _metinler(kutu) if m.startswith(baslik)]
+    assert basliklar and all(ord(c) < 0x2000 or c in "ğüşıöçĞÜŞİÖÇ" for b in basliklar for c in b)           # başlık metninde emoji yok
+    assert "📢" not in " ".join(_metinler(kutu)) and "🙋" not in " ".join(_metinler(kutu))
+    p.close()
+
+
+def test_duyuru_basligi_okunmamis_sayisini_ikonla_birlikte_gosterir():
+    p = _panel(cihaz_ozeti=False)
+    metin = " | ".join(_metinler(p.panel_duyuru))
+    assert "Duyurular  (" in metin and "yeni)" in metin and len(_ikonlu_baslik(p.panel_duyuru)) == 1
+    p.close()
+
+
+def test_baslik_ikonlari_farkli_ve_projenin_ortak_ikon_kayit_defterinden():
+    from client.tkys_sidebar_refined import PATHS
+    assert "megaphone" in PATHS and "user" in PATHS                       # ikon adları ortak kayıt defterinde tanımlı (eksikse düz dosya ikonu çıkar)
+    p = _panel(cihaz_ozeti=False)
+    a = _ikonlu_baslik(p.panel_duyuru)[0].pixmap().toImage()
+    b = _ikonlu_baslik(p.panel_benim_gunum)[0].pixmap().toImage()
+    assert a != b                                                          # iki panelin ikonu/rengi farklı
+    p.close()
+
+
+def test_okunmamis_duyuru_emoji_yerine_yeni_rozeti_tasir_okunmus_tasimaz():
+    from PySide6.QtWidgets import QLabel
+    p = _panel(cihaz_ozeti=False)
+    rozetler = [e for e in p.panel_duyuru.findChildren(QLabel) if e.objectName() == "yeniRozeti"]
+    assert len(rozetler) == 1 and rozetler[0].text() == "Yeni"                       # 1 okunmamış duyuru, 1 rozet
+    assert "🆕" not in " ".join(_metinler(p.panel_duyuru))
+    okunmus = _panel(duyurular=[dict(DUYURULAR[0], okundu=True, yeni=False)], cihaz_ozeti=False)
+    okunmus._okunanlar_acik = True
+    okunmus._duyurulari_ciz()
+    assert [e for e in okunmus.panel_duyuru.findChildren(QLabel) if e.objectName() == "yeniRozeti"] == []
+    p.close(); okunmus.close()
