@@ -22,7 +22,7 @@ eksikse karar NO-GO'dur**: eksik giderilir, liste yeniden kontrol edilir. Hepsi 
 | 9 | Backup PASS | Öğrenci C | SMOKE-001 S11–S12; 05.00 görevinin log'u | ☐ |
 | 10 | Restore PASS | Öğrenci C | Yedeğin yeni veritabanına geri yüklenip kayıt sayılarının karşılaştırıldığı çıktı | ☐ |
 | 11 | Audit PASS | Öğrenci C | SEC-001: SEC-T12; SMOKE-001 S9 | ☐ |
-| 12 | UAT PASS | Ekip | UAT-001: üç katılımcının onayı, açık P0/P1 yok | ☐ |
+| 12 | UAT PASS | Ekip | UAT-001: üç katılımcının onayı, açık P0/P1 yok | ⏩ Bilinçli ertelendi (Karar bölümündeki istisna) |
 | 13 | Installation PASS | Öğrenci A/B + C | Sunucu kurulumu (SMOKE-001 H1–H4) ve her istemcide `.exe` + `TKYS_API_URL` | ☐ |
 | 14 | Documentation complete | Ekip | Kurulum, yedekleme, geri yükleme kılavuzları; psikolog, memur, müdür kılavuzları güncel | ☐ |
 
@@ -31,6 +31,8 @@ eksikse karar NO-GO'dur**: eksik giderilir, liste yeniden kontrol edilir. Hepsi 
 GO ☐  NO-GO ☐
 
 NO-GO ise eksik maddeler ve sorumlusu: ________
+
+**İstisna (ekip kararı, 27.11.2026):** Madde 12 (UAT pilotu) canlıya geçişten **önce** yapılmadı. Ekip, pilotun canlıya geçişten sonraki **ilk hafta** içinde bir psikolog, bir memur ve bir müdürle yapılmasına karar verdi ([`UAT-001_Pilot_Raporu.md`](UAT-001_Pilot_Raporu.md)). Bu bilinçli bir erteleme ve "tek madde eksikse NO-GO" kuralının açıkça kayda geçirilmiş istisnasıdır. Pilotta çıkan P0/P1 sorunlar öncelikle düzeltilir (hotfix); madde, pilot raporu doldurulup üç katılımcının onayı alınınca ☑ olur.
 
 GO ise: develop → main birleştirilir, `v1.0.0` etiketi oluşturulur, canlıya geçmeden hemen önce elle yedek alınır.
 Adım adım uygulama, geri dönüş planı ve otomatik ön kontrol (`python scripts/yayin_oncesi_kontrol.py`): [`docs/release/Yayin_Gunu_Rehberi_v1.0.0.md`](../release/Yayin_Gunu_Rehberi_v1.0.0.md).

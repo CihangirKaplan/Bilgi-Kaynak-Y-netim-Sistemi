@@ -5,6 +5,8 @@ Yol haritasına göre pilotta bir psikolog, bir idari personel (memur) ve bir m�
 olarak açılır ve önemine göre sınıflanır (P0–P4, yol haritası 25. bölüm). Pilot sırasında yalnızca blocker, hata, güvenlik ve kritik
 kullanım sorunları düzeltilir; yeni özellik eklenmez.
 
+> **Not (ekip kararı, 27.11.2026):** Bu pilot canlıya geçişten **önce** yapılmadı; canlıya geçişten sonraki **ilk hafta** içinde yapılacak. GO/NO-GO listesinde madde 12 bu nedenle istisna olarak işaretlendi.
+
 | Alan | Bilgi |
 |---|---|
 | Sürüm | commit ________ |
