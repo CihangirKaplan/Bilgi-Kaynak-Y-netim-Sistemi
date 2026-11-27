@@ -6,7 +6,7 @@
 | Biçim | Yol haritası belgesi, 24. bölüm (Test ID, Requirement, Environment, …) |
 | Sorumlu | Öğrenci C (Backend, Security & Platform) |
 | Hazırlanma | 22.11.2026 |
-| Güncelleme | 27.11.2026 — canlı API denemeleri (T01, T02, T03, T07, T08) `develop` `f1efdb2` ile güncellenen canlı sunucuda çalıştırıldı: 23 PASS, 0 FAIL |
+| Güncelleme | 27.11.2026 — canlı API denemeleri (T01, T02, T03, T07, T08: 23 PASS, 0 FAIL) ve sunucuda elle yapılan denemeler (T10–T13) `develop` `f1efdb2` ile güncellenen canlı sunucuda yapıldı; T13 ve T10'da iki bulgu bulunup düzeltildi |
 | Sürüm | `develop` — `f8c0b00` (ilk sürüm: `5626337`) |
 
 Bu rapor iki ortamı ayrı gösterir:
@@ -35,10 +35,10 @@ python -m pytest -q tests/security
 | SEC-T07 | Rate / Brute-Force | ✅ PASS (24 test) | ✅ PASS (27.11.2026: 5. yanlış parolada 429, kilit sürerken doğru parola 429, 60 sn sonra 200) |
 | SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ✅ PASS (27.11.2026: bozuk/imzasız token 401, pasifleştirilen hesabın token'ı 403; istemcide açık oturum "Oturumunuz geçersiz hâle gelmiştir" ile sonlanır, yeniden girişte "Kullanıcı hesabı aktif değil.") |
 | SEC-T09 | Error Leakage | ✅ PASS (24 test) | — |
-| SEC-T10 | Secret Scan | ✅ PASS (3 test) | ⏳ (`.env` ve JWT anahtarı) |
-| SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ⏳ (sunucudaki kurulumla) |
-| SEC-T12 | Audit Integrity | ✅ PASS (17 test) | ⏳ |
-| SEC-T13 | Backup Security | ✅ PASS (3 test) | ⏳ (klasör izni) |
+| SEC-T10 | Secret Scan | ✅ PASS (3 test) | ✅ PASS (27.11.2026: `.env` git dışı, JWT anahtarı 64 karakter ve örnek değil; `.env` ve `anahtar.pem` izinleri daraltıldı — Bulgular #4) |
+| SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ✅ PASS (27.11.2026: sunucudaki kurulu paketlerde bilinen açık yok) |
+| SEC-T12 | Audit Integrity | ✅ PASS (17 test) | ✅ PASS (27.11.2026: UPDATE/DELETE/TRUNCATE engellendi, kayıt sayısı 75 → 75) |
+| SEC-T13 | Backup Security | ✅ PASS (3 test) | ✅ PASS (27.11.2026, düzeltmeden sonra; ilk denemede FAIL: miras izinler — Bulgular #3) |
 | SEC-T14 | Business Logic Abuse | ✅ PASS (36 test) | — |
 | SEC-T15 | Concurrency | ✅ PASS (8 test) | — |
 
@@ -58,6 +58,9 @@ dosyalardaki bütün testleri gösterir; 22.11.2026 listesine göre T01, T02, T0
 |---|---|---|---|---|
 | 1 | SEC-T08 | Oturum açıkken hesabı pasifleştirilen kullanıcının token'ı sunucuda **reddediliyordu** (403 "Kullanıcı hesabı aktif değil."; veri dönmez) ama istemci yalnızca 401'i "oturum bitti" saydığı için giriş ekranına dönmüyor, her işlemde hata gösteriyordu. | P2 (güvenlik açığı değil, kullanıcı deneyimi) | Düzeltildi: istemci bu 403'ü oturum sonu sayar (`client/api_yoneticisi.py`, test `test_oturum_pasif_hesap.py`) |
 | 2 | SEC-T12 | Canlı deneme komutundaki `SET olay_turu = 'X'` tetikleyici yüzünden değil, 'X' geçerli bir değer olmadığı için hata veriyordu (yanlış nedenle PASS verebilirdi). | Rapor düzeltmesi | Düzeltildi: komut geçerli bir sütun/değerle (`SET hedef_tablo = 'deneme'`) yazıldı |
+| 3 | SEC-T13 | Yedek klasörü (`C:\TKYS\backups`) üst klasörden miras kalan izinlerle `Users` (okuma) ve `Authenticated Users` (değiştirme) erişimine açıktı: sunucuya giriş yapan her kullanıcı veritabanı yedeklerini okuyabilir ya da silebilirdi. | P1 (veri gizliliği) | Düzeltildi 27.11.2026: miras kesildi, yalnızca Administrators ve SYSTEM (`icacls /inheritance:r`); otomatik yedekleme doğrulandı |
+| 4 | SEC-T10 | `.env` (veritabanı ve JWT sırları) ve `sertifika\anahtar.pem` (TLS özel anahtarı) aynı mirasla her kullanıcıya açıktı. | P1 (sır gizliliği) | Düzeltildi 27.11.2026: yalnızca Administrators ve SYSTEM; sunucu çalışmaya devam ediyor |
+| 5 | SEC-T10 / T12 | (a) `C:\TKYS` klasörünün kendisi `Authenticated Users` tarafından değiştirilebilir (sunucu kodu dahil). (b) Sunucu veritabanına `postgres` (tam yetkili) ile bağlanıyor; kurulum kılavuzu 6A'daki kısıtlı kullanıcı (`tkys_uygulama`) kurulmamış. | P2 (sertleştirme önerisi) | Açık: ekip kararı. Sunucuya yalnızca yönetici hesaplarının giriş yapabildiği ortamda risk düşüktür |
 
 ## Ayrıntılar
 
@@ -249,11 +252,14 @@ Steps:            1. Depo, düz yazılmış gizli bilgi kalıplarına karşı ta
                   3. Canlı: sunucudaki .env yalnızca sunucuda; JWT_SECRET rastgele üretilmiş ve örnek dosyadaki değer değil:
                      python -c "import os;from dotenv import load_dotenv;load_dotenv();print(len(os.getenv('JWT_SECRET','')))"
 Expected Result:  Depoda gizli bilgi yok; sunucudaki anahtar en az 32 karakter ve rastgele.
-Actual Result:    Geliştirme: 3/3 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 3/3 test geçti. Canlı (27.11.2026): `.env` git tarafından yok sayılıyor (git check-ignore .env); JWT_SECRET
+                  64 karakter ve örnek dosyadaki değerle aynı değil (anahtarın kendisi yazdırılmadı). Bulgu: `.env` ve `sertifika\anahtar.pem`
+                  dosyalarına üst klasörden miras kalan izinle her kullanıcı erişebiliyordu; yalnızca Administrators ve SYSTEM'e daraltıldı
+                  (Bulgular #4) ve sunucunun çalışmaya devam ettiği doğrulandı.
+PASS / FAIL:      PASS (bulgu düzeltildikten sonra)
 Tester:           Öğrenci C
-Date:             22.11.2026
-Evidence:         test_gizli_bilgi_taramasi.py, test_jwt_secret_quality.py
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence:         test_gizli_bilgi_taramasi.py, test_jwt_secret_quality.py; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt
 ```
 
 ### SEC-T11 — Dependency Scan
@@ -267,11 +273,11 @@ Steps:            1. pip install pip-audit
                   2. pip-audit -r requirements.txt
                   3. Canlı: sunucuda, sanal ortam etkinken: pip-audit   (kurulu paketleri tarar)
 Expected Result:  "No known vulnerabilities found"
-Actual Result:    Geliştirme: 40 bağımlılık (doğrudan 16 + dolaylı) tarandı, bilinen açık yok. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 40 bağımlılık (doğrudan 16 + dolaylı) tarandı, bilinen açık yok. Canlı (27.11.2026): sunucunun sanal ortamında `pip_audit` (2.10.1): "No known vulnerabilities found".
+PASS / FAIL:      PASS
 Tester:           Öğrenci C
 Date:             22.11.2026
-Evidence:         pip-audit çıktısı (ekran görüntüsü eklenecek)
+Evidence:         pip-audit çıktısı; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt
 Not:              Tarama, o günkü açık veritabanına göredir; canlıya geçmeden hemen önce yeniden çalıştırılmalıdır.
 ```
 
@@ -289,11 +295,13 @@ Steps:            1. denetim_kayitlari tablosunda UPDATE / DELETE / TRUNCATE ver
                      UPDATE denetim_kayitlari SET hedef_tablo = 'deneme' WHERE denetim_id = 1;   → tetikleyici hatası vermeli
                      (mesaj "...degistirilemez veya silinemez (UPDATE)"; DELETE ve TRUNCATE için de aynı).
 Expected Result:  Değiştirme ve silme reddedilir; kayıt aynı kalır.
-Actual Result:    Geliştirme: 17/17 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 17/17 test geçti. Canlı (27.11.2026, postgres kullanıcısıyla, BEGIN ... ROLLBACK içinde): UPDATE, DELETE ve
+                  TRUNCATE "denetim_kayitlari tablosundaki kayitlar degistirilemez veya silinemez" hatasıyla engellendi; kayıt sayısı
+                  75 → 75. Not: sunucu veritabanına `postgres` ile bağlanıyor (Bulgular #5).
+PASS / FAIL:      PASS
 Tester:           Öğrenci C
-Date:             22.11.2026
-Evidence:         test_audit_degistirilemez.py, test_audit_security.py
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence:         test_audit_degistirilemez.py, test_audit_security.py; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt
 ```
 
 ### SEC-T13 — Backup Security
@@ -310,11 +318,14 @@ Steps:            1. Hiçbir API ucunun dosya sunmadığı ve statik klasör ba�
                      Çıktıda yalnızca Administrators ve SYSTEM (ve sistem sorumlusu hesabı) olmalı; Users/Everyone olmamalı.
                      Klasör ağda paylaşılmamalı.
 Expected Result:  API üzerinden yedeğe ulaşılamaz; klasöre yalnızca sistem sorumlusu erişir.
-Actual Result:    Geliştirme: 3/3 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 3/3 test geçti. Canlı (27.11.2026): ilk denemede FAIL; yedek klasöründe üst klasörden miras kalan `Users` (okuma) ve
+                  `Authenticated Users` (değiştirme) izinleri vardı (Bulgular #3). Miras kesilip yalnızca Administrators ve SYSTEM bırakıldıktan
+                  sonra PASS: yönetici olmayan oturum klasörü listeleyemiyor ("Erişim engellendi"), `net share` listesinde yedek klasörü yok,
+                  otomatik yedekleme (SYSTEM) çalışmaya devam ediyor (yeni yedek, çıkış kodu 0).
+PASS / FAIL:      PASS (bulgu düzeltildikten sonra)
 Tester:           Öğrenci C
-Date:             22.11.2026
-Evidence:         tests/security/test_sec_t13_yedek_erisimi.py; canlı: icacls çıktısı
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence:         tests/security/test_sec_t13_yedek_erisimi.py; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt
 ```
 
 ### SEC-T14 — Business Logic Abuse
