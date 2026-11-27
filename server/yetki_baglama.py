@@ -26,3 +26,10 @@ def yetkiyle_bagla(fonksiyon, parametre_adi: str, bagimlilik):
 
     sarmalayici.__signature__ = imza.replace(parameters=parametreler)
     return sarmalayici
+
+
+class Hepsi(tuple):
+    """`UCLAR` tablosunda "listedeki izinlerin HEPSİ gerekir" (izin_kontrol_tumu) anlamına gelir; düz demet "biri yeter" (izin_kontrol_biri) demektir."""
+
+    def __new__(cls, *izin_adlari: str):
+        return super().__new__(cls, izin_adlari)

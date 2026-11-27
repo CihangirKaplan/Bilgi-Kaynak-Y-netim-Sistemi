@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 import server.guvenlik as guvenlik
 import server.sunucu as sunucu
+from server import kullanici_api
 from server.guvenlik import parola_hashle
 from server.modeller import ParolaSifirlamaTalebiModeli
 
@@ -51,7 +52,7 @@ def test_pasif_yonetici_icin_de_ayni_engel_uygulanir():
 
 def test_yonetici_olmayan_hedefin_parolasi_sifirlanir_ve_gecerlilik_suresi_yazilir():
     conn, cursor = sahte_vt(("ADMIN",), (True, "MEMUR"))
-    with patch("server.sunucu.gecici_parola_uret", return_value="GECICI"), patch("server.sunucu.parola_hashle", return_value="HASH"):
+    with patch("server.kullanici_api.gecici_parola_uret", return_value="GECICI"), patch("server.kullanici_api.parola_hashle", return_value="HASH"):
         sonuc = sifirla(conn)
     assert sonuc["durum"] == "basarili" and sonuc["gecici_parola_gecerlilik_saat"] == guvenlik.GECICI_PAROLA_GECERLILIK_SAAT
     guncelleme = next(c for c in cursor.execute.call_args_list if " ".join(c.args[0].split()).startswith("UPDATE kullanicilar"))
@@ -148,7 +149,7 @@ def test_parola_degistirilince_sure_bilgisi_temizlenir():
 
 
 def test_yeni_kullanici_gecici_parolasi_da_sureli_ve_yanitta_sure_vardir():
-    kaynak = open(sunucu.__file__, encoding="utf-8").read()
+    kaynak = open(kullanici_api.__file__, encoding="utf-8").read()
     assert "(kullanici_adi, parola_hash, rol_id, aktif_mi, ilk_giris_mi, gecici_parola_bitis,\n                 personel_id, personel_kodu, personel_kaydi_tarihi)" in kaynak
     assert '"gecici_parola_gecerlilik_saat": GECICI_PAROLA_GECERLILIK_SAAT' in kaynak
 

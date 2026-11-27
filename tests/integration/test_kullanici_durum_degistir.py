@@ -12,6 +12,16 @@ from server.sunucu import (
 )
 
 
+def _duz_rotalar(rotalar):
+    """`include_router` ile eklenen uçlar `app.routes` içinde doğrudan görünmez; yönlendirici sarmalayıcılarının içine de bakılır."""
+    for r in rotalar:
+        asil = getattr(r, "original_router", None)
+        if asil is not None:
+            yield from _duz_rotalar(asil.routes)
+        else:
+            yield r
+
+
 def sahte_db(islem_rolu="MUDUR", hedef_rol="PSIKOLOG", aktif=True, planli=0, aktif_odalar=(3,), rezervasyonlu=(), danisan=0):
     """planli: bugün ve sonrası için planlı randevu sayısı (psikolog pasife alınırken sorulur).
     aktif_odalar / rezervasyonlu: psikolog aktifleştirilirken oda doğrulama ve cihaz rezervasyonlu oda sorguları.
@@ -198,7 +208,7 @@ def test_durum_degistirme_audit_parametreleri_dogru():
 
 def test_mudur_http_uzerinden_kullanici_durumunu_degistirebilir():
     endpoint = next(
-        route for route in app.routes
+        route for route in _duz_rotalar(app.routes)
         if getattr(route, "path", None)
         == "/api/kullanicilar/{kullanici_id}/durum-degistir"
         and "PATCH" in getattr(route, "methods", set())
@@ -334,7 +344,7 @@ def test_psikolog_olmayana_ya_da_pasife_alinirken_oda_secimi_reddedilir():
 
 @pytest.mark.parametrize("govde, beklenen", [(None, 422), ({}, 422), ({"oda_idleri": [3]}, 200)])
 def test_http_psikolog_aktiflestirme_govdesi(govde, beklenen):
-    endpoint = next(r for r in app.routes if getattr(r, "path", None) == "/api/kullanicilar/{kullanici_id}/durum-degistir" and "PATCH" in getattr(r, "methods", set()))
+    endpoint = next(r for r in _duz_rotalar(app.routes) if getattr(r, "path", None) == "/api/kullanicilar/{kullanici_id}/durum-degistir" and "PATCH" in getattr(r, "methods", set()))
     yetki = endpoint.dependant.dependencies[0].call
     conn, _ = sahte_db(aktif=False, aktif_odalar=(3,))
     app.dependency_overrides[yetki] = lambda: 10

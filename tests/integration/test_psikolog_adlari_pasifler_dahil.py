@@ -7,6 +7,16 @@ from unittest.mock import MagicMock, patch
 from server.sunucu import app, aktif_psikologlari_listele
 
 
+def _duz_rotalar(rotalar):
+    """`include_router` ile eklenen uçlar `app.routes` içinde doğrudan görünmez; yönlendirici sarmalayıcılarının içine de bakılır."""
+    for r in rotalar:
+        asil = getattr(r, "original_router", None)
+        if asil is not None:
+            yield from _duz_rotalar(asil.routes)
+        else:
+            yield r
+
+
 def _cagir(satirlar, **kwargs):
     conn = MagicMock()
     imlec = conn.cursor.return_value
@@ -33,6 +43,6 @@ def test_pasifler_dahil_eski_psikologlari_aktiflik_bilgisiyle_getirir():
 
 
 def test_uc_noktada_pasifler_dahil_sorgu_parametresi_var_varsayilan_kapali():
-    yol = next(r for r in app.routes if getattr(r, "path", None) == "/api/psikologlar")
+    yol = next(r for r in _duz_rotalar(app.routes) if getattr(r, "path", None) == "/api/psikologlar")
     parametre = next(p for p in yol.dependant.query_params if p.name == "pasifler_dahil")
     assert parametre.default is False

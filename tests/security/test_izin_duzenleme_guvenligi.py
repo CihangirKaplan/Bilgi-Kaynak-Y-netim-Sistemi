@@ -77,7 +77,7 @@ def test_basarili_izin_duzenleme_baglantiyi_kapatir():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.denetim_kaydi_olustur"),
+        patch("server.rol_api.denetim_kaydi_olustur"),
     ):
         sonuc = izin_duzenle(17, veri, kullanici_id=7)
 

@@ -208,9 +208,10 @@ def test_liste_sorgusu_yalniz_acik_talepleri_ve_aktif_kullanicilari_eski_once_ge
 
 
 def test_liste_ve_kapat_uclari_parola_sifirlama_iznini_ister():
-    import inspect
+    from server import parola_talebi_api
+    tablo = {f.__name__: yetki for _, _, f, _, yetki, _ in parola_talebi_api.UCLAR}
     for ad in ("parola_sifirlama_taleplerini_listele", "parola_sifirlama_talebini_kapat"):
-        assert 'izin_kontrol("KULLANICI_PAROLA_SIFIRLA")' in inspect.getsource(getattr(sunucu, ad)), ad
+        assert tablo[ad] == "KULLANICI_PAROLA_SIFIRLA", ad
 
 
 def test_talep_acma_ucu_tek_izinsiz_uctur_ve_bu_bilincli_istisnadir():

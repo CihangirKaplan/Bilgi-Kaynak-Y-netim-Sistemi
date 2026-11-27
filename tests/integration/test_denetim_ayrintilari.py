@@ -30,7 +30,7 @@ def _izin_duzenle(onceki_roller, secilen, eski_ad="Eski", yeni_ad="Yeni"):
     c.fetchone.side_effect = [(9, "RANDEVU_DUZENLE", eski_ad)]
     c.fetchall.side_effect = [[(1, "ADMIN"), (2, "MEMUR"), (3, "MUDUR")], [(r,) for r in onceki_roller]]
     denetim = MagicMock()
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur", denetim):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.rol_api.denetim_kaydi_olustur", denetim):
         izin_duzenle(9, IzinDuzenleModeli(gorunen_ad=yeni_ad, verilen_rol_idleri=secilen), kullanici_id=1)
     return denetim.call_args.kwargs["ayrinti"]
 
@@ -52,7 +52,7 @@ def test_izin_degismediyse_eklenen_ve_kaldirilan_bos():
 def test_izin_olusturma_denetime_yazilir_ve_nasil_verildigini_kaydeder():
     conn = MagicMock()
     conn.cursor.return_value.fetchone.return_value = (77,)
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.ayrintili_kayit_yaz") as yaz:
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.rol_api.ayrintili_kayit_yaz") as yaz:
         yanit = izin_ekle({"izin_adi": "YENI_IZIN"}, kullanici_id=1)
     assert yanit["izin_id"] == 77
     assert yaz.call_args.args[2:5] == ("CREATE", "izinler", 77)

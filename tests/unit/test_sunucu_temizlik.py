@@ -66,7 +66,8 @@ def test_ayni_modeller_iki_kez_iceri_aktarilmamis():
 
 def test_kullanilmayan_rol_kodu_sozlugu_kalmamis():
     """Personel kodu önekleri yalnızca _siradaki_personel_kodu içinde tanımlıdır (kullanici_olustur'da ölü bir kopyası vardı)."""
-    kullanici_olustur = next(n for n in AGAC.body if isinstance(n, ast.FunctionDef) and n.name == "kullanici_olustur")
+    kullanici_agaci = ast.parse((Path(sunucu.__file__).parent / "kullanici_api.py").read_text(encoding="utf-8"))
+    kullanici_olustur = next(n for n in kullanici_agaci.body if isinstance(n, ast.FunctionDef) and n.name == "kullanici_olustur")
     atamalar = [t.id for n in ast.walk(kullanici_olustur) if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)]
     assert "rol_kodlari" not in atamalar
 
@@ -76,9 +77,8 @@ def test_sunucuda_cirplak_except_yok():
     import ast
     from pathlib import Path
 
-    kaynak = Path(__file__).resolve().parents[2] / "server" / "sunucu.py"
-    cirplak = [d.lineno for d in ast.walk(ast.parse(kaynak.read_text(encoding="utf-8")))
-               if isinstance(d, ast.ExceptHandler) and d.type is None]
+    cirplak = [(dosya.name, d.lineno) for dosya in sorted((Path(__file__).resolve().parents[2] / "server").glob("*.py"))
+               for d in ast.walk(ast.parse(dosya.read_text(encoding="utf-8"))) if isinstance(d, ast.ExceptHandler) and d.type is None]
     assert cirplak == []
 
 

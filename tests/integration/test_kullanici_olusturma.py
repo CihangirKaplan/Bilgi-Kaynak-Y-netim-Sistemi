@@ -71,8 +71,8 @@ def test_admin_gecici_sifreyle_kullanici_olusturur():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=mock_conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="TestGecici123!"),
-        patch("server.sunucu.parola_hashle", return_value="ornek_hash") as mock_hash,
+        patch("server.kullanici_api.gecici_parola_uret", return_value="TestGecici123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="ornek_hash") as mock_hash,
     ):
         sonuc = kullanici_olustur(
             yeni_kullanici=yeni_kullanici,
