@@ -18,6 +18,7 @@ Kısa özet: hazırlık PR'ı → develop'ı main'e birleştir → `v1.0.0` etik
 - [ ] **Dondurma:** Bu saatten sonra develop'a yalnızca yayını engelleyen hata düzeltmeleri girer. Açık PR'lar (arkadaşların PR'ları dahil) ya merge edilir ya da yayın sonrasına bırakılır.
 - [ ] GitHub Actions "TKYS QA Tests", develop son koşusu **yeşil** (Actions sayfası → develop).
 - [ ] GitHub'da açık **P0 / P1** issue yok.
+- [ ] **Canlı doğrulama günü** yapıldı ve tamamlandı: [`Canli_Dogrulama_Gunu_Kontrol_Listesi.md`](Canli_Dogrulama_Gunu_Kontrol_Listesi.md) (sunucu güncelleme provası, elle kontroller, yedek/geri yükleme, SEC-001 canlı denemeleri). Orada çıkan P0/P1 sorunlar giderildi.
 - [ ] GO/NO-GO listesindeki 14 madde kanıtlarıyla dolduruldu, karar **GO**.
 - [ ] Yerelde (proje klasöründe, sanal ortam açık) otomatik kontrol çalıştırıldı ve **HATA** satırı yok:
 
@@ -101,7 +102,7 @@ Proje klasöründe (yerelde):
 
 ## 6. Yayın sonrası smoke test (en az 15 dakika)
 
-`docs/test-reports/SMOKE-001_Canli_Ortam_Smoke_Test.md` içindeki S2–S11 adımlarını yeni sürümde tekrarlayın. En az şunlar:
+`docs/test-reports/SMOKE-001_Canli_Ortam_Smoke_Test.md` içindeki S2–S11 adımlarını yeni sürümde tekrarlayın (canlı doğrulama gününde yapılan elle kontrollerin kısa tekrarıdır: [`Canli_Dogrulama_Gunu_Kontrol_Listesi.md`](Canli_Dogrulama_Gunu_Kontrol_Listesi.md) bölüm 2). En az şunlar:
 
 - [ ] Her rolle giriş (yönetici, müdür, memur, psikolog, danışma öğrencisi, proje asistanı); ana panelde Duyurular / Benim Günüm / Bugün-Yarın-Hafta seçici açılıyor.
 - [ ] **Benim Günüm → Bekleyen işlerim:** danışma öğrencisinde açık görevi, memur/yöneticide onay bekleyen danışma masası oturumunu ve açık arızayı gösteriyor; bekleyen yoksa satır yok.

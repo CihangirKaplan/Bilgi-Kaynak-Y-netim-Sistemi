@@ -3,7 +3,7 @@
 **Amaç:** Yayından **önce**, sistemin son hâlini gerçek sunucuda (gerçek Windows, gerçek PostgreSQL, gerçek ağ) bir kez baştan sona denemek. Geliştirme ve CI testleri
 tamamdır; bu liste yalnızca **canlı ortamda görülebilen** riskleri kapatır: veritabanı güncellemesi, yetkiler, yedekten geri dönüş, güvenlik denemeleri, yeni özelliklerin elle kontrolü.
 
-Bu liste **yayın değildir**: `main` dalına geçilmez, `v1.0.0` etiketi atılmaz. Yayının adımları `docs/release/Yayin_Gunu_Rehberi_v1.0.0.md` dosyasındadır;
+Bu liste **yayın değildir**: `main` dalına geçilmez, `v1.0.0` etiketi atılmaz. Yayının adımları [`Yayin_Gunu_Rehberi_v1.0.0.md`](Yayin_Gunu_Rehberi_v1.0.0.md) dosyasındadır;
 bu gün orada yazan sunucu güncelleme ve smoke test adımlarının **provasıdır**. Burada çıkan sorunlar yayın gününden önce düzeltilir.
 
 | Alan | Bilgi |
@@ -188,4 +188,4 @@ Bu günün çıktısı, `docs/test-reports/GO-NO-GO_Kontrol_Listesi.md` içindek
 
 **Karar:** Canlı doğrulama tamam ☐  Tamam değil ☐ — eksik maddeler ve sorumlusu: ________
 
-Tamamsa: UAT pilotu ve GO/NO-GO toplantısı sırada; GO çıkarsa `docs/release/Yayin_Gunu_Rehberi_v1.0.0.md` izlenir.
+Tamamsa: UAT pilotu ve GO/NO-GO toplantısı ([`GO-NO-GO_Kontrol_Listesi.md`](../test-reports/GO-NO-GO_Kontrol_Listesi.md)) sırada; GO çıkarsa [`Yayin_Gunu_Rehberi_v1.0.0.md`](Yayin_Gunu_Rehberi_v1.0.0.md) izlenir.
