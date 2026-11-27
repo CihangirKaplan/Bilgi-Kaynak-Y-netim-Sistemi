@@ -11,6 +11,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
 from client.rapor_excel import (
+    yazdirma_hazirla,
+    birim_bicimi,
+    ozet_bicimi,
     ACIKLAMA_FONT,
     BASLIK_FONT,
     BOLUM_DOLGU,
@@ -55,6 +58,12 @@ def _onay_durumu(oturum):
     return ONAY_ONAYLANDI if oturum.get("onaylandi_mi") else ONAY_BEKLIYOR
 
 
+BIRIMLER = {
+    "Rapordaki öğrenciler": "öğrenci", "Toplam görev": "görev", "Devam eden": "görev", "Tamamlanan": "görev",
+    "Onay bekleyen": "görev", "Onaylanan": "görev", "Aktif öğrenci": "öğrenci", "Pasif öğrenci": "öğrenci",
+}
+
+
 def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
     sayfa.sheet_view.showGridLines = False
     satir = 1
@@ -68,7 +77,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
         h1.font = BASLIK_FONT if kalin else Font()
         h1.alignment = Alignment(vertical="top", wrap_text=True)
         if b is not None:
-            h2 = _hucre_yaz(sayfa, satir, 2, b, bicim)
+            h2 = _hucre_yaz(sayfa, satir, 2, b, ozet_bicimi(BIRIMLER, a, b, bicim))
             h2.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         if c is not None:
             h3 = _hucre_yaz(sayfa, satir, 3, c)
@@ -98,7 +107,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
 
     # ---- Rapor bilgileri ----
     bolum("RAPOR BİLGİLERİ")
-    yaz("Rapor Tarihi", datetime.now(), "Raporun Excel'e aktarıldığı an.", TARIH_SAAT_BICIMI, kalin=True)
+    yaz("Rapor Tarihi", datetime.now(), "Raporun oluşturulduğu an.", TARIH_SAAT_BICIMI, kalin=True)
     for ad, deger in filtre_ozeti:
         if ad == "Dönem":
             aciklama = (
@@ -214,4 +223,5 @@ def excel_dosyasi_olustur(veri, filtre_ozeti, dosya_yolu):
         ],
     )
 
+    yazdirma_hazirla(kitap)
     kitap.save(dosya_yolu)

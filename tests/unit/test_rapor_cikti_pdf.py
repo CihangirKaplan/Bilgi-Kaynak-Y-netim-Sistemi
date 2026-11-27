@@ -138,7 +138,7 @@ def test_hucre_bicimleri():
     ws["A5"] = datetime(2026, 1, 2, 0, 0); ws["A5"].number_format = "dd.mm.yyyy"
     ws["A6"] = True; ws["A7"] = None; ws["A8"] = "=A1"
     cikti = [rapor_cikti.hucre_metni(ws[f"A{i}"]) for i in range(1, 9)]
-    assert cikti == ["%50", "3", "2", "1,23", "02.01.2026", "Evet", "", "=A1"]       # metin ham yazılır (formül çalıştırılmaz)
+    assert cikti == ["%50,0", "3", "2", "1,23", "02.01.2026", "Evet", "", "=A1"]       # metin ham yazılır (formül çalıştırılmaz)
 
 
 def test_html_ozel_karakterler_kacirilir(tmp_path):

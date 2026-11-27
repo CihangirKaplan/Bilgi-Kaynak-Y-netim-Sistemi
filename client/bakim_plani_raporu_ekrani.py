@@ -128,10 +128,10 @@ class BakimPlaniRaporuEkrani(RaporSayfasiTaban):
                 ("Aktif plan", ozet.get("aktif_plan", 0), "Süzgece uyan aktif plan sayısı."),
                 ("Geciken plan", ozet.get("geciken_plan", 0), "Sonraki görev tarihi geçmiş aktif planlar."),
                 ("Gecikme oranı", ozet.get("gecikme_orani"), "Geciken plan / aktif plan.", "0.0%"),
-                ("Ortalama gecikme (gün)", ozet.get("ortalama_gecikme_gun"), "Geciken planların ortalama gecikmesi."),
-                ("En çok gecikme (gün)", ozet.get("en_cok_gecikme_gun"), "En uzun süredir geciken planın gecikmesi."),
+                ("Ortalama gecikme", ozet.get("ortalama_gecikme_gun"), "Geciken planların ortalama gecikmesi."),
+                ("En çok gecikme", ozet.get("en_cok_gecikme_gun"), "En uzun süredir geciken planın gecikmesi."),
                 ("Yaklaşan plan", ozet.get("yaklasan_plan", 0), "Uyarı süresi içinde, henüz gecikmemiş planlar."),
-                ("Planlı / pasif plan", f"{ozet.get('planli_plan', 0)} / {ozet.get('pasif_plan', 0)}", "Zamanı gelmemiş ve pasif planlar."),
+                ("Planlı / pasif plan", f"{ozet.get('planli_plan', 0)} planlı / {ozet.get('pasif_plan', 0)} pasif", "Zamanı gelmemiş ve pasif planlar."),
                 ("Planı olmayan cihaz", ozet.get("plani_olmayan_cihaz", 0), "Aktif bakım/kalibrasyon planı bulunmayan (kullanım dışı olmayan) cihazlar."),
             ],
             [

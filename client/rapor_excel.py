@@ -10,6 +10,8 @@ from datetime import date, datetime
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.page import PageMargins
+from openpyxl.worksheet.properties import PageSetupProperties
 
 BASLIK_DOLGU = PatternFill("solid", fgColor="E8F0FF")
 BASLIK_FONT = Font(bold=True, color="16294B")
@@ -27,6 +29,37 @@ TARIH_BICIMI = "dd.mm.yyyy"
 TARIH_SAAT_BICIMI = "dd.mm.yyyy hh:mm"
 PARA_BICIMI = '#,##0.00 "₺"'
 GUN_BICIMI = '0.0 "gün"'
+
+
+def birim_bicimi(birim, deger=None):
+    """Sayı hücresine birimini ekleyen Excel biçimi: '13' yerine '13 cihaz' görünür, hücre yine sayıdır (Excel'de toplanabilir).
+    Tam sayılar '#,##0 "birim"', kesirli sayılar '#,##0.00 "birim"' biçimini alır."""
+    kesirli = isinstance(deger, float) and not float(deger).is_integer()
+    return f'#,##0.00 "{birim}"' if kesirli else f'#,##0 "{birim}"'
+
+
+def yazdirma_hazirla(kitap):
+    """Excel'de Yazdır'a basınca düzgün çıksın: A4 yatay, sayfa genişliğine sığdırılmış, tablo başlığı her sayfada, altbilgide sayfa numarası."""
+    for sayfa in kitap.worksheets:
+        sayfa.page_setup.orientation = "landscape"
+        sayfa.page_setup.paperSize = 9                          # A4
+        sayfa.page_setup.fitToWidth = 1
+        sayfa.page_setup.fitToHeight = 0                        # genişliğe sığdır, yükseklik serbest (çok sayfa)
+        sayfa.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        sayfa.page_margins = PageMargins(left=0.4, right=0.4, top=0.5, bottom=0.6)
+        sayfa.oddFooter.left.text = "TKYS"
+        sayfa.oddFooter.center.text = "&A"
+        sayfa.oddFooter.right.text = "Sayfa &P / &N"
+        if sayfa.freeze_panes == "A2":                          # düzenli tablo: ilk satır (sütun başlıkları) her yazdırılan sayfada tekrarlanır
+            sayfa.print_title_rows = "1:1"
+
+
+def ozet_bicimi(birimler, ad, deger, bicim=None):
+    """Özet satırı için sayı biçimi: açıkça verilmişse o; yoksa {etiket: birim} tablosundaki birimle (sayısal değerlerde)."""
+    if bicim or not birimler or isinstance(deger, bool) or not isinstance(deger, (int, float)):
+        return bicim
+    birim = birimler.get(ad)
+    return birim_bicimi(birim, deger) if birim else None
 
 KALIBRASYON_UYARI_GUN = 30
 
@@ -217,9 +250,21 @@ def _kodlar(liste):
     return ", ".join(liste) if liste else "Yok"
 
 
+def _ekli(metin, liste_metni):
+    """'Şu an süren bakımlar: ET-003, MIK-009' — liste boşsa (değer 0 zaten bunu söyler) 'Yok' yazılmaz, yalnızca açıklama kalır."""
+    return f"{metin}: {liste_metni}" if liste_metni not in ("", "Yok") else f"{metin}."
+
+
 def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
     sayfa.sheet_view.showGridLines = False
     satir = 1
+    birimler = {
+        "Rapordaki cihazlar": "cihaz", "Bakım kaydı (toplam)": "kayıt", "Devam eden bakım": "bakım", "Planlanmış bakım": "bakım",
+        "Tamamlanan bakım": "bakım", "Kalibrasyon kaydı (dönemde)": "kayıt", "Süresi dolmuş": "cihaz",
+        f"{KALIBRASYON_UYARI_GUN} gün içinde dolacak": "cihaz", f"{KALIBRASYON_UYARI_GUN} günden fazla süresi var": "cihaz",
+        "Kalibrasyon kaydı yok": "cihaz", "Arıza kaydı (toplam)": "kayıt", "Çözümü süren arıza": "arıza", "Çözülen arıza": "arıza",
+        "Diğer": "cihaz", **{durum: "cihaz" for durum in DURUM_SIRASI},
+    }
 
     def yaz(a, b=None, c=None, bicim=None, kalin=False):
         nonlocal satir
@@ -227,7 +272,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
         h1.font = BASLIK_FONT if kalin else Font()
         h1.alignment = Alignment(vertical="top", wrap_text=True)
         if b is not None:
-            h2 = _hucre_yaz(sayfa, satir, 2, b, bicim)
+            h2 = _hucre_yaz(sayfa, satir, 2, b, ozet_bicimi(birimler, a, b, bicim))
             h2.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         if c is not None:
             h3 = _hucre_yaz(sayfa, satir, 3, c)
@@ -257,7 +302,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
 
     # ---- Rapor bilgileri ----
     bolum("RAPOR BİLGİLERİ")
-    yaz("Rapor Tarihi", datetime.now(), "Raporun Excel'e aktarıldığı an.", TARIH_SAAT_BICIMI, kalin=True)
+    yaz("Rapor Tarihi", datetime.now(), "Raporun oluşturulduğu an.", TARIH_SAAT_BICIMI, kalin=True)
 
     for ad, deger in filtre_ozeti:
         if ad == "Dönem":
@@ -277,7 +322,8 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
         yaz(ad, deger, aciklama, kalin=True)
 
     yaz("Rapordaki cihazlar", len(ozetler),
-        ", ".join(f"{o['cihaz']['envanter_kodu']} ({o['cihaz']['cihaz_adi']})" for o in ozetler) or "Cihaz bulunamadı.",
+        _ekli("Rapora dahil cihazlar", ", ".join(f"{o['cihaz']['envanter_kodu']} ({o['cihaz']['cihaz_adi']})" for o in ozetler))
+        if ozetler else "Rapora dahil cihaz yok.",
         kalin=True)
 
     # ---- Bakım ----
@@ -292,11 +338,11 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
     yaz("Bakım kaydı (toplam)", ozet.get("bakim_sayisi", len(bakimlar)),
         "Seçilen dönemde girilen tüm bakım kayıtları.", kalin=True)
     yaz("Devam eden bakım", len(siniflar[BAKIM_DEVAM]),
-        f"Şu an süren bakımlar: {cihaz_kodu(siniflar[BAKIM_DEVAM])}", kalin=True)
+        _ekli("Şu an süren bakımlar", cihaz_kodu(siniflar[BAKIM_DEVAM])), kalin=True)
     yaz("Planlanmış bakım", len(siniflar[BAKIM_PLANLI]),
-        f"Başlangıç tarihi henüz gelmemiş bakımlar: {cihaz_kodu(siniflar[BAKIM_PLANLI])}", kalin=True)
+        _ekli("Başlangıç tarihi henüz gelmemiş bakımlar", cihaz_kodu(siniflar[BAKIM_PLANLI])), kalin=True)
     yaz("Tamamlanan bakım", len(siniflar[BAKIM_BITTI]),
-        f"Bitiş tarihi geçmiş bakımlar: {cihaz_kodu(siniflar[BAKIM_BITTI])}", kalin=True)
+        _ekli("Bitiş tarihi geçmiş bakımlar", cihaz_kodu(siniflar[BAKIM_BITTI])), kalin=True)
     toplam_maliyet = ozet.get("toplam_bakim_maliyeti", 0)
     yaz("Toplam bakım maliyeti", toplam_maliyet, "Bakım kayıtlarındaki maliyetlerin toplamı.", PARA_BICIMI, kalin=True)
     if bakimlar:
@@ -317,12 +363,12 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
     bolum("KALİBRASYON (bugünkü durum)")
     yaz("Kalibrasyon kaydı (dönemde)", ozet.get("kalibrasyon_sayisi", len(veri.get("kalibrasyonlar", []))),
         "Seçilen dönemde girilen kalibrasyon kaydı sayısı.", kalin=True)
-    yaz("Süresi dolmuş", len(dolmus), f"Geçerlilik tarihi geçmiş cihazlar: {kodlar(dolmus)}", kalin=True)
+    yaz("Süresi dolmuş", len(dolmus), _ekli("Geçerlilik tarihi geçmiş cihazlar", kodlar(dolmus)), kalin=True)
     yaz(f"{KALIBRASYON_UYARI_GUN} gün içinde dolacak", len(yakinda),
-        f"Geçerliliği {KALIBRASYON_UYARI_GUN} günden az kalmış cihazlar: {kodlar(yakinda)}", kalin=True)
+        _ekli(f"Geçerliliği {KALIBRASYON_UYARI_GUN} günden az kalmış cihazlar", kodlar(yakinda)), kalin=True)
     yaz(f"{KALIBRASYON_UYARI_GUN} günden fazla süresi var", len(gecerli),
-        f"Kalibrasyonu geçerli ve süresi rahat cihazlar: {kodlar(gecerli)}", kalin=True)
-    yaz("Kalibrasyon kaydı yok", len(kayitsiz), f"Hiç kalibrasyon kaydı bulunmayan cihazlar: {kodlar(kayitsiz)}", kalin=True)
+        _ekli("Kalibrasyonu geçerli ve süresi rahat cihazlar", kodlar(gecerli)), kalin=True)
+    yaz("Kalibrasyon kaydı yok", len(kayitsiz), _ekli("Hiç kalibrasyon kaydı bulunmayan cihazlar", kodlar(kayitsiz)), kalin=True)
     yaz("Not", None, "Kalibrasyon durumu bugüne göre hesaplanır; tarih filtresinden etkilenmez.")
 
     # ---- Arıza ----
@@ -334,8 +380,8 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti, ozetler, bugun):
     yaz("Arıza kaydı (toplam)", ozet.get("ariza_sayisi", len(arizalar)),
         "Seçilen dönemde bildirilen ya da çözülen arızalar.", kalin=True)
     yaz("Çözümü süren arıza", len(acik),
-        f"Henüz çözülmemiş, çözüm için uğraşılan arızalar: {cihaz_kodu(acik)}", kalin=True)
-    yaz("Çözülen arıza", len(cozulen), f"Çözüm tarihi girilmiş arızalar: {cihaz_kodu(cozulen)}", kalin=True)
+        _ekli("Henüz çözülmemiş, çözüm için uğraşılan arızalar", cihaz_kodu(acik)), kalin=True)
+    yaz("Çözülen arıza", len(cozulen), _ekli("Çözüm tarihi girilmiş arızalar", cihaz_kodu(cozulen)), kalin=True)
     sureler = [s for s in (_ariza_suresi_gun(a, bugun) for a in cozulen) if s is not None]
     if sureler:
         yaz("Ortalama çözüm süresi", sum(sureler) / len(sureler),
@@ -669,4 +715,5 @@ def excel_dosyasi_olustur(veri, filtre_ozeti, dosya_yolu, bugun=None):
         ],
     )
 
+    yazdirma_hazirla(kitap)
     kitap.save(dosya_yolu)

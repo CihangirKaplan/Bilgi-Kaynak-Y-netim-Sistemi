@@ -11,6 +11,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from client.rapor_excel import (
+    yazdirma_hazirla,
+    birim_bicimi,
+    ozet_bicimi,
     ACIKLAMA_FONT,
     BASLIK_FONT,
     BOLUM_DOLGU,
@@ -52,6 +55,12 @@ def _sira(ogrenci):
     return sira if sira is not None else SIRASIZ
 
 
+BIRIMLER = {
+    "Listelenen öğrenci": "öğrenci", "Puanı olan öğrenci": "öğrenci", "Faaliyet kaydı": "kayıt", "Toplam puan": "puan",
+    "Ortalama puan": "puan", "En yüksek puan": "puan", "Aktif öğrenci": "öğrenci", "Pasif öğrenci": "öğrenci",
+}
+
+
 def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
     sayfa.sheet_view.showGridLines = False
     satir = 1
@@ -64,7 +73,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
         h1.font = BASLIK_FONT if kalin else Font()
         h1.alignment = Alignment(vertical="top", wrap_text=True)
         if b is not None:
-            h2 = _hucre_yaz(sayfa, satir, 2, b, bicim)
+            h2 = _hucre_yaz(sayfa, satir, 2, b, ozet_bicimi(BIRIMLER, a, b, bicim))
             h2.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         if c is not None:
             h3 = _hucre_yaz(sayfa, satir, 3, c)
@@ -94,7 +103,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
 
     # ---- Rapor bilgileri ----
     bolum("RAPOR BİLGİLERİ")
-    yaz("Rapor Tarihi", datetime.now(), "Raporun Excel'e aktarıldığı an.", TARIH_SAAT_BICIMI, kalin=True)
+    yaz("Rapor Tarihi", datetime.now(), "Raporun oluşturulduğu an.", TARIH_SAAT_BICIMI, kalin=True)
     aciklamalar = {
         "Dönem": lambda d: ("Tarih sınırı uygulanmadı; kayıtlı tüm faaliyetler rapora dahil." if d == "Tümü"
                             else "Faaliyet tarihi bu aralıkta olan kayıtlar rapora dahil edildi."),
@@ -126,7 +135,7 @@ def _ozet_sayfasini_yaz(sayfa, veri, filtre_ozeti):
         for o in ilk_uc:
             yaz(f"{o['sira']}. sıra", _sayi(o["toplam_puan"]),
                 f"{o['ad_soyad']} ({o['ogrenci_numarasi']})" + ("" if o.get("aktif_mi", True) else " — pasif öğrenci"),
-                kalin=True)
+                birim_bicimi("puan", _sayi(o["toplam_puan"])), kalin=True)
     else:
         yaz("Sıralama", None, "Bu raporda puanı olan öğrenci yok.")
 
@@ -244,4 +253,5 @@ def excel_dosyasi_olustur(veri, filtre_ozeti, dosya_yolu):
         ],
     )
 
+    yazdirma_hazirla(kitap)
     kitap.save(dosya_yolu)

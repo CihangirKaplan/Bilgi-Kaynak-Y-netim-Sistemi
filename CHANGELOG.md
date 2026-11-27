@@ -72,6 +72,9 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 - **Dışa aktarma:** tüm rapor ve liste sayfalarında **⬇ Dışa Aktar** düğmesi; önce "Hangi türde kaydetmek istersiniz?" sorulur (Excel .xlsx ya da PDF), sonra
   dosya yeri seçilir. PDF: A4 yatay, sayfa numaralı, her sayfada tablo başlığı; tablo sayfası başına ilk 3000 satır (uzun listeler için Excel). Liste aktarımları
   denetim kaydına dosya türüyle (Excel/PDF) yazılır.
+- **Rapor çıktıları:** özet satırlarında sayılar birimiyle görünür ("13 cihaz", "18 kayıt", "14.101,50 ₺", "6,1 gün", "97,33 saat"); hücre yine sayıdır (Excel'de toplanabilir).
+  Liste boşken "Yok" tekrarı yazılmaz; PDF yüksek çözünürlükte (eşit harf aralığı), başlık şeritli, bölüm başlığı altındaki içerikle birlikte ve satırlar sayfa sonunda
+  bölünmeden yerleşir, tablo başlığı her sayfada tekrarlanır. Excel dosyaları A4 yatay, sayfaya sığdırılmış, altbilgide sayfa numarasıyla yazdırılır.
 - **🔔 Zil bildirimleri:** süresi dolan öğrenci kayıtları, sonucu girilmemiş randevular ve yedek uyarısı.
 - Oda Yönetimi: kullanılmamış odayı uyarıyla veritabanından kalıcı silme.
 
