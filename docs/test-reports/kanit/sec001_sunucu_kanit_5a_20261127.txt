@@ -1,0 +1,66 @@
+SEC-001 — Bulgu #5(a): C:\TKYS klasörü izinleri sıkılaştırıldı
+Tarih: 27.11.2026   Sunucu: Windows, C:\TKYS, develop f1efdb2
+Not: Bilgisayar adı ve kullanıcı adları <...> ile maskelenmiştir. Çıktılar terminalden olduğu gibi alınmıştır.
+
+================================================================================
+1) Karar için yapılan okuma-yalnız kontroller
+================================================================================
+PS C:\TKYS> Get-ScheduledTask | Where-Object { $_.TaskName -like 'TKYS*' } | Select-Object TaskName, State, @{n='Hesap';e={$_.Principal.UserId}}, @{n='Yetki';e={$_.Principal.RunLevel}} | Format-Table -AutoSize
+TaskName                  State Hesap    Yetki
+TKYS_Otomatik_Yedekleme   Ready SYSTEM Highest
+TKYS_Sunucu             Running SYSTEM Highest
+(İki görev de SYSTEM ile çalışıyor: klasör izinlerini kısıtlamaktan etkilenmez.)
+
+PS C:\TKYS> Get-LocalUser | Select-Object Name, Enabled
+  Administrator False / Guest False / <yönetici hesabı> True / VarsayılanHesap False / WDAGUtilityAccount False
+PS C:\TKYS> Get-LocalGroupMember -SID S-1-5-32-544      (Administrators)
+  <bilgisayar>\Administrator, <bilgisayar>\<yönetici hesabı>
+PS C:\TKYS> Get-LocalGroupMember -SID S-1-5-32-555      (Remote Desktop Users)
+  (boş)
+PS C:\TKYS> (Get-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server').fDenyTSConnections
+1                                                       (Uzak Masaüstü kapalı)
+PS C:\TKYS> quser
+  <yönetici>   console   1   Active   27.11.2026 11:53          (yalnızca bilgisayarın başındaki oturum)
+
+================================================================================
+2) Önceki durum (bulgu)
+================================================================================
+PS C:\TKYS> icacls C:\TKYS
+C:\TKYS BUILTIN\Administrators:(I)(OI)(CI)(F)
+        NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+        BUILTIN\Users:(I)(OI)(CI)(RX)
+        NT AUTHORITY\Authenticated Users:(I)(M)
+        NT AUTHORITY\Authenticated Users:(I)(OI)(CI)(IO)(M)
+(Üst klasörden miras: giriş yapan her kullanıcı sunucu kodunu değiştirebilirdi.)
+İzin yedeği: PS C:\TKYS> icacls C:\TKYS /save C:\TKYS\backups\tkys_klasor_acl_yedek_20261127.txt   -> Successfully processed 1 files
+Geri dönüş komutu (gerekirse): icacls C:\TKYS /inheritance:e
+
+================================================================================
+3) Düzeltme (yönetici PowerShell)
+================================================================================
+PS C:\TKYS> icacls C:\TKYS /inheritance:r /grant:r "BUILTIN\Administrators:(OI)(CI)F" "NT AUTHORITY\SYSTEM:(OI)(CI)F"
+processed file: C:\TKYS
+Successfully processed 1 files; Failed processing 0 files
+
+Sonra (üst klasör ve alt klasör/dosyalar miras alarak aynı iki satırı gösteriyor):
+C:\TKYS NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+        BUILTIN\Administrators:(OI)(CI)(F)
+C:\TKYS\server NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+               BUILTIN\Administrators:(I)(OI)(CI)(F)
+C:\TKYS\logs NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+             BUILTIN\Administrators:(I)(OI)(CI)(F)
+C:\TKYS\.venv\Scripts\python.exe NT AUTHORITY\SYSTEM:(I)(F)
+                                 BUILTIN\Administrators:(I)(F)
+
+================================================================================
+4) Doğrulama
+================================================================================
+Sunucu yeniden başlatıldı (schtasks /End, port kapandı, schtasks /Run):
+  [2026-11-27 14:25:39] Sunucu başlatılıyor: https://172.24.4.66:8443
+  INFO: Application startup complete.
+  GET /api/saglik -> {"durum":"calisiyor"}
+Otomatik yedekleme (SYSTEM): "Yedek oluşturuldu: tkys_20261127_142638_983067.dump", "Yedekleme çıkış kodu: 0"
+Git (yönetici PowerShell):  PS C:\TKYS> git status --short   ->  (hata yok, çıktı boş)
+
+Sonuç: PASS. Klasör yalnızca Administrators ve SYSTEM tarafından değiştirilebilir; sunucu, yedekleme ve git çalışıyor.
+Bundan sonra C:\TKYS içindeki git/pip/alembic/dosya okuma komutları "Yönetici olarak çalıştır" PowerShell ister.
