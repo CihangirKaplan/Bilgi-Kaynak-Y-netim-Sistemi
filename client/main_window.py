@@ -2047,7 +2047,22 @@ QLabel {
             return
         secili = tablo.selectionModel().selectedRows()
         durum = tablo.item(secili[0].row(), 3) if secili else None
-        dugme.setText(ODA_AKTIF_ET_ETIKETI if durum is not None and "Pasif" in durum.text() else ODA_PASIFE_AL_ETIKETI)
+        pasif = durum is not None and "Pasif" in durum.text()
+        dugme.setText(ODA_AKTIF_ET_ETIKETI if pasif else ODA_PASIFE_AL_ETIKETI)
+        AnaPencere.oda_sil_butonunu_guncelle(self, secili_var=bool(secili), pasif=pasif)
+
+    def oda_sil_butonunu_guncelle(self, secili_var=False, pasif=False):
+        """"Odayı Sil" yalnızca PASİF bir oda seçiliyken etkindir (aktif oda önce pasife alınır)."""
+        silme = getattr(self, "oda_sil_butonu", None)
+        if silme is None:
+            return
+        silme.setEnabled(bool(secili_var and pasif))
+        if not secili_var:
+            silme.setToolTip("Silmek için pasif bir oda seçin. (Pasif odalar için sağ üstteki \"Pasif odaları da göster\" kutusunu işaretleyin.)")
+        elif not pasif:
+            silme.setToolTip("Aktif oda silinemez. Önce odayı pasife alın; sonra pasif odayı seçip silebilirsiniz.")
+        else:
+            silme.setToolTip("Seçili pasif odayı kalıcı olarak siler (geri alınamaz).")
 
     def oda_durumunu_degistir(self):
         """Seçili odayı pasife alır; seçili oda zaten pasifse yeniden aktif eder."""
@@ -2115,6 +2130,11 @@ QLabel {
         satir = secili_satirlar[0].row()
         oda_id = int(self.oda_tablosu.item(satir, 0).text())
         oda_adi = self.oda_tablosu.item(satir, 1).text()
+        durum = self.oda_tablosu.item(satir, 3)
+        if durum is None or "Pasif" not in durum.text():                  # düğme zaten etkin olmaz; yine de aktif oda silinmez
+            QMessageBox.warning(self, "Aktif Oda Silinemez",
+                                f"'{oda_adi}' aktif. Silmeden önce odayı pasife alın; ardından silebilirsiniz.")
+            return
 
         kutu = QMessageBox(self)
         kutu.setIcon(QMessageBox.Warning)
@@ -2123,7 +2143,7 @@ QLabel {
         kutu.setInformativeText(
             "Bu işlem geri alınamaz. Odayla ilgili psikolog atamaları da kalkar.\n"
             "Odayı kullanan randevu, cihaz rezervasyonu ya da etkinlik kaydı varsa oda silinemez; "
-            "bu durumda odayı pasife alabilirsiniz.\n\nOdayı silmek istediğinize emin misiniz?")
+            "bu durumda oda pasif olarak kalır.\n\nOdayı silmek istediğinize emin misiniz?")
         kutu.addButton("Evet, Sil", QMessageBox.DestructiveRole)
         hayir = kutu.addButton("Vazgeç", QMessageBox.RejectRole)
         kutu.setDefaultButton(hayir)
@@ -2539,7 +2559,9 @@ QLabel {
                     self.oda_durum_butonu = btn                      # seçili odaya göre "Pasife Al" / "Aktif Et" olur
                     btn.clicked.connect(self.oda_durumunu_degistir)
                 elif etiket == ODA_SIL_ETIKETI:
+                    self.oda_sil_butonu = btn                        # yalnızca pasif oda seçiliyken etkin olur
                     btn.clicked.connect(self.odayi_sil)
+                    AnaPencere.oda_sil_butonunu_guncelle(self)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
                 elif izin_kodu == "Danışma masası oturumunu yönetme":

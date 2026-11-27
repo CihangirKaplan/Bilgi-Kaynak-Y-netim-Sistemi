@@ -83,7 +83,7 @@ def _randevu(c, kod, personel, oda, baslangic, durum="PLANLANDI"):
 def test_kayitsiz_oda_silinir_atamalar_kalkar_denetim_yazilir(ortam):
     c, admin, psikolog, personel, kod, oda = ortam
     yedek = oda("yedek", atanmis=True)                          # psikologun ikinci aktif odası
-    silinecek = oda("silinecek", atanmis=True)
+    silinecek = oda("silinecek", aktif=False, atanmis=True)     # yalnızca pasif oda silinir
     sonuc = oda_api.oda_sil(silinecek, kullanici_id=admin)
     assert sonuc["durum"] == "silindi" and not _var_mi(c, silinecek)
     c.execute("SELECT COUNT(*) FROM psikolog_odalar WHERE oda_id = %s", (silinecek,))
@@ -98,7 +98,7 @@ def test_kayitsiz_oda_silinir_atamalar_kalkar_denetim_yazilir(ortam):
 @pytest.mark.parametrize("tur", ["gecmis_randevu", "iptal_randevu", "gelecek_randevu", "rezervasyon", "etkinlik"])
 def test_kullanilmis_oda_silinemez_ve_yerinde_kalir(ortam, tur):
     c, admin, psikolog, personel, kod, oda = ortam
-    oda_id = oda("kullanilmis")
+    oda_id = oda("kullanilmis", aktif=False)                    # kullanım kuralına ulaşmak için oda pasif olmalı
     simdi = datetime.now()
     if tur == "gecmis_randevu":
         _randevu(c, kod, personel, oda_id, simdi - timedelta(days=30), "TAMAMLANDI")
@@ -131,12 +131,12 @@ def test_kullanilmis_oda_silinemez_ve_yerinde_kalir(ortam, tur):
             c.execute("DELETE FROM cihazlar WHERE cihaz_id = %s", (cihaz,))
 
 
-def test_psikologun_tek_aktif_odasi_silinemez_pasif_odasi_silinir(ortam):
+def test_aktif_oda_silinemez_once_pasife_alinmali_pasif_odasi_silinir(ortam):
     c, admin, psikolog, personel, kod, oda = ortam
-    tek = oda("tek", atanmis=True)
+    tek = oda("tek", atanmis=True)                              # psikologun tek aktif odası ve aktif
     with pytest.raises(HTTPException) as hata:
         oda_api.oda_sil(tek, kullanici_id=admin)
-    assert hata.value.status_code == 409 and "tek aktif odası" in hata.value.detail and _var_mi(c, tek)
+    assert hata.value.status_code == 409 and "Aktif oda silinemez" in hata.value.detail and "pasife alın" in hata.value.detail and _var_mi(c, tek)
     pasif = oda("pasif", aktif=False, atanmis=True)             # pasif oda psikoloğun aktif oda sayısını etkilemez
     assert oda_api.oda_sil(pasif, kullanici_id=admin)["durum"] == "silindi" and not _var_mi(c, pasif)
 

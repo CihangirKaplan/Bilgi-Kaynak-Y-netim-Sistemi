@@ -446,26 +446,24 @@ def oda_gecmis_kayit_sayilari(cursor, oda_id):
 def oda_sil(oda_id: int, kullanici_id: int | None = None):
     """Odayı veritabanından kalıcı olarak siler (geri alınamaz).
 
-    Silinemez (409): odanın tek aktif odası olduğu psikolog varsa ya da odayı kullanan herhangi bir randevu, cihaz rezervasyonu
-    ya da oda etkinliği kaydı varsa (geçmiş kayıtlar ve raporlar bozulmasın; bu durumda oda pasife alınabilir). Psikolog-oda atamaları
+    Yalnızca PASİF oda silinebilir: aktif oda önce pasife alınmalıdır (pasife alma; planlı randevu/rezervasyon/etkinlik ve psikologun tek aktif odası
+    kurallarını zaten denetler, böylece silme bu kuralları ayrıca atlatamaz). Silinemez (409): oda aktifse ya da odayı kullanan herhangi bir randevu,
+    cihaz rezervasyonu ya da oda etkinliği kaydı varsa (geçmiş kayıtlar ve raporlar bozulmasın; oda pasif olarak kalır). Psikolog-oda atamaları
     odayla birlikte kalkar. Silinen oda denetim kaydına yazılır."""
     conn = None
     cursor = None
     try:
         conn = vt_baglan(VT_AYARLARI)
         cursor = conn.cursor()
-        cursor.execute("SELECT oda_adi FROM odalar WHERE oda_id = %s FOR UPDATE;", (oda_id,))
+        cursor.execute("SELECT oda_adi, aktif_mi FROM odalar WHERE oda_id = %s FOR UPDATE;", (oda_id,))
         satir = cursor.fetchone()
         if satir is None:
             raise HTTPException(status_code=404, detail="Oda bulunamadı.")
-        oda_adi = satir[0]
-
-        etkilenenler = tek_aktif_odasi_olan_psikologlar(cursor, oda_id)
-        if etkilenenler:
+        oda_adi, aktif_mi = satir
+        if aktif_mi:
             raise HTTPException(
                 status_code=409,
-                detail="Bu oda şu psikologların tek aktif odası: " + ", ".join(etkilenenler)
-                       + ". Önce onlara başka bir oda atayın.",
+                detail="Aktif oda silinemez. Önce odayı pasife alın; ardından (pasif odalar listede görünür olduğunda) silebilirsiniz.",
             )
 
         sayilar = oda_gecmis_kayit_sayilari(cursor, oda_id)
