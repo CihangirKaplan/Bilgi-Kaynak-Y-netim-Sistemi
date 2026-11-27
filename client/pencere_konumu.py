@@ -80,6 +80,8 @@ class _Ortalayici(QObject):
             ekran = QGuiApplication.screenAt(merkez) or ana.screen()
             if ekran is not None:                      # pencere ekranın dışına taşmasın
                 a = ekran.availableGeometry()
+                if cerceve.height() > a.height() * 0.75:     # ekranı neredeyse dolduran pencere: üstte ve altta eşit boşluk kalsın
+                    ust = a.top() + (a.height() - cerceve.height()) // 2
                 sol = max(a.left(), min(sol, a.right() - cerceve.width() + 1))
                 ust = max(a.top(), min(ust, a.bottom() - cerceve.height() + 1))
             pencere.move(QPoint(sol, ust))

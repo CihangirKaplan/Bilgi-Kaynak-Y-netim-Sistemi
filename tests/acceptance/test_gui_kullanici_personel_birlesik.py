@@ -460,7 +460,7 @@ def test_diger_rollerde_kullanici_adi_otomatik_dolmaz(form):
 
 def test_alan_sirasi_rol_ogrenci_bilgileri_sonra_kullanici_adi(form):
     """Kullanıcı adı, ad soyaddan türediği için en altta (düğmelerin hemen üstünde) durur."""
-    duzen = form.layout()
+    duzen = form.icerik.layout()          # alanlar kaydırma alanındaki içerik yerleşiminde
     sira = lambda parca: duzen.indexOf(parca)
     assert sira(form.combo_rol) < sira(form.ogrenci_kutusu) < sira(form.input_kullanici_adi)
     assert sira(form.input_kullanici_adi) < sira(form.sonuc_kutusu)

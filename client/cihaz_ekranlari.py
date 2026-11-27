@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from client.api_yoneticisi import hata_detayi_metni, istek_hatasi_metni, api_hata_mesaji
 """Cihaz envanteri: liste ekranı, 'Cihaz ekle / durum güncelle' formu ve düzenleme listesi.
@@ -50,7 +51,7 @@ def durum_hapi(durum):
     return hap(ad, renk, arka)
 
 
-class CihazIslemFormu(QDialog):
+class CihazIslemFormu(KaydirmaliDiyalog):
     """Cihaz Ekleme ve Düzenleme İşlemleri İçin Ortak Form"""
     def __init__(self, api_url, token, islem_turu="EKLE", cihaz_veri=None):
         super().__init__()
@@ -64,7 +65,7 @@ class CihazIslemFormu(QDialog):
         self.setMinimumWidth(440)
         self.setStyleSheet(FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
         
@@ -96,13 +97,13 @@ class CihazIslemFormu(QDialog):
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         # Cihazlar silinmez (bakım, kalibrasyon, arıza ve rezervasyon geçmişi bağlıdır); yerine "kullanım dışına al" vardır.
         self.btn_kullanim_disi = None
         if islem_turu == "GUNCELLE" and (cihaz_veri or {}).get("durum") != "Kullanim_Disi":
             self.btn_kullanim_disi = tehlike_dugmesi("Cihazı kullanım dışına al", self.kullanim_disi_yap)
-            layout.addWidget(self.btn_kullanim_disi)
+            alt_yerlesim.addWidget(self.btn_kullanim_disi)
 
     def _kullanim_disi_onayi(self):
         kutu = QMessageBox(self)

@@ -2,6 +2,7 @@
 
 Görünüm, bakım/kalibrasyon ekranlarıyla aynı ortak bileşenleri (tablo_tasarimi) kullanır.
 """
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from client.tablo_tasarimi import cihaz_hucresi_uygula, cihaz_ipucu, islem_dugmeleri, tablo_dolgusunu_daralt, tarih_saat_goster
 from client.tablo_siralama import SIRALAMA_ROLU
@@ -62,7 +63,7 @@ def ariza_cihaz_notu(durum):
     return f"Cihaz şu anda '{DURUM_ADLARI.get(durum, durum)}' durumunda: arıza kaydedilir, cihazın durumu değişmez."
 
 
-class ArizaBildirimFormu(QDialog):
+class ArizaBildirimFormu(KaydirmaliDiyalog):
     """Yeni Cihaz Arıza Bildirimi Oluşturma Ekranı (FAIL-002)"""
     def __init__(self, api_url, token, parent=None):
         super().__init__(parent)
@@ -72,7 +73,7 @@ class ArizaBildirimFormu(QDialog):
         self.setWindowTitle("Yeni Arıza Bildirimi")
         self.setMinimumWidth(460)
         self.setStyleSheet(ARIZA_FORM_STIL)
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         layout.setSpacing(14)
 
         self.lbl_bilgi = QLabel("Arızalanan cihazı ve sorunun detaylarını giriniz.\n" + ariza_cihaz_notu(None))
@@ -104,7 +105,7 @@ class ArizaBildirimFormu(QDialog):
         self.btn_kaydet.setObjectName("tehlike")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         self.cihazlari_yukle()
 
@@ -373,7 +374,7 @@ class ArizaYonetimEkrani(QWidget):
             self.verileri_yukle()
 
 
-class ArizaDuzenleFormu(QDialog):
+class ArizaDuzenleFormu(KaydirmaliDiyalog):
     """Mevcut Arızayı Düzenleme ve Çözme Ekranı"""
     def __init__(self, api_url, token, ariza_verisi, parent=None):
         super().__init__(parent)
@@ -385,7 +386,7 @@ class ArizaDuzenleFormu(QDialog):
         self.setMinimumWidth(460)
         self.setStyleSheet(ARIZA_FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
 
@@ -437,7 +438,7 @@ class ArizaDuzenleFormu(QDialog):
         self.btn_kaydet.setObjectName("kaydet")
         self.btn_kaydet.setCursor(Qt.PointingHandCursor)
         self.btn_kaydet.clicked.connect(self.kaydet)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
     def _yeniden_ac_notu(self, *_):
         self.lbl_yeniden_ac.setVisible(self.zaten_cozulmustu and "Çözüldü" not in self.cmb_durum.currentText())

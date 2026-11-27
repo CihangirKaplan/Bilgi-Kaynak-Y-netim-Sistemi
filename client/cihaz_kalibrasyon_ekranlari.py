@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from client.api_yoneticisi import istek_hatasi_metni, hata_detayi_metni
 from PySide6.QtWidgets import (
@@ -34,7 +35,7 @@ KALIBRASYON_CAKISMA_METINLERI = (
     "Kalibrasyonu kaydet",
 )
 
-class YeniKalibrasyonFormu(QDialog):
+class YeniKalibrasyonFormu(KaydirmaliDiyalog):
     def __init__(self, api_url, token, parent=None, cihaz_id=None, plan_id=None):
         """cihaz_id / plan_id verilirse (plandan "kayıt aç" kısayolu) cihaz ve bağlı plan seçili açılır."""
         super().__init__(parent)
@@ -47,7 +48,7 @@ class YeniKalibrasyonFormu(QDialog):
 
         self.setStyleSheet(FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form = QFormLayout()
         form.setSpacing(10)
 
@@ -93,7 +94,7 @@ class YeniKalibrasyonFormu(QDialog):
         self.lbl_cihaz_hatasi.hide()
         layout.addWidget(self.lbl_cihaz_hatasi)
 
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         self.cihazlari_yukle()
         self.on_secimi_uygula()
@@ -191,7 +192,7 @@ class YeniKalibrasyonFormu(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Sunucu hatası: {istek_hatasi_metni(e)}")
 
-class KalibrasyonDuzenleFormu(QDialog):
+class KalibrasyonDuzenleFormu(KaydirmaliDiyalog):
     def __init__(self, api_url, token, veri, parent=None, sil_fn=None):
         super().__init__(parent)
         self.api_url = api_url
@@ -204,7 +205,7 @@ class KalibrasyonDuzenleFormu(QDialog):
 
         self.setStyleSheet(FORM_STIL)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form = QFormLayout()
         form.setSpacing(15)
 
@@ -242,11 +243,11 @@ class KalibrasyonDuzenleFormu(QDialog):
         btn.setObjectName("kaydet")
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(self.kaydet)
-        layout.addWidget(btn)
+        alt_yerlesim.addWidget(btn)
         self.btn_sil = None
         if sil_fn:
             self.btn_sil = tehlike_dugmesi("Bu kalibrasyon kaydını sil", self.sil)
-            layout.addWidget(self.btn_sil)
+            alt_yerlesim.addWidget(self.btn_sil)
 
     def sil(self):
         if self.sil_fn and self.sil_fn():

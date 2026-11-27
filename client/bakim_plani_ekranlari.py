@@ -3,6 +3,7 @@
 Her cihaz için tekrarlayan plan tanımlanır: tür, tekrar aralığı (gün), uyarı süresi (gün) ve
 sonraki görev tarihi. Plan durumu: Planlı, Yaklaşıyor (uyarı süresi içinde), Gecikmiş, Pasif.
 """
+from client.diyalog_tabani import KaydirmaliDiyalog
 import datetime
 
 from PySide6.QtCore import Qt, QDate
@@ -87,7 +88,7 @@ def periyot_metni(gun):
     return f"{gun} günde bir"
 
 
-class PlanFormu(QDialog):
+class PlanFormu(KaydirmaliDiyalog):
     """Yeni plan ekleme / mevcut planı düzenleme penceresi."""
 
     def __init__(self, api_url, token, plan=None, ebeveyn=None, sil_fn=None):
@@ -109,7 +110,7 @@ class PlanFormu(QDialog):
 
     # ------------------------------------------------------------------ arayüz
     def arayuzu_kur(self):
-        ana = QVBoxLayout(self)
+        ana, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         ana.setContentsMargins(22, 20, 22, 18)
         ana.setSpacing(14)
 
@@ -196,7 +197,7 @@ class PlanFormu(QDialog):
         self.btn_kaydet.clicked.connect(self.kaydet)
         butonlar.addWidget(self.btn_vazgec)
         butonlar.addWidget(self.btn_kaydet, 1)
-        ana.addLayout(butonlar)
+        alt_yerlesim.addLayout(butonlar)
         self.btn_sil = None
         if self.sil_fn and self.plan:
             self.btn_sil = tehlike_dugmesi("Bu planı sil", self.sil)

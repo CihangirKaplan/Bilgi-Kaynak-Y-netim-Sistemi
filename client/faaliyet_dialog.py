@@ -1,3 +1,4 @@
+from client.diyalog_tabani import KaydirmaliDiyalog
 import logging
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QComboBox, QSpinBox, QPushButton, QMessageBox
 from client.api_yoneticisi import (
@@ -13,7 +14,7 @@ from client.bildirim_toast import basari_bildirimi
 
 logger = logging.getLogger(__name__)
 
-class FaaliyetEkleDialog(QDialog):
+class FaaliyetEkleDialog(KaydirmaliDiyalog):
     KISAYOL_GENISLIGI = 170       # "Yeni ... Ekle" düğmelerinin ortak genişliği (px)
 
     # mevcut_veri verilirse pencere düzenleme modunda açılır.
@@ -54,7 +55,7 @@ class FaaliyetEkleDialog(QDialog):
             QPushButton#btnYeniOgr:hover, QPushButton#btnKisayol:hover { background-color: #2ECC71; }
         """)
 
-        layout = QVBoxLayout(self)
+        layout, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         form_layout = QFormLayout()
 
         ogr_layout = QHBoxLayout()
@@ -122,7 +123,7 @@ class FaaliyetEkleDialog(QDialog):
         buton_metni = "Güncelle" if self.mevcut_veri else "Kaydet"
         self.btn_kaydet = QPushButton(buton_metni)
         self.btn_kaydet.clicked.connect(self.kaydet_tiklandi)
-        layout.addWidget(self.btn_kaydet)
+        alt_yerlesim.addWidget(self.btn_kaydet)
 
         self.verileri_yukle()
 

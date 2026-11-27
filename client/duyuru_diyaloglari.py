@@ -1,5 +1,6 @@
 """Ana panel duyurusu yayınlama penceresi (yalnızca DUYURU_YONET izni olanlara açılır)."""
 
+from client.diyalog_tabani import KaydirmaliDiyalog
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (QCheckBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
                                QPlainTextEdit, QVBoxLayout)
@@ -10,7 +11,7 @@ BASLIK_UZUNLUGU = 120
 METIN_UZUNLUGU = 1000
 
 
-class DuyuruDiyalogu(QDialog):
+class DuyuruDiyalogu(KaydirmaliDiyalog):
     """Başlık, metin ve (isteğe bağlı) son geçerlilik tarihi alıp sunucuya gönderir."""
 
     def __init__(self, api_url, token, parent=None):
@@ -20,7 +21,7 @@ class DuyuruDiyalogu(QDialog):
         self.setWindowTitle("Yeni Duyuru")
         self.setMinimumWidth(460)
 
-        lay = QVBoxLayout(self)
+        lay, alt_yerlesim = self.kaydirmali_kur()      # alanlar kaydırılır; düğmeler altta sabit kalır
         uyari = QLabel("Duyuru, giriş yapan herkesin ana panelinde görünür. Kişisel bilgi (danışan adı, telefon vb.) yazmayın.")
         uyari.setWordWrap(True)
         uyari.setStyleSheet("color: #854D0E; background: #FEF3C7; border-radius: 8px; padding: 8px 10px; font-size: 12px;")
@@ -50,7 +51,7 @@ class DuyuruDiyalogu(QDialog):
         self.kutu.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         self.kutu.accepted.connect(self.yayinla)
         self.kutu.rejected.connect(self.reject)
-        lay.addWidget(self.kutu)
+        alt_yerlesim.addWidget(self.kutu)
 
     def yayinla(self):
         baslik = self.txt_baslik.text().strip()
