@@ -221,3 +221,47 @@ def test_aktarim_modeli_bicimi_kabul_eder_eskisiz_excel_sayar():
     assert sunucu.ListeAktarimModeli(liste="OGRENCI", satir_sayisi=1, bicim="PDF").bicim == "PDF"
     with pytest.raises(ValidationError):
         sunucu.ListeAktarimModeli(liste="OGRENCI", satir_sayisi=1, bicim="DOCX")
+
+
+# ---------------------------------------------------------------- görsel doğrulamada bulunan kusurlar
+def test_kisa_sutunlar_icerigi_sigacak_kadar_genis_kalir():
+    """Görsel doğrulamada 'No' ve 'Öğrenci No' sütunları dar kalıp rakamları satır ortasından bölüyordu."""
+    satirlar = [[("No", False, True, None, None), ("Açıklama", False, True, None, None)],
+                [("12", True, False, None, None), ("Çok uzun bir açıklama metni " * 6, False, False, None, None)],
+                [("202100001", False, False, None, None), ("Kısa", False, False, None, None)]]
+    no, aciklama = rapor_cikti._sutun_agirliklari(satirlar, 2)
+    assert no >= len("202100001") * 2                                          # en uzun değer (9 hane) sığacak pay
+    assert aciklama > no                                                       # uzun metin sütunu yine de daha fazla pay alır
+    uzun_1 = rapor_cikti._sutun_agirliklari([[("x" * 60, False, False, None, None)]], 1)[0]
+    uzun_2 = rapor_cikti._sutun_agirliklari([[("x" * 120, False, False, None, None)]], 1)[0]
+    assert uzun_1 < uzun_2 < uzun_1 * 2                                       # uzun metinde pay orantısız büyümez
+
+
+def test_serbest_duzenli_sayfa_baslik_satiri_gibi_boyanmaz_hucre_bicimleri_korunur():
+    """Cihaz Raporu'nun 'Durum Raporu' sayfası gibi serbest düzenli sayfalarda ilk satır başlık değildir; Excel'deki dolgu/kalın korunur."""
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook(); ws = wb.active; ws.title = "Durum Raporu"
+    ws["A1"] = "DURUM RAPORU — Kategorilere göre kayıt"                           # tek hücreli ilk satır: başlık değil
+    ws["A2"] = "BAKIM — Devam eden"; ws["A2"].fill = PatternFill("solid", fgColor="FF16294B"); ws["A2"].font = Font(bold=True, color="FFFFFFFF")
+    ws["B2"] = "x"; ws["A3"] = "Cihaz"; ws["B3"] = "Tarih"; ws["A4"] = "EEG"; ws["B4"] = "26.11.2026"
+    kod = rapor_cikti._tablo_html("Durum Raporu", ws)
+    assert "<thead>" not in kod                                                # sahte mavi başlık satırı yok
+    assert "bgcolor='#16294B'" in kod and "<b>BAKIM — Devam eden</b>" in kod and "<font color='#FFFFFF'>" in kod
+
+
+def test_duzenli_tablo_ilk_satiri_basliktir_ve_cok_sutunda_yazi_kuculur():
+    wb = Workbook(); ws = wb.active; ws.title = "Liste"
+    for s in range(1, 13):
+        ws.cell(row=1, column=s, value=f"Sütun {s}")
+        ws.cell(row=2, column=s, value=s)
+    kod = rapor_cikti._tablo_html("Liste", ws)
+    assert kod.count("<th ") == 12 and "<thead>" in kod and "font-size:7pt" in kod         # >10 sütun: bir punto küçük
+    ws2 = Workbook().active
+    for s in range(1, 4):
+        ws2.cell(row=1, column=s, value=f"S{s}"); ws2.cell(row=2, column=s, value=s)
+    assert "font-size:7pt" not in rapor_cikti._tablo_html("Az", ws2)
+
+
+def test_denetim_ayrintisinda_bicim_alani_turkce_etiketle_gorunur():
+    import client.audit_kayitlari_ekrani as modul
+    assert modul.alan_adi("bicim") == "Biçim"

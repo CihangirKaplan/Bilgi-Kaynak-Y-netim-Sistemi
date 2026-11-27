@@ -100,6 +100,7 @@ OLAY_RENKLERI = {
 
 
 AYRINTI_ETIKETLERI = {
+    "bicim": "Biçim",
     "onceki": "Önceki değer", "yeni": "Yeni değer", "neden": "Neden", "izin": "İzin", "rol": "Rol",
     "eklenen_roller": "Rolü eklenenler", "kaldirilan_roller": "Rolü kaldırılanlar", "verilen_roller": "Verilen roller",
     "gorunen_ad": "Görünen ad", "aktif_mi": "Aktif mi", "personel_kodu": "Personel kodu", "yas_grubu": "Yaş grubu",
