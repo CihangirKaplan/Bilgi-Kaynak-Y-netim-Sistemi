@@ -1,0 +1,63 @@
+SEC-001 canlı ortam denemeleri — 27.11.2026 11:50
+Sunucu: https://172.24.4.66:8443 | Adımlar: T01, T02, T03, T07, T08 | Onay (veri değiştiren adımlar): EVET
+
+SEC-T01 — Authentication Bypass (token yok / bozuk token)
+  [PASS] T01.1 /api/saglik tokensiz açık (sağlık kontrolü)
+         beklenen: 200 | gerçek: HTTP 200
+  [PASS] T01.2 GET /api/cihazlar tokensiz
+         beklenen: 401 | gerçek: HTTP 401 "Not authenticated"
+  [PASS] T01.2 GET /api/randevular tokensiz
+         beklenen: 401 | gerçek: HTTP 401 "Not authenticated"
+  [PASS] T01.2 GET /api/yetkilerim tokensiz
+         beklenen: 401 | gerçek: HTTP 401 "Not authenticated"
+  [PASS] T01.2 GET /api/audit-kayitlari tokensiz
+         beklenen: 401 | gerçek: HTTP 401 "Not authenticated"
+  [PASS] T01.3 GET /api/cihazlar bozuk token ile
+         beklenen: 401 | gerçek: HTTP 401 "Geçersiz token."
+
+SEC-T02 — Function-Level Authorization (yetkisiz rol yönetim uçlarına erişemez)
+  [PASS] T02.1 GET /api/yonetim-raporlari/randevu-ozet (sec_psikolog_a)
+         beklenen: 403 | gerçek: HTTP 403 "Bu işlem için yetkiniz bulunmuyor."
+  [PASS] T02.1 GET /api/audit-kayitlari (sec_psikolog_a)
+         beklenen: 403 | gerçek: HTTP 403 "Bu işlem için yetkiniz bulunmuyor."
+  [PASS] T02.1 POST /api/kullanicilar (sec_psikolog_a)
+         beklenen: 403 | gerçek: HTTP 403 "Bu işlem için yetkiniz bulunmuyor."
+  [PASS] T02.1 PATCH /api/kullanicilar/1/rol (sec_psikolog_a)
+         beklenen: 403 | gerçek: HTTP 403 "Bu işlem için yetkiniz bulunmuyor."
+
+SEC-T03 — Object-Level Authorization (başkasının kaydı değiştirilemez)
+  [PASS] T03.1 sec_psikolog_b, sec_psikolog_a kullanıcısının randevusunu iptal etmeye çalışır
+         beklenen: 403 ya da 404 | gerçek: HTTP 403 "Yalnızca kendi randevunuzu iptal edebilirsiniz."
+  [PASS] T03.2 A'nın randevusu hâlâ planlı (kayıt değişmedi)
+         beklenen: PLANLANDI | gerçek: PLANLANDI
+  [PASS] T03.3 sec_asistan, başkasının rezervasyonunu iptal etmeye çalışır
+         beklenen: 403 | gerçek: HTTP 403 "Bu rezervasyonu yalnızca oluşturan kişi ya da cihaz yöneticisi değişti"
+  [PASS] T03.4 rezervasyon hâlâ aktif (kayıt değişmedi)
+         beklenen: Aktif | gerçek: Aktif
+
+SEC-T07 — Rate / Brute-Force (hesap kilidi)
+  [PASS] T07.1 yanlış parolalar: ilk denemeler 401, kilit eşiğinde 429
+         beklenen: …401, 401, 429 (en geç 5. denemede) | gerçek: 401, 401, 401, 401, 429
+  [PASS] T07.2 kilit sürerken DOĞRU parola da kabul edilmez
+         beklenen: 429, token yok | gerçek: HTTP 429 "Hesap geçici olarak kilitli."
+  [PASS] T07.3 Retry-After başlığı kalan süreyi bildirir
+         beklenen: 1-900 sn | gerçek: 60 sn
+         kilidin açılması bekleniyor (61 sn)…
+  [PASS] T07.4 kilit süresi dolunca doğru parola kabul edilir
+         beklenen: 200 + token | gerçek: HTTP 200
+
+SEC-T08 — Token (değiştirilmiş token, pasifleştirilen kullanıcının token'ı)
+  [PASS] T08.0 geçerli token ile kontrol isteği
+         beklenen: 200 | gerçek: HTTP 200
+  [PASS] T08.1 imzası bozulmuş token
+         beklenen: 401 | gerçek: HTTP 401 "Geçersiz token."
+  [PASS] T08.2 imzasız ('alg: none') token
+         beklenen: 401 | gerçek: HTTP 401 "Geçersiz token."
+  [PASS] T08.3 yönetici 'sec_pasif' hesabını pasifleştirir
+         beklenen: 200 | gerçek: HTTP 200
+  [PASS] T08.4 pasifleştirilen hesabın eski token'ı reddedilir
+         beklenen: 401 ya da 403 (veri dönmez) | gerçek: HTTP 403 "Kullanıcı hesabı aktif değil."
+         'sec_pasif' hesabı yeniden AKTİF edildi.
+
+ÖZET: 23 PASS, 0 FAIL, 0 ATLANDI
+Kanıt dosyası: sec001_canli_kanit_20261127_1150.txt

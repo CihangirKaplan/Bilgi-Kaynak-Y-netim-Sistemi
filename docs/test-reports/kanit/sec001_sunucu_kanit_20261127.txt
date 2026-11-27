@@ -1,0 +1,129 @@
+SEC-001 — Sunucuda elle yapılan denemeler (SEC-T10, T11, T12, T13)
+Tarih: 27.11.2026   Sunucu: Windows, C:\TKYS, develop f1efdb2, veritabanı: tkys (PostgreSQL 18, 127.0.0.1)
+Not: Aşağıdaki çıktılar terminalden olduğu gibi alınmıştır; yalnızca Windows konsolunun bozduğu Türkçe karakterler
+düzeltilmiştir ("sat²r" -> "satır"). Parola ve anahtar içeren satır yoktur (postgres parolası gizli girilmiş, ekrana yazılmamıştır).
+
+================================================================================
+SEC-T10 — Gizli bilgi
+================================================================================
+PS C:\TKYS> git check-ignore .env
+.env
+
+PS C:\TKYS> C:\TKYS\.venv\Scripts\python.exe -c "import os;from dotenv import load_dotenv,dotenv_values;load_dotenv();ornek=dotenv_values('.env.example').get('JWT_SECRET');s=os.getenv('JWT_SECRET','');print('uzunluk:',len(s),'| örnek değerle aynı mı:',s==ornek)"
+uzunluk: 64 | örnek değerle aynı mı: False
+
+Sonuç: PASS. (JWT anahtarının kendisi yazdırılmamıştır.)
+
+Bulgu ve düzeltme — .env ve sertifika\anahtar.pem dosya izinleri (rapor: Bulgular #4):
+Düzeltmeden önce (icacls C:\TKYS\.env ve ...\anahtar.pem aynı sonucu verdi):
+  BUILTIN\Administrators:(I)(F)
+  NT AUTHORITY\SYSTEM:(I)(F)
+  BUILTIN\Users:(I)(RX)
+  NT AUTHORITY\Authenticated Users:(I)(M)
+Düzeltme (yönetici PowerShell):
+  icacls "C:\TKYS\.env" /inheritance:r /grant:r "BUILTIN\Administrators:F" "NT AUTHORITY\SYSTEM:F"
+  icacls "C:\TKYS\sertifika\anahtar.pem" /inheritance:r /grant:r "BUILTIN\Administrators:F" "NT AUTHORITY\SYSTEM:F"
+Düzeltmeden sonra:
+  C:\TKYS\.env NT AUTHORITY\SYSTEM:(F)
+               BUILTIN\Administrators:(F)
+  C:\TKYS\sertifika\anahtar.pem NT AUTHORITY\SYSTEM:(F)
+                                BUILTIN\Administrators:(F)
+Sunucu sonrasında çalışıyor:
+  PS C:\TKYS> curl.exe -k -s https://172.24.4.66:8443/api/saglik
+  {"durum":"calisiyor"}
+
+================================================================================
+SEC-T11 — Bağımlılık taraması (sunucudaki kurulu paketler)
+================================================================================
+PS C:\TKYS> C:\TKYS\.venv\Scripts\python.exe -m pip install pip-audit
+...
+Successfully installed ... pip-audit-2.10.1 ...
+PS C:\TKYS> C:\TKYS\.venv\Scripts\python.exe -m pip_audit
+No known vulnerabilities found
+
+Sonuç: PASS.
+
+================================================================================
+SEC-T12 — Denetim kayıtları değiştirilemez (postgres kullanıcısıyla, BEGIN ... ROLLBACK içinde)
+================================================================================
+PS C:\TKYS> & $psql -h 127.0.0.1 -U postgres -d tkys -c "SELECT count(*) FROM denetim_kayitlari;"
+ count
+-------
+    75
+(1 satır)
+
+PS C:\TKYS> & $psql ... -c "BEGIN; UPDATE denetim_kayitlari SET hedef_tablo = 'deneme' WHERE denetim_id = (SELECT min(denetim_id) FROM denetim_kayitlari); ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosundaki kayitlar degistirilemez veya silinemez (UPDATE).
+BAĞLAM:  denetim_kaydi_degistirilemez() PL/pgSQL fonksiyonu, 13. satır, RAISE içinde
+
+PS C:\TKYS> & $psql ... -c "BEGIN; DELETE FROM denetim_kayitlari WHERE denetim_id = (SELECT min(denetim_id) FROM denetim_kayitlari); ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosundaki kayitlar degistirilemez veya silinemez (DELETE).
+BAĞLAM:  denetim_kaydi_degistirilemez() PL/pgSQL fonksiyonu, 13. satır, RAISE içinde
+
+PS C:\TKYS> & $psql ... -c "BEGIN; TRUNCATE denetim_kayitlari; ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosundaki kayitlar degistirilemez veya silinemez (TRUNCATE).
+BAĞLAM:  denetim_kaydi_degistirilemez() PL/pgSQL fonksiyonu, 13. satır, RAISE içinde
+
+PS C:\TKYS> & $psql ... -c "SELECT count(*) FROM denetim_kayitlari;"
+ count
+-------
+    75
+(1 satır)
+
+Sonuç: PASS. Üç komut da tetikleyici hatasıyla engellendi, kayıt sayısı 75 -> 75 (değişmedi).
+Not: Sunucu veritabanına postgres (tam yetkili) kullanıcıyla bağlanıyor; bu denemede tetikleyici postgres için de çalıştı.
+Kısıtlı uygulama kullanıcısı (kurulum kılavuzu 6A) kurulmamış: rapor Bulgular #5.
+
+================================================================================
+SEC-T13 — Yedek klasörü
+================================================================================
+İlk deneme (yönetici PowerShell) — SONUÇ: FAIL (rapor: Bulgular #3):
+PS C:\TKYS> icacls "C:\TKYS\backups"
+C:\TKYS\backups BUILTIN\Administrators:(I)(OI)(CI)(F)
+                NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+                BUILTIN\Users:(I)(OI)(CI)(RX)
+                NT AUTHORITY\Authenticated Users:(I)(M)
+                NT AUTHORITY\Authenticated Users:(I)(OI)(CI)(IO)(M)
+
+Düzeltme (yönetici PowerShell):
+PS C:\TKYS> icacls "C:\TKYS\backups" /inheritance:r /grant:r "BUILTIN\Administrators:(OI)(CI)F" "NT AUTHORITY\SYSTEM:(OI)(CI)F"
+processed file: C:\TKYS\backups
+Successfully processed 1 files; Failed processing 0 files
+
+Düzeltmeden sonra:
+PS C:\TKYS> icacls "C:\TKYS\backups"
+C:\TKYS\backups NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+                BUILTIN\Administrators:(OI)(CI)(F)
+
+Successfully processed 1 files; Failed processing 0 files
+
+Yönetici olmayan oturumdan klasöre erişim:
+PS C:\TKYS> icacls "C:\TKYS\backups"
+C:\TKYS\backups: Erişim engellendi.
+PS C:\TKYS> Get-ChildItem C:\TKYS\backups
+Get-ChildItem : 'C:\TKYS\backups' yoluna erişim reddedildi.   (UnauthorizedAccessException)
+
+Ağ paylaşımı:
+PS C:\TKYS> net share
+Paylaşım adı Kaynak                          Açıklama
+C$           C:\                             Varsayılan değer
+IPC$                                         Uzak IPC
+ADMIN$       C:\WINDOWS                      Uzak Yönetici
+Komut başarıyla tamamlandı.
+(Yedek klasörü paylaşımda yok; yalnızca varsayılan yönetimsel paylaşımlar var.)
+
+Düzeltmeden sonra otomatik yedekleme (SYSTEM hesabıyla çalışan görev) hâlâ çalışıyor:
+PS C:\TKYS> schtasks /Run /TN TKYS_Otomatik_Yedekleme
+SUCCESS: Attempted to run the scheduled task "TKYS_Otomatik_Yedekleme".
+PS C:\TKYS> Get-Content C:\TKYS\logs\yedekleme.log -Tail 6
+Yedek oluşturuldu: tkys_20261127_122454_196369.dump
+Veritabanı: tkys
+Dosya boyutu: 123272 bayt
+Temizlenecek eski yedek bulunamadi.
+Otomatik yedekleme ve rotasyon tamamlandi.
+[2026-11-27 12:24:55] Yedekleme çıkış kodu: 0
+
+Sonuç (düzeltme sonrası): PASS.
