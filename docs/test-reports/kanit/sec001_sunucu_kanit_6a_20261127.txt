@@ -1,0 +1,59 @@
+SEC-001 — Kısıtlı uygulama veritabanı kullanıcısı (kurulum kılavuzu 6A) ve SEC-T12'nin uygulama kullanıcısıyla tekrarı
+Tarih: 27.11.2026   Sunucu: Windows, C:\TKYS, develop f1efdb2, veritabanı: tkys (PostgreSQL 18)
+Not: Çıktılar terminalden olduğu gibi alınmıştır; Windows konsolunun bozduğu Türkçe karakterler düzeltilmiştir ("sat²r" -> "satır").
+Parola yoktur: uygulama kullanıcısının parolası .env dosyasından okunup yalnızca oturum değişkenine konmuş, ekrana yazılmamıştır.
+
+================================================================================
+6A — Sunucuyu kısıtlı veritabanı kullanıcısıyla çalıştırma
+================================================================================
+Öncesi: sunucu veritabanına "postgres" (tam yetkili) ile bağlanıyordu (.env: DB_USER=postgres) — Bulgular #5(b).
+Yapılanlar (yönetici PowerShell):
+  1. Taze yedek: scripts\backup\veritabani_yedekle.py -> tkys_20261127_140215_399200.dump
+  2. .env'ye tam yetkili hesap DB_MIGRATION_USER / DB_MIGRATION_PASSWORD olarak da eklendi (parola ekrana yazılmadan).
+  3. Önizleme: python scripts\uygulama_kullanicisi_olustur.py
+       ÖNİZLEME: veritabanında hiçbir şey değiştirilmedi.
+         Veritabanı            : tkys
+         Yönetici kullanıcı    : postgres
+         Oluşturulacak kullanıcı: tkys_uygulama (süper kullanıcı değil; tablo oluşturamaz/silemez)
+  4. Oluşturma: python scripts\uygulama_kullanicisi_olustur.py --uygula
+  5. .env: DB_USER=tkys_uygulama (DB_PASSWORD yeni parola); DB_MIGRATION_USER=postgres olduğu gibi kaldı.
+     (Select-String ile doğrulandı: .env:9:DB_USER=tkys_uygulama  /  .env:39:DB_MIGRATION_USER=postgres)
+  6. Sunucu yeniden başlatıldı (schtasks /End, port kapandı, schtasks /Run).
+Sonrası:
+  - Günlük: "[2026-11-27 14:07:11] Sunucu başlatılıyor ... Application startup complete."
+  - Sağlık: {"durum":"calisiyor"}
+  - İstemciden (admin) gezinme: oda kullanımı, odalar, psikologlar, danışan kodları, randevular, cihazlar, personel, rol-izin matrisi,
+    yetkiler vb. uçlarının hepsi "200 OK" (sunucu günlüğü).
+  - python -m alembic current -> f6c2d8a4b715 (head);  python scripts\sema_dogrula.py -> "ŞEMA UYUMLU"
+  - Otomatik yedekleme (schtasks /Run /TN TKYS_Otomatik_Yedekleme): "Yedek oluşturuldu: tkys_20261127_140849_148321.dump",
+    "Yedekleme çıkış kodu: 0"
+Sonuç: PASS — sunucu kısıtlı kullanıcıyla eksiksiz çalışıyor.
+
+================================================================================
+SEC-T12 — Denetim kayıtları, UYGULAMA kullanıcısıyla (tkys_uygulama), BEGIN ... ROLLBACK içinde
+================================================================================
+PS C:\TKYS> & $psql -h 127.0.0.1 -U tkys_uygulama -d tkys -c "BEGIN; UPDATE denetim_kayitlari SET hedef_tablo = 'deneme' WHERE denetim_id = (SELECT min(denetim_id) FROM denetim_kayitlari); ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosuna erişim engellendi
+
+PS C:\TKYS> & $psql ... -c "BEGIN; DELETE FROM denetim_kayitlari WHERE denetim_id = (SELECT min(denetim_id) FROM denetim_kayitlari); ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosuna erişim engellendi
+
+PS C:\TKYS> & $psql ... -c "BEGIN; TRUNCATE denetim_kayitlari; ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosuna erişim engellendi
+
+PS C:\TKYS> & $psql ... -c "BEGIN; DROP TABLE denetim_kayitlari; ROLLBACK;"
+BEGIN
+HATA:  denetim_kayitlari tablosunun sahibi olmalısınız
+
+PS C:\TKYS> & $psql ... -c "SELECT count(*) FROM denetim_kayitlari;"
+ count
+-------
+    98
+(1 satır)
+
+Sonuç: PASS. Uygulama kullanıcısı denetim kaydını ne değiştirebiliyor, ne silebiliyor, ne boşaltabiliyor, ne de tabloyu düşürebiliyor
+(önceki denemede tam yetkili postgres kullanıcısı da tetikleyici tarafından engellenmişti; burada yetki düzeyinde de engelleniyor).
+(Kayıt sayısı 75'ten 98'e, 27.11.2026'daki giriş/yedekleme/test işlemlerinin yazdığı yeni denetim kayıtları yüzünden artmıştır.)

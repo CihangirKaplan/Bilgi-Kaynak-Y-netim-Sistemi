@@ -37,7 +37,7 @@ python -m pytest -q tests/security
 | SEC-T09 | Error Leakage | ✅ PASS (24 test) | — |
 | SEC-T10 | Secret Scan | ✅ PASS (3 test) | ✅ PASS (27.11.2026: `.env` git dışı, JWT anahtarı 64 karakter ve örnek değil; `.env` ve `anahtar.pem` izinleri daraltıldı — Bulgular #4) |
 | SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ✅ PASS (27.11.2026: sunucudaki kurulu paketlerde bilinen açık yok) |
-| SEC-T12 | Audit Integrity | ✅ PASS (17 test) | ✅ PASS (27.11.2026: UPDATE/DELETE/TRUNCATE engellendi, kayıt sayısı 75 → 75) |
+| SEC-T12 | Audit Integrity | ✅ PASS (17 test) | ✅ PASS (27.11.2026: UPDATE/DELETE/TRUNCATE engellendi, kayıt sayısı 75 → 75; kısıtlı uygulama kullanıcısıyla da engelleniyor, DROP dahil) |
 | SEC-T13 | Backup Security | ✅ PASS (3 test) | ✅ PASS (27.11.2026, düzeltmeden sonra; ilk denemede FAIL: miras izinler — Bulgular #3) |
 | SEC-T14 | Business Logic Abuse | ✅ PASS (36 test) | — |
 | SEC-T15 | Concurrency | ✅ PASS (8 test) | — |
@@ -60,7 +60,7 @@ dosyalardaki bütün testleri gösterir; 22.11.2026 listesine göre T01, T02, T0
 | 2 | SEC-T12 | Canlı deneme komutundaki `SET olay_turu = 'X'` tetikleyici yüzünden değil, 'X' geçerli bir değer olmadığı için hata veriyordu (yanlış nedenle PASS verebilirdi). | Rapor düzeltmesi | Düzeltildi: komut geçerli bir sütun/değerle (`SET hedef_tablo = 'deneme'`) yazıldı |
 | 3 | SEC-T13 | Yedek klasörü (`C:\TKYS\backups`) üst klasörden miras kalan izinlerle `Users` (okuma) ve `Authenticated Users` (değiştirme) erişimine açıktı: sunucuya giriş yapan her kullanıcı veritabanı yedeklerini okuyabilir ya da silebilirdi. | P1 (veri gizliliği) | Düzeltildi 27.11.2026: miras kesildi, yalnızca Administrators ve SYSTEM (`icacls /inheritance:r`); otomatik yedekleme doğrulandı |
 | 4 | SEC-T10 | `.env` (veritabanı ve JWT sırları) ve `sertifika\anahtar.pem` (TLS özel anahtarı) aynı mirasla her kullanıcıya açıktı. | P1 (sır gizliliği) | Düzeltildi 27.11.2026: yalnızca Administrators ve SYSTEM; sunucu çalışmaya devam ediyor |
-| 5 | SEC-T10 / T12 | (a) `C:\TKYS` klasörünün kendisi `Authenticated Users` tarafından değiştirilebilir (sunucu kodu dahil). (b) Sunucu veritabanına `postgres` (tam yetkili) ile bağlanıyor; kurulum kılavuzu 6A'daki kısıtlı kullanıcı (`tkys_uygulama`) kurulmamış. | P2 (sertleştirme önerisi) | Açık: ekip kararı. Sunucuya yalnızca yönetici hesaplarının giriş yapabildiği ortamda risk düşüktür |
+| 5 | SEC-T10 / T12 | (a) `C:\TKYS` klasörünün kendisi `Authenticated Users` tarafından değiştirilebilir (sunucu kodu dahil). (b) Sunucu veritabanına `postgres` (tam yetkili) ile bağlanıyordu; kurulum kılavuzu 6A'daki kısıtlı kullanıcı (`tkys_uygulama`) kurulmamıştı. | P2 (sertleştirme önerisi) | (b) Düzeltildi 27.11.2026: sunucu `tkys_uygulama` ile çalışıyor, uygulama kullanıcısı denetim kaydını değiştiremiyor/silemiyor/düşüremiyor (kanıt: docs/test-reports/kanit/sec001_sunucu_kanit_6a_20261127.txt). (a) Açık: ekip kararı; sunucuya yalnızca yönetici hesaplarının giriş yapabildiği ortamda risk düşüktür |
 
 ## Ayrıntılar
 
@@ -297,11 +297,14 @@ Steps:            1. denetim_kayitlari tablosunda UPDATE / DELETE / TRUNCATE ver
 Expected Result:  Değiştirme ve silme reddedilir; kayıt aynı kalır.
 Actual Result:    Geliştirme: 17/17 test geçti. Canlı (27.11.2026, postgres kullanıcısıyla, BEGIN ... ROLLBACK içinde): UPDATE, DELETE ve
                   TRUNCATE "denetim_kayitlari tablosundaki kayitlar degistirilemez veya silinemez" hatasıyla engellendi; kayıt sayısı
-                  75 → 75. Not: sunucu veritabanına `postgres` ile bağlanıyor (Bulgular #5).
+                  75 → 75 (o tarihte sunucu `postgres` ile bağlanıyordu, Bulgular #5). Sonradan sunucu kısıtlı `tkys_uygulama` kullanıcısına geçirildi
+                  (kılavuz 6A) ve deneme bu kullanıcıyla tekrarlandı: UPDATE, DELETE, TRUNCATE "erişim engellendi", DROP TABLE
+                  "tablonun sahibi olmalısınız" hatası verdi; kayıt sayısı değişmedi.
 PASS / FAIL:      PASS
 Tester:           Öğrenci C
 Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
-Evidence:         test_audit_degistirilemez.py, test_audit_security.py; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt
+Evidence:         test_audit_degistirilemez.py, test_audit_security.py; canlı: docs/test-reports/kanit/sec001_sunucu_kanit_20261127.txt,
+                  docs/test-reports/kanit/sec001_sunucu_kanit_6a_20261127.txt
 ```
 
 ### SEC-T13 — Backup Security
