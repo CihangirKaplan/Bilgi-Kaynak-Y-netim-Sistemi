@@ -33,3 +33,4 @@ GO ☐  NO-GO ☐
 NO-GO ise eksik maddeler ve sorumlusu: ________
 
 GO ise: develop → main birleştirilir, `v1.0.0` etiketi oluşturulur, canlıya geçmeden hemen önce elle yedek alınır.
+Adım adım uygulama, geri dönüş planı ve otomatik ön kontrol (`python scripts/yayin_oncesi_kontrol.py`): [`docs/release/Yayin_Gunu_Rehberi_v1.0.0.md`](../release/Yayin_Gunu_Rehberi_v1.0.0.md).
