@@ -1,0 +1,57 @@
+Canlı doğrulama — Yedekleme ve geri yükleme kanıtı (GO/NO-GO madde 9 ve 10)
+Tarih: 27.11.2026   Sunucu: Windows, C:\TKYS, veritabanı: tkys (PostgreSQL 18), develop f1efdb2 -> c959e71
+Not: Çıktılar terminalden olduğu gibi alınmıştır; Windows konsolunun bozduğu Türkçe karakterler düzeltilmiştir. Parola yoktur.
+
+================================================================================
+MADDE 9 — Yedekleme
+================================================================================
+Elle yedek (scripts\backup\veritabani_yedekle.py), yönetici PowerShell:
+  tkys_20261127_110820_834846.dump   113801 bayt   (11:08, SEC-001 öncesi)
+  tkys_20261127_140215_399200.dump   123763 bayt   (14:02, 6A öncesi)
+  tkys_20261127_145731_349625.dump   138789 bayt   (14:57, sunucu güncellemesi öncesi)
+
+Otomatik yedekleme görevi (schtasks /Run /TN TKYS_Otomatik_Yedekleme; görev SYSTEM hesabıyla çalışır):
+  [2026-11-27 11:05:50] Yedekleme başlatıldı.      Yedek oluşturuldu: tkys_20261127_110550_960333.dump   Yedekleme çıkış kodu: 0
+  [2026-11-27 12:24:55] ...                        Yedek oluşturuldu: tkys_20261127_122454_196369.dump (123272 bayt)  çıkış kodu: 0
+  [2026-11-27 14:08:50] ...                        Yedek oluşturuldu: tkys_20261127_140849_148321.dump (138080 bayt)  çıkış kodu: 0
+  [2026-11-27 14:26:40] ...                        Yedek oluşturuldu: tkys_20261127_142638_983067.dump (138093 bayt)  çıkış kodu: 0
+  (12:24 ve sonrası: yedek klasörü yalnızca Administrators ve SYSTEM'e açık hâlde ve sunucu kısıtlı tkys_uygulama kullanıcısıyla çalışırken; yedekleme sorunsuz.)
+
+Arayüz (Yönetici -> Sistem Durumu, canlı sunucuya bağlı istemci):
+  Son Yedek: 27.11.2026 14:57 (1 saatten kısa süre önce) — Toplam 18 yedek, son yedek 0.13 MB;  Uygulama sürümü 1.0.0, şema f6c2d8a4b715,
+  veritabanı boyutu 10.6 MB. (SMOKE S12 karşılığı.)
+
+Görev ayarları (SMOKE H1): schtasks /Query /TN TKYS_Sunucu /XML ->
+  <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>  <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>  <StartWhenAvailable>true</StartWhenAvailable>
+Yedek klasörü izni (SEC-T13): yalnızca SYSTEM ve Administrators (bkz. sec001_sunucu_kanit_20261127.txt).
+
+================================================================================
+MADDE 10 — Geri yükleme (yedek YENİ bir veritabanına yüklenir; canlı veritabanının üzerine yazılmaz)
+================================================================================
+PS C:\TKYS> C:\TKYS\.venv\Scripts\python.exe scripts\restore\veritabani_geri_yukle.py --hedef tkys_dogrulama_test
+Yedek: tkys_20261127_142638_983067.dump
+
+Geri yuklendi: tkys_dogrulama_test
+Tablo                         Geri yuklenen  Kaynak (su an)
+roller                                    6               6
+izinler                                  37              37
+rol_izinleri                            216             216
+kullanicilar                              8               8
+personel                                  8               8
+odalar                                    3               3
+danisan_kodlari                           1               1
+randevular                                1               1
+cihazlar                                  1               1
+cihaz_rezervasyonlari                     1               1
+cihaz_bakimlari                           0               0
+cihaz_kalibrasyonlari                     0               0
+cihaz_arizalari                           0               0
+denetim_kayitlari                        98              98
+alembic                        f6c2d8a4b715    f6c2d8a4b715
+
+Sonuç: PASS — 14 tablonun hepsinde geri yüklenen kayıt sayısı kaynakla aynı; veritabanı sürümü aynı.
+
+Deneme veritabanının silinmesi (yalnızca tkys_dogrulama_test; DB_MIGRATION_* tam yetkili hesapla, parola ekrana yazılmadan):
+  Önce:   bkys, postgres, template0, template1, tkys, tkys_backup_test_20261117, tkys_deneme, tkys_dogrulama_test, tkys_restore_test
+  PS C:\TKYS> psql ... -c "DROP DATABASE tkys_dogrulama_test;"   ->   DROP DATABASE
+  Sonra:  bkys, postgres, template0, template1, tkys, tkys_backup_test_20261117, tkys_deneme, tkys_restore_test   (canlı "tkys" yerinde)
