@@ -204,9 +204,9 @@ Bu günün çıktısı, `docs/test-reports/GO-NO-GO_Kontrol_Listesi.md` içindek
 | 9 Backup, 10 Restore | Bölüm 3 (yedek günlüğü + geri yükleme çıktısı) | ☐ |
 | 11 Audit | Bölüm 2.6 ve SEC-T12 | ☐ |
 | 13 Installation | Bölüm 1 (sunucu güncelleme) ve bölüm 5 | ☐ |
-| 12 UAT | **Bu günün kapsamında değil** (pilot, `UAT-001_Pilot_Raporu.md`) | — |
+| 12 UAT | **Bu günün kapsamında değil.** Ekip kararı (27.11.2026): pilot canlıya geçişten **önce** yapılmaz, geçişten sonraki ilk hafta içinde yapılır (`UAT-001_Pilot_Raporu.md`); GO/NO-GO listesinde madde 12 "bilinçli ertelendi" | — |
 | 14 Documentation | Kılavuzların güncelliği; bu günde çıkan eksikler issue olarak kaydedilir | ☐ |
 
 **Karar:** Canlı doğrulama tamam ☐  Tamam değil ☐ — eksik maddeler ve sorumlusu: ________
 
-Tamamsa: UAT pilotu ve GO/NO-GO toplantısı ([`GO-NO-GO_Kontrol_Listesi.md`](../test-reports/GO-NO-GO_Kontrol_Listesi.md)) sırada; GO çıkarsa [`Yayin_Gunu_Rehberi_v1.0.0.md`](Yayin_Gunu_Rehberi_v1.0.0.md) izlenir.
+Tamamsa: GO/NO-GO toplantısı ([`GO-NO-GO_Kontrol_Listesi.md`](../test-reports/GO-NO-GO_Kontrol_Listesi.md)) sırada; GO çıkarsa [`Yayin_Gunu_Rehberi_v1.0.0.md`](Yayin_Gunu_Rehberi_v1.0.0.md) izlenir. UAT pilotu (madde 12) yayından sonraki ilk haftaya ertelendi.

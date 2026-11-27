@@ -19,7 +19,7 @@ Kısa özet: hazırlık PR'ı → develop'ı main'e birleştir → `v1.0.0` etik
 - [ ] GitHub Actions "TKYS QA Tests", develop son koşusu **yeşil** (Actions sayfası → develop).
 - [ ] GitHub'da açık **P0 / P1** issue yok.
 - [ ] **Canlı doğrulama günü** yapıldı ve tamamlandı: [`Canli_Dogrulama_Gunu_Kontrol_Listesi.md`](Canli_Dogrulama_Gunu_Kontrol_Listesi.md) (sunucu güncelleme provası, elle kontroller, yedek/geri yükleme, SEC-001 canlı denemeleri). Orada çıkan P0/P1 sorunlar giderildi.
-- [ ] GO/NO-GO listesindeki 14 madde kanıtlarıyla dolduruldu, karar **GO**.
+- [ ] GO/NO-GO listesindeki 14 madde kanıtlarıyla dolduruldu (madde 12 UAT, ekip kararıyla yayından sonraki ilk haftaya ertelendi: listede "bilinçli ertelendi"), karar **GO**.
 - [ ] Yerelde (proje klasöründe, sanal ortam açık) otomatik kontrol çalıştırıldı ve **HATA** satırı yok:
 
       git checkout develop; git pull origin develop
@@ -135,5 +135,5 @@ Yayından sonraki ilk saatlerde karar verin: geri dönüş, yayından sonra giri
 ## 8. Yayından sonra
 
 - [ ] Ekibe ve kullanıcılara yayın duyurusu (tarih, sürüm, kılavuzlar, destek yolu: `RELEASE_NOTES.md` → Destek).
-- [ ] İlk hafta: günlük `logs\sunucu.log` ve yedek log kontrolü; yeni sorunlar GitHub issue olarak P0/P1/P2 etiketiyle açılır.
+- [ ] İlk hafta: **UAT pilotu** (madde 12; bir psikolog, bir memur, bir müdür; `docs/test-reports/UAT-001_Pilot_Raporu.md`) yapılır, P0/P1 çıkarsa hotfix; günlük `logs\sunucu.log` ve yedek log kontrolü; yeni sorunlar GitHub issue olarak P0/P1/P2 etiketiyle açılır.
 - [ ] Bundan sonraki kod değişiklikleri yine `develop`'a gelir; yayınlar `develop → main` PR'ı ve yeni etiketle (`v1.0.1`, `v1.1.0`…) yapılır.
