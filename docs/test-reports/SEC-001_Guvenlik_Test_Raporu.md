@@ -33,7 +33,7 @@ python -m pytest -q tests/security
 | SEC-T05 | Input Validation | ✅ PASS (129 test) | — |
 | SEC-T06 | Injection | ✅ PASS (5 test) | — |
 | SEC-T07 | Rate / Brute-Force | ✅ PASS (24 test) | ✅ PASS (27.11.2026: 5. yanlış parolada 429, kilit sürerken doğru parola 429, 60 sn sonra 200) |
-| SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ✅ PASS (27.11.2026: bozuk/imzasız token 401, pasifleştirilen hesabın token'ı 403); ⏳ istemcide giriş ekranına dönüş (elle) |
+| SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ✅ PASS (27.11.2026: bozuk/imzasız token 401, pasifleştirilen hesabın token'ı 403; istemcide açık oturum "Oturumunuz geçersiz hâle gelmiştir" ile sonlanır, yeniden girişte "Kullanıcı hesabı aktif değil.") |
 | SEC-T09 | Error Leakage | ✅ PASS (24 test) | — |
 | SEC-T10 | Secret Scan | ✅ PASS (3 test) | ⏳ (`.env` ve JWT anahtarı) |
 | SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ⏳ (sunucudaki kurulumla) |
@@ -208,12 +208,16 @@ Expected Result:  Token ile istek reddedilir (veri dönmez): bozuk/süresi dolmu
 Actual Result:    Geliştirme: 25/25 test geçti (25.11.2026). Pasifleştirilen hesabın token'ı 403 alır; istemcinin buna tepkisi eksikti, düzeltildi
                   (Bulgular #1). Canlı (27.11.2026, betik): 6/6 PASS; geçerli token 200, imzası bozulmuş ve imzasız (alg: none) token 401,
                   yönetici hesabı pasifleştirince eski token 403 "Kullanıcı hesabı aktif değil." (hesap betikle yeniden aktif edildi).
-                  Elle yapılacak son adım (istemcide giriş ekranına dönüş) henüz yapılmadı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı betik PASS, istemci adımı ⏳
+                  Canlı (27.11.2026, istemci, elle): `sec_pasif` oturumu açıkken yönetici hesabı pasife aldı; istemcide işlem denenince
+                  "Oturumunuz geçersiz hâle gelmiştir. Uygulamayı kullanmaya devam etmek için lütfen yeniden giriş yapın." uyarısı çıktı ve giriş
+                  ekranı açıldı; aynı hesapla yeniden girişte "Kullanıcı hesabı aktif değil." görüldü.
+PASS / FAIL:      PASS (betik ve istemci)
 Tester:           Öğrenci C
 Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
 Evidence:         test_token_api_kalite.py, test_guvenlik_jwt_kalite.py, test_kullanici_pasiflestirme.py, tests/unit/test_oturum_pasif_hesap.py;
-                  canlı: scripts/canli_guvenlik_denemesi.py çıktısı (T08.1–T08.4) + istemcide giriş ekranına dönüşün ekran görüntüsü
+                  canlı: scripts/canli_guvenlik_denemesi.py çıktısı (T08.1–T08.4);
+                  istemci: docs/test-reports/kanit/sec001_t08_istemci_1_oturum_uyarisi.png,
+                  docs/test-reports/kanit/sec001_t08_istemci_2_hesap_aktif_degil.png
 ```
 
 ### SEC-T09 — Error Leakage
