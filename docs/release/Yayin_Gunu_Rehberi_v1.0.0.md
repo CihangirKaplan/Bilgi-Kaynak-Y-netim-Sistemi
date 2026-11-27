@@ -3,6 +3,8 @@
 Bu rehber, **GO/NO-GO toplantısında GO kararı çıktıktan sonra** (bkz. `docs/test-reports/GO-NO-GO_Kontrol_Listesi.md`) sırayla izlenir.
 NO-GO ise hiçbir adım uygulanmaz. Her adımın yanındaki kutuyu işaretleyin; bir adım başarısız olursa **durun**, sonraki adıma geçmeyin.
 
+Kim hangi adımı yapar, süreler ve sıra: [`Ekip_Gorev_Dagilimi_v1.0.0.md`](Ekip_Gorev_Dagilimi_v1.0.0.md).
+
 Kısa özet: hazırlık PR'ı → develop'ı main'e birleştir → `v1.0.0` etiketi → canlı sunucuyu güncelle → istemcileri güncelle → smoke test.
 
 | Alan | Bilgi |
