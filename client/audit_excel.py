@@ -37,7 +37,7 @@ def audit_excel_olustur(dosya_yolu, kayitlar, ozet, filtre_ozeti, kesildi=False)
         filtre_ozeti,
         [
             ("Toplam kayıt (süzgeçle)", ozet.get("toplam_kayit", 0), "Süzgece uyan tüm kayıtlar."),
-            ("Dosyadaki kayıt", len(kayitlar), "Bu Excel dosyasına yazılan kayıt sayısı."),
+            ("Dosyadaki kayıt", len(kayitlar), "Dosyaya yazılan kayıt sayısı."),
             ("Başarısız giriş", ozet.get("basarisiz_giris", 0), "Başarısız giriş denemeleri."),
             ("Kullanıcı işlemleri", ozet.get("kullanici_islemleri", 0), "Oluşturma, güncelleme, rol değişikliği ve silme işlemleri."),
             ("Bugünkü işlemler", ozet.get("bugunku_islemler", 0), "Bugün yapılan işlemler."),

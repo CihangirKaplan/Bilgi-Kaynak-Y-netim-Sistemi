@@ -174,15 +174,24 @@ def hucre_metni(hucre):
     return str(deger)
 
 
+def _renk(renk):
+    """openpyxl rengini (ARGB metni) #RRGGBB'ye çevirir; tema/indeks renkleri ve 'dolgusuz' (00000000) için None."""
+    deger = getattr(renk, "rgb", None)
+    if isinstance(deger, str) and len(deger) == 8 and deger != "00000000":
+        return "#" + deger[2:]
+    return None
+
+
 def _satir_verileri(sayfa, en_fazla=None):
-    """Boş olmayan satırlar: [(metin, sayisal_mi, kalin_mi, dolgulu_mu)] listesi; en_fazla verilirse ilk satır + en_fazla veri satırı."""
+    """Boş olmayan satırlar: [(metin, sayisal_mi, kalin_mi, dolgu_rengi, yazi_rengi)] listesi; en_fazla verilirse ilk satır + en_fazla veri satırı."""
     satirlar = []
-    for numara, satir in enumerate(sayfa.iter_rows(), start=1):
+    for satir in sayfa.iter_rows():
         if all(h.value is None for h in satir):
             continue
         satirlar.append([
             (hucre_metni(h), isinstance(h.value, (int, float)) and not isinstance(h.value, bool),
-             bool(h.font and h.font.b), bool(h.fill and h.fill.fill_type == "solid"))
+             bool(h.font and h.font.b), _renk(h.fill.fgColor) if (h.fill and h.fill.fill_type == "solid") else None,
+             _renk(h.font.color) if (h.font and h.font.color) else None)
             for h in satir
         ])
     toplam = len(satirlar)
@@ -203,8 +212,8 @@ def _ozet_html(sayfa):
             govde.append(f"<h1>{html.escape(metinler[0])}</h1>")
             ilk_satir = False
             continue
-        if len(dolu) == 1 and satir[0][3]:                      # tek hücreli, dolgulu satır = bölüm başlığı
-            govde.append(f"<h2>{html.escape(dolu[0])}</h2>")
+        if len(dolu) == 1 and satir[0][3] is not None:          # tek hücreli, dolgulu satır = bölüm başlığı
+            govde.append(f"<div style='font-size:4pt'>&nbsp;</div><h2>{html.escape(dolu[0])}</h2>")
         elif len(dolu) == 1 and not satir[0][2]:                # tek hücreli düz satır = açıklama
             govde.append(f"<p class='alt'>{html.escape(dolu[0])}</p>")
         else:
@@ -218,31 +227,61 @@ def _ozet_html(sayfa):
     return "\n".join(govde)
 
 
+def _sutun_agirliklari(satirlar, sutun_sayisi):
+    """Sütun genişlik oranları: kısa sütunlar (No, tarih, durum) içeriği sığacak kadar, uzun metin sütunları orantılı daralarak pay alır."""
+    en_uzun = [1] * sutun_sayisi
+    for satir in satirlar[:200]:
+        for i, hucre in enumerate(satir):
+            en_uzun[i] = max(en_uzun[i], len(hucre[0]))
+    return [u * 2.0 + 4 if u <= 16 else 36 + 2.5 * (u - 16) ** 0.55 for u in en_uzun]
+
+
+def _kucult(icerik):
+    return f"<span style='font-size:7pt'>{icerik}</span>"
+
+
+def _hucre_html(hucre, etiket, zemin, kucuk=False):
+    metin, sayisal, kalin, dolgu, yazi = hucre
+    renk = yazi if yazi and yazi.upper() != "#000000" else None
+    icerik = html.escape(metin)
+    if kucuk:
+        icerik = _kucult(icerik)
+    if kalin:
+        icerik = f"<b>{icerik}</b>"
+    if renk:
+        icerik = f"<font color='{renk}'>{icerik}</font>"
+    return f"<{etiket} align='{'right' if sayisal else 'left'}' bgcolor='{dolgu or zemin}'>{icerik}</{etiket}>"
+
+
 def _tablo_html(ad, sayfa):
     satirlar, toplam = _satir_verileri(sayfa, PDF_EN_FAZLA_SATIR)
     if not satirlar:
         return f"<h2>{html.escape(ad)}</h2><p class='alt'>Bu sayfada kayıt yok.</p>"
     sutun_sayisi = max(len(s) for s in satirlar)
-    agirlik = [1.0] * sutun_sayisi
-    for satir in satirlar[:200]:
-        for i, (metin, *_r) in enumerate(satir):
-            agirlik[i] = max(agirlik[i], min(len(metin), 40) ** 0.8)
+    agirlik = _sutun_agirliklari(satirlar, sutun_sayisi)
     toplam_agirlik = sum(agirlik)
+    genislik = [f"{100 * a / toplam_agirlik:.2f}%" for a in agirlik]
     govde = [f"<h2>{html.escape(ad)}</h2>"]
     if toplam - 1 > PDF_EN_FAZLA_SATIR:
         govde.append(f"<p class='alt'>Bu sayfada {toplam - 1} kayıt var; PDF'te ilk {PDF_EN_FAZLA_SATIR} kayıt gösterilir. "
                      "Tamamı için Excel olarak kaydedin.</p>")
     govde.append("<table width='100%' cellspacing='0' cellpadding='3' border='1' style='border-color:#C7D0DD;'>")
-    baslik, *veriler = satirlar
-    govde.append("<thead><tr>" + "".join(
-        f"<th width='{100 * agirlik[i] / toplam_agirlik:.1f}%' bgcolor='#24559B'><font color='#FFFFFF'>"
-        f"{html.escape(m[0])}</font></th>" for i, m in enumerate(baslik)
-    ) + "</tr></thead>")
+    ilk = satirlar[0]
+    kucuk = sutun_sayisi > 10                                                   # çok sütunlu tabloda yazı bir punto küçülür
+    basliklu = len(ilk) == sutun_sayisi and all(h[0] != "" for h in ilk)        # düzenli tablo: ilk satır sütun başlığıdır
+    veriler = satirlar
+    if basliklu:
+        govde.append("<thead><tr>" + "".join(
+            f"<th width='{genislik[i]}' bgcolor='#24559B'><font color='#FFFFFF'>"
+            f"{_kucult(html.escape(m[0])) if kucuk else html.escape(m[0])}</font></th>" for i, m in enumerate(ilk)
+        ) + "</tr></thead>")
+        veriler = satirlar[1:]
     for numara, satir in enumerate(veriler):
         zemin = "#F3F6FB" if numara % 2 else "#FFFFFF"
-        govde.append(f"<tr bgcolor='{zemin}'>" + "".join(
-            f"<td align='{'right' if sayisal else 'left'}'>{html.escape(metin)}</td>" for metin, sayisal, *_r in satir
-        ) + "</tr>")
+        hucreler = "".join(_hucre_html(h, "td", zemin, kucuk) for h in satir)
+        if not basliklu and numara == 0:                                          # serbest düzenli sayfa: sütun genişlikleri ilk satırdan verilir
+            hucreler = "".join(_hucre_html(h, "td", zemin, kucuk).replace("<td ", f"<td width='{genislik[i]}' ", 1) for i, h in enumerate(satir))
+        govde.append(f"<tr>{hucreler}</tr>")
     govde.append("</table>")
     return "\n".join(govde)
 
