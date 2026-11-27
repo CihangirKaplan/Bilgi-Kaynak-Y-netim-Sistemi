@@ -48,8 +48,8 @@ def dashboard_ozet_getir(kullanici_id: int | None = None):
         cursor.execute("SELECT COUNT(*) FROM cihaz_arizalari WHERE cozuldu_mu = False;")
         ozet["acik_ariza_sayisi"] = cursor.fetchone()[0]
 
-        # 3. Bugünkü Randevuları Çek
-        cursor.execute("SELECT COUNT(*) FROM randevular WHERE DATE(baslangic_zamani) = CURRENT_DATE;")
+        # 3. Bugünkü Randevuları Çek (iptal edilenler sayılmaz: ana panelde görünmezler)
+        cursor.execute("SELECT COUNT(*) FROM randevular WHERE DATE(baslangic_zamani) = CURRENT_DATE AND durum <> 'IPTAL_EDILDI';")
         ozet["bugunku_randevu_sayisi"] = cursor.fetchone()[0]
 
         return ozet
@@ -85,6 +85,7 @@ def dashboard_bugunku_randevular(kullanici_id: int | None = None,
             JOIN kullanicilar k ON p.kullanici_id = k.kullanici_id
             JOIN odalar o ON r.oda_id = o.oda_id
             WHERE r.baslangic_zamani >= CURRENT_DATE + %s AND r.baslangic_zamani < CURRENT_DATE + %s
+              AND r.durum <> 'IPTAL_EDILDI'
             ORDER BY r.baslangic_zamani;
         """, (bas, son))
         return [{

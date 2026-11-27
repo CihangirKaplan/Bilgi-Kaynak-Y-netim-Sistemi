@@ -550,9 +550,10 @@ class DashboardEkrani(QWidget):
     def _randevulari_yukle(self):
         lbl_deger, lbl_alt = self.kartlar["randevu"]
         try:
-            randevular = self._getir(self._aralik_yolu("/api/dashboard/bugunku-randevular"))
+            # İptal edilen randevular ana panelde gösterilmez (sunucu da döndürmez; eski sunucuya karşı burada da süzülür).
+            randevular = [r for r in self._getir(self._aralik_yolu("/api/dashboard/bugunku-randevular")) if r["durum"] != "IPTAL_EDILDI"]
             # Özet kartı her zaman BUGÜNÜ sayar; başka gün seçiliyse bugün için ayrıca sorulur.
-            bugunku = randevular if self.aralik == "bugun" else self._getir("/api/dashboard/bugunku-randevular")
+            bugunku = randevular if self.aralik == "bugun" else [r for r in self._getir("/api/dashboard/bugunku-randevular") if r["durum"] != "IPTAL_EDILDI"]
         except Exception as e:
             logger.warning("Randevu listesi yüklenemedi: %s", e)
             lbl_deger.setText("?")
@@ -561,20 +562,17 @@ class DashboardEkrani(QWidget):
             self._kaydirma_ipucu_guncelle(self.panel_randevu, 0)
             return
 
-        aktif = [r for r in bugunku if r["durum"] != "IPTAL_EDILDI"]
-        lbl_deger.setText(str(len(aktif)))
+        lbl_deger.setText(str(len(bugunku)))
         lbl_alt.setText("Bugün planlanan seans")
         self.lbl_randevu_bos.setText(f"{self._aralik_adi()} için kayıtlı randevu bulunmuyor.")
         kaydirilabilir = self._liste_goster(self.tablo_randevu, self.lbl_randevu_bos, len(randevular), TABLO_GORUNEN_SATIR)
         self._kaydirma_ipucu_guncelle(self.panel_randevu, len(randevular) if kaydirilabilir else 0)
         for i, r in enumerate(randevular):
-            iptal = r["durum"] == "IPTAL_EDILDI"
-            gri = "#9CA3AF" if iptal else None
             metin, renk, arka = DURUM_METIN.get(r["durum"], (r["durum"], "#374151", "#F3F4F6"))
-            self.tablo_randevu.setItem(i, 0, _item(self._saat_metni(r), renk=gri, kalin=not iptal))
-            self.tablo_randevu.setItem(i, 1, _item(r["danisan_kod_id"], renk=gri))
-            self.tablo_randevu.setItem(i, 2, _item(r["psikolog"], renk=gri))
-            self.tablo_randevu.setItem(i, 3, _item(r["oda"], renk=gri))
+            self.tablo_randevu.setItem(i, 0, _item(self._saat_metni(r), kalin=True))
+            self.tablo_randevu.setItem(i, 1, _item(r["danisan_kod_id"]))
+            self.tablo_randevu.setItem(i, 2, _item(r["psikolog"]))
+            self.tablo_randevu.setItem(i, 3, _item(r["oda"]))
             _hap(self.tablo_randevu, i, 4, metin, renk, arka)
 
     def _rezervasyonlari_yukle(self):
