@@ -673,7 +673,14 @@ class DashboardEkrani(QWidget):
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(3)
         ust_satir = QHBoxLayout()
-        ad = QLabel(("🆕 " if not okundu else "") + str(d.get("baslik", "")))
+        if not okundu:                                                  # okunmamış duyuru: emoji yerine küçük "Yeni" rozeti
+            rozet = QLabel("Yeni")
+            rozet.setObjectName("yeniRozeti")
+            rozet.setFixedHeight(18)
+            rozet.setAlignment(Qt.AlignCenter)
+            rozet.setStyleSheet("background: #DBEAFE; color: #1D4ED8; font-size: 10px; font-weight: 800; border-radius: 9px; padding: 0px 9px;")
+            ust_satir.addWidget(rozet, 0, Qt.AlignVCenter)
+        ad = QLabel(str(d.get("baslik", "")))
         ad.setStyleSheet("font-size: 14px; font-weight: 800; color: %s;" % ("#64748B" if okundu else "#0A1F5C"))
         ad.setWordWrap(True)
         ust_satir.addWidget(ad, 1)
@@ -704,6 +711,16 @@ class DashboardEkrani(QWidget):
         lay.addWidget(alt)
         return kutu
 
+    @staticmethod
+    def _baslik_ikonu(ikon, renk, zemin):
+        """Panel başlığının solundaki yumuşak renkli zeminli çizgi ikon (kartlardakiyle aynı stil; emoji yok)."""
+        etiket = QLabel()
+        etiket.setObjectName("panelBaslikIkonu")
+        etiket.setFixedSize(30, 30)
+        etiket.setAlignment(Qt.AlignCenter)
+        etiket.setPixmap(renkli_ikon_pixmap(ikon, renk, zemin, kutu=30, ikon_boyutu=17, yaricap=9))
+        return etiket
+
     def _duyurulari_ciz(self):
         """Okunmamış duyurular üstte; okunanlar "Okunan duyurular" düğmesinin arkasında gizli (silinmez, istenirse yeniden gösterilir)."""
         self._kutuyu_bosalt(self.duyuru_lay)
@@ -712,7 +729,8 @@ class DashboardEkrani(QWidget):
         self.panel_duyuru.setVisible(True)                      # duyuru yoksa da kutu görünür ("Şu an yayında duyuru yok")
 
         ust = QHBoxLayout()
-        baslik = QLabel("📢  Duyurular" + (f"  ({len(okunmamis)} yeni)" if okunmamis else ""))
+        ust.addWidget(self._baslik_ikonu("megaphone", "#1D4ED8", "#DBEAFE"))
+        baslik = QLabel("Duyurular" + (f"  ({len(okunmamis)} yeni)" if okunmamis else ""))
         baslik.setObjectName("duyuruBasligi")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
         ust.addWidget(baslik)
@@ -829,9 +847,17 @@ class DashboardEkrani(QWidget):
         rezervasyonlar = self.benim_gunum.get("rezervasyonlar") or []
         isler = [i for i in (self.benim_gunum.get("isler") or []) if isinstance(i, dict) and i.get("metin")]
         self.panel_benim_gunum.setVisible(True)                                       # kaydınız yoksa da kutu görünür
-        baslik = QLabel("🙋  Benim Günüm")
+        baslik = QLabel("Benim Günüm")
+        baslik.setObjectName("benimGunumBasligi")
         baslik.setStyleSheet("font-size: 15px; font-weight: 800; color: #0A1F5C;")
-        self.benim_gunum_lay.addWidget(baslik)
+        baslik_satiri = QHBoxLayout()
+        baslik_satiri.setContentsMargins(0, 0, 0, 0)
+        baslik_satiri.addWidget(self._baslik_ikonu("user", "#6D28D9", "#EDE9FE"))
+        baslik_satiri.addWidget(baslik)
+        baslik_satiri.addStretch()
+        baslik_kap = QWidget()
+        baslik_kap.setLayout(baslik_satiri)
+        self.benim_gunum_lay.addWidget(baslik_kap)
         if not (randevular or rezervasyonlar or isler):
             bos = QLabel("Günlük bilgileriniz yüklenemedi." if self._benim_gunum_hata
                          else "Bugün ve yarın için size ait randevu ya da cihaz rezervasyonu yok.")
