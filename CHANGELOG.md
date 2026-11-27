@@ -69,6 +69,11 @@ Mimari: PySide6 masaüstü istemci → REST (FastAPI) → PostgreSQL. Veritaban�
 - Rezervasyon listesinde Rezerve eden sütunu ve satırda düzenle/iptal düğmeleri; arıza tarihleri gün.ay.yıl biçiminde; Raporlar'da
   "Tümü" döneminde tarih kutuları pasif. Bakım, Uygunluk, Rezervasyon ve Raporlar ekranları 1366 px'lik dizüstü ekranlarına sığar.
 - Cihaz raporları (rezervasyon, geciken bakım planı) ve Excel aktarımı.
+- **Dışa aktarma:** tüm rapor ve liste sayfalarında **⬇ Dışa Aktar** düğmesi; önce "Hangi türde kaydetmek istersiniz?" sorulur (Excel .xlsx ya da PDF), sonra
+  dosya yeri seçilir. PDF: A4 yatay, sayfa numaralı, her sayfada tablo başlığı; tablo sayfası başına ilk 3000 satır (uzun listeler için Excel). Liste aktarımları
+  denetim kaydına dosya türüyle (Excel/PDF) yazılır.
+- **🔔 Zil bildirimleri:** süresi dolan öğrenci kayıtları, sonucu girilmemiş randevular ve yedek uyarısı.
+- Oda Yönetimi: kullanılmamış odayı uyarıyla veritabanından kalıcı silme.
 
 ### Öğrenci, faaliyet ve danışma masası
 
