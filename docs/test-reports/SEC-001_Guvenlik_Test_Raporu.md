@@ -6,7 +6,7 @@
 | Biçim | Yol haritası belgesi, 24. bölüm (Test ID, Requirement, Environment, …) |
 | Sorumlu | Öğrenci C (Backend, Security & Platform) |
 | Hazırlanma | 22.11.2026 |
-| Güncelleme | 27.11.2026 — canlı API denemeleri (T01, T02, T03, T07, T08: 23 PASS, 0 FAIL) ve sunucuda elle yapılan denemeler (T10–T13) `develop` `f1efdb2` ile güncellenen canlı sunucuda yapıldı; T13 ve T10'da iki bulgu bulunup düzeltildi |
+| Güncelleme | 27.11.2026 — canlı API denemeleri (T01, T02, T03, T07, T08: 23 PASS, 0 FAIL) ve sunucuda elle yapılan denemeler (T10–T13) `develop` `f1efdb2` ile güncellenen canlı sunucuda yapıldı; T13 ve T10'da iki P1 bulgu, ayrıca iki P2 sertleştirme maddesi bulunup düzeltildi; açık bulgu kalmadı |
 | Sürüm | `develop` — `f8c0b00` (ilk sürüm: `5626337`) |
 
 Bu rapor iki ortamı ayrı gösterir:
@@ -60,7 +60,7 @@ dosyalardaki bütün testleri gösterir; 22.11.2026 listesine göre T01, T02, T0
 | 2 | SEC-T12 | Canlı deneme komutundaki `SET olay_turu = 'X'` tetikleyici yüzünden değil, 'X' geçerli bir değer olmadığı için hata veriyordu (yanlış nedenle PASS verebilirdi). | Rapor düzeltmesi | Düzeltildi: komut geçerli bir sütun/değerle (`SET hedef_tablo = 'deneme'`) yazıldı |
 | 3 | SEC-T13 | Yedek klasörü (`C:\TKYS\backups`) üst klasörden miras kalan izinlerle `Users` (okuma) ve `Authenticated Users` (değiştirme) erişimine açıktı: sunucuya giriş yapan her kullanıcı veritabanı yedeklerini okuyabilir ya da silebilirdi. | P1 (veri gizliliği) | Düzeltildi 27.11.2026: miras kesildi, yalnızca Administrators ve SYSTEM (`icacls /inheritance:r`); otomatik yedekleme doğrulandı |
 | 4 | SEC-T10 | `.env` (veritabanı ve JWT sırları) ve `sertifika\anahtar.pem` (TLS özel anahtarı) aynı mirasla her kullanıcıya açıktı. | P1 (sır gizliliği) | Düzeltildi 27.11.2026: yalnızca Administrators ve SYSTEM; sunucu çalışmaya devam ediyor |
-| 5 | SEC-T10 / T12 | (a) `C:\TKYS` klasörünün kendisi `Authenticated Users` tarafından değiştirilebilir (sunucu kodu dahil). (b) Sunucu veritabanına `postgres` (tam yetkili) ile bağlanıyordu; kurulum kılavuzu 6A'daki kısıtlı kullanıcı (`tkys_uygulama`) kurulmamıştı. | P2 (sertleştirme önerisi) | (b) Düzeltildi 27.11.2026: sunucu `tkys_uygulama` ile çalışıyor, uygulama kullanıcısı denetim kaydını değiştiremiyor/silemiyor/düşüremiyor (kanıt: docs/test-reports/kanit/sec001_sunucu_kanit_6a_20261127.txt). (a) Açık: ekip kararı; sunucuya yalnızca yönetici hesaplarının giriş yapabildiği ortamda risk düşüktür |
+| 5 | SEC-T10 / T12 | (a) `C:\TKYS` klasörünün kendisi `Authenticated Users` tarafından değiştirilebilirdi (sunucu kodu dahil). (b) Sunucu veritabanına `postgres` (tam yetkili) ile bağlanıyordu; kurulum kılavuzu 6A'daki kısıtlı kullanıcı (`tkys_uygulama`) kurulmamıştı. | P2 (sertleştirme önerisi) | Düzeltildi 27.11.2026. (a) `C:\TKYS` izinleri yalnızca Administrators ve SYSTEM'e daraltıldı (`icacls /inheritance:r`); sunucu, otomatik yedekleme ve git doğrulandı (kanıt: docs/test-reports/kanit/sec001_sunucu_kanit_5a_20261127.txt). (b) Sunucu `tkys_uygulama` ile çalışıyor; uygulama kullanıcısı denetim kaydını değiştiremiyor/silemiyor/düşüremiyor (kanıt: docs/test-reports/kanit/sec001_sunucu_kanit_6a_20261127.txt) |
 
 ## Ayrıntılar
 
