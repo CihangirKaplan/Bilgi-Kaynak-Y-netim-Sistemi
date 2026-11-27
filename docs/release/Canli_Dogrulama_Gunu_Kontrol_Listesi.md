@@ -159,12 +159,12 @@ Adım adım yönerge: **`docs/test-reports/SEC-001_Canli_Deneme_Rehberi.md`**. B
 | SEC-T11 (`pip-audit`) | PASS: bilinen açık yok |
 | SEC-T12 (denetim kaydı değiştirilemez) | PASS: UPDATE/DELETE/TRUNCATE engellendi, kayıt sayısı değişmedi; sunucu `tkys_uygulama` kullanıcısına geçtikten sonra tekrarlandı: DROP dahil engelli |
 | SEC-T13 (yedek klasörü izni) | PASS düzeltmeden sonra (Bulgu #3: miras izinler) |
-| Bulgu #5 (P2) | (b) kısıtlı veritabanı kullanıcısı: **kapatıldı** (sunucu `tkys_uygulama` ile çalışıyor); (a) `C:\TKYS` klasörü izinleri: **açık, ekip kararı** |
+| Bulgu #5 (P2) | **Kapatıldı** (27.11.2026): (a) `C:\TKYS` klasörü izinleri yalnızca Administrators ve SYSTEM'e daraltıldı, (b) sunucu `tkys_uygulama` ile çalışıyor. **Raporda açık bulgu kalmadı** |
 
 - [ ] **Yayın adayı sürümde kısa tekrar (veri değiştirmeyen):** `python scripts/canli_guvenlik_denemesi.py --adres https://172.24.4.66:8443 --ca sertifika.pem --adimlar T01,T02,T08 --yetkisiz sec_psikolog_a`; hepsi **PASS**, `FAIL` yok. Kimlik doğrulama ya da yetki koduna dokunan bir değişiklik girdiyse T03 ve T07'yi de `--onay` ile tekrarlayın.
 - [ ] **SEC-T12, uygulama kullanıcısıyla:** sunucu `tkys_uygulama` ile çalışıyor (27.11.2026): denetim kaydı denemelerini (UPDATE/DELETE/TRUNCATE) `.env` içindeki **uygulama kullanıcısıyla** tekrarlayın: üçü de engellenmeli, kayıt sayısı değişmemeli.
-- [ ] **Sunucu izinleri bozulmadı:** güncellemeden sonra `.env`, `anahtar.pem` ve yedek klasörünün izinleri (Bulgu #3, #4 düzeltmeleri) hâlâ yalnızca Administrators/SYSTEM (`icacls`); `git pull` bu izinleri geri açmamış.
-- [ ] **Açık bulgu #5(a)** (`C:\TKYS` klasörü izinleri): ekip kararı verildi (düzeltildi ya da kabul edilen risk olarak raporda bırakıldı).
+- [ ] **Sunucu izinleri bozulmadı:** güncellemeden sonra `C:\TKYS` klasörünün, `.env`, `anahtar.pem` ve yedek klasörünün izinleri (Bulgu #3, #4, #5 düzeltmeleri) hâlâ yalnızca Administrators/SYSTEM (`icacls`); `git pull` bu izinleri geri açmamış (yeni gelen dosyalar `Authenticated Users` mirası almamış).
+- [ ] Raporda **açık bulgu kalmadı** (Bulgu #1–#5 kapalı); güncelleme sırasında yeni bir bulgu çıkmadı.
 - [ ] Yeni bulgu çıktıysa `SEC-001_Guvenlik_Test_Raporu.md` içindeki Bulgular tablosuna eklendi (bölüm 8).
 
 ## 5. Kurulum ve istemci kontrolü (GO/NO-GO 13)
