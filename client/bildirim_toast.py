@@ -37,8 +37,12 @@ def basari_bildirimi(pencere, mesaj, sure_ms=SURE_MS):
         return None
     eski = getattr(ust, "_tkys_toast", None)
     if eski is not None:
-        eski.hide()
-        eski.deleteLater()
+        try:
+            eski.hide()
+            eski.deleteLater()
+        except RuntimeError:        # önceki bildirim süresi dolunca kendini silmiş: Python referansı geçersiz, yok sayılır
+            pass
+        ust._tkys_toast = None
 
     etiket = QLabel(str(mesaj), ust)
     etiket.setObjectName("tkysToast")

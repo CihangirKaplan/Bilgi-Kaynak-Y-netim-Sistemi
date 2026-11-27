@@ -54,3 +54,16 @@ def test_yeni_bildirim_eskisinin_yerini_alir_ve_kendiliginden_kaybolur():
 
 def test_pencere_yoksa_hata_vermez():
     assert basari_bildirimi(None, "x") is None
+
+
+def test_kendiliginden_silinmis_eski_bildirimden_sonra_yenisi_hata_vermez():
+    """Önceki bildirim süresi dolup kendini silince, sonraki bildirim "Internal C++ object already deleted" hatası vermemeli
+    (Oda Yönetimi'nde oda ekledikten sonra odayı silerken görülen "Bağlantı hatası" penceresi)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    p = _pencere()
+    ilk = basari_bildirimi(p, "Oda başarıyla eklendi.")
+    ilk.deleteLater()                                                  # animasyon bitince olan: etiket silinir
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    yeni = basari_bildirimi(p, "Oda silindi.")                         # eskiden RuntimeError fırlatırdı
+    assert yeni.text() == "Oda silindi." and yeni.isVisible()
+    p.close()
