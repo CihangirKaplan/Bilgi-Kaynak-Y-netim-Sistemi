@@ -54,6 +54,7 @@ UC_MODULLERI = [
         ("GET", "/api/cihaz-odalari", CIHAZ_REZ, "200"),
         ("GET", "/api/odalar/{oda_id}", ODA_GORUNTULE, "200"),
         ("PATCH", "/api/odalar/{oda_id}", ODA_DUZENLE, "200"),
+        ("DELETE", "/api/odalar/{oda_id}", Hepsi(ODA_EKLE, ODA_DUZENLE), "200"),
         ("GET", "/api/psikologlar", TAKVIM, "200"),
     ]),
     (parola_talebi_api, [

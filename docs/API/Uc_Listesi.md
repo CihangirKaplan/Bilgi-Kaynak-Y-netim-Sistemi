@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **154** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **155** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -275,6 +275,7 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 |---|---|---|---|
 | GET | `/api/odalar` | ODA_DURUMU_GORUNTULE | odalari_listele |
 | POST | `/api/odalar` | ODA_EKLE | oda_olustur |
+| DELETE | `/api/odalar/{oda_id}` | ODA_DUZENLE, ODA_EKLE | Odayı veritabanından kalıcı olarak siler (geri alınamaz). |
 | GET | `/api/odalar/{oda_id}` | ODA_DURUMU_GORUNTULE | oda_detay |
 | PATCH | `/api/odalar/{oda_id}` | ODA_DUZENLE | oda_guncelle |
 

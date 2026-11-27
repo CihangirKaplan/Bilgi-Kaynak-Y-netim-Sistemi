@@ -409,6 +409,93 @@ def oda_detay(oda_id: int, kullanici_id: int | None = None):
         if conn is not None: conn.close()
 
 
+def tek_aktif_odasi_olan_psikologlar(cursor, oda_id):
+    """Tek aktif odası bu oda olan psikologların adları (oda pasife alınır ya da silinirse odasız kalırlar)."""
+    cursor.execute(
+        """
+        SELECT k.kullanici_adi
+        FROM psikolog_odalar po
+        JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
+        JOIN personel p ON p.kullanici_id = k.kullanici_id
+        WHERE po.oda_id = %s AND k.aktif_mi = TRUE AND p.aktif_mi = TRUE
+          AND EXISTS (SELECT 1 FROM odalar o0 WHERE o0.oda_id = po.oda_id AND o0.aktif_mi = TRUE)
+          AND NOT EXISTS (
+              SELECT 1 FROM psikolog_odalar po2
+              JOIN odalar o2 ON o2.oda_id = po2.oda_id
+              WHERE po2.kullanici_id = po.kullanici_id
+                AND po2.oda_id <> po.oda_id AND o2.aktif_mi = TRUE
+          )
+        ORDER BY k.kullanici_adi;
+        """,
+        (oda_id,),
+    )
+    return [k[0] for k in cursor.fetchall()]
+
+
+def oda_gecmis_kayit_sayilari(cursor, oda_id):
+    """Odayı kullanan TÜM kayıtların (geçmiş ve gelecek, iptaller dahil) sayıları: bu kayıtlar varken oda silinemez."""
+    cursor.execute("SELECT COUNT(*) FROM randevular WHERE oda_id = %s;", (oda_id,))
+    randevu = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM cihaz_rezervasyonlari WHERE kullanilacak_oda_id = %s;", (oda_id,))
+    rezervasyon = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM oda_etkinlikleri WHERE oda_id = %s;", (oda_id,))
+    etkinlik = cursor.fetchone()[0]
+    return {"randevu": randevu, "cihaz_rezervasyonu": rezervasyon, "etkinlik": etkinlik}
+
+
+def oda_sil(oda_id: int, kullanici_id: int | None = None):
+    """Odayı veritabanından kalıcı olarak siler (geri alınamaz).
+
+    Silinemez (409): odanın tek aktif odası olduğu psikolog varsa ya da odayı kullanan herhangi bir randevu, cihaz rezervasyonu
+    ya da oda etkinliği kaydı varsa (geçmiş kayıtlar ve raporlar bozulmasın; bu durumda oda pasife alınabilir). Psikolog-oda atamaları
+    odayla birlikte kalkar. Silinen oda denetim kaydına yazılır."""
+    conn = None
+    cursor = None
+    try:
+        conn = vt_baglan(VT_AYARLARI)
+        cursor = conn.cursor()
+        cursor.execute("SELECT oda_adi FROM odalar WHERE oda_id = %s FOR UPDATE;", (oda_id,))
+        satir = cursor.fetchone()
+        if satir is None:
+            raise HTTPException(status_code=404, detail="Oda bulunamadı.")
+        oda_adi = satir[0]
+
+        etkilenenler = tek_aktif_odasi_olan_psikologlar(cursor, oda_id)
+        if etkilenenler:
+            raise HTTPException(
+                status_code=409,
+                detail="Bu oda şu psikologların tek aktif odası: " + ", ".join(etkilenenler)
+                       + ". Önce onlara başka bir oda atayın.",
+            )
+
+        sayilar = oda_gecmis_kayit_sayilari(cursor, oda_id)
+        parcalar = []
+        if sayilar["randevu"]:
+            parcalar.append(f"{sayilar['randevu']} randevu")
+        if sayilar["cihaz_rezervasyonu"]:
+            parcalar.append(f"{sayilar['cihaz_rezervasyonu']} cihaz rezervasyonu")
+        if sayilar["etkinlik"]:
+            parcalar.append(f"{sayilar['etkinlik']} oda etkinliği")
+        if parcalar:
+            raise HTTPException(
+                status_code=409,
+                detail="Bu odayı kullanan " + ", ".join(parcalar) + " kaydı var. Geçmiş kayıtlar ve raporlar bozulmasın diye "
+                       "kullanılmış oda silinemez; odayı pasife alarak kullanımdan kaldırabilirsiniz.",
+            )
+
+        from server.denetim import denetim_kaydi_olustur, satiri_sil_ve_ayrintisini_al
+        silinen = satiri_sil_ve_ayrintisini_al(cursor, "odalar", oda_id)
+        denetim_kaydi_olustur(VT_AYARLARI, "DELETE", kullanici_id, "odalar", oda_id, mevcut_cursor=cursor, ayrinti=silinen)
+        conn.commit()
+        return {"durum": "silindi", "mesaj": "Oda silindi.", "oda_id": oda_id, "oda_adi": oda_adi}
+    except HTTPException:
+        if conn is not None: conn.rollback()
+        raise
+    finally:
+        if cursor is not None: cursor.close()
+        if conn is not None: conn.close()
+
+
 def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int | None = None):
     degisiklikler = oda.model_dump(exclude_unset=True)
     if not degisiklikler or any(deger is None for deger in degisiklikler.values()):
@@ -425,25 +512,7 @@ def oda_guncelle(oda_id: int, oda: OdaGuncelleModeli, kullanici_id: int | None =
 
         if degisiklikler.get("aktif_mi") is False:
             # Her psikologun en az bir aktif odası olmalı: tek aktif odası bu oda olan psikolog varsa pasife alınamaz.
-            cursor.execute(
-                """
-                SELECT k.kullanici_adi
-                FROM psikolog_odalar po
-                JOIN kullanicilar k ON k.kullanici_id = po.kullanici_id
-                JOIN personel p ON p.kullanici_id = k.kullanici_id
-                WHERE po.oda_id = %s AND k.aktif_mi = TRUE AND p.aktif_mi = TRUE
-                  AND EXISTS (SELECT 1 FROM odalar o0 WHERE o0.oda_id = po.oda_id AND o0.aktif_mi = TRUE)
-                  AND NOT EXISTS (
-                      SELECT 1 FROM psikolog_odalar po2
-                      JOIN odalar o2 ON o2.oda_id = po2.oda_id
-                      WHERE po2.kullanici_id = po.kullanici_id
-                        AND po2.oda_id <> po.oda_id AND o2.aktif_mi = TRUE
-                  )
-                ORDER BY k.kullanici_adi;
-                """,
-                (oda_id,),
-            )
-            etkilenenler = [k[0] for k in cursor.fetchall()]
+            etkilenenler = tek_aktif_odasi_olan_psikologlar(cursor, oda_id)
             if etkilenenler:
                 raise HTTPException(
                     status_code=409,
@@ -543,6 +612,7 @@ UCLAR = [
     ("GET", "/api/cihaz-odalari", cihaz_odalarini_listele, "kullanici_id", "CIHAZ_REZERVASYON", {}),
     ("GET", "/api/odalar/{oda_id}", oda_detay, "kullanici_id", "ODA_DURUMU_GORUNTULE", {}),
     ("PATCH", "/api/odalar/{oda_id}", oda_guncelle, "kullanici_id", "ODA_DUZENLE", {}),
+    ("DELETE", "/api/odalar/{oda_id}", oda_sil, "kullanici_id", Hepsi("ODA_EKLE", "ODA_DUZENLE"), {}),
     ("GET", "/api/psikologlar", aktif_psikologlari_listele, "kullanici_id", "TAKVIM_GORUNTULE", {}),
 ]
 

@@ -20,6 +20,7 @@ SILINEBILIR_TABLOLAR = {
     "faaliyet_birimleri": "birim_id",
     "roller": "rol_id",
     "ogrenciler": "ogrenci_id",
+    "odalar": "oda_id",
 }
 
 # Kişisel veri içeren tablolarda denetim kaydına YALNIZCA bu alanlar yazılır; kalanı (ad soyad, telefon, öğrenci numarası...)
