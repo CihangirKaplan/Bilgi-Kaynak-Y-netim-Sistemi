@@ -28,6 +28,7 @@ def test_silinebilir_tablolar_bilinen_tablolardir():
     assert set(SILINEBILIR_TABLOLAR) == {
         "cihaz_bakimlari", "cihaz_kalibrasyonlari", "cihaz_bakim_planlari",
         "ogrenci_faaliyet_takip", "faaliyet_birimleri", "roller", "ogrenciler",
+        "odalar",
     }
 
 

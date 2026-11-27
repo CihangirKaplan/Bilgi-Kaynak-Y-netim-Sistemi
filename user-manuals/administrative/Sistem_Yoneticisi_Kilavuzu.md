@@ -73,7 +73,7 @@ Ayrıntı: [Müdür Kılavuzu → Kullanıcı & Personel](../director/Mudur_Kila
 - **Psikologun en az bir odası** olmalıdır (**Oda Yetkileri**).
 - Bir psikoloğu pasife alırken planlı randevusu, atanmış odası ve danışanları kontrol edilir.
 - Hiçbir kullanıcı **silinmez**, yalnızca pasife alınır; geçmiş kayıtlar korunur.
-- **Oda Yönetimi** → **＋ Yeni Oda Ekle / ✎ Odayı Düzenle / ✕ Odayı Pasife Al / ✓ Odayı Aktif Et**.
+- **Oda Yönetimi** → **＋ Yeni Oda Ekle / ✎ Odayı Düzenle / ✕ Odayı Pasife Al / ✓ Odayı Aktif Et / 🗑 Odayı Sil** (silme kalıcıdır; kullanılmış oda silinemez, pasife alınır).
 
 ---
 

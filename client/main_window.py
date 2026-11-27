@@ -271,6 +271,7 @@ def izin_var(rol, izin_adi):
 # ======================================================================
 ODA_PASIFE_AL_ETIKETI = "✕  Odayı Pasife Al"
 ODA_AKTIF_ET_ETIKETI = "✓  Odayı Aktif Et"
+ODA_SIL_ETIKETI = "🗑  Odayı Sil"
 
 MENU = [
     ("GENEL BAKIŞ", [
@@ -387,7 +388,8 @@ MENU = [
              aciklama="Sistemdeki fiziksel odaların tanımlanması ve düzenlenmesi",
              aksiyon=[("＋  Yeni Oda Ekle", "Oda yönetimi"),
                       ("✎  Odayı Düzenle", "Oda yönetimi"),
-                      (ODA_PASIFE_AL_ETIKETI, "Oda yönetimi")]),
+                      (ODA_PASIFE_AL_ETIKETI, "Oda yönetimi"),
+                      (ODA_SIL_ETIKETI, "Oda yönetimi")]),
     ]),
     ("SİSTEM", [
         dict(ikon="🛡️", ad="Rol & İzin Yönetimi", izin="Rol-izin yönetme",
@@ -2099,6 +2101,56 @@ QLabel {
             except Exception as e:
                 QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
 
+    def odayi_sil(self):
+        """Seçili odayı veritabanından KALICI siler (uyarıdan sonra). Kullanılmış oda (randevu, rezervasyon, etkinlik) sunucuda reddedilir."""
+        if not hasattr(self, 'oda_tablosu'): return
+
+        from PySide6.QtWidgets import QMessageBox
+
+        secili_satirlar = self.oda_tablosu.selectionModel().selectedRows()
+        if not secili_satirlar:
+            QMessageBox.warning(self, "Seçim Yapılmadı", "Lütfen silmek istediğiniz odayı tablodan seçin.")
+            return
+
+        satir = secili_satirlar[0].row()
+        oda_id = int(self.oda_tablosu.item(satir, 0).text())
+        oda_adi = self.oda_tablosu.item(satir, 1).text()
+
+        kutu = QMessageBox(self)
+        kutu.setIcon(QMessageBox.Warning)
+        kutu.setWindowTitle("Odayı Sil")
+        kutu.setText(f"'{oda_adi}' adlı oda veritabanından KALICI olarak silinecek.")
+        kutu.setInformativeText(
+            "Bu işlem geri alınamaz. Odayla ilgili psikolog atamaları da kalkar.\n"
+            "Odayı kullanan randevu, cihaz rezervasyonu ya da etkinlik kaydı varsa oda silinemez; "
+            "bu durumda odayı pasife alabilirsiniz.\n\nOdayı silmek istediğinize emin misiniz?")
+        kutu.addButton("Evet, Sil", QMessageBox.DestructiveRole)
+        hayir = kutu.addButton("Vazgeç", QMessageBox.RejectRole)
+        kutu.setDefaultButton(hayir)
+        kutu.exec()
+        secilen = kutu.clickedButton()
+        if secilen is None or kutu.buttonRole(secilen) != QMessageBox.DestructiveRole:      # Vazgeç, Esc ya da pencereyi kapatma: silinmez
+            return
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            res = oturum_kontrollu_istek("DELETE", f"{self.api_url}/api/odalar/{oda_id}", headers=headers, timeout=5)
+            if oturum_hatasi_mi(res):
+                return
+
+            if res.status_code == 200:
+                basari_bildirimi(self, "Oda silindi.")
+                self.odalari_getir()
+            elif res.status_code == 404:
+                QMessageBox.information(self, "Oda Bulunamadı", "Bu oda zaten silinmiş. Liste yenileniyor.")
+                self.odalari_getir()
+            elif res.status_code == 409:
+                QMessageBox.warning(self, "Oda Silinemedi", hata_detayi_metni(res, "Oda silinemedi."))
+            else:
+                QMessageBox.warning(self, "Hata", f"İşlem başarısız (Kod: {res.status_code})")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Bağlantı hatası:\n{istek_hatasi_metni(e)}")
+
     # Sayfa adı -> (ekran özniteliği, yenileme metodu). Sayfalar açılışta bir kez oluşturulduğundan,
     # kullanıcı sayfaya (menüden ya da bildirimden) geçtiğinde liste güncel veriyle yeniden yüklenir.
     SAYFA_YENILEME = {
@@ -2486,6 +2538,8 @@ QLabel {
                 elif etiket == ODA_PASIFE_AL_ETIKETI:
                     self.oda_durum_butonu = btn                      # seçili odaya göre "Pasife Al" / "Aktif Et" olur
                     btn.clicked.connect(self.oda_durumunu_degistir)
+                elif etiket == ODA_SIL_ETIKETI:
+                    btn.clicked.connect(self.odayi_sil)
                 elif etiket == "＋  Kalibrasyon Kaydı":
                     btn.clicked.connect(lambda: self.aktif_kalibrasyon_ekrani.yeni_ekle() if hasattr(self, 'aktif_kalibrasyon_ekrani') else None)
                 elif izin_kodu == "Danışma masası oturumunu yönetme":
