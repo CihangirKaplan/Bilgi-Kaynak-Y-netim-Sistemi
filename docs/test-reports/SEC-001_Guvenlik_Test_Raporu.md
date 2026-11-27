@@ -6,14 +6,14 @@
 | Biçim | Yol haritası belgesi, 24. bölüm (Test ID, Requirement, Environment, …) |
 | Sorumlu | Öğrenci C (Backend, Security & Platform) |
 | Hazırlanma | 22.11.2026 |
-| Güncelleme | 25.11.2026 — geliştirme/CI testleri `develop` `f8c0b00` üzerinde yeniden çalıştırıldı |
+| Güncelleme | 27.11.2026 — canlı API denemeleri (T01, T02, T03, T07, T08) `develop` `f1efdb2` ile güncellenen canlı sunucuda çalıştırıldı: 23 PASS, 0 FAIL |
 | Sürüm | `develop` — `f8c0b00` (ilk sürüm: `5626337`) |
 
 Bu rapor iki ortamı ayrı gösterir:
 
 - **Geliştirme/CI:** Otomatik testler. Linux, Python 3.13, PostgreSQL test veritabanı `crkys_alembic_test`. Aynı testler GitHub'da her PR'da
   ("TKYS QA Tests") da çalışır. Sonuçlar 22.11.2026'da yerelde çalıştırılarak alınmıştır.
-- **Canlı ortam:** Windows sunucu `172.24.4.66:8000`, istemci bilgisayardan elle yapılan denemeler. ⏳ olan satırlar sunucuda yapılıp
+- **Canlı ortam:** Windows sunucu `https://172.24.4.66:8443` (HTTPS), istemci bilgisayardan yapılan denemeler. ⏳ olan satırlar sunucuda yapılıp
   sonuç, tarih ve kanıt (ekran görüntüsü ya da komut çıktısı) bu rapora eklenecektir.
 
 Testleri tek komutla yeniden çalıştırmak için (proje klasöründe):
@@ -26,14 +26,14 @@ python -m pytest -q tests/security
 
 | Test ID | Konu | Geliştirme/CI | Canlı ortam |
 |---|---|---|---|
-| SEC-T01 | Authentication Bypass | ✅ PASS (15 test) | ✅ PASS (tokensiz istek 401) — tarih/kanıt eklenecek |
-| SEC-T02 | Function-Level Authorization | ✅ PASS (25 test) | ⏳ |
-| SEC-T03 | Object-Level Authorization | ✅ PASS (15 test) | ⏳ |
+| SEC-T01 | Authentication Bypass | ✅ PASS (15 test) | ✅ PASS (27.11.2026: tokensiz ve bozuk token istekleri 401) |
+| SEC-T02 | Function-Level Authorization | ✅ PASS (25 test) | ✅ PASS (27.11.2026: psikolog hesabı yönetim uçlarında 403) |
+| SEC-T03 | Object-Level Authorization | ✅ PASS (15 test) | ✅ PASS (27.11.2026: başkasının randevusu ve rezervasyonu 403, kayıt değişmedi) |
 | SEC-T04 | Property-Level Authorization | ✅ PASS (10 test) | — (sunucu kodu aynı; ayrıca gerekmez) |
 | SEC-T05 | Input Validation | ✅ PASS (129 test) | — |
 | SEC-T06 | Injection | ✅ PASS (5 test) | — |
-| SEC-T07 | Rate / Brute-Force | ✅ PASS (24 test) | ⏳ |
-| SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ⏳ |
+| SEC-T07 | Rate / Brute-Force | ✅ PASS (24 test) | ✅ PASS (27.11.2026: 5. yanlış parolada 429, kilit sürerken doğru parola 429, 60 sn sonra 200) |
+| SEC-T08 | Token | ✅ PASS (25 test; bkz. Bulgular) | ✅ PASS (27.11.2026: bozuk/imzasız token 401, pasifleştirilen hesabın token'ı 403); ⏳ istemcide giriş ekranına dönüş (elle) |
 | SEC-T09 | Error Leakage | ✅ PASS (24 test) | — |
 | SEC-T10 | Secret Scan | ✅ PASS (3 test) | ⏳ (`.env` ve JWT anahtarı) |
 | SEC-T11 | Dependency Scan | ✅ PASS (40 bağımlılık, 0 bilinen açık) | ⏳ (sunucudaki kurulumla) |
@@ -66,18 +66,18 @@ dosyalardaki bütün testleri gösterir; 22.11.2026 listesine göre T01, T02, T0
 ```
 Test ID:          SEC-T01
 Requirement:      Kimlik doğrulaması olmadan korunan uca erişilemez (beklenen 401).
-Environment:      Geliştirme/CI (develop 5626337) + Canlı (172.24.4.66:8000)
+Environment:      Geliştirme/CI (develop 5626337) + Canlı (https://172.24.4.66:8443)
 Precondition:     Sunucu çalışıyor; istekte token yok, süresi dolmuş ya da değiştirilmiş token var.
 Steps:            1. Bütün API uçları taranır, /api/saglik dışında hepsinin token istediği doğrulanır.
                   2. Tokensiz ve süresi dolmuş token ile korunan uca istek atılır.
-                  3. Canlı: istemci bilgisayardan GET http://172.24.4.66:8000/api/cihazlar (token yok).
+                  3. Canlı: scripts/canli_guvenlik_denemesi.py (T01.1–T01.3): tokensiz ve bozuk token ile korunan uçlar.
 Expected Result:  401 Unauthorized; veri dönmez.
-Actual Result:    Geliştirme: 15/15 test geçti. Canlı: istemciden 401 alındı.
+Actual Result:    Geliştirme: 15/15 test geçti. Canlı (27.11.2026): 6/6 PASS; /api/saglik 200, korunan uçlar tokensiz 401, bozuk token 401.
 PASS / FAIL:      PASS
 Tester:           Öğrenci C
-Date:             22.11.2026 (canlı deneme tarihi eklenecek)
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
 Evidence:         tests/security/test_uc_koruma_taramasi.py, test_sec_t01_t02.py, test_sec_t07_t08_auth.py;
-                  canlı: istemcideki istek çıktısının ekran görüntüsü
+                  canlı: docs/test-reports/kanit/sec001_canli_kanit_20261127_1150.txt
 ```
 
 ### SEC-T02 — Function-Level Authorization
@@ -91,11 +91,13 @@ Steps:            1. Kritik uçlar her rolle çağrılır; izni olmayan roller i
                   2. Canlı: psikolog hesabıyla giriş yapılır; yönetim raporları / kullanıcı yönetimi menülerinin görünmediği
                      ve doğrudan istekle (ör. GET /api/yonetim-raporlari/...) 403 döndüğü görülür.
 Expected Result:  403 Forbidden; menü görünmez.
-Actual Result:    Geliştirme: 25/25 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 25/25 test geçti. Canlı (27.11.2026): 4/4 PASS; psikolog hesabı randevu-özet, denetim kayıtları, kullanıcı oluşturma ve
+                  rol değiştirme uçlarında 403 "Bu işlem için yetkiniz bulunmuyor." aldı (hesabın geçici parolası değiştirilmiş olarak denendi).
+PASS / FAIL:      PASS
 Tester:           Öğrenci C
-Date:             22.11.2026
-Evidence:         test_sec_t01_t02.py, test_kritik_endpoint_rbac_quality.py, test_rbac_quality.py, test_kalan_uclar_yetki.py
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence:         test_sec_t01_t02.py, test_kritik_endpoint_rbac_quality.py, test_rbac_quality.py, test_kalan_uclar_yetki.py;
+                  canlı: docs/test-reports/kanit/sec001_canli_kanit_20261127_1150.txt
 ```
 
 ### SEC-T03 — Object-Level Authorization
@@ -109,10 +111,12 @@ Steps:            1. Psikolog B, psikolog A'nın randevusunu düzenlemeye / ipta
                   2. Kullanıcı başkasının cihaz rezervasyonunu düzenlemeye / iptal etmeye çalışır.
                   3. Canlı: iki psikolog hesabıyla aynı deneme istemciden yapılır.
 Expected Result:  İşlem reddedilir (403/404); kayıt değişmez.
-Actual Result:    Geliştirme: 15/15 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 15/15 test geçti. Canlı (27.11.2026): 4/4 PASS; psikolog B, A'nın randevusunu iptal edemedi (403), randevu PLANLANDI
+                  kaldı; asistan, başkasının rezervasyonunu iptal edemedi (403), rezervasyon Aktif kaldı.
+PASS / FAIL:      PASS
 Tester:           Öğrenci C
-Date:             22.11.2026
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence-canlı:   docs/test-reports/kanit/sec001_canli_kanit_20261127_1150.txt
 Evidence:         test_sec_t03_http.py, test_randevu_yetkilendirme.py, tests/unit/test_rezervasyon_duzenleme.py
 ```
 
@@ -180,11 +184,13 @@ Steps:            1. Aynı hesaba 5 kez yanlış parola: hesap 1 dk kilitlenir; 
                   3. Şifre değiştirmede yanlış eski şifre de aynı sınıra sayılır.
                   4. Canlı: istemciden bir test hesabıyla 5 kez yanlış parola girilir, ardından doğru parolayla giriş denenir.
 Expected Result:  Kilit mesajı; doğru parola da kilit süresince kabul edilmez; denemeler denetim kaydına yazılır.
-Actual Result:    Geliştirme: 24/24 test geçti. Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+Actual Result:    Geliştirme: 24/24 test geçti. Canlı (27.11.2026): 4/4 PASS; 5. yanlış parolada 429 (ilk 4 deneme 401), kilit sürerken doğru parola
+                  429 "Hesap geçici olarak kilitli.", Retry-After 60 sn, süre dolunca doğru parola 200.
+PASS / FAIL:      PASS
 Tester:           Öğrenci C
-Date:             22.11.2026
-Evidence:         test_sec_t07_t08_auth.py, test_giris_siniri_pg_quality.py (PG), tests/unit/test_son_kontrol_duzeltmeleri.py
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
+Evidence:         test_sec_t07_t08_auth.py, test_giris_siniri_pg_quality.py (PG), tests/unit/test_son_kontrol_duzeltmeleri.py;
+                  canlı: docs/test-reports/kanit/sec001_canli_kanit_20261127_1150.txt
 ```
 
 ### SEC-T08 — Token
@@ -200,10 +206,12 @@ Steps:            1. Değiştirilmiş ve süresi dolmuş token ile istek.
 Expected Result:  Token ile istek reddedilir (veri dönmez): bozuk/süresi dolmuş token 401; pasifleştirilen hesabın token'ı 403 "Kullanıcı hesabı aktif
                   değil."; her iki durumda istemci "Oturumunuz geçersiz hâle gelmiştir" uyarısıyla giriş ekranına döner.
 Actual Result:    Geliştirme: 25/25 test geçti (25.11.2026). Pasifleştirilen hesabın token'ı 403 alır; istemcinin buna tepkisi eksikti, düzeltildi
-                  (Bulgular #1). Canlı: ⏳
-PASS / FAIL:      Geliştirme PASS / Canlı ⏳
+                  (Bulgular #1). Canlı (27.11.2026, betik): 6/6 PASS; geçerli token 200, imzası bozulmuş ve imzasız (alg: none) token 401,
+                  yönetici hesabı pasifleştirince eski token 403 "Kullanıcı hesabı aktif değil." (hesap betikle yeniden aktif edildi).
+                  Elle yapılacak son adım (istemcide giriş ekranına dönüş) henüz yapılmadı: ⏳
+PASS / FAIL:      Geliştirme PASS / Canlı betik PASS, istemci adımı ⏳
 Tester:           Öğrenci C
-Date:             22.11.2026
+Date:             22.11.2026 (geliştirme) / 27.11.2026 (canlı)
 Evidence:         test_token_api_kalite.py, test_guvenlik_jwt_kalite.py, test_kullanici_pasiflestirme.py, tests/unit/test_oturum_pasif_hesap.py;
                   canlı: scripts/canli_guvenlik_denemesi.py çıktısı (T08.1–T08.4) + istemcide giriş ekranına dönüşün ekran görüntüsü
 ```
