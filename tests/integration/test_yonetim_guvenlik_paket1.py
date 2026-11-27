@@ -69,7 +69,7 @@ def test_pasif_role_rol_degistirilemez():
 def _rol_guncelle(kayit, yapanin_rol_id, sayi=0, aktif=False):
     conn = _cursor([kayit, (yapanin_rol_id,), (sayi,)])
     denetim = MagicMock()
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur", denetim):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.rol_api.denetim_kaydi_olustur", denetim):
         try:
             return rol_guncelle(3, RolGorunenAdModeli(gorunen_ad="Memur", aktif_mi=aktif), kullanici_id=1), conn, denetim
         except HTTPException as h:
@@ -92,7 +92,7 @@ def test_kisi_kendi_rolunu_pasife_alamaz():
 
 def test_zaten_pasif_rol_yeniden_kaydedilince_kullanici_sayisi_hesaplanmaz():
     conn = _cursor([("MEMUR", False, "Memur")])
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.denetim_kaydi_olustur"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.rol_api.denetim_kaydi_olustur"):
         yanit = rol_guncelle(3, RolGorunenAdModeli(gorunen_ad="Memur", aktif_mi=False), kullanici_id=1)
     assert "etkilenen_kullanici" not in yanit
 

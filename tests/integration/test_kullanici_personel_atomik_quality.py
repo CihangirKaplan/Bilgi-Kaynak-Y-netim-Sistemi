@@ -72,8 +72,8 @@ def test_kullanici_ve_personel_birlikte_olusturulur():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="Test123!"),
-        patch("server.sunucu.parola_hashle", return_value="hash"),
+        patch("server.kullanici_api.gecici_parola_uret", return_value="Test123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="hash"),
     ):
         sonuc = kullanici_olustur(
             KullaniciOlusturModeli(
@@ -110,8 +110,8 @@ def test_personel_alani_yazilirken_hata_olursa_kullanici_geri_alinir():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="Test123!"),
-        patch("server.sunucu.parola_hashle", return_value="hash"),
+        patch("server.kullanici_api.gecici_parola_uret", return_value="Test123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="hash"),
     ):
         with pytest.raises(HTTPException) as hata:
             kullanici_olustur(
@@ -155,8 +155,8 @@ def test_danisma_ogrencisi_kayitlari_birlikte_olusturulur():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="Test123!"),
-        patch("server.sunucu.parola_hashle", return_value="hash"),
+        patch("server.kullanici_api.gecici_parola_uret", return_value="Test123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="hash"),
     ):
         kullanici_olustur(
             yeni,
@@ -191,8 +191,8 @@ def test_ogrenci_hatasinda_tum_islem_geri_alinir():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="Test123!"),
-        patch("server.sunucu.parola_hashle", return_value="hash"),
+        patch("server.kullanici_api.gecici_parola_uret", return_value="Test123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="hash"),
     ):
         with pytest.raises(HTTPException) as hata:
             kullanici_olustur(yeni, kullanici_id=10)
@@ -226,8 +226,8 @@ def test_audit_hatasinda_tum_islem_geri_alinir():
 
     with (
         patch("server.sunucu.psycopg2.connect", return_value=conn),
-        patch("server.sunucu.gecici_parola_uret", return_value="Test123!"),
-        patch("server.sunucu.parola_hashle", return_value="hash"),
+        patch("server.kullanici_api.gecici_parola_uret", return_value="Test123!"),
+        patch("server.kullanici_api.parola_hashle", return_value="hash"),
     ):
         with pytest.raises(HTTPException) as hata:
             kullanici_olustur(yeni, kullanici_id=10)

@@ -37,11 +37,21 @@ def izinleri_bul(bagimlilik):
     return bulunan
 
 
+def api_rotalari(rotalar):
+    """`include_router` ile eklenen yönlendiricilerin içindeki uçlar dahil, bütün APIRoute'ları gezer."""
+    for rota in rotalar:
+        if isinstance(rota, APIRoute):
+            yield rota
+        elif getattr(rota, "original_router", None) is not None:
+            yield from api_rotalari(rota.original_router.routes)
+        else:
+            yield from api_rotalari(getattr(rota, "routes", []))
+
+
 def uclari_topla():
     satirlar = []
-    for rota in app.routes:
-        yollar = [rota] if isinstance(rota, APIRoute) else list(getattr(rota, "routes", []))
-        for r in yollar:
+    for r in api_rotalari(app.routes):
+        if True:
             if not isinstance(r, APIRoute) or not r.path.startswith("/api"):
                 continue
             izinler = sorted(set(izinleri_bul(r.dependant)))

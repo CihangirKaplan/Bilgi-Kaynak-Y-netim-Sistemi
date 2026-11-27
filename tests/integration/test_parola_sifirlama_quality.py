@@ -96,11 +96,11 @@ def test_admin_gecici_parola_uretir_ve_audit_yazar():
 
     with (
         patch(
-            "server.sunucu.gecici_parola_uret",
+            "server.kullanici_api.gecici_parola_uret",
             return_value="TEST_GECICI_PAROLA",
         ),
         patch(
-            "server.sunucu.parola_hashle",
+            "server.kullanici_api.parola_hashle",
             return_value="TEST_HASH",
         ),
     ):
@@ -150,11 +150,11 @@ def test_audit_hatasinda_transaction_geri_alinir():
 
     with (
         patch(
-            "server.sunucu.gecici_parola_uret",
+            "server.kullanici_api.gecici_parola_uret",
             return_value="TEST_GECICI_PAROLA",
         ),
         patch(
-            "server.sunucu.parola_hashle",
+            "server.kullanici_api.parola_hashle",
             return_value="TEST_HASH",
         ),
     ):

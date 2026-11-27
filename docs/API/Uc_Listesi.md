@@ -1,7 +1,7 @@
 # TKYS API Uç Listesi
 
 Bu dosya **sunucu kodundan otomatik üretilir** (`python scripts/api_uc_listesi_uret.py`); elle düzenlemeyin.
-Toplam **140** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
+Toplam **154** uç. **İzin** sütunu, ucu çağırmak için rolün sahip olması gereken izindir (`—`: yalnızca giriş yapmış olmak yeterli ya da uç kendi kuralını uygular;
 gerekçeler `tests/security/test_uc_koruma_taramasi.py` içindedir).
 
 Etkileşimli API belgesi (`/docs`) **varsayılan olarak kapalıdır**; yalnızca teknik kişi gerektiğinde sunucunun `.env` dosyasına `TKYS_API_DOCS=1` yazarak açar.
@@ -50,9 +50,9 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/bildirim/ogrenci-saklama` | FAALIYET_KAYITLARI_DUZENLE | Zil: saklama süresi dolmuş Gönüllü öğrenci sayıları (`bekleyen`, `ertelenen`); kişisel veri içermez. |
-| GET | `/api/bildirim/sonucu-girilmemis-randevu` | RANDEVU_DUZENLE | Zil: tarihi geçmiş ama hâlâ "Planlandı" olan randevu sayısı (psikolog yalnızca kendi randevularını sayar). |
-| GET | `/api/bildirim/yedek` | AUDIT_KAYITLARI_INCELE | Zil: son yedeğin durumu (var mı, kaç saat önce, eski mi). |
+| GET | `/api/bildirim/ogrenci-saklama` | FAALIYET_KAYITLARI_DUZENLE | Saklama süresi dolmuş Gönüllü öğrenci sayıları: `bekleyen` (işlem bekliyor), `ertelenen` (ileri bir tarihe ert |
+| GET | `/api/bildirim/sonucu-girilmemis-randevu` | RANDEVU_DUZENLE | Tarihi geçmiş ama hâlâ "Planlandı" olan randevu sayısı (sonucu girilmemiş). Psikolog yalnızca kendi randevular |
+| GET | `/api/bildirim/yedek` | AUDIT_KAYITLARI_INCELE | Son yedeğin durumu (Sistem Durumu sayfasıyla aynı kural): var mı, ne zaman, kaç saat önce, eski mi. |
 
 ## /api/bolumler
 
@@ -110,6 +110,12 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 | PATCH | `/api/danisan-kodlari/{danisan_kod_id}/bilgiler` | RANDEVU_OLUSTUR | Danışanın yaş grubunu günceller (kapalı liste; serbest metin yoktur). Terapi türü randevuda tutulur. |
 | PATCH | `/api/danisan-kodlari/{danisan_kod_id}/durum` | RANDEVU_OLUSTUR | Danışanı pasife alır ya da yeniden aktif eder. |
 
+## /api/danisan-randevu-sayilari
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| GET | `/api/danisan-randevu-sayilari` | TAKVIM_GORUNTULE | danisan_randevu_sayilari |
+
 ## /api/danisma
 
 | Yöntem | Yol | İzin | Açıklama |
@@ -131,10 +137,23 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
+| GET | `/api/dashboard/benim-gunum` | — | dashboard_benim_gunum |
+| GET | `/api/dashboard/bugunku-etkinlikler` | — | dashboard_bugunku_etkinlikler |
 | GET | `/api/dashboard/bugunku-randevular` | TAKVIM_GORUNTULE | dashboard_bugunku_randevular |
-| GET | `/api/dashboard/bugunku-rezervasyonlar` | CIHAZ_ENVANTER_YONET | dashboard_bugunku_rezervasyonlar |
+| GET | `/api/dashboard/bugunku-rezervasyonlar` | CIHAZ_ENVANTER_YONET, CIHAZ_REZERVASYON, CIHAZ_UYGUNLUK_GORUNTULE | dashboard_bugunku_rezervasyonlar |
 | GET | `/api/dashboard/ozet` | CIHAZ_ENVANTER_YONET | dashboard_ozet_getir |
 | GET | `/api/dashboard/yaklasan-islemler` | BAKIM_KAYITLARI_GORUNTULE, BAKIM_KAYITLARI_YONET, CIHAZ_ENVANTER_YONET, KALIBRASYON_KAYITLARI_GORUNTULE, KALIBRASYON_KAYITLARI_YONET | Ana panel/zil bildirimleri için yaklaşan ve geciken bakım ve kalibrasyonlar. Cihaz envanterini yönetenler heps |
+
+## /api/duyurular
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| GET | `/api/duyurular` | — | duyurulari_getir |
+| POST | `/api/duyurular` | DUYURU_YONET | duyuru_yayinla |
+| POST | `/api/duyurular/okundu` | — | Yayındaki bütün duyuruları (çağıran için) okundu işaretler. |
+| DELETE | `/api/duyurular/{duyuru_id}` | DUYURU_YONET | duyuru_kaldir |
+| DELETE | `/api/duyurular/{duyuru_id}/okundu` | — | Okundu işaretini kaldırır (duyuru bu kullanıcıya yeniden görünür). İşaret yoksa da başarılıdır. |
+| POST | `/api/duyurular/{duyuru_id}/okundu` | — | duyuruyu_okundu_isaretle |
 
 ## /api/faaliyet-birimleri
 
@@ -216,6 +235,16 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 |---|---|---|---|
 | POST | `/api/login` | — | giris_yap |
 
+## /api/oda-etkinlikleri
+
+| Yöntem | Yol | İzin | Açıklama |
+|---|---|---|---|
+| GET | `/api/oda-etkinlikleri` | ODA_ETKINLIK_GORUNTULE | etkinlikleri_listele |
+| POST | `/api/oda-etkinlikleri` | ODA_ETKINLIK_YONET | etkinlik_olustur |
+| GET | `/api/oda-etkinlikleri/secenekler` | ODA_ETKINLIK_GORUNTULE | etkinlik_secenekleri |
+| PATCH | `/api/oda-etkinlikleri/{etkinlik_id}` | ODA_ETKINLIK_YONET | etkinlik_guncelle |
+| PATCH | `/api/oda-etkinlikleri/{etkinlik_id}/iptal` | ODA_ETKINLIK_YONET | etkinlik_iptal |
+
 ## /api/oda-kullanim-raporu
 
 | Yöntem | Yol | İzin | Açıklama |
@@ -259,15 +288,15 @@ Kimlik doğrulama: `Authorization: Bearer <JWT>` başlığı (giriş: `POST /api
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
-| GET | `/api/ogrenci-raporu` | FAALIYET_KAYITLARI_DUZENLE | Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (pasife alındıktan 2 yıl) durumu, faal |
+| GET | `/api/ogrenci-raporu` | FAALIYET_KAYITLARI_DUZENLE | Öğrenci Raporu: tür ve bölüm dağılımı, aktif/pasif, Gönüllü öğrenci kayıt saklama süresi (pasife alındıktan 2  |
 
 ## /api/ogrenciler
 
 | Yöntem | Yol | İzin | Açıklama |
 |---|---|---|---|
 | PATCH | `/api/ogrenciler/{ogrenci_id}/aktiflik` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_aktiflik_duzenle |
-| DELETE | `/api/ogrenciler/{ogrenci_id}/saklama-suresi-sil` | OGRENCI_KAYDI_SIL | ogrenci_saklama_suresi_sil |
 | GET | `/api/ogrenciler/{ogrenci_id}/puanlar` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_puan_detayi |
+| DELETE | `/api/ogrenciler/{ogrenci_id}/saklama-suresi-sil` | OGRENCI_KAYDI_SIL | ogrenci_saklama_suresi_sil |
 | PATCH | `/api/ogrenciler/{ogrenci_id}/silme-ertele` | FAALIYET_KAYITLARI_DUZENLE | ogrenci_silme_ertele |
 
 ## /api/ogrenciler-liste

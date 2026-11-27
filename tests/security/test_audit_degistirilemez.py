@@ -73,6 +73,6 @@ def test_downgrade_tetikleyicileri_ve_fonksiyonu_kaldirir(migration):
 
 def test_uygulama_kodu_audit_tablosunu_degistirmez_ya_da_silmez():
     """Tetikleyici ek bir koruma; uygulama zaten yalnizca INSERT/SELECT yapmali."""
-    for dosya in ("server/sunucu.py", "server/denetim.py"):
-        metin = Path(dosya).read_text(encoding="utf-8")
+    for dosya in sorted(Path("server").glob("*.py")):                      # sunucu kodu birçok modüle bölündü: hepsi taranır
+        metin = dosya.read_text(encoding="utf-8")
         assert not re.search(r"(UPDATE|DELETE\s+FROM|TRUNCATE)\s+(TABLE\s+)?denetim_kayitlari", metin, re.I), dosya

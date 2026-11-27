@@ -257,8 +257,8 @@ def olustur(rol, rol_id, oda_idleri, aktif_odalar=(1, 2, 3), **ekstra):
     conn, cursor = sahte_olusturma_veritabani(rol, aktif_odalar)
     yeni = KullaniciOlusturModeli(kullanici_adi="yeni_kisi", rol_id=rol_id, oda_idleri=oda_idleri, **ekstra)
     with patch("server.sunucu.psycopg2.connect", return_value=conn), \
-            patch("server.sunucu.gecici_parola_uret", return_value="Gecici123!"), \
-            patch("server.sunucu.parola_hashle", return_value="hash"):
+            patch("server.kullanici_api.gecici_parola_uret", return_value="Gecici123!"), \
+            patch("server.kullanici_api.parola_hashle", return_value="hash"):
         try:
             sonuc = kullanici_olustur(yeni_kullanici=yeni, kullanici_id=10)
             hata = None
@@ -301,8 +301,8 @@ def test_psikolog_olmayana_oda_verilemez(rol, rol_id, ekstra):
 def test_psikolog_cihaz_rezervasyonlu_odayla_olusturulamaz():
     conn, cursor = sahte_olusturma_veritabani("PSIKOLOG", (1, 2, 3), rezervasyonlu={2: "EEG Odası"})
     yeni = KullaniciOlusturModeli(kullanici_adi="yeni_kisi", rol_id=1, oda_idleri=[1, 2])
-    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.sunucu.gecici_parola_uret", return_value="Gecici123!"), \
-            patch("server.sunucu.parola_hashle", return_value="hash"):
+    with patch("server.sunucu.psycopg2.connect", return_value=conn), patch("server.kullanici_api.gecici_parola_uret", return_value="Gecici123!"), \
+            patch("server.kullanici_api.parola_hashle", return_value="hash"):
         with pytest.raises(HTTPException) as hata:
             kullanici_olustur(yeni_kullanici=yeni, kullanici_id=10)
     assert hata.value.status_code == 409 and "EEG Odası" in hata.value.detail and "psikologa atanamaz" in hata.value.detail

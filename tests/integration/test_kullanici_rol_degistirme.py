@@ -7,6 +7,16 @@ from server.modeller import RolDegistirModeli
 from server.sunucu import kullanici_rol_degistir
 
 
+def _duz_rotalar(rotalar):
+    """`include_router` ile eklenen uçlar `app.routes` içinde doğrudan görünmez; yönlendirici sarmalayıcılarının içine de bakılır."""
+    for r in rotalar:
+        asil = getattr(r, "original_router", None)
+        if asil is not None:
+            yield from _duz_rotalar(asil.routes)
+        else:
+            yield r
+
+
 def test_mudur_admin_rolu_atayamaz():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
@@ -268,7 +278,7 @@ def test_rol_degistirmede_beklenmeyen_alan_reddedilir():
     from server.sunucu import app, izin_kontrol
 
     rol_degistirme_endpointi = next(
-        route for route in app.routes
+        route for route in _duz_rotalar(app.routes)
         if getattr(route, "path", None) == "/api/kullanicilar/{kullanici_id}/rol"
         and "PATCH" in getattr(route, "methods", set())
     )

@@ -3,6 +3,16 @@ from unittest.mock import MagicMock, patch
 from server.sunucu import DurumDegistirModeli, kullanici_durum_degistir
 
 
+def _duz_rotalar(rotalar):
+    """`include_router` ile eklenen uçlar `app.routes` içinde doğrudan görünmez; yönlendirici sarmalayıcılarının içine de bakılır."""
+    for r in rotalar:
+        asil = getattr(r, "original_router", None)
+        if asil is not None:
+            yield from _duz_rotalar(asil.routes)
+        else:
+            yield r
+
+
 def test_mudur_psikolog_kullanicisini_pasiflestirebilir():
     mock_conn = MagicMock()
     mock_cursor = mock_conn.cursor.return_value
@@ -341,7 +351,7 @@ def test_mudur_http_uzerinden_kullanici_pasiflestirebilir():
     from server.sunucu import app
 
     endpoint = next(
-        route for route in app.routes
+        route for route in _duz_rotalar(app.routes)
         if getattr(route, "path", None)
         == "/api/kullanicilar/{kullanici_id}/durum-degistir"
         and "PATCH" in getattr(route, "methods", set())
