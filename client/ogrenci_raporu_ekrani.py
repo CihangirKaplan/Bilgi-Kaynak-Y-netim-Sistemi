@@ -92,7 +92,7 @@ class OgrenciRaporuEkrani(RaporSayfasiTaban):
             filtre,
             [
                 ("Toplam öğrenci", ozet.get("toplam", 0), "Süzgece uyan öğrenci sayısı."),
-                ("Aktif / pasif", f"{ozet.get('aktif', 0)} / {ozet.get('pasif', 0)}", "Hesap durumu."),
+                ("Aktif / pasif", f"{ozet.get('aktif', 0)} aktif / {ozet.get('pasif', 0)} pasif", "Hesap durumu."),
                 ("Yeni kayıt (son 30 gün)", ozet.get("son_30_gun_yeni", 0), "Son 30 günde kaydedilen öğrenciler."),
                 ("Saklama süresi dolmuş", ozet.get("saklama_suresi_dolmus", 0), "2 yıldır pasif olan, ertelenmemiş Gönüllü öğrenciler."),
                 ("Saklama süresi ertelenen", ozet.get("saklama_ertelenen", 0), "Süresi dolmuş ama ileri bir tarihe ertelenmiş kayıtlar."),

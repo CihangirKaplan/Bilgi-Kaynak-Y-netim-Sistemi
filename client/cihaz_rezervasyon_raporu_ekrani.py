@@ -91,8 +91,8 @@ class CihazRezervasyonRaporuEkrani(RaporSayfasiTaban):
             filtre,
             [
                 ("Rezervasyon sayısı", ozet.get("rezervasyon_sayisi", 0), "Dönemle kesişen, iptal edilmeyen rezervasyonlar."),
-                ("Toplam kullanım (saat)", ozet.get("toplam_saat", 0), "Dönem sınırlarına kırpılmış planlanan süre toplamı."),
-                ("Ortalama süre (saat)", ozet.get("ortalama_sure_saat"), "Rezervasyon başına ortalama planlanan süre."),
+                ("Toplam kullanım", ozet.get("toplam_saat", 0), "Dönem sınırlarına kırpılmış planlanan süre toplamı."),
+                ("Ortalama süre", ozet.get("ortalama_sure_saat"), "Rezervasyon başına ortalama planlanan süre."),
                 ("İptal edilen rezervasyon", ozet.get("iptal_edilen_rezervasyon", 0), "Dönemde başlayacak iken iptal edilenler; saate dahil değil."),
                 ("Kullanılan cihaz", ozet.get("kullanilan_cihaz_sayisi", 0), "Dönemde en az bir rezervasyonu olan cihaz sayısı."),
                 ("Hiç kullanılmayan cihaz", ozet.get("kullanilmayan_cihaz_sayisi", 0), "Dönemde hiç rezerve edilmeyen cihaz sayısı."),
